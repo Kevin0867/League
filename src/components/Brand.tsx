@@ -1,23 +1,24 @@
 import Link from "next/link";
 
-// Official PURE Academy logo. Assets live in /public/brand — drop-in replace
-// those SVGs with the official files to make this pixel-perfect.
-//   variant="navy"  → navy wordmark, for light surfaces (default)
-//   variant="white" → white wordmark, for dark surfaces (hero, footer)
+// Official PURE Academy logo (white wordmark on navy). Because the artwork has a
+// solid navy background, we clip it into a rounded "tile" so it reads as an
+// intentional logo lozenge on light surfaces (header, login, portal).
+// Files live in /public/brand: pure-academy-navy.png, -black.png, -elite.png.
 export function Logo({
   href = "/",
-  variant = "navy",
-  className = "h-10",
+  className = "h-11",
 }: {
   href?: string;
-  variant?: "navy" | "white";
   className?: string;
 }) {
-  const src = variant === "white" ? "/brand/pure-academy-white.svg" : "/brand/pure-academy-navy.svg";
   return (
-    <Link href={href} className="inline-flex items-center" aria-label="PURE Academy home">
+    <Link
+      href={href}
+      aria-label="PURE Academy home"
+      className="inline-flex overflow-hidden rounded-lg ring-1 ring-black/5"
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="PURE Academy" className={`${className} w-auto`} />
+      <img src="/brand/pure-academy-navy.png" alt="PURE Academy" className={`${className} w-auto`} />
     </Link>
   );
 }
