@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
-import { startCheckout } from "./actions";
+import { startCheckout, markMessageRead } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +51,16 @@ export default async function PortalHome() {
       })
     : [];
 
+  const inbox = peopleIds.length
+    ? await prisma.messageRecipient.findMany({
+        where: { personId: { in: peopleIds } },
+        include: { message: true },
+        orderBy: { message: { sentAt: "desc" } },
+        take: 20,
+      })
+    : [];
+  const unread = inbox.filter((r) => !r.readAt).length;
+
   const waiverOutstanding = me && !me.waiverSignedAt;
 
   return (
@@ -68,6 +78,39 @@ export default async function PortalHome() {
           </p>
         </div>
       )}
+
+      {/* Announcements / inbox */}
+      <section>
+        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Announcements
+          {unread > 0 && <span className="badge bg-brand-100 text-brand-800">{unread} new</span>}
+        </h2>
+        {inbox.length === 0 ? (
+          <div className="card text-sm text-slate-500">No messages yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {inbox.map((r) => (
+              <div key={r.id} className={`card ${!r.readAt ? "border-l-4 border-brand-400" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-slate-800">{r.message.subject ?? "Message from PURE Academy"}</div>
+                    <p className="mt-1 text-sm text-slate-600">{r.message.body}</p>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {r.message.sentAt.toLocaleDateString()} · {r.message.channels.replace(/,/g, ", ")}
+                    </div>
+                  </div>
+                  {!r.readAt && (
+                    <form action={markMessageRead}>
+                      <input type="hidden" name="recipientId" value={r.id} />
+                      <button className="btn-ghost text-xs whitespace-nowrap">Mark read</button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Placement / registration status */}
       <section>

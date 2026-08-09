@@ -5,7 +5,9 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { dispatchMessage } from "@/lib/messaging";
 import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
+import { formatCents } from "@/lib/money";
 
 async function requireManager() {
   const session = await getSession();
@@ -164,6 +166,18 @@ export async function requestSeasonFees(formData: FormData) {
       },
     });
     created++;
+
+    // Triggered "payment request" message (§13) — player + parents, after assignment.
+    await dispatchMessage({
+      senderId: session.userId,
+      seasonId: team.seasonId,
+      audienceType: "SINGLE_PERSON",
+      audienceRef: m.personId,
+      channels: ["IN_APP", "EMAIL"],
+      triggerType: "PAYMENT_REQUEST",
+      subject: "Your season fee is ready",
+      body: `Your ${formatCents(feeCents)} season fee for ${team.name} is ready to pay in your portal. The fee reserves a place on a team, not a session count.`,
+    });
   }
 
   await audit({

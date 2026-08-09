@@ -7,6 +7,20 @@ import { getSession } from "@/lib/auth";
 import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 
+/** Mark a received message as read for the current user's household. */
+export async function markMessageRead(formData: FormData) {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  const recipientId = String(formData.get("recipientId") ?? "");
+  const household = await householdPersonIds(session.personId);
+  // Only mark rows that belong to this household.
+  await prisma.messageRecipient.updateMany({
+    where: { id: recipientId, personId: { in: household }, readAt: null },
+    data: { readAt: new Date(), inAppStatus: "READ" },
+  });
+  revalidatePath("/portal");
+}
+
 /** People this logged-in user may pay for: themselves + their dependents. */
 async function householdPersonIds(personId: string | null): Promise<string[]> {
   if (!personId) return [];

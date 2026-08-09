@@ -82,9 +82,13 @@ npm run dev                   # http://localhost:3000
 - **Foundation (done):** complete data model, auth + RBAC, seed data, public site,
   registration with duplicate detection + waiver capture, team-build board,
   facility agreement tracker, compliance dashboard, coaches/schedule/payments views.
-- **Phase 1 (Week 1):** pool → team **assignment engine**, payment-request-after-
-  assignment via Stripe, session cancellation flows, assignment/cancellation
-  notifications.
+- **Phase 1 (done):** pool → team **assignment engine** (overlapping pools, cap/gate
+  enforcement, publish gate), **Stripe hosted checkout** with payment-request-after-
+  assignment and webhook reconciliation, and the **communications system** —
+  audience-resolved messaging (in-app + email + SMS) with per-recipient delivery
+  logging, plus automatic team-assignment and payment-request triggers.
+- **Phase 1 (remaining):** session cancellation flows and the rest of the triggered-
+  message table (practice cancelled via SMS, waiver/DUPR reminders).
 - **Phase 2 (before league):** ACP setup, **DUPR verification** + submission retry
   queue, fixture generation, 7-day notice + 48-hour availability confirmation with
   escalation, line-up DUPR validation, forfeits, line-by-line scoring, month-end

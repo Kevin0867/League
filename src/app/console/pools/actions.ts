@@ -5,7 +5,28 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { dispatchMessage } from "@/lib/messaging";
 import { TEAM_CAP } from "@/lib/enums";
+
+/** Triggered "team assignment" message (§13) — player + parents, on assignment. */
+async function notifyAssignment(teamId: string, personIds: string[], seasonId: string) {
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { facility: true, coach: { include: { person: true } } },
+  });
+  if (!team) return;
+  const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
+  const where = team.facility?.name ?? "your location";
+  const when = team.dayOfWeek ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}` : "a day and time to be confirmed";
+  const body = `You've been placed on ${team.name}. Coach: ${coachName}. Location: ${where}. Practice: ${when}. Your season fee request will follow.`;
+  for (const personId of personIds) {
+    await dispatchMessage({
+      seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
+      channels: ["IN_APP", "EMAIL"], triggerType: "TEAM_ASSIGNMENT",
+      subject: `You're on ${team.name}!`, body,
+    });
+  }
+}
 
 async function requireAssigner() {
   const session = await getSession();
@@ -74,6 +95,9 @@ export async function assignToTeam(formData: FormData) {
     summary: `Assigned ${regs.length} player(s): ${regs.map((r) => `${r.person.firstName} ${r.person.lastName}`).join(", ")}`,
   });
 
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
+  if (team) await notifyAssignment(teamId, regs.map((r) => r.personId), team.seasonId);
+
   revalidatePath("/console/pools");
   revalidatePath("/console/teams");
   revalidatePath(`/console/teams/${teamId}`);
@@ -130,6 +154,8 @@ export async function createTeamFromPool(formData: FormData) {
     action: "CREATE",
     summary: `Formed "${name}" from pool with ${regs.length} player(s)`,
   });
+
+  await notifyAssignment(team.id, regs.map((r) => r.personId), seasonId);
 
   revalidatePath("/console/pools");
   revalidatePath("/console/teams");
