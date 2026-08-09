@@ -4,6 +4,7 @@ import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
+import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { TEAM_CAP } from "@/lib/enums";
 
 // Pool assignment as native-form-POST route handlers with ticket auth. Route
@@ -16,18 +17,40 @@ export const dynamic = "force-dynamic";
 async function notifyAssignment(teamId: string, personIds: string[], seasonId: string) {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    include: { facility: true, coach: { include: { person: true } } },
+    include: {
+      facility: true,
+      coach: { include: { person: true } },
+      members: { include: { person: true } },
+    },
   });
   if (!team) return;
   const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
-  const where = team.facility?.name ?? "your location";
-  const when = team.dayOfWeek ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}` : "a day and time to be confirmed";
-  const body = `You've been placed on ${team.name}. Coach: ${coachName}. Location: ${where}. Practice: ${when}. Your season fee request will follow.`;
+  const coachContact =
+    [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
+  const locationName = team.facility?.name ?? "To be confirmed";
+  // Assigned players may see the exact address (§15); private courts show general area otherwise.
+  const locationAddress = team.facility?.exactAddress ?? team.facility?.generalArea ?? null;
+  const practiceWhen = team.dayOfWeek
+    ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}`
+    : "A day and time to be confirmed";
+
   for (const personId of personIds) {
+    const person = team.members.find((m) => m.personId === personId)?.person;
+    const firstName = person?.firstName ?? "there";
+    const email = teamAssignmentEmail({
+      name: firstName,
+      teamId: team.id,
+      teamName: team.name,
+      coachName,
+      coachContact,
+      locationName,
+      locationAddress,
+      practiceWhen,
+    });
     await dispatchMessage({
       seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
       channels: ["IN_APP", "EMAIL"], triggerType: "TEAM_ASSIGNMENT",
-      subject: `You're on ${team.name}!`, body,
+      subject: email.subject, body: email.text, html: email.html,
     });
   }
 }

@@ -19,6 +19,8 @@ export type DispatchInput = {
   channels: Channel[];
   subject?: string;
   body: string;
+  /** Optional branded HTML for the EMAIL channel; `body` remains the text fallback. */
+  html?: string;
   triggerType?: string | null;
 };
 
@@ -61,7 +63,7 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     const failureReasons: string[] = [];
 
     if (channels.includes("EMAIL")) {
-      const res = await sendEmail(r.email, subject, input.body);
+      const res = await sendEmail(r.email, subject, input.body, input.html);
       emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`email: ${res.error}`);
     }

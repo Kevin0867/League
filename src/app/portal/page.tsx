@@ -177,7 +177,12 @@ export default async function PortalHome() {
           <div className="space-y-3">
             {memberships.map((m) => (
               <div key={m.id} className="card">
-                <div className="font-semibold text-slate-800">{m.team.name}</div>
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-slate-800">{m.team.name}</div>
+                  <Link href={`/portal/team/${m.teamId}`} className="text-sm font-medium text-brand-700 hover:underline">
+                    View team →
+                  </Link>
+                </div>
                 <dl className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-600">
                   <div><dt className="text-xs text-slate-400">Coach</dt><dd>{m.team.coach ? `${m.team.coach.person.firstName} ${m.team.coach.person.lastName}` : "TBA"}</dd></div>
                   <div><dt className="text-xs text-slate-400">Location</dt><dd>{m.team.facility?.name ?? "TBA"}</dd></div>

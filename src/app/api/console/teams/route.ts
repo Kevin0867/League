@@ -5,7 +5,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
-import { formatCents } from "@/lib/money";
+import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 
 // Team mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -176,7 +176,8 @@ export async function POST(req: Request) {
         });
         if (existing) continue;
 
-        await prisma.payment.create({
+        const description = `${team.season?.name ?? "Season"} fee — ${team.name}`;
+        const payment = await prisma.payment.create({
           data: {
             direction: "IN",
             partyId: m.personId,
@@ -185,12 +186,19 @@ export async function POST(req: Request) {
             status: "REQUESTED",
             category: "PLAYER_FEE",
             seasonId: team.seasonId,
-            description: `${team.season?.name ?? "Season"} fee — ${team.name}`,
+            description,
           },
         });
         created++;
 
-        // Triggered "payment request" message (§13) — player + parents, after assignment.
+        // Triggered "payment request" message (§13) — player + parents, after
+        // assignment. Branded HTML with pay-in-full / 3-payment CTAs (§8).
+        const email = paymentRequestEmail({
+          name: m.person.firstName,
+          amountCents: feeCents,
+          description,
+          paymentId: payment.id,
+        });
         await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
@@ -198,8 +206,9 @@ export async function POST(req: Request) {
           audienceRef: m.personId,
           channels: ["IN_APP", "EMAIL"],
           triggerType: "PAYMENT_REQUEST",
-          subject: "Your season fee is ready",
-          body: `Your ${formatCents(feeCents)} season fee for ${team.name} is ready to pay in your portal. The fee reserves a place on a team, not a session count.`,
+          subject: email.subject,
+          body: email.text,
+          html: email.html,
         });
       }
 
