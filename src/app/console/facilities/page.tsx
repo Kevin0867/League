@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
+import { mintConsoleTicket } from "@/lib/auth";
 import { FacilityForm } from "./FacilityForm";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ const NEXT_ACTION: Record<string, string> = {
 };
 
 export default async function FacilitiesPage() {
+  const ticket = await mintConsoleTicket();
   const facilities = await prisma.facility.findMany({
     include: { _count: { select: { teams: true, sessions: true } } },
     orderBy: [{ agreementStatus: "asc" }, { name: "asc" }],
@@ -38,7 +40,7 @@ export default async function FacilitiesPage() {
             against a non-executed agreement without an explicit override.
           </p>
         </div>
-        <FacilityForm />
+        <FacilityForm ticket={ticket} />
       </div>
 
       <div className="card overflow-x-auto">

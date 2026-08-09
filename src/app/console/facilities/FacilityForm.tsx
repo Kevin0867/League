@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { createFacility } from "./actions";
 
-export function FacilityForm() {
+export function FacilityForm({ ticket }: { ticket: string }) {
   const [open, setOpen] = useState(false);
   const [feeBasis, setFeeBasis] = useState("NONE");
   const [isPrivate, setIsPrivate] = useState(false);
@@ -19,7 +18,8 @@ export function FacilityForm() {
   const perRate = feeBasis === "PER_COURT" || feeBasis === "PER_HOUR" || feeBasis === "PER_SESSION";
 
   return (
-    <form action={createFacility} className="card space-y-4">
+    <form method="POST" action="/api/console/facilities" className="card space-y-4">
+      <input type="hidden" name="ticket" value={ticket} />
       <h3 className="font-semibold text-brand-900">Add facility</h3>
 
       <div className="grid gap-3 sm:grid-cols-2">

@@ -48,7 +48,7 @@ export function ConsoleShell({
           ☰
         </button>
         <span className="font-bold text-brand-800">PURE Console</span>
-        <Link href="/logout" className="text-sm text-slate-500">Sign out</Link>
+        <Link href="/logout" prefetch={false} className="text-sm text-slate-500">Sign out</Link>
       </div>
 
       <div className="mx-auto flex max-w-7xl">
@@ -96,7 +96,7 @@ export function ConsoleShell({
             <div className="text-sm text-slate-500">
               Signed in as <span className="font-semibold text-slate-800">{name}</span>
             </div>
-            <Link href="/logout" className="btn-ghost text-sm">Sign out</Link>
+            <Link href="/logout" prefetch={false} className="btn-ghost text-sm">Sign out</Link>
           </div>
           <div className="p-4 md:p-6">{children}</div>
         </main>

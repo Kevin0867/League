@@ -82,6 +82,32 @@ export async function verifyActionTicket(
   }
 }
 
+/**
+ * Console mutations run as POSTs, where this runtime does not deliver the
+ * session cookie. Pages mint a console ticket while rendering (a GET, where the
+ * session IS readable) and embed it in a hidden form field; the action then
+ * resolves the actor from that ticket, falling back to the cookie session when
+ * present (e.g. local dev). Returns just the identity + role the RBAC checks
+ * need.
+ */
+const CONSOLE_SCOPE = "console";
+
+export async function mintConsoleTicket(): Promise<string> {
+  const s = await getSession();
+  return s
+    ? signActionTicket({ userId: s.userId, role: s.role, scope: CONSOLE_SCOPE })
+    : "";
+}
+
+export async function actorFromForm(
+  formData: FormData
+): Promise<{ userId: string; role: Role } | null> {
+  const t = await verifyActionTicket(formData.get("ticket")?.toString(), CONSOLE_SCOPE);
+  if (t) return { userId: t.userId, role: t.role };
+  const s = await getSession();
+  return s ? { userId: s.userId, role: s.role } : null;
+}
+
 export async function hashPassword(pw: string) {
   return bcrypt.hash(pw, 10);
 }
