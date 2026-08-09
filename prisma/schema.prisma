@@ -521,9 +521,13 @@ model Payment {
   // Stripe references — never raw card data (§18)
   stripeCheckoutId String?
   stripePaymentIntentId String?
+  stripeSubscriptionId String?
 
-  /// Monthly-vs-full for player fees (§8)
+  /// Monthly-vs-full for player fees (§8). installmentPlan = true means the
+  /// 3-payment plan; installmentsPaid/Total track how many of the 3 have cleared.
   installmentPlan Boolean @default(false)
+  installmentsPaid Int    @default(0)
+  installmentsTotal Int?
 
   description   String?
   paidAt        DateTime?

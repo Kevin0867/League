@@ -261,11 +261,14 @@ export default async function PortalHome() {
                   <div className="flex items-center gap-3">
                     <StatusBadge status={p.status} />
                     {(p.status === "REQUESTED" || p.status === "PENDING") && (
-                      <form method="POST" action="/api/portal">
+                      <form method="POST" action="/api/portal" className="flex flex-wrap items-center justify-end gap-2">
                         <input type="hidden" name="ticket" value={ticket} />
                         <input type="hidden" name="op" value="startCheckout" />
                         <input type="hidden" name="paymentId" value={p.id} />
-                        <button className="btn-primary">Pay now</button>
+                        <button name="plan" value="full" className="btn-primary">Pay in full</button>
+                        <button name="plan" value="installments" className="btn-secondary">
+                          3 payments of {formatCents(Math.round(p.amountCents / 3))}
+                        </button>
                       </form>
                     )}
                   </div>
@@ -274,7 +277,10 @@ export default async function PortalHome() {
                   <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
                     The season fee reserves a place on a team, not a session count. There are
                     no make-ups: individual practices PURE cancels are not refunded or credited.
-                    Secure checkout is hosted by Stripe — we never see your card details.
+                    Choose <span className="font-medium">pay in full</span>, or the{" "}
+                    <span className="font-medium">3-payment plan</span> — 3 equal charges billed
+                    automatically at the end of each of your first three training months (nothing
+                    charged today). Secure checkout is hosted by Stripe — we never see your card details.
                   </p>
                 )}
               </div>

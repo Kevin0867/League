@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
+import {
+  INSTALLMENT_COUNT,
+  installmentChargeDates,
+  splitInstallments,
+  sendPaymentConfirmation,
+} from "@/lib/payments/receipt";
 import { audit } from "@/lib/audit";
 
 // Player-portal mutations as native-form-POST route handlers with ticket auth.
@@ -103,41 +109,105 @@ export async function POST(req: Request) {
       }
       if (payment.status === "PAID") return NextResponse.redirect(new URL("/portal", origin), 303);
 
+      // Payment plan: pay in full (one charge now) or 3 equal monthly charges.
+      const installments = String(formData.get("plan") ?? "full") === "installments";
+      const success = `${appUrl()}/portal/payment/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancel = `${appUrl()}/portal/payment/cancel`;
+      const productName = payment.description ?? "PURE Academy season fee";
+      const productBlurb =
+        "Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.";
+
       if (!isStripeConfigured()) {
-        // Dev simulation — mark paid directly, clearly flagged in the record.
+        // Dev simulation — no real charge; record the plan and confirm, clearly flagged.
         await prisma.payment.update({
           where: { id: payment.id },
-          data: { status: "PAID", method: "STRIPE", paidAt: new Date(), description: (payment.description ?? "") + " [simulated — Stripe not configured]" },
+          data: {
+            method: "STRIPE",
+            installmentPlan: installments,
+            installmentsTotal: installments ? INSTALLMENT_COUNT : null,
+            status: installments ? "PENDING" : "PAID",
+            paidAt: installments ? null : new Date(),
+            description: (payment.description ?? "") + " [simulated — Stripe not configured]",
+          },
         });
-        await audit({ actorId: actor.userId, entityType: "Payment", entityId: payment.id, action: "PAID", summary: "Simulated checkout (no Stripe keys)" });
-        return NextResponse.redirect(new URL("/portal/payment/success?sim=1", origin), 303);
+        await audit({ actorId: actor.userId, entityType: "Payment", entityId: payment.id, action: installments ? "SCHEDULED" : "PAID", summary: "Simulated checkout (no Stripe keys)" });
+        await sendPaymentConfirmation(payment.id);
+        return NextResponse.redirect(
+          new URL(`/portal/payment/success?sim=1&payment=${payment.id}`, origin),
+          303
+        );
       }
 
+      if (installments) {
+        // Save the card and schedule 3 equal monthly charges. The first charge
+        // is deferred to season start + 1 month via trial_end; the webhook
+        // cancels the subscription after the 3rd invoice clears.
+        const seasonStart = payment.seasonId
+          ? (await prisma.season.findUnique({ where: { id: payment.seasonId } }))?.startDate ?? new Date()
+          : new Date();
+        const firstCharge = installmentChargeDates(seasonStart)[0];
+        const trialEnd = Math.max(
+          Math.floor(firstCharge.getTime() / 1000),
+          Math.floor(Date.now() / 1000) + 3600
+        );
+        const perCharge = Math.round(payment.amountCents / INSTALLMENT_COUNT);
+
+        const checkout = await stripe().checkout.sessions.create({
+          mode: "subscription",
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency: "usd",
+                unit_amount: perCharge,
+                recurring: { interval: "month" },
+                product_data: { name: `${productName} — 3-payment plan` },
+              },
+            },
+          ],
+          subscription_data: {
+            trial_end: trialEnd,
+            metadata: { paymentId: payment.id },
+            description: productBlurb,
+          },
+          metadata: { paymentId: payment.id },
+          success_url: success,
+          cancel_url: cancel,
+        });
+
+        await prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: "PENDING",
+            installmentPlan: true,
+            installmentsTotal: INSTALLMENT_COUNT,
+            stripeCheckoutId: checkout.id,
+          },
+        });
+        return NextResponse.redirect(checkout.url!, 303);
+      }
+
+      // Pay in full — one hosted-checkout charge now.
       const checkout = await stripe().checkout.sessions.create({
         mode: "payment",
-        // Never collect or store card data ourselves — Stripe hosts the form.
         line_items: [
           {
             quantity: 1,
             price_data: {
               currency: "usd",
               unit_amount: payment.amountCents,
-              product_data: {
-                name: payment.description ?? "PURE Academy season fee",
-                description:
-                  "Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.",
-              },
+              product_data: { name: productName, description: productBlurb },
             },
           },
         ],
         metadata: { paymentId: payment.id },
-        success_url: `${appUrl()}/portal/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appUrl()}/portal/payment/cancel`,
+        success_url: success,
+        cancel_url: cancel,
       });
 
       await prisma.payment.update({
         where: { id: payment.id },
-        data: { status: "PENDING", stripeCheckoutId: checkout.id },
+        data: { status: "PENDING", installmentPlan: false, stripeCheckoutId: checkout.id },
       });
 
       return NextResponse.redirect(checkout.url!, 303);
