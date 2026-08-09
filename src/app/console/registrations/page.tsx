@@ -1,11 +1,33 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { findDuplicateGroups } from "@/lib/domain/registrations";
+import { AddPlayerForm } from "./AddPlayerForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function RegistrationsPage() {
+const OK: Record<string, string> = { addPlayer: "Player added to the roster." };
+const ERRORS: Record<string, string> = {
+  name: "First and last name are required.",
+  contact: "An email or phone number is required.",
+  auth: "You don't have permission to add players.",
+  failed: "Could not add the player — please try again.",
+};
+
+export default async function RegistrationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
+  const seasonRows = await prisma.season.findMany({
+    orderBy: [{ active: "desc" }, { startDate: "desc" }],
+    include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
+  });
+  const seasons = seasonRows.map((s) => ({ id: s.id, name: s.name, divisions: s.divisions }));
+
   const registrations = await prisma.registration.findMany({
     include: { person: true, division: true, locationPrefs: { orderBy: { rank: "asc" }, include: { facility: true } } },
     orderBy: { submittedAt: "desc" },
@@ -29,13 +51,25 @@ export default async function RegistrationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Registrations</h1>
-        <p className="text-slate-500">
-          {counts.total} total · {counts.assigned} assigned · {counts.waitlisted} waitlisted ·{" "}
-          <span className={counts.noWaiver ? "text-amber-600 font-medium" : ""}>{counts.noWaiver} without waiver</span>
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Registrations</h1>
+          <p className="text-slate-500">
+            {counts.total} total · {counts.assigned} assigned · {counts.waitlisted} waitlisted ·{" "}
+            <span className={counts.noWaiver ? "text-amber-600 font-medium" : ""}>{counts.noWaiver} without waiver</span>
+          </p>
+        </div>
+        <AddPlayerForm ticket={ticket} seasons={seasons} />
       </div>
+
+      {sp.ok && OK[sp.ok] && (
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {ERRORS[sp.err] ?? "Something went wrong."}
+        </p>
+      )}
 
       {dupGroups.length > 0 && (
         <div className="card border-l-4 border-amber-400">

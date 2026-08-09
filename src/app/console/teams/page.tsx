@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   teamMissingFields,
@@ -7,10 +8,23 @@ import {
   canPublishTeam,
 } from "@/lib/domain/teams";
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
+import { TeamCreateForm } from "./TeamCreateForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeamBuildBoard() {
+const OK: Record<string, string> = { createTeam: "Team created." };
+const ERRORS: Record<string, string> = {
+  fields: "Team name and season are required.",
+  auth: "You don't have permission to manage teams.",
+};
+
+export default async function TeamBuildBoard({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const teams = await prisma.team.findMany({
     include: {
       _count: { select: { members: true } },
@@ -20,6 +34,13 @@ export default async function TeamBuildBoard() {
     },
     orderBy: [{ market: "asc" }, { name: "asc" }],
   });
+
+  const seasonRows = await prisma.season.findMany({
+    orderBy: [{ active: "desc" }, { startDate: "desc" }],
+    include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
+  });
+  const seasons = seasonRows.map((s) => ({ id: s.id, name: s.name, divisions: s.divisions }));
+  const facilities = (await prisma.facility.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }));
 
   const ready = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const published = teams.filter((t) => t.published).length;
@@ -33,12 +54,23 @@ export default async function TeamBuildBoard() {
             Every team&apos;s six fields and completion status. Cap {TEAM_CAP}, minimum {TEAM_MIN}.
           </p>
         </div>
-        <div className="flex gap-3 text-sm">
+        <div className="flex items-center gap-3 text-sm">
           <Pill label="Teams" value={teams.length} />
           <Pill label="Ready" value={ready} tone="emerald" />
           <Pill label="Published" value={published} tone="brand" />
         </div>
       </div>
+
+      {sp.ok && OK[sp.ok] && (
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {ERRORS[sp.err] ?? "Something went wrong."}
+        </p>
+      )}
+
+      <TeamCreateForm ticket={ticket} seasons={seasons} facilities={facilities} />
 
       {teams.length === 0 ? (
         <div className="card">

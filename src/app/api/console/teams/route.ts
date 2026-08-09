@@ -30,6 +30,31 @@ export async function POST(req: Request) {
   const op = String(formData.get("op") ?? "");
 
   switch (op) {
+    case "createTeam": {
+      const name = String(formData.get("name") ?? "").trim();
+      const seasonId = String(formData.get("seasonId") ?? "").trim();
+      if (!name || !seasonId) return NextResponse.redirect(new URL("/console/teams?err=fields", origin), 303);
+      const divisionId = String(formData.get("divisionId") ?? "").trim() || null;
+      const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
+      const dayOfWeek = String(formData.get("dayOfWeek") ?? "").trim() || null;
+      const startTime = String(formData.get("startTime") ?? "").trim() || null;
+      const facility = facilityId ? await prisma.facility.findUnique({ where: { id: facilityId } }) : null;
+      const team = await prisma.team.create({
+        data: {
+          name,
+          seasonId,
+          divisionId,
+          facilityId,
+          market: facility?.market ?? null,
+          dayOfWeek,
+          startTime,
+          origin: "PURE_ACADEMY",
+          published: false,
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: team.id, action: "team.create", summary: `Created team ${name}` });
+      return NextResponse.redirect(new URL(`/console/teams/${team.id}?ok=createTeam`, origin), 303);
+    }
     case "updateTeam": {
       if (!teamId) return back("?err=team");
 
