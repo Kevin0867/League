@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { registerAction, type RegisterState } from "@/app/register/actions";
+import { WaiverText, WAIVER_VERSION } from "@/components/WaiverText";
 
 type Option = { id: string; name: string };
 
@@ -19,6 +20,7 @@ export function RegisterForm({
     {}
   );
   const [isMinor, setIsMinor] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <form action={action} className="space-y-8">
@@ -123,21 +125,41 @@ export function RegisterForm({
       </Section>
 
       <Section title="Waiver & consent" subtitle="No player appears on a court-ready roster without a signed waiver.">
-        <label className="flex items-start gap-2 text-sm">
+        <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
+        <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <WaiverText />
+        </div>
+
+        <label className="mt-4 flex items-start gap-2 text-sm">
           <input type="checkbox" name="waiver" className="mt-0.5" required />
           <span>
-            I have read and accept the liability waiver and the season terms,
-            including the <strong>no make-up policy</strong> — the season fee reserves a
-            place on a team, not a session count. Individual practices that PURE
-            cancels are not refunded or credited.
+            I have read, understand, and agree to the{" "}
+            <strong>Acknowledgment of Risk, Waiver, and Release of Liability</strong>{" "}
+            above, and to the season terms including the{" "}
+            <strong>no make-up policy</strong> — the season fee reserves a place on a
+            team, not a session count. Individual practices that PURE cancels are
+            not refunded or credited. If registering a minor, I certify I am their
+            parent or legal guardian and sign on their behalf.
           </span>
         </label>
+
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input type="checkbox" name="mediaOptOut" className="mt-0.5" />
+          <span>
+            I do <strong>not</strong> consent to the use of photos/videos of me or my
+            minor child(ren) (Photo/Video Release opt-out).
+          </span>
+        </label>
+
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Signature (type full name)" name="signatureName" required />
-          <label className="flex items-center gap-2 self-end pb-2 text-sm">
-            <input type="checkbox" name="mediaOptOut" />
-            <span>Opt out of media/photo consent</span>
-          </label>
+          <div>
+            <label className="label" htmlFor="signatureName">Signature (type full legal name)</label>
+            <input id="signatureName" name="signatureName" className="input" required />
+          </div>
+          <div>
+            <label className="label" htmlFor="waiverDate">Date</label>
+            <input id="waiverDate" name="waiverDate" type="date" className="input" defaultValue={today} readOnly />
+          </div>
         </div>
       </Section>
 

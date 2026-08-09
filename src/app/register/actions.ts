@@ -87,8 +87,10 @@ export async function registerAction(
       signedAt: new Date(),
       signatureName,
       mediaConsent: !mediaOptOut,
-      parentalConsent: isMinor ? formData.get("parentalConsent") === "on" : false,
-      documentVersion: "v1",
+      // Agreeing to the waiver (which certifies guardianship for minors) is the
+      // parental consent for a minor registration.
+      parentalConsent: isMinor ? waiverSigned : false,
+      documentVersion: g("waiverVersion") || "2026-08",
     },
   });
 
