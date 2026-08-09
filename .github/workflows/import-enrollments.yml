@@ -1,0 +1,42 @@
+name: Import enrollments
+
+# Manually-triggered importer that loads a PURE Academy enrollment CSV directly
+# into the database (the CI runner can reach the production Neon database, which
+# the browser upload path also does). The CSV is passed at dispatch time as
+# gzip+base64 so enrollee PII is never committed to the repository.
+#
+# Requirements:
+#   - Repository secret DATABASE_URL set to the (pooled) Neon connection string.
+#
+# Safe to re-run: people are matched on name + email/phone and merged.
+
+on:
+  workflow_dispatch:
+    inputs:
+      csv_gz_b64:
+        description: "base64(gzip(enrollment CSV))"
+        required: true
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CSV_GZ_B64: ${{ inputs.csv_gz_b64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Verify DATABASE_URL is configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+      - name: Import enrollments
+        run: npx tsx --tsconfig tsconfig.scripts.json scripts/import-enrollments.ts

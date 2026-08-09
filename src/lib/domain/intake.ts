@@ -24,6 +24,14 @@ export type IntakeInput = {
   mediaOptOut?: boolean;
   emergency?: { name?: string | null; phone?: string | null; relation?: string | null } | null;
   isCoachRegistration?: boolean;
+  /**
+   * When true, if the resolved person already has a registration in the same
+   * season + division, return that one instead of creating a duplicate. Used by
+   * the bulk importer so it is idempotent (safe to re-run, and collapses
+   * repeat submissions within the same file). Off by default so the public
+   * /register form and intake API keep recording every submission.
+   */
+  skipIfRegistered?: boolean;
   waiver?: { signed?: boolean; signatureName?: string | null; parentalConsent?: boolean } | null;
   seasonId?: string | null;
   seasonName?: string | null;
@@ -37,7 +45,10 @@ export type IntakeResult = {
   personId: string;
   registrationId: string;
   status: string;
+  /** True when the resolved person already existed (matched a prior record). */
   duplicate: boolean;
+  /** False when an existing registration was reused (skipIfRegistered). */
+  registrationCreated: boolean;
 };
 
 function computeIsMinor(dob: Date | null): boolean {
@@ -132,6 +143,23 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
     personId = person.id;
   }
 
+  // Idempotent bulk import: if this person is already registered for this
+  // season+division, reuse that registration instead of creating a duplicate.
+  if (input.skipIfRegistered) {
+    const already = await prisma.registration.findFirst({
+      where: { personId, seasonId: season.id, divisionId },
+    });
+    if (already) {
+      return {
+        personId,
+        registrationId: already.id,
+        status: already.status,
+        duplicate: true,
+        registrationCreated: false,
+      };
+    }
+  }
+
   if (waiverSigned) {
     await prisma.waiver.create({
       data: {
@@ -186,5 +214,11 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
     }
   }
 
-  return { personId, registrationId: registration.id, status: registration.status, duplicate: !!match };
+  return {
+    personId,
+    registrationId: registration.id,
+    status: registration.status,
+    duplicate: !!match,
+    registrationCreated: true,
+  };
 }
