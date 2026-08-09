@@ -1,31 +1,15 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { ingestRegistration } from "@/lib/domain/intake";
 import { parseEnrollments, distinctDivisions } from "@/lib/domain/enrollmentImport";
 
-export type ImportState = {
-  error?: string;
-  preview?: {
-    total: number;
-    mapped: number;
-    skipped: number;
-    childCount: number;
-    divisions: string[];
-    markets: string[];
-  };
-  result?: {
-    created: number;
-    duplicates: number;
-    errors: number;
-    divisionsEnsured: number;
-    seasonName: string;
-    sampleErrors: string[];
-  };
-};
+// Enrollment import as a ROUTE HANDLER (not a server action): on this runtime,
+// server actions — especially multipart/file uploads — don't reliably see the
+// session cookie, while route handlers do. Returns the same shapes the form
+// renders. mode=preview parses only; mode=commit writes.
+export const dynamic = "force-dynamic";
 
 const DEFAULT_SEASON = {
   name: "PURE Academy — Fall 2026",
@@ -34,33 +18,29 @@ const DEFAULT_SEASON = {
   endDate: new Date("2026-12-13T00:00:00Z"),
 };
 
-export async function importEnrollments(
-  _prev: ImportState | undefined,
-  formData: FormData
-): Promise<ImportState> {
+export async function POST(req: Request) {
   const session = await getSession();
-  if (!session) {
-    return { error: "DIAG-A: the import action received no session (getSession() was null)." };
-  }
+  if (!session) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
   if (!["COO", "DIRECTOR"].includes(session.role)) {
-    return { error: `DIAG-B: your account role is "${session.role}" — importing needs COO or Director.` };
+    return NextResponse.json({ error: "Importing needs a COO or Director account." }, { status: 403 });
   }
 
+  const formData = await req.formData();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { error: "Choose a CSV file to upload." };
+    return NextResponse.json({ error: "Choose a CSV file to upload." }, { status: 400 });
   }
+
   const text = await file.text();
   const { rows, skipped, total } = parseEnrollments(text);
   if (rows.length === 0) {
-    return { error: "No valid rows found. Is this the enrollment CSV export?" };
+    return NextResponse.json({ error: "No valid rows found. Is this the enrollment CSV export?" }, { status: 400 });
   }
   const divisions = distinctDivisions(rows);
   const markets = [...new Set(rows.flatMap((r) => r.markets))];
 
-  const commit = formData.get("mode") === "commit";
-  if (!commit) {
-    return {
+  if (formData.get("mode") !== "commit") {
+    return NextResponse.json({
       preview: {
         total,
         mapped: rows.length,
@@ -69,7 +49,7 @@ export async function importEnrollments(
         divisions: divisions.map((d) => d.name),
         markets,
       },
-    };
+    });
   }
 
   // --- Commit: ensure season + divisions, then ingest each row ---
@@ -131,10 +111,8 @@ export async function importEnrollments(
     action: "enrollments.import",
     summary: `Imported ${created} new / ${duplicates} duplicate registrations from CSV`,
   });
-  revalidatePath("/console/registrations");
-  revalidatePath("/console/setup");
 
-  return {
+  return NextResponse.json({
     result: {
       created,
       duplicates,
@@ -143,5 +121,5 @@ export async function importEnrollments(
       seasonName: season.name,
       sampleErrors,
     },
-  };
+  });
 }

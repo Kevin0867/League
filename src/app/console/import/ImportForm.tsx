@@ -1,14 +1,54 @@
 "use client";
 
-import { useActionState } from "react";
-import { importEnrollments, type ImportState } from "./actions";
+import { useRef, useState } from "react";
+
+type ImportState = {
+  error?: string;
+  preview?: {
+    total: number;
+    mapped: number;
+    skipped: number;
+    childCount: number;
+    divisions: string[];
+    markets: string[];
+  };
+  result?: {
+    created: number;
+    duplicates: number;
+    errors: number;
+    divisionsEnsured: number;
+    seasonName: string;
+    sampleErrors: string[];
+  };
+};
 
 export function ImportForm() {
-  const [state, action, pending] = useActionState<ImportState, FormData>(importEnrollments, {});
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, setState] = useState<ImportState>({});
+  const [pending, setPending] = useState(false);
+
+  // Post to the route handler (reliable cookie/session on this runtime).
+  async function submit(mode: "preview" | "commit") {
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    fd.set("mode", mode);
+    setPending(true);
+    setState({});
+    try {
+      const res = await fetch("/api/console/import", { method: "POST", body: fd });
+      const json = (await res.json()) as ImportState;
+      setState(json);
+    } catch {
+      setState({ error: "Upload failed — please try again." });
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
-      <form action={action} className="card space-y-4">
+      <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="card space-y-4">
         <div>
           <label className="label" htmlFor="file">Enrollment CSV</label>
           <input
@@ -25,10 +65,10 @@ export function ImportForm() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="submit" name="mode" value="preview" disabled={pending} className="btn-secondary">
+          <button type="button" onClick={() => submit("preview")} disabled={pending} className="btn-secondary">
             {pending ? "Reading…" : "Preview"}
           </button>
-          <button type="submit" name="mode" value="commit" disabled={pending} className="btn-primary">
+          <button type="button" onClick={() => submit("commit")} disabled={pending} className="btn-primary">
             {pending ? "Working…" : "Import now"}
           </button>
         </div>
