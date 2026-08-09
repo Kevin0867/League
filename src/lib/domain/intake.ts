@@ -40,6 +40,27 @@ export type IntakeInput = {
   divisionName?: string | null;
   locationPrefs?: Array<{ facilityId?: string | null; facilityName?: string | null; marketName?: string | null; rank?: number }>;
   source?: string; // "web-form" | "api" | "import" | ...
+  /**
+   * Additional enrollment-intake fields captured from the source CSV. Person
+   * fields backfill an existing person; registration fields are written on
+   * create and backfilled onto an existing registration on re-import.
+   */
+  extra?: {
+    // Person
+    address?: string | null;
+    gender?: string | null;
+    howHeard?: string | null;
+    stripeCustomerId?: string | null;
+    // Registration
+    schedule?: string | null;
+    minorNames?: string | null;
+    perClassRateCents?: number | null;
+    enrollmentFeeCents?: number | null;
+    stripeSubscriptionId?: string | null;
+    stripePaymentMethod?: string | null;
+    sourceStatus?: string | null;
+    importRaw?: unknown;
+  };
 };
 
 export type IntakeResult = {
@@ -102,6 +123,22 @@ export async function ingestRegistration(
   const isMinor = computeIsMinor(dob);
   const mediaOptOut = !!input.mediaOptOut;
   const waiverSigned = !!input.waiver?.signed;
+  const x = input.extra ?? {};
+
+  // Registration-level intake fields, written on create and backfilled on
+  // re-import. `undefined` values are stripped so we never clobber with null.
+  const regExtra = Object.fromEntries(
+    Object.entries({
+      schedule: x.schedule ?? undefined,
+      minorNames: x.minorNames ?? undefined,
+      perClassRateCents: x.perClassRateCents ?? undefined,
+      enrollmentFeeCents: x.enrollmentFeeCents ?? undefined,
+      stripeSubscriptionId: x.stripeSubscriptionId ?? undefined,
+      stripePaymentMethod: x.stripePaymentMethod ?? undefined,
+      sourceStatus: x.sourceStatus ?? undefined,
+      importRaw: x.importRaw ?? undefined,
+    }).filter(([, v]) => v !== undefined)
+  ) as Record<string, unknown>;
 
   // Duplicate detection — match on name + (email OR phone) (§3).
   const candidate = { id: "new", firstName, lastName, email, phone };
@@ -128,6 +165,11 @@ export async function ingestRegistration(
         ...(input.emergency?.phone ? { emergencyPhone: input.emergency.phone } : {}),
         ...(input.emergency?.relation ? { emergencyRelation: input.emergency.relation } : {}),
         ...(input.medicalDisclosures ? { medicalNotes: input.medicalDisclosures } : {}),
+        // Backfill demographic/intake fields only where the person has none.
+        ...(!match.address && x.address ? { address: x.address } : {}),
+        ...(!match.gender && x.gender ? { gender: x.gender } : {}),
+        ...(!match.howHeard && x.howHeard ? { howHeard: x.howHeard } : {}),
+        ...(!match.stripeCustomerId && x.stripeCustomerId ? { stripeCustomerId: x.stripeCustomerId } : {}),
       },
     });
   } else {
@@ -147,6 +189,10 @@ export async function ingestRegistration(
         duprRating: input.duprRating ?? null,
         medicalNotes: input.medicalDisclosures ?? null,
         waiverSignedAt: waiverSigned ? new Date() : null,
+        address: x.address ?? null,
+        gender: x.gender ?? null,
+        howHeard: x.howHeard ?? null,
+        stripeCustomerId: x.stripeCustomerId ?? null,
       },
     });
     personId = person.id;
@@ -159,6 +205,11 @@ export async function ingestRegistration(
       where: { personId, seasonId: season.id, divisionId },
     });
     if (already) {
+      // Re-import: backfill newly-captured intake fields onto the existing
+      // registration without creating a duplicate.
+      if (Object.keys(regExtra).length) {
+        await db.registration.update({ where: { id: already.id }, data: regExtra });
+      }
       return {
         personId,
         registrationId: already.id,
@@ -197,6 +248,7 @@ export async function ingestRegistration(
       mediaOptOut,
       isCoachRegistration: !!input.isCoachRegistration,
       status: match ? "DUPLICATE" : "SUBMITTED",
+      ...regExtra,
     },
   });
 

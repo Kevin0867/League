@@ -42,6 +42,8 @@ jobs:
             echo "::error::DATABASE_URL secret is not set. Add it in Settings → Secrets and variables → Actions."
             exit 1
           fi
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
       - name: Import enrollments
         run: |
           if [ -f data/enrollments.csv ]; then

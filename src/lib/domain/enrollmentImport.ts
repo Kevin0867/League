@@ -23,7 +23,30 @@ export type MappedEnrollment = {
   emergencyName: string | null;
   emergencyPhone: string | null;
   dateSubmitted: string | null;
+  // Additional intake fields captured from the source CSV
+  address: string | null;
+  gender: string | null;
+  howHeard: string | null;
+  waiverSignature: string | null;
+  minorNames: string | null;
+  schedule: string | null;
+  perClassRateCents: number | null;
+  enrollmentFeeCents: number | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripePaymentMethod: string | null;
+  sourceStatus: string | null;
+  /// The full original CSV row (header -> value), so no field is ever dropped.
+  raw: Record<string, string>;
 };
+
+/** Parse a dollar string like "$120.00" / "120" to integer cents, or null. */
+function moneyToCents(v: string | undefined): number | null {
+  const s = (v ?? "").replace(/[^0-9.]/g, "").trim();
+  if (!s) return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : Math.round(n * 100);
+}
 
 /** Minimal RFC4180 CSV parser (handles quoted fields, embedded commas/newlines). */
 export function parseCsv(text: string): string[][] {
@@ -156,6 +179,21 @@ export function mapEnrollmentRow(rec: Record<string, string>): MappedEnrollment 
     emergencyName: (rec["Emergency Contact"] ?? "").trim() || (isChild ? parentName : null),
     emergencyPhone: (rec["Emergency Phone"] ?? "").trim() || null,
     dateSubmitted: (rec["Date Submitted"] ?? "").trim() || null,
+    address: (rec["Address"] ?? "").trim() || null,
+    gender: (rec["Gender"] ?? "").trim() || null,
+    howHeard: (rec["How Heard"] ?? "").trim() || null,
+    waiverSignature: (rec["Waiver Signature"] ?? "").trim() || null,
+    minorNames: (rec["Minor Name(s)"] ?? "").trim() || null,
+    schedule: (rec["Schedule"] ?? "").trim() || null,
+    perClassRateCents: moneyToCents(rec["Per-Class Rate"]),
+    enrollmentFeeCents: moneyToCents(rec["Enrollment Fee"]),
+    stripeCustomerId: (rec["Stripe Customer ID"] ?? "").trim() || null,
+    stripeSubscriptionId: (rec["Stripe Subscription ID"] ?? "").trim() || null,
+    stripePaymentMethod: (rec["Stripe Payment Method"] ?? "").trim() || null,
+    sourceStatus: (rec["Status"] ?? "").trim() || null,
+    // Keep the entire original row so nothing is ever lost, even columns we
+    // don't yet map to first-class fields (Program IDs, Zoho sync, etc.).
+    raw: Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, (v ?? "").trim()])),
   };
 }
 

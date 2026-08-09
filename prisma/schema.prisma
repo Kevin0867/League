@@ -83,6 +83,13 @@ model Person {
   email              String?
   phone              String?
 
+  // Contact / demographics (captured from enrollment intake)
+  address            String?
+  gender             String?
+  howHeard           String?
+  /// Stripe customer id carried over from the source enrollment system
+  stripeCustomerId   String?
+
   // Emergency contact
   emergencyName      String?
   emergencyPhone     String?
@@ -153,6 +160,17 @@ model Registration {
   partnerRequests    String?   // free text / names
   medicalDisclosures String?
   mediaOptOut        Boolean   @default(false)
+
+  // Enrollment intake fields (captured from the source CSV)
+  schedule           String?   // chosen schedule text from the enrollment form
+  minorNames         String?   // "Minor Name(s)" for household/child registrations
+  perClassRateCents  Int?      // per-class rate at enrollment
+  enrollmentFeeCents Int?      // enrollment fee at enrollment
+  stripeSubscriptionId String? // Stripe subscription id from the source system
+  stripePaymentMethod String?  // Stripe payment method from the source system
+  sourceStatus       String?   // "Status" from the source system (e.g. active)
+  /// Full original enrollment row, so no source field is ever lost
+  importRaw          Json?
 
   /// Coach fee is waived; a coach registers through the same flow (§3)
   isCoachRegistration Boolean  @default(false)

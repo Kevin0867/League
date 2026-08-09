@@ -97,11 +97,25 @@ export async function runEnrollmentImport(
         mediaOptOut: r.mediaOptOut,
         skillLevel: r.minRating ? String(r.minRating) : null,
         waiver: r.waiverSigned
-          ? { signed: true, signatureName: `${r.firstName} ${r.lastName}` }
+          ? { signed: true, signatureName: r.waiverSignature ?? `${r.firstName} ${r.lastName}` }
           : null,
         emergency: r.emergencyName
           ? { name: r.emergencyName, phone: r.emergencyPhone }
           : null,
+        extra: {
+          address: r.address,
+          gender: r.gender,
+          howHeard: r.howHeard,
+          stripeCustomerId: r.stripeCustomerId,
+          schedule: r.schedule,
+          minorNames: r.minorNames,
+          perClassRateCents: r.perClassRateCents,
+          enrollmentFeeCents: r.enrollmentFeeCents,
+          stripeSubscriptionId: r.stripeSubscriptionId,
+          stripePaymentMethod: r.stripePaymentMethod,
+          sourceStatus: r.sourceStatus,
+          importRaw: r.raw,
+        },
         locationPrefs: r.markets.map((m, i) => ({ marketName: m, rank: i + 1 })),
         source: "import",
         skipIfRegistered: true,
