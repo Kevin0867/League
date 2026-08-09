@@ -8,7 +8,7 @@ import { sendEmail } from "@/lib/notify";
 // receipt, so the two never drift. Support contact and the second logo are
 // configurable; set SUPPORT_EMAIL in the environment to override the default.
 
-export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "hello@purepickleball.com";
+export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "team@purepickleball.com";
 export const SUPPORT_PHONE = process.env.SUPPORT_PHONE || "";
 export const ACADEMY_LOGO = "/brand/pure-academy-navy.png";
 export const PADEL_LOGO = "/brand/pure-pickleball-padel.png";
