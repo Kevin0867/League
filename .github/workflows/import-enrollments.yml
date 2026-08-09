@@ -26,6 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # schema.prisma uses directUrl for migrations; the CI secret is already a
+      # direct (non-pooled) connection, so reuse it here.
+      DIRECT_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
       CSV_GZ_B64: ${{ inputs.csv_gz_b64 }}
     steps:
       - uses: actions/checkout@v4
