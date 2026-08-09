@@ -142,3 +142,106 @@ export async function registerAction(
 
   redirect("/register/thanks");
 }
+
+// A parent/guardian registers multiple children and signs ONE waiver covering
+// all of them. Creates the guardian (with an optional portal login), then a
+// Person + guardian-signed Waiver + Registration for each child.
+export async function familyRegisterAction(
+  _prev: RegisterState | undefined,
+  formData: FormData
+): Promise<RegisterState> {
+  const g = (k: string) => String(formData.get(k) ?? "").trim();
+  const seasonId = g("seasonId");
+
+  const gFirst = g("guardianFirstName");
+  const gLast = g("guardianLastName");
+  const gEmail = g("guardianEmail").toLowerCase();
+  const signatureName = g("signatureName");
+  const waiverSigned = formData.get("waiver") === "on";
+  const mediaOptOut = formData.get("mediaOptOut") === "on";
+
+  if (!gFirst || !gLast) return { error: "Parent/guardian name is required." };
+  if (!gEmail) return { error: "Parent/guardian email is required." };
+  if (!waiverSigned || !signatureName) return { error: "Please read, agree to, and sign the waiver." };
+
+  const firstNames = formData.getAll("childFirstName").map((v) => String(v).trim());
+  const lastNames = formData.getAll("childLastName").map((v) => String(v).trim());
+  const genders = formData.getAll("childGender").map((v) => String(v).trim());
+  const dobs = formData.getAll("childDob").map((v) => String(v).trim());
+  const divisionIds = formData.getAll("childDivisionId").map((v) => String(v).trim());
+
+  const kids = firstNames
+    .map((fn, i) => ({ firstName: fn, lastName: lastNames[i] ?? "", gender: genders[i] ?? "", dob: dobs[i] ?? "", divisionId: divisionIds[i] ?? "" }))
+    .filter((k) => k.firstName && k.lastName);
+  if (kids.length === 0) return { error: "Add at least one child (first and last name)." };
+
+  // Guardian person (reuse by email) + optional portal login.
+  const guardianAddress = g("guardianAddress") || null;
+  const guardianHowHeard = g("guardianHowHeard") || null;
+  let guardian = await prisma.person.findFirst({ where: { email: gEmail } });
+  if (!guardian) {
+    guardian = await prisma.person.create({
+      data: {
+        firstName: gFirst,
+        lastName: gLast,
+        email: gEmail,
+        phone: g("guardianPhone") || null,
+        address: guardianAddress,
+        howHeard: guardianHowHeard,
+      },
+    });
+  }
+  const password = g("password");
+  if (password && !(await prisma.user.findUnique({ where: { email: gEmail } }))) {
+    await prisma.user.create({
+      data: { email: gEmail, passwordHash: await hashPassword(password), role: "PARENT", personId: guardian.id },
+    });
+  }
+
+  const markets = [1, 2, 3].map((r) => g(`locationPref${r}`)).filter(Boolean);
+
+  for (const k of kids) {
+    const dob = k.dob ? new Date(k.dob) : null;
+    const isMinor = dob ? new Date().getFullYear() - dob.getFullYear() < 18 : true;
+    const child = await prisma.person.create({
+      data: {
+        firstName: k.firstName,
+        lastName: k.lastName,
+        gender: k.gender || null,
+        dob,
+        isMinor,
+        address: guardianAddress,
+        howHeard: guardianHowHeard,
+        mediaOptOut,
+        guardianId: guardian.id,
+        waiverSignedAt: new Date(),
+      },
+    });
+    await prisma.waiver.create({
+      data: {
+        personId: child.id,
+        seasonId,
+        signedAt: new Date(),
+        signatureName,
+        mediaConsent: !mediaOptOut,
+        parentalConsent: true,
+        documentVersion: g("waiverVersion") || "2026-08",
+      },
+    });
+    const registration = await prisma.registration.create({
+      data: {
+        personId: child.id,
+        seasonId,
+        divisionId: k.divisionId || null,
+        status: "SUBMITTED",
+      },
+    });
+    for (let i = 0; i < markets.length; i++) {
+      await prisma.locationPreference.create({
+        data: { registrationId: registration.id, marketName: markets[i], rank: i + 1 },
+      });
+    }
+  }
+
+  redirect("/register/thanks");
+}

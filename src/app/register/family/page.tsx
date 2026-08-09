@@ -1,22 +1,19 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
-import { RegisterForm } from "@/components/RegisterForm";
+import { FamilyRegisterForm } from "@/components/FamilyRegisterForm";
 import { prisma } from "@/lib/db";
 import { ACADEMY_MARKETS } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
-export default async function RegisterPage() {
+export default async function FamilyRegisterPage() {
   const season = await prisma.season.findFirst({
     where: { active: true, program: "PURE_ACADEMY" },
     orderBy: { startDate: "desc" },
     include: { divisions: { orderBy: { name: "asc" } } },
   });
 
-  const facilities = await prisma.facility.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, isPrivate: true, generalArea: true, market: true },
-  });
+  const facilities = await prisma.facility.findMany({ select: { market: true } });
 
   if (!season) {
     return (
@@ -31,14 +28,8 @@ export default async function RegisterPage() {
     );
   }
 
-  // Location options are the academy's markets (cities) players can attend —
-  // the base list plus any additional markets found on facilities — so the
-  // dropdowns are always populated even before facilities are added.
   const locations = Array.from(
-    new Set([
-      ...ACADEMY_MARKETS,
-      ...facilities.map((f) => f.market ?? "").filter(Boolean),
-    ])
+    new Set([...ACADEMY_MARKETS, ...facilities.map((f) => f.market ?? "").filter(Boolean)])
   );
 
   return (
@@ -47,20 +38,13 @@ export default async function RegisterPage() {
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">{season.name}</p>
-          <h1 className="display text-3xl text-brand-900 sm:text-4xl">Season registration</h1>
+          <h1 className="display text-3xl text-brand-900 sm:text-4xl">Family registration</h1>
           <p className="mt-2 text-slate-600">
-            Enroll today, pay later. We&apos;ll request the ${(49500 / 100).toFixed(0)} season
-            fee only after you&apos;re assigned a team, coach, location, day, and time.
-          </p>
-          <p className="mt-2 text-sm text-slate-600">
-            Registering more than one child?{" "}
-            <Link href="/register/family" className="font-medium text-accent-700 underline">
-              Use the family form
-            </Link>{" "}
-            to add them all and sign one waiver.
+            Registering more than one child? Add each of them here and sign one waiver for all.{" "}
+            <Link href="/register" className="text-accent-700 underline">Registering just yourself or one player?</Link>
           </p>
         </div>
-        <RegisterForm
+        <FamilyRegisterForm
           seasonId={season.id}
           divisions={season.divisions.map((d) => ({ id: d.id, name: d.name }))}
           locations={locations}
