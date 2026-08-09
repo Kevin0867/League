@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
-import { requireStaff } from "@/lib/rbac";
+import { getSession } from "@/lib/auth";
 import { ImportForm } from "./ImportForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImportPage() {
-  const session = await requireStaff();
-  if (!["COO", "DIRECTOR"].includes(session.role)) redirect("/console");
+  // Auth is already enforced by the console layout (requireStaff). Only refine
+  // the role here — and never redirect to /login from the page, to avoid the
+  // double-auth bounce on the deployed runtime.
+  const session = await getSession();
+  if (session && session.role !== "COO" && session.role !== "DIRECTOR") redirect("/console");
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { requireStaff } from "@/lib/rbac";
+import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import {
   CreateSeasonForm,
@@ -13,8 +13,9 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
-  const session = await requireStaff();
-  if (!["COO", "DIRECTOR"].includes(session.role)) redirect("/console");
+  // Auth enforced by the console layout; only refine role (never bounce to /login).
+  const session = await getSession();
+  if (session && session.role !== "COO" && session.role !== "DIRECTOR") redirect("/console");
 
   const seasons = await prisma.season.findMany({
     orderBy: [{ active: "desc" }, { startDate: "desc" }],

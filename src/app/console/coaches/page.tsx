@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { coachAssignmentGate } from "@/lib/domain/teams";
-import { requireStaff } from "@/lib/rbac";
+import { getSession } from "@/lib/auth";
 import { StaffForm } from "./StaffForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function CoachesPage() {
-  const session = await requireStaff();
+  // Auth enforced by the console layout; read the session only to gate the form.
+  const session = await getSession();
   const coaches = await prisma.coach.findMany({
     include: { person: true, _count: { select: { teams: true, recruits: true } } },
     orderBy: { person: { lastName: "asc" } },
@@ -16,7 +17,7 @@ export default async function CoachesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
-      {["COO", "DIRECTOR"].includes(session.role) && <StaffForm role={session.role} />}
+      {session && ["COO", "DIRECTOR"].includes(session.role) && <StaffForm role={session.role} />}
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
