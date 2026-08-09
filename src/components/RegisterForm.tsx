@@ -4,142 +4,168 @@ import { useActionState, useState } from "react";
 import { registerAction, type RegisterState } from "@/app/register/actions";
 import { WaiverText, WAIVER_VERSION } from "@/components/WaiverText";
 
-type Option = { id: string; name: string };
+const YOUTH_LEVELS = ["High School", "Middle", "Elementary"];
+const ADULT_TEAMS = ["Men's", "Women's"];
+const SKILLS = ["2.5", "3.0", "3.5", "4.0", "4.5", "5.0+"];
+const PRACTICE_TIMES = ["Mornings", "Evenings"];
+const MAX_KIDS = 4;
+
+type Mode = "adult" | "child" | "both";
 
 export function RegisterForm({
   seasonId,
-  divisions,
   locations,
 }: {
   seasonId: string;
-  divisions: Option[];
   locations: string[];
 }) {
-  const [state, action, pending] = useActionState<RegisterState, FormData>(
-    registerAction,
-    {}
-  );
-  const [isMinor, setIsMinor] = useState(false);
+  const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, {});
+  const [mode, setMode] = useState<Mode>("adult");
+  const [kidCount, setKidCount] = useState(1);
   const today = new Date().toISOString().slice(0, 10);
+
+  const adultPlaying = mode === "adult" || mode === "both";
+  const hasChildren = mode === "child" || mode === "both";
+  const kids = Array.from({ length: kidCount });
 
   return (
     <form action={action} className="space-y-8">
       <input type="hidden" name="seasonId" value={seasonId} />
+      <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
 
-      <Section title="Player details" subtitle="One record per person — coaches register here too, with the fee waived.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="First name" name="firstName" required />
-          <Field label="Last name" name="lastName" required />
-          <Field label="Email" name="email" type="email" />
-          <Field label="Phone" name="phone" type="tel" />
-          <div>
-            <label className="label" htmlFor="dob">Date of birth</label>
-            <input
-              id="dob" name="dob" type="date" className="input"
-              onChange={(e) => {
-                const d = e.target.valueAsDate;
-                setIsMinor(d ? new Date().getFullYear() - d.getFullYear() < 18 : false);
-              }}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="gender">Gender</label>
-            <select id="gender" name="gender" className="input" defaultValue="">
-              <option value="">— Select —</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-          </div>
-          <div>
-            <label className="label" htmlFor="skillLevel">Skill level</label>
-            <select id="skillLevel" name="skillLevel" className="input" defaultValue="">
-              <option value="">— Select —</option>
-              <option value="Beginner">Beginner</option>
-              <option value="Intermediate">Intermediate</option>
-              <option value="Advanced">Advanced</option>
-            </select>
-          </div>
-          <Field label="Address" name="address" placeholder="Street, city, ZIP" />
-          <div>
-            <label className="label" htmlFor="howHeard">How did you hear about us?</label>
-            <select id="howHeard" name="howHeard" className="input" defaultValue="">
-              <option value="">— Select —</option>
-              <option value="Friend or family">Friend or family</option>
-              <option value="Social media">Social media</option>
-              <option value="Google or web search">Google or web search</option>
-              <option value="Community event">Community event</option>
-              <option value="Flyer or sign">Flyer or sign</option>
-              <option value="Coach or staff">Coach or staff</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
+      {/* 01 — Who's playing */}
+      <Section n="01" title="Who's playing?">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <ModeCard value="adult" mode={mode} setMode={setMode} title="Myself" sub="Adult, 18 or older" />
+          <ModeCard value="child" mode={mode} setMode={setMode} title="My child" sub="Player under 18" />
+          <ModeCard value="both" mode={mode} setMode={setMode} title="Myself and my child(ren)" sub="One adult + up to 4 kids" />
         </div>
       </Section>
 
-      <Section title="Division & DUPR" subtitle="Pick ONE division. Players between bands are placed by the Academy Director after the Week-1 assessment.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="divisionId">Division</label>
-            <select id="divisionId" name="divisionId" className="input">
-              <option value="">— Select a division —</option>
-              {divisions.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
+      {/* 02 — Player Information */}
+      <Section n="02" title="Player information">
+        {adultPlaying && (
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="mb-3 text-sm font-medium text-slate-600">You (adult player)</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="First name" name="primaryFirst" required />
+              <Field label="Last name" name="primaryLast" required />
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="primaryDob">Date of birth <span className="text-rose-500">*</span></label>
+                <input id="primaryDob" name="primaryDob" type="date" className="input" required />
+                <p className="mt-1 text-xs text-slate-400">We use this to match the player to the right age group.</p>
+              </div>
+            </div>
           </div>
-          <Field label="DUPR account ID" name="duprId" placeholder="Required before first league match" />
-          <Field label="Current DUPR rating" name="duprRating" type="number" />
-        </div>
-        {isMinor && (
-          <label className="mt-4 flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-sm">
-            <input type="checkbox" name="parentalConsent" className="mt-0.5" />
-            <span>
-              As parent/guardian I give <strong>DUPR parental consent</strong> for this
-              under-18 player (required for league play).
-            </span>
-          </label>
+        )}
+
+        {hasChildren && (
+          <div className={adultPlaying ? "mt-4 space-y-4" : "space-y-4"}>
+            {kids.map((_, i) => (
+              <div key={i} className="rounded-lg border border-slate-200 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-600">Child #{i + 1}</span>
+                  {kidCount > 1 && (
+                    <button type="button" onClick={() => setKidCount((c) => c - 1)} className="text-xs text-rose-600 hover:underline">
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="First name" name="kidFirst" required={i === 0} />
+                  <Field label="Last name" name="kidLast" required={i === 0} />
+                  <div className="sm:col-span-2">
+                    <label className="label">Date of birth {i === 0 && <span className="text-rose-500">*</span>}</label>
+                    <input name="kidDob" type="date" className="input" required={i === 0} />
+                    <p className="mt-1 text-xs text-slate-400">We use this to match the player to the right age group.</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {kidCount < MAX_KIDS && (
+              <button type="button" onClick={() => setKidCount((c) => Math.min(MAX_KIDS, c + 1))} className="btn-secondary">
+                + Add another child
+              </button>
+            )}
+            {kidCount >= MAX_KIDS && (
+              <p className="text-xs text-slate-400">Up to {MAX_KIDS} children can share one waiver.</p>
+            )}
+          </div>
         )}
       </Section>
 
-      <Section title="Preferences" subtitle="Pools overlap on location and time. Rank the locations you're willing to attend — pick as many as work for you.">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[1, 2, 3].map((r) => (
-            <div key={r}>
-              <label className="label" htmlFor={`locationPref${r}`}>Location #{r}</label>
-              <select id={`locationPref${r}`} name={`locationPref${r}`} className="input" defaultValue="">
-                <option value="">— Select a location —</option>
-                {locations.map((loc) => (
-                  <option key={loc} value={loc}>{loc}</option>
-                ))}
-              </select>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="practiceTimePref">Practice time preference</label>
-            <select id="practiceTimePref" name="practiceTimePref" className="input">
-              <option value="">—</option>
-              <option value="weeknight">Weeknight</option>
-              <option value="weekday">Weekday</option>
-              <option value="weekend">Weekend</option>
-            </select>
+      {/* 03 — Program Interest */}
+      <Section n="03" title="Program interest" subtitle="Pick the track and skill level that fits each player. Our team confirms placement after you register.">
+        {adultPlaying && (
+          <ProgramRow label="You" teamName="primaryTeam" skillName="primarySkill" teams={ADULT_TEAMS} groupLabel="Adult ELITE TEAMS" />
+        )}
+        {hasChildren && (
+          <div className={adultPlaying ? "mt-4 space-y-4" : "space-y-4"}>
+            {kids.map((_, i) => (
+              <ProgramRow
+                key={i}
+                label={`Child #${i + 1}`}
+                teamName="kidTeam"
+                skillName="kidSkill"
+                teams={YOUTH_LEVELS}
+                groupLabel="Youth ELITE TEAMS"
+              />
+            ))}
           </div>
-          <Field label="Days that don't work" name="daysThatDontWork" placeholder="e.g. Tuesdays, Thursdays" />
-          <Field label="Partner / friend requests" name="partnerRequests" />
-          <Field label="Medical disclosures" name="medical" />
+        )}
+      </Section>
+
+      {/* 04 — Preferences */}
+      <Section n="04" title="Preferences">
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <label className="label">Location <span className="text-slate-400">(choose all that work)</span></label>
+            <div className="mt-1 space-y-2">
+              {locations.map((loc) => (
+                <label key={loc} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="location" value={loc} />
+                  {loc}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="label">Practice times <span className="text-slate-400">(choose all that work)</span></label>
+            <div className="mt-1 space-y-2">
+              {PRACTICE_TIMES.map((t) => (
+                <label key={t} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="practiceTime" value={t} />
+                  {t}
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
       </Section>
 
-      <Section title="Emergency contact">
+      {/* 05 — Contact Information */}
+      <Section n="05" title="Contact information">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Contact name" name="emergencyName" />
-          <Field label="Contact phone" name="emergencyPhone" type="tel" />
+          {!adultPlaying && (
+            <>
+              <Field label="Parent / guardian first name" name="primaryFirst" required />
+              <Field label="Parent / guardian last name" name="primaryLast" required />
+            </>
+          )}
+          <Field label="Email" name="primaryEmail" type="email" required />
+          <Field label="Phone" name="primaryPhone" type="tel" required />
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="comments">Comments <span className="text-slate-400">(optional)</span></label>
+            <textarea
+              id="comments" name="comments" rows={3} className="input"
+              placeholder="How long they've played, current level, what they want to work on…"
+            />
+          </div>
         </div>
       </Section>
 
-      <Section title="Waiver & consent" subtitle="No player appears on a court-ready roster without a signed waiver.">
-        <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
+      {/* Waiver & signature */}
+      <Section title="Waiver & consent" subtitle="No player appears on a court-ready roster without a signed waiver. One signature covers everyone listed above.">
         <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
           <WaiverText />
         </div>
@@ -150,10 +176,8 @@ export function RegisterForm({
             I have read, understand, and agree to the{" "}
             <strong>Acknowledgment of Risk, Waiver, and Release of Liability</strong>{" "}
             above, and to the season terms including the{" "}
-            <strong>no make-up policy</strong> — the season fee reserves a place on a
-            team, not a session count. Individual practices that PURE cancels are
-            not refunded or credited. If registering a minor, I certify I am their
-            parent or legal guardian and sign on their behalf.
+            <strong>no make-up policy</strong>. If registering a minor, I certify I am
+            their parent or legal guardian and sign on their behalf.
           </span>
         </label>
 
@@ -195,12 +219,66 @@ export function RegisterForm({
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function ModeCard({
+  value, mode, setMode, title, sub,
+}: { value: Mode; mode: Mode; setMode: (m: Mode) => void; title: string; sub: string }) {
+  const active = mode === value;
+  return (
+    <label
+      className={`flex cursor-pointer flex-col rounded-lg border p-4 ${
+        active ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-slate-200 hover:border-slate-300"
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <input
+          type="radio" name="mode" value={value} checked={active}
+          onChange={() => setMode(value)} className="accent-brand-600"
+        />
+        <span className="font-medium text-slate-900">{title}</span>
+      </span>
+      <span className="mt-1 pl-6 text-xs text-slate-500">{sub}</span>
+    </label>
+  );
+}
+
+function ProgramRow({
+  label, teamName, skillName, teams, groupLabel,
+}: { label: string; teamName: string; skillName: string; teams: string[]; groupLabel: string }) {
+  return (
+    <div className="rounded-lg border border-slate-200 p-4">
+      <p className="mb-3 text-sm font-medium text-slate-600">{label}</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label">{groupLabel}</label>
+          <select name={teamName} className="input" defaultValue="">
+            <option value="">— Select —</option>
+            {teams.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Skill level</label>
+          <select name={skillName} className="input" defaultValue="">
+            <option value="">— Select —</option>
+            {SKILLS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  n, title, subtitle, children,
+}: { n?: string; title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <section className="card">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      {subtitle && <p className="mb-4 mt-0.5 text-sm text-slate-500">{subtitle}</p>}
-      {!subtitle && <div className="mb-4" />}
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-slate-900">
+          {n && <span className="mr-2 text-sm font-semibold text-brand-500">{n}</span>}
+          {title}
+        </h2>
+        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+      </div>
       {children}
     </section>
   );

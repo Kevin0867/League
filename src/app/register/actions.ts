@@ -3,129 +3,288 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
-import { isLikelyDuplicate } from "@/lib/domain/registrations";
 
 export type RegisterState = { error?: string };
 
-export async function registerAction(
-  _prev: RegisterState | undefined,
-  formData: FormData
-): Promise<RegisterState> {
-  const g = (k: string) => String(formData.get(k) ?? "").trim();
+// --- Program Interest → Division matching -----------------------------------
+// The public form captures a "track" (youth school level or adult Men's/Women's)
+// plus a skill band. Prod division names vary, so we match loosely by name and
+// fall back to leaving the registration unassigned (staff place them). The chosen
+// track is always preserved verbatim in Registration.programInterest.
 
-  const firstName = g("firstName");
-  const lastName = g("lastName");
-  const email = g("email").toLowerCase();
-  const phone = g("phone");
-  const password = g("password");
-  const seasonId = g("seasonId");
-  const divisionId = g("divisionId") || null;
-  const waiverSigned = formData.get("waiver") === "on";
-  const signatureName = g("signatureName");
+function genderFromTeam(team: string): string | null {
+  const t = team.toLowerCase();
+  if (t.includes("women")) return "Female";
+  if (t.includes("men")) return "Male";
+  return null;
+}
 
-  if (!firstName || !lastName) return { error: "Name is required." };
-  if (!email && !phone) return { error: "An email or phone number is required." };
-  if (!waiverSigned || !signatureName)
-    return { error: "The liability waiver must be signed to register." };
-  if (!seasonId) return { error: "No active season is open for registration." };
+function programLabel(team: string, skill: string): string {
+  return [team, skill].filter(Boolean).join(" — ") || (skill ? skill : "");
+}
 
-  // Duplicate detection (§3) — match on name + (email OR phone).
-  const candidate = { id: "new", firstName, lastName, email, phone };
-  const existingPeople = await prisma.person.findMany({
-    where: {
-      OR: [email ? { email } : undefined, phone ? { phone } : undefined].filter(
-        Boolean
-      ) as object[],
-    },
-  });
-  const match = existingPeople.find((p) => isLikelyDuplicate(candidate, p));
+function matchDivisionId(
+  divisions: { id: string; name: string }[],
+  team: string,
+  skill: string
+): string | null {
+  const find = (pred: (n: string) => boolean) =>
+    divisions.find((d) => pred(d.name.toLowerCase()))?.id ?? null;
+  const t = team.toLowerCase();
 
-  const dob = g("dob") ? new Date(g("dob")) : null;
-  const isMinor = dob
-    ? new Date().getFullYear() - dob.getFullYear() < 18
-    : false;
-  const mediaOptOut = formData.get("mediaOptOut") === "on";
+  const skillBand = skill ? skill.replace("+", "") : "";
+  const bySkill = () => (skillBand ? find((n) => n.includes(skillBand)) : null);
 
-  let personId: string;
-  if (match) {
-    // Reuse the existing person; the registration will be flagged for merge review.
-    personId = match.id;
+  // Youth levels match by school level only (never fall through to an adult band).
+  if (t.includes("high school")) return find((n) => n.includes("high school") || /\bhs\b/.test(n));
+  if (t.includes("middle")) return find((n) => n.includes("middle"));
+  if (t.includes("elementary")) return find((n) => n.includes("elementary") || n.includes("elem"));
+
+  // Adult tracks: prefer a gendered division, else fall back to the skill band.
+  if (t.includes("women"))
+    return (
+      find((n) => n.includes("women") && (!skillBand || n.includes(skillBand))) ||
+      find((n) => n.includes("women")) ||
+      bySkill()
+    );
+  if (t.includes("men"))
+    return (
+      find((n) => /\bmen('s)?\b/.test(n) && !n.includes("women") && (!skillBand || n.includes(skillBand))) ||
+      find((n) => /\bmen('s)?\b/.test(n) && !n.includes("women")) ||
+      bySkill()
+    );
+
+  // No team chosen — last resort match by skill band.
+  return bySkill();
+}
+
+type PlayerInput = {
+  firstName: string;
+  lastName: string;
+  dob: string;
+  team: string;
+  skill: string;
+  isChild: boolean;
+};
+
+// Creates the Person, a signed Waiver, and one Registration for a single player.
+async function enrollPlayer(opts: {
+  player: PlayerInput;
+  seasonId: string;
+  divisions: { id: string; name: string }[];
+  signatureName: string;
+  mediaOptOut: boolean;
+  waiverVersion: string;
+  locations: string[];
+  practiceTimes: string[];
+  comments: string;
+  // For an adult who is also the contact, reuse that Person instead of creating one.
+  existingPersonId?: string;
+  guardianId?: string;
+  email?: string;
+  phone?: string;
+}): Promise<void> {
+  const { player } = opts;
+  const dob = player.dob ? new Date(player.dob) : null;
+  const isMinor = player.isChild;
+
+  let personId = opts.existingPersonId ?? "";
+  if (personId) {
     await prisma.person.update({
-      where: { id: match.id },
+      where: { id: personId },
       data: {
-        phone: match.phone ?? (phone || null),
-        email: match.email ?? (email || null),
-        ...(waiverSigned && !match.waiverSignedAt ? { waiverSignedAt: new Date() } : {}),
+        dob: dob ?? undefined,
+        isMinor,
+        gender: genderFromTeam(player.team) ?? undefined,
+        waiverSignedAt: new Date(),
       },
     });
   } else {
     const person = await prisma.person.create({
       data: {
-        firstName,
-        lastName,
-        email: email || null,
-        phone: phone || null,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        email: opts.email || null,
+        phone: opts.phone || null,
         dob,
         isMinor,
-        gender: g("gender") || null,
-        address: g("address") || null,
-        howHeard: g("howHeard") || null,
-        mediaOptOut,
-        emergencyName: g("emergencyName") || null,
-        emergencyPhone: g("emergencyPhone") || null,
-        duprId: g("duprId") || null,
-        medicalNotes: g("medical") || null,
-        waiverSignedAt: waiverSigned ? new Date() : null,
+        gender: genderFromTeam(player.team),
+        mediaOptOut: opts.mediaOptOut,
+        guardianId: opts.guardianId ?? null,
+        waiverSignedAt: new Date(),
       },
     });
     personId = person.id;
   }
 
-  // Waiver record with signature date (§3). Media consent is opt-out.
   await prisma.waiver.create({
     data: {
       personId,
-      seasonId,
+      seasonId: opts.seasonId,
       signedAt: new Date(),
-      signatureName,
-      mediaConsent: !mediaOptOut,
-      // Agreeing to the waiver (which certifies guardianship for minors) is the
-      // parental consent for a minor registration.
-      parentalConsent: isMinor ? waiverSigned : false,
-      documentVersion: g("waiverVersion") || "2026-08",
+      signatureName: opts.signatureName,
+      mediaConsent: !opts.mediaOptOut,
+      // A minor's registration is consented to by the signing guardian.
+      parentalConsent: isMinor,
+      documentVersion: opts.waiverVersion,
     },
   });
 
-  // The registration itself.
   const registration = await prisma.registration.create({
     data: {
       personId,
-      seasonId,
-      divisionId,
-      skillLevel: g("skillLevel") || null,
-      duprRatingAtReg: g("duprRating") ? Number(g("duprRating")) : null,
-      practiceTimePref: g("practiceTimePref") || null,
-      daysThatDontWork: g("daysThatDontWork") || null,
-      partnerRequests: g("partnerRequests") || null,
-      medicalDisclosures: g("medical") || null,
-      mediaOptOut,
-      status: match ? "DUPLICATE" : "SUBMITTED",
+      seasonId: opts.seasonId,
+      divisionId: matchDivisionId(opts.divisions, player.team, player.skill),
+      skillLevel: player.skill || null,
+      programInterest: programLabel(player.team, player.skill) || null,
+      practiceTimePref: opts.practiceTimes.join(", ") || null,
+      schedule: opts.practiceTimes.join(", ") || null,
+      partnerRequests: opts.comments || null,
+      mediaOptOut: opts.mediaOptOut,
+      status: "SUBMITTED",
     },
   });
 
-  // Ranked location preferences (up to 3) — stored by market/city name.
-  const seenMarkets = new Set<string>();
-  for (let rank = 1; rank <= 3; rank++) {
-    const market = g(`locationPref${rank}`);
-    if (market && !seenMarkets.has(market)) {
-      seenMarkets.add(market);
-      await prisma.locationPreference.create({
-        data: { registrationId: registration.id, marketName: market, rank },
+  for (let i = 0; i < opts.locations.length; i++) {
+    await prisma.locationPreference.create({
+      data: { registrationId: registration.id, marketName: opts.locations[i], rank: i + 1 },
+    });
+  }
+}
+
+// PURE Academy enrollment — mirrors the public PURE website form. One waiver
+// signing covers up to one adult (the person filling it out, if playing) plus
+// up to four children. Each enrolled player gets a Person, a signed Waiver, and
+// a Registration matched to a division by their chosen program track.
+export async function registerAction(
+  _prev: RegisterState | undefined,
+  formData: FormData
+): Promise<RegisterState> {
+  const g = (k: string) => String(formData.get(k) ?? "").trim();
+  const getAll = (k: string) => formData.getAll(k).map((v) => String(v).trim());
+
+  const seasonId = g("seasonId");
+  if (!seasonId) return { error: "No active season is open for registration." };
+
+  const mode = g("mode") || "adult"; // "adult" | "child" | "both"
+  const adultPlaying = mode === "adult" || mode === "both";
+  const hasChildren = mode === "child" || mode === "both";
+
+  // Contact / primary person (adult player in adult|both mode; guardian in child mode).
+  const firstName = g("primaryFirst");
+  const lastName = g("primaryLast");
+  const email = g("primaryEmail").toLowerCase();
+  const phone = g("primaryPhone");
+  const comments = g("comments");
+  const password = g("password");
+
+  const waiverSigned = formData.get("waiver") === "on";
+  const signatureName = g("signatureName");
+  const mediaOptOut = formData.get("mediaOptOut") === "on";
+  const waiverVersion = g("waiverVersion") || "2026-08";
+
+  if (!firstName || !lastName)
+    return { error: hasChildren && !adultPlaying ? "Parent/guardian name is required." : "Your name is required." };
+  if (!email) return { error: "An email is required." };
+  if (!phone) return { error: "A phone number is required." };
+  if (!waiverSigned || !signatureName)
+    return { error: "The liability waiver must be read, agreed to, and signed." };
+
+  // Shared preferences.
+  const locations = getAll("location").filter(Boolean);
+  const practiceTimes = getAll("practiceTime").filter(Boolean);
+
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { divisions: { select: { id: true, name: true } } },
+  });
+  const divisions = season?.divisions ?? [];
+
+  // Reuse an existing person by email so families don't create duplicates.
+  const existing = await prisma.person.findFirst({ where: { email } });
+  let primaryId: string;
+  if (existing) {
+    primaryId = existing.id;
+    await prisma.person.update({
+      where: { id: existing.id },
+      data: {
+        firstName: existing.firstName || firstName,
+        lastName: existing.lastName || lastName,
+        phone: existing.phone ?? (phone || null),
+        mediaOptOut,
+      },
+    });
+  } else {
+    const primary = await prisma.person.create({
+      data: { firstName, lastName, email: email || null, phone: phone || null, mediaOptOut },
+    });
+    primaryId = primary.id;
+  }
+
+  // The adult (contact) plays: enroll them, reusing the primary Person.
+  if (adultPlaying) {
+    await enrollPlayer({
+      player: {
+        firstName,
+        lastName,
+        dob: g("primaryDob"),
+        team: g("primaryTeam"),
+        skill: g("primarySkill"),
+        isChild: false,
+      },
+      seasonId,
+      divisions,
+      signatureName,
+      mediaOptOut,
+      waiverVersion,
+      locations,
+      practiceTimes,
+      comments,
+      existingPersonId: primaryId,
+      email: email || undefined,
+      phone: phone || undefined,
+    });
+  }
+
+  // Children (up to 4), each guardian-signed on the same waiver.
+  if (hasChildren) {
+    const kf = getAll("kidFirst");
+    const kl = getAll("kidLast");
+    const kd = getAll("kidDob");
+    const kt = getAll("kidTeam");
+    const ks = getAll("kidSkill");
+    const kids = kf
+      .map((fn, i) => ({
+        firstName: fn,
+        lastName: kl[i] ?? "",
+        dob: kd[i] ?? "",
+        team: kt[i] ?? "",
+        skill: ks[i] ?? "",
+        isChild: true,
+      }))
+      .filter((k) => k.firstName && k.lastName)
+      .slice(0, 4);
+
+    if (!adultPlaying && kids.length === 0)
+      return { error: "Add at least one player (first and last name)." };
+
+    for (const kid of kids) {
+      await enrollPlayer({
+        player: kid,
+        seasonId,
+        divisions,
+        signatureName,
+        mediaOptOut,
+        waiverVersion,
+        locations,
+        practiceTimes,
+        comments,
+        guardianId: primaryId,
       });
     }
   }
 
-  // Optional: create a portal login so the family can track placement & pay later.
+  // Optional portal login. Adult-only → PLAYER; guardian present → PARENT.
   if (password && email) {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (!existingUser) {
@@ -133,112 +292,9 @@ export async function registerAction(
         data: {
           email,
           passwordHash: await hashPassword(password),
-          role: "PLAYER",
-          personId,
+          role: hasChildren ? "PARENT" : "PLAYER",
+          personId: primaryId,
         },
-      });
-    }
-  }
-
-  redirect("/register/thanks");
-}
-
-// A parent/guardian registers multiple children and signs ONE waiver covering
-// all of them. Creates the guardian (with an optional portal login), then a
-// Person + guardian-signed Waiver + Registration for each child.
-export async function familyRegisterAction(
-  _prev: RegisterState | undefined,
-  formData: FormData
-): Promise<RegisterState> {
-  const g = (k: string) => String(formData.get(k) ?? "").trim();
-  const seasonId = g("seasonId");
-
-  const gFirst = g("guardianFirstName");
-  const gLast = g("guardianLastName");
-  const gEmail = g("guardianEmail").toLowerCase();
-  const signatureName = g("signatureName");
-  const waiverSigned = formData.get("waiver") === "on";
-  const mediaOptOut = formData.get("mediaOptOut") === "on";
-
-  if (!gFirst || !gLast) return { error: "Parent/guardian name is required." };
-  if (!gEmail) return { error: "Parent/guardian email is required." };
-  if (!waiverSigned || !signatureName) return { error: "Please read, agree to, and sign the waiver." };
-
-  const firstNames = formData.getAll("childFirstName").map((v) => String(v).trim());
-  const lastNames = formData.getAll("childLastName").map((v) => String(v).trim());
-  const genders = formData.getAll("childGender").map((v) => String(v).trim());
-  const dobs = formData.getAll("childDob").map((v) => String(v).trim());
-  const divisionIds = formData.getAll("childDivisionId").map((v) => String(v).trim());
-
-  const kids = firstNames
-    .map((fn, i) => ({ firstName: fn, lastName: lastNames[i] ?? "", gender: genders[i] ?? "", dob: dobs[i] ?? "", divisionId: divisionIds[i] ?? "" }))
-    .filter((k) => k.firstName && k.lastName);
-  if (kids.length === 0) return { error: "Add at least one child (first and last name)." };
-
-  // Guardian person (reuse by email) + optional portal login.
-  const guardianAddress = g("guardianAddress") || null;
-  const guardianHowHeard = g("guardianHowHeard") || null;
-  let guardian = await prisma.person.findFirst({ where: { email: gEmail } });
-  if (!guardian) {
-    guardian = await prisma.person.create({
-      data: {
-        firstName: gFirst,
-        lastName: gLast,
-        email: gEmail,
-        phone: g("guardianPhone") || null,
-        address: guardianAddress,
-        howHeard: guardianHowHeard,
-      },
-    });
-  }
-  const password = g("password");
-  if (password && !(await prisma.user.findUnique({ where: { email: gEmail } }))) {
-    await prisma.user.create({
-      data: { email: gEmail, passwordHash: await hashPassword(password), role: "PARENT", personId: guardian.id },
-    });
-  }
-
-  const markets = [1, 2, 3].map((r) => g(`locationPref${r}`)).filter(Boolean);
-
-  for (const k of kids) {
-    const dob = k.dob ? new Date(k.dob) : null;
-    const isMinor = dob ? new Date().getFullYear() - dob.getFullYear() < 18 : true;
-    const child = await prisma.person.create({
-      data: {
-        firstName: k.firstName,
-        lastName: k.lastName,
-        gender: k.gender || null,
-        dob,
-        isMinor,
-        address: guardianAddress,
-        howHeard: guardianHowHeard,
-        mediaOptOut,
-        guardianId: guardian.id,
-        waiverSignedAt: new Date(),
-      },
-    });
-    await prisma.waiver.create({
-      data: {
-        personId: child.id,
-        seasonId,
-        signedAt: new Date(),
-        signatureName,
-        mediaConsent: !mediaOptOut,
-        parentalConsent: true,
-        documentVersion: g("waiverVersion") || "2026-08",
-      },
-    });
-    const registration = await prisma.registration.create({
-      data: {
-        personId: child.id,
-        seasonId,
-        divisionId: k.divisionId || null,
-        status: "SUBMITTED",
-      },
-    });
-    for (let i = 0; i < markets.length; i++) {
-      await prisma.locationPreference.create({
-        data: { registrationId: registration.id, marketName: markets[i], rank: i + 1 },
       });
     }
   }

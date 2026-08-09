@@ -156,6 +156,9 @@ model Registration {
   divisionId         String?
   division           Division? @relation(fields: [divisionId], references: [id])
   skillLevel         String?
+  /// Program interest chosen on the public form (e.g. "High School", "Men's — 3.5")
+  /// preserved verbatim so staff see the requested track even when no division matched.
+  programInterest    String?
   duprRatingAtReg    Float?
 
   practiceTimePref   String?   // e.g. "weeknight", "weekend"

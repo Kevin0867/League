@@ -46,25 +46,21 @@ export default async function RegisterPage() {
       <PublicNav />
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-6">
-          <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">{season.name}</p>
-          <h1 className="display text-3xl text-brand-900 sm:text-4xl">Season registration</h1>
-          <p className="mt-2 text-slate-600">
-            Enroll today, pay later. We&apos;ll request the ${(49500 / 100).toFixed(0)} season
-            fee only after you&apos;re assigned a team, coach, location, day, and time.
+          <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+            {season.name} · Player Enrollment
           </p>
-          <p className="mt-2 text-sm text-slate-600">
-            Registering more than one child?{" "}
-            <Link href="/register/family" className="font-medium text-accent-700 underline">
-              Use the family form
-            </Link>{" "}
-            to add them all and sign one waiver.
+          <h1 className="display text-3xl text-brand-900 sm:text-4xl">PURE Academy enrollment</h1>
+          <p className="mt-2 text-slate-600">
+            Tell us about the player. Our team matches you to the right team, coach, and
+            location — then reaches out to confirm. Enroll today, pay later: we&apos;ll request
+            the ${(49500 / 100).toFixed(0)} season fee only after you&apos;re assigned a team.
+          </p>
+          <p className="mt-2 text-sm text-slate-500">
+            Registering a whole family? Choose <strong>&ldquo;Myself and my child(ren)&rdquo;</strong> —
+            one waiver covers one adult and up to four kids.
           </p>
         </div>
-        <RegisterForm
-          seasonId={season.id}
-          divisions={season.divisions.map((d) => ({ id: d.id, name: d.name }))}
-          locations={locations}
-        />
+        <RegisterForm seasonId={season.id} locations={locations} />
       </div>
     </div>
   );
