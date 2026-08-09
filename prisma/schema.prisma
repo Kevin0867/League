@@ -4,14 +4,14 @@
 //   "Get these entities right and the rest follows. Get them wrong and every
 //    report is a workaround."
 //
-// Dev uses SQLite for zero-config local runs. Production targets PostgreSQL
-// (encryption at rest, backups, retention). Because this schema is written to
-// run on SQLite today, we avoid native enums and scalar-list arrays:
+// Runs on PostgreSQL (managed migrations, encryption at rest, backups). The
+// schema keeps a deliberately portable shape:
 //   - enum-like values are Strings with the allowed set documented inline and
-//     validated in application code (see src/lib/enums.ts)
-//   - "arrays" are modeled as related rows or JSON strings
-//   - money is stored as INTEGER CENTS (never floats) to avoid rounding drift
-// Moving to Postgres later is a provider swap plus optional enum/array upgrades.
+//     validated in application code (see src/lib/enums.ts). This trades
+//     DB-level enum enforcement for zero-churn value changes across seasons;
+//     CHECK constraints can be layered via a migration if desired.
+//   - "arrays" are modeled as related rows or JSON strings.
+//   - money is stored as INTEGER CENTS (never floats) to avoid rounding drift.
 // ---------------------------------------------------------------------------
 
 generator client {
@@ -19,8 +19,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl is used for migrations. With a connection pooler (PgBouncer,
+  // Supabase, Neon) point DATABASE_URL at the pooler and DIRECT_URL at the
+  // direct connection. Locally both are the same.
+  directUrl = env("DIRECT_URL")
 }
 
 // ===========================================================================

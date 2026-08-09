@@ -28,21 +28,29 @@ Player/Parent own record).
 - **Next.js 15** (App Router) + **React 19** + **TypeScript** — one codebase,
   server-rendered public site, both portals, mobile-first (coaches mark
   attendance courtside on a phone, §18).
-- **Prisma** ORM. **SQLite** for local dev (zero-config); **PostgreSQL** for
-  production (encryption at rest, backups, retention).
+- **Prisma** ORM on **PostgreSQL**, with committed migration files.
 - Custom **JWT sessions** (`jose`) + **bcrypt**, with a role permission matrix.
 - **Stripe hosted checkout** for payments — the app never touches card data (§18).
 - **Tailwind CSS**.
 
 ## Getting started
 
+You need a PostgreSQL database. Point `DATABASE_URL` / `DIRECT_URL` at it (see
+`.env.example`), then:
+
 ```bash
 npm install
-cp .env.example .env          # DATABASE_URL defaults to SQLite (file:./dev.db)
-npm run db:push               # create the schema
+cp .env.example .env          # set DATABASE_URL / DIRECT_URL for your Postgres
+npm run db:deploy             # apply migrations (prisma migrate deploy)
 npm run db:seed               # load demo data
 npm run dev                   # http://localhost:3000
 ```
+
+In this project's dev container a local Postgres is bootstrapped automatically by
+a SessionStart hook (`scripts/dev-db.sh`) — it initializes the cluster, starts
+the server, applies migrations, and seeds when empty. Run it by hand any time
+with `bash scripts/dev-db.sh`. Use `npm run db:migrate` to create a new migration
+after editing the schema.
 
 ### Demo logins (password: `pickleball`)
 
@@ -57,7 +65,8 @@ npm run dev                   # http://localhost:3000
 ### Scripts
 
 - `npm run dev` / `build` / `start`
-- `npm run db:push` — sync schema to the database
+- `npm run db:migrate` — create & apply a migration in dev (after schema edits)
+- `npm run db:deploy` — apply committed migrations (CI / production)
 - `npm run db:seed` — reset & load demo data
 - `npm run db:studio` — Prisma Studio data browser
 
@@ -74,8 +83,10 @@ npm run dev                   # http://localhost:3000
   roster sizing with coach-plays, duplicate detection, à la carte revenue split
   (court cost off the top, rates stamped onto the transaction), and standings
   computed from game-level data so any standings method can be swapped in later.
-- **Enum-like values** are Strings (SQLite has no native enums), with the allowed
-  sets centralized and documented in `src/lib/enums.ts`.
+- **Enum-like values** are Strings with the allowed sets centralized in
+  `src/lib/enums.ts` and validated in app code — a deliberate choice for
+  zero-churn value changes across seasons. DB-level CHECK constraints can be
+  layered via a migration if stricter enforcement is wanted.
 
 ## Roadmap (mirrors spec §19 phasing)
 
@@ -131,8 +142,16 @@ Key spec sections are cited inline in the code (search for `§`). Highlights:
 | §17 Roles & permissions | `src/lib/rbac.ts` |
 | §18 No card data, mobile-first, audit trail | Stripe checkout, `AuditLog` |
 
-## Production deployment (later)
+## Production deployment
 
-Switch `datasource.provider` to `postgresql`, set `DATABASE_URL`, provision Stripe
-keys, and set a strong `AUTH_SECRET`. Upgrade enum-like String fields to native
-Postgres enums and scalar-list fields to arrays where desired.
+- Provision a managed PostgreSQL instance; set `DATABASE_URL` (pooled) and
+  `DIRECT_URL` (direct, for migrations). Run `npm run db:deploy` on release.
+- Set a strong `AUTH_SECRET` (`openssl rand -base64 32`).
+- Provision Stripe keys (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+  `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`) — checkout switches from simulation to
+  live automatically when present.
+- Provision Twilio (`TWILIO_*`) and Resend (`RESEND_API_KEY`) for SMS/email.
+
+Still to harden before real family data: encryption at rest for minors'/medical
+fields, automated backups with a tested restore, and (optionally) DB-level CHECK
+constraints on the enum-like columns.
