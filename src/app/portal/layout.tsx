@@ -14,6 +14,7 @@ export default async function PortalLayout({
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <Logo href="/portal" />
           <div className="flex items-center gap-3 text-sm">
+            <Link href="/portal/lessons" className="font-medium text-brand-700 hover:underline">Lessons</Link>
             <span className="hidden text-slate-500 sm:inline">{session.name}</span>
             <Link href="/logout" className="btn-ghost">Sign out</Link>
           </div>

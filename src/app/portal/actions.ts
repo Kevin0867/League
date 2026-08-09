@@ -7,6 +7,25 @@ import { getSession } from "@/lib/auth";
 import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 
+/** Book an à la carte offering (§11). Creates a REQUESTED booking for the coach. */
+export async function bookOffering(formData: FormData) {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  const offeringId = String(formData.get("offeringId") ?? "");
+  const clientId = String(formData.get("clientId") ?? session.personId ?? "");
+
+  const household = await householdPersonIds(session.personId);
+  if (!household.includes(clientId)) throw new Error("Not authorized.");
+
+  const offering = await prisma.alaCarteOffering.findUnique({ where: { id: offeringId } });
+  if (!offering || !offering.active) throw new Error("Offering unavailable.");
+
+  await prisma.alaCarteBooking.create({
+    data: { offeringId, clientId, coachId: offering.coachId, status: "REQUESTED" },
+  });
+  revalidatePath("/portal/lessons");
+}
+
 /**
  * Player-entered availability for a fixture (§14). Player marks Playing or Not
  * playing themselves — not relayed through a coach. Scoped to the household.

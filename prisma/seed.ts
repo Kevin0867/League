@@ -254,6 +254,17 @@ async function main() {
     },
   });
 
+  console.log("Seeding à la carte offerings…");
+  await prisma.alaCarteOffering.create({
+    data: { type: "PRIVATE", title: "60-min private lesson", facilityId: facScottsdale.id, coachId: coachSam.coach.id, priceCents: 9000 },
+  });
+  await prisma.alaCarteOffering.create({
+    data: { type: "CLINIC", title: "Saturday skills clinic", facilityId: facMesa.id, coachId: coachSam.coach.id, priceCents: 4500 },
+  });
+  await prisma.alaCarteBooking.create({
+    data: { offeringId: (await prisma.alaCarteOffering.findFirstOrThrow({ where: { type: "PRIVATE" } })).id, clientId: p1.id, coachId: coachSam.coach.id, status: "REQUESTED" },
+  });
+
   console.log("Seeding an ACP fixture with line scores (for standings)…");
   const teamAcp2 = await prisma.team.create({
     data: {
