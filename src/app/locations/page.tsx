@@ -23,7 +23,7 @@ export default async function LocationsPage() {
     <div>
       <PublicNav />
       <div className="mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-3xl font-bold text-slate-900">Locations</h1>
+        <h1 className="display text-3xl text-brand-900 sm:text-4xl">Locations</h1>
         <p className="mt-2 text-slate-600">
           We play across the Valley. Private residences and single-site courts are shown by
           general area only — the exact location is released to assigned players behind login.

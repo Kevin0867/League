@@ -44,7 +44,7 @@ export default async function RegisterPage() {
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">{season.name}</p>
-          <h1 className="text-3xl font-bold text-slate-900">Season registration</h1>
+          <h1 className="display text-3xl text-brand-900 sm:text-4xl">Season registration</h1>
           <p className="mt-2 text-slate-600">
             Enroll today, pay later. We&apos;ll request the ${(49500 / 100).toFixed(0)} season
             fee only after you&apos;re assigned a team, coach, location, day, and time.

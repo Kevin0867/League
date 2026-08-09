@@ -14,7 +14,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   // Mobile-first: coaches mark attendance courtside on a phone (§18).
-  themeColor: "#164ae1",
+  themeColor: "#0e1d34",
 };
 
 export default function RootLayout({

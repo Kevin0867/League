@@ -15,7 +15,7 @@ export default async function ProgramsPage() {
     <div>
       <PublicNav />
       <div className="mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-3xl font-bold text-slate-900">Programs &amp; divisions</h1>
+        <h1 className="display text-3xl text-brand-900 sm:text-4xl">Programs &amp; divisions</h1>
         <p className="mt-2 text-slate-600">
           A twelve-session season per team: six practice weeks, five league weeks, and
           championship week. Youth divisions run by school level; adult divisions by DUPR band.

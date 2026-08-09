@@ -12,28 +12,31 @@ export default async function HomePage() {
       <PublicNav />
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-brand-800 text-white">
-        <div className="mx-auto max-w-6xl px-4 py-20">
-          <p className="mb-3 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-            {season ? season.name : "Fall 2026 Season"}
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 text-white">
+        {/* subtle accent glow */}
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent-500/20 blur-3xl" />
+        <div className="relative mx-auto max-w-6xl px-4 py-24">
+          <p className="eyebrow eyebrow-light mb-5">
+            {season ? season.name : "PURE Academy · Fall 2026"}
           </p>
-          <h1 className="max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl">
-            Youth &amp; adult pickleball, organized end to end.
+          <h1 className="display max-w-3xl text-4xl text-white sm:text-6xl">
+            Youth &amp; adult pickleball,{" "}
+            <em className="text-accent-400">organized end to end.</em>
           </h1>
-          <p className="mt-4 max-w-xl text-lg text-brand-50">
+          <p className="mt-6 max-w-xl text-lg text-brand-100">
             Register, get placed on a team, and play a DUPR-recorded league —
             all in one place. Coaches manage rosters, attendance, and match
             nights from their phone.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/register" className="btn bg-white text-brand-700 hover:bg-brand-50">
+            <Link href="/register" className="btn-accent px-6 py-3 text-base">
               Register for the season
             </Link>
-            <Link href="/standings" className="btn bg-brand-500/40 text-white ring-1 ring-white/40 hover:bg-brand-500/60">
+            <Link href="/standings" className="btn bg-white/10 px-6 py-3 text-base text-white ring-1 ring-white/25 hover:bg-white/20">
               View league standings
             </Link>
           </div>
-          <p className="mt-6 text-sm text-brand-100">
+          <p className="mt-6 text-sm text-brand-300">
             Enroll today, pay later — payment is requested only after you&apos;re
             placed on a team, coach, location, day, and time.
           </p>
@@ -42,7 +45,10 @@ export default async function HomePage() {
 
       {/* Capability grid */}
       <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="text-2xl font-bold text-slate-900">Everything a season needs</h2>
+        <p className="eyebrow">The platform</p>
+        <h2 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">
+          Everything a season <em className="text-accent-600">needs</em>
+        </h2>
         <p className="mt-2 text-slate-600">One platform across the whole operation.</p>
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {CAPS.map((c) => (
@@ -59,8 +65,10 @@ export default async function HomePage() {
       <section className="border-y border-slate-200 bg-white">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 md:grid-cols-2">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">
-              Arizona Club Pickleball — a DUPR-recorded league
+            <p className="eyebrow mb-3">The league</p>
+            <h2 className="display text-3xl text-brand-900 sm:text-4xl">
+              Arizona Club Pickleball —{" "}
+              <em className="text-accent-600">a DUPR-recorded league</em>
             </h2>
             <p className="mt-3 text-slate-600">
               Doubles-only, three ranked lines per match, best of three to 11.
@@ -76,7 +84,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-2 gap-4">
             {STATS.map((s) => (
               <div key={s.label} className="card text-center">
-                <div className="text-3xl font-extrabold text-brand-700">{s.value}</div>
+                <div className="text-3xl font-extrabold text-accent-600">{s.value}</div>
                 <div className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
                   {s.label}
                 </div>

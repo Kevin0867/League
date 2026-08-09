@@ -21,7 +21,7 @@ export default async function PublicSchedulePage() {
     <div>
       <PublicNav />
       <div className="mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-3xl font-bold text-slate-900">Remaining schedule</h1>
+        <h1 className="display text-3xl text-brand-900 sm:text-4xl">Remaining schedule</h1>
         <p className="mt-2 text-slate-600">Upcoming league fixtures by week. Exact court allocation and arrival instructions are shared with rostered players behind login.</p>
 
         <div className="mt-8 space-y-8">

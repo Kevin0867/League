@@ -36,7 +36,7 @@ export default async function StandingsPage() {
     <div>
       <PublicNav />
       <div className="mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-3xl font-bold text-slate-900">League standings</h1>
+        <h1 className="display text-3xl text-brand-900 sm:text-4xl">League standings</h1>
         <p className="mt-2 text-slate-600">
           Arizona Club Pickleball, by division. Forfeits are recorded 3–0 and never
           submitted to DUPR.

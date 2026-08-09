@@ -19,7 +19,7 @@ export default async function PublicChampionshipPage() {
     <div>
       <PublicNav />
       <div className="mx-auto max-w-5xl px-4 py-10">
-        <h1 className="text-3xl font-bold text-slate-900">Championship bracket</h1>
+        <h1 className="display text-3xl text-brand-900 sm:text-4xl">Championship bracket</h1>
         <p className="mt-2 text-slate-600">Championship week, December 7–13. Single-elimination, seeded by division standings.</p>
 
         <div className="mt-8 space-y-10">
