@@ -1,21 +1,25 @@
 name: Import enrollments
 
 # Manually-triggered importer that loads a PURE Academy enrollment CSV directly
-# into the database (the CI runner can reach the production Neon database, which
-# the browser upload path also does). The CSV is passed at dispatch time as
-# gzip+base64 so enrollee PII is never committed to the repository.
+# into the database (the CI runner can reach the Neon database that the browser
+# upload path also targets). Safe to re-run: people are matched on name +
+# email/phone and merged, and existing registrations are reused.
 #
 # Requirements:
-#   - Repository secret DATABASE_URL set to the (pooled) Neon connection string.
+#   - Repository secret DATABASE_URL set to the Neon connection string.
 #
-# Safe to re-run: people are matched on name + email/phone and merged.
+# CSV source (either works):
+#   - a data/enrollments.csv file present on the dispatched ref (e.g. a
+#     short-lived branch, so enrollee PII never lands in the main history), or
+#   - the csv_gz_b64 input: base64(gzip(csv)).
 
 on:
   workflow_dispatch:
     inputs:
       csv_gz_b64:
-        description: "base64(gzip(enrollment CSV))"
-        required: true
+        description: "base64(gzip(enrollment CSV)) — optional if data/enrollments.csv is committed on this ref"
+        required: false
+        default: ""
 
 jobs:
   import:
@@ -39,4 +43,11 @@ jobs:
             exit 1
           fi
       - name: Import enrollments
-        run: npx tsx --tsconfig tsconfig.scripts.json scripts/import-enrollments.ts
+        run: |
+          if [ -f data/enrollments.csv ]; then
+            echo "Importing from committed data/enrollments.csv"
+            npx tsx --tsconfig tsconfig.scripts.json scripts/import-enrollments.ts data/enrollments.csv
+          else
+            echo "Importing from csv_gz_b64 input"
+            npx tsx --tsconfig tsconfig.scripts.json scripts/import-enrollments.ts
+          fi
