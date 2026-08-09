@@ -59,9 +59,45 @@ export type IntakeInput = {
     stripeSubscriptionId?: string | null;
     stripePaymentMethod?: string | null;
     sourceStatus?: string | null;
+    /** Original submission date from the source system (ISO), preserved as submittedAt. */
+    dateSubmitted?: string | null;
     importRaw?: unknown;
   };
 };
+
+/** Create any location preferences that aren't already on this registration. */
+async function ensureLocationPrefs(
+  db: PrismaClient,
+  registrationId: string,
+  prefs: Array<{ facilityId?: string | null; facilityName?: string | null; marketName?: string | null; rank?: number }>
+): Promise<void> {
+  if (!prefs.length) return;
+  const existing = await db.locationPreference.findMany({ where: { registrationId } });
+  const haveMarkets = new Set(existing.map((p) => (p.marketName ?? "").toLowerCase()));
+  for (let i = 0; i < prefs.length; i++) {
+    const lp = prefs[i];
+    let facilityId = lp.facilityId ?? null;
+    if (!facilityId && lp.facilityName) {
+      const f = await db.facility.findFirst({
+        where: { name: { equals: lp.facilityName, mode: "insensitive" } },
+      });
+      facilityId = f?.id ?? null;
+    }
+    const marketKey = (lp.marketName ?? "").toLowerCase();
+    if (marketKey && haveMarkets.has(marketKey)) continue;
+    if (facilityId || lp.marketName) {
+      await db.locationPreference.create({
+        data: {
+          registrationId,
+          facilityId: facilityId ?? undefined,
+          marketName: lp.marketName ?? null,
+          rank: lp.rank ?? i + 1,
+        },
+      });
+      if (marketKey) haveMarkets.add(marketKey);
+    }
+  }
+}
 
 export type IntakeResult = {
   personId: string;
@@ -124,6 +160,10 @@ export async function ingestRegistration(
   const mediaOptOut = !!input.mediaOptOut;
   const waiverSigned = !!input.waiver?.signed;
   const x = input.extra ?? {};
+  const submittedAt =
+    x.dateSubmitted && !isNaN(new Date(x.dateSubmitted).getTime())
+      ? new Date(x.dateSubmitted)
+      : null;
 
   // Registration-level intake fields, written on create and backfilled on
   // re-import. `undefined` values are stripped so we never clobber with null.
@@ -136,6 +176,7 @@ export async function ingestRegistration(
       stripeSubscriptionId: x.stripeSubscriptionId ?? undefined,
       stripePaymentMethod: x.stripePaymentMethod ?? undefined,
       sourceStatus: x.sourceStatus ?? undefined,
+      submittedAt: submittedAt ?? undefined,
       importRaw: x.importRaw ?? undefined,
     }).filter(([, v]) => v !== undefined)
   ) as Record<string, unknown>;
@@ -205,11 +246,19 @@ export async function ingestRegistration(
       where: { personId, seasonId: season.id, divisionId },
     });
     if (already) {
-      // Re-import: backfill newly-captured intake fields onto the existing
-      // registration without creating a duplicate.
-      if (Object.keys(regExtra).length) {
-        await db.registration.update({ where: { id: already.id }, data: regExtra });
+      // Re-import: backfill every newly-captured field onto the existing
+      // registration (only where it's currently empty, so we never clobber
+      // staff edits), and ensure its location preferences exist.
+      const backfill: Record<string, unknown> = { ...regExtra };
+      if (already.skillLevel == null && input.skillLevel) backfill.skillLevel = input.skillLevel;
+      if (already.practiceTimePref == null && input.practiceTimePref) backfill.practiceTimePref = input.practiceTimePref;
+      if (already.partnerRequests == null && input.partnerRequests) backfill.partnerRequests = input.partnerRequests;
+      if (already.daysThatDontWork == null && input.daysThatDontWork) backfill.daysThatDontWork = input.daysThatDontWork;
+      if (already.medicalDisclosures == null && input.medicalDisclosures) backfill.medicalDisclosures = input.medicalDisclosures;
+      if (Object.keys(backfill).length) {
+        await db.registration.update({ where: { id: already.id }, data: backfill });
       }
+      await ensureLocationPrefs(db, already.id, input.locationPrefs ?? []);
       return {
         personId,
         registrationId: already.id,
@@ -253,27 +302,7 @@ export async function ingestRegistration(
   });
 
   // Ranked location preferences (resolve facilities by id or name).
-  const prefs = input.locationPrefs ?? [];
-  for (let i = 0; i < prefs.length; i++) {
-    const lp = prefs[i];
-    let facilityId = lp.facilityId ?? null;
-    if (!facilityId && lp.facilityName) {
-      const f = await db.facility.findFirst({
-        where: { name: { equals: lp.facilityName, mode: "insensitive" } },
-      });
-      facilityId = f?.id ?? null;
-    }
-    if (facilityId || lp.marketName) {
-      await db.locationPreference.create({
-        data: {
-          registrationId: registration.id,
-          facilityId: facilityId ?? undefined,
-          marketName: lp.marketName ?? null,
-          rank: lp.rank ?? i + 1,
-        },
-      });
-    }
-  }
+  await ensureLocationPrefs(db, registration.id, input.locationPrefs ?? []);
 
   return {
     personId,

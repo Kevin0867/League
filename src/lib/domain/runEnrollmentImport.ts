@@ -114,6 +114,7 @@ export async function runEnrollmentImport(
           stripeSubscriptionId: r.stripeSubscriptionId,
           stripePaymentMethod: r.stripePaymentMethod,
           sourceStatus: r.sourceStatus,
+          dateSubmitted: r.dateSubmitted,
           importRaw: r.raw,
         },
         locationPrefs: r.markets.map((m, i) => ({ marketName: m, rank: i + 1 })),
