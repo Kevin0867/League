@@ -39,8 +39,11 @@ export async function importEnrollments(
   formData: FormData
 ): Promise<ImportState> {
   const session = await getSession();
-  if (!session || !["COO", "DIRECTOR"].includes(session.role)) {
-    return { error: "Not authorized to import enrollments." };
+  if (!session) {
+    return { error: "DIAG-A: the import action received no session (getSession() was null)." };
+  }
+  if (!["COO", "DIRECTOR"].includes(session.role)) {
+    return { error: `DIAG-B: your account role is "${session.role}" — importing needs COO or Director.` };
   }
 
   const file = formData.get("file");
