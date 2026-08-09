@@ -62,8 +62,12 @@ export async function sendEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: process.env.EMAIL_FROM ?? "PURE Academy <noreply@purepickleball.com>",
+        from: process.env.EMAIL_FROM ?? "PURE Academy <team@purepickleball.com>",
         to,
+        // Replies go to the team inbox by default (override with EMAIL_REPLY_TO).
+        reply_to: process.env.EMAIL_REPLY_TO ?? "team@purepickleball.com",
+        // Optionally copy every outbound email to a shared inbox for a record.
+        ...(process.env.EMAIL_BCC ? { bcc: process.env.EMAIL_BCC } : {}),
         subject,
         text: body,
         ...(html ? { html } : {}),
