@@ -1,12 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Brand";
 import { loginAction } from "./actions";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState(loginAction, {});
+
+  // Full-page navigation once the session cookie is set, so the browser sends it.
+  useEffect(() => {
+    if (state?.redirect) window.location.assign(state.redirect);
+  }, [state]);
 
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-br from-slate-50 to-brand-50 px-4">

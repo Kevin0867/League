@@ -1,16 +1,17 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword, createSession } from "@/lib/auth";
 
 // First-run bootstrap: create the initial COO account when the system has no
 // users yet. Locks itself the moment any user exists. Optionally gated by a
 // SETUP_TOKEN env var for extra safety on a public deploy.
+// Returns a redirect target instead of calling redirect(), so the Set-Cookie
+// header is reliably committed before the client navigates.
 export async function createFirstAdmin(
-  _prev: { error?: string } | undefined,
+  _prev: { error?: string; redirect?: string } | undefined,
   formData: FormData
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; redirect?: string }> {
   const userCount = await prisma.user.count();
   if (userCount > 0) return { error: "Setup is already complete. Please sign in." };
 
@@ -39,5 +40,5 @@ export async function createFirstAdmin(
     personId: person.id,
     name: `${firstName} ${lastName}`,
   });
-  redirect("/console");
+  return { redirect: "/console" };
 }

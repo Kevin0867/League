@@ -1,10 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { createFirstAdmin } from "./actions";
 
 export function SetupForm({ needsToken }: { needsToken: boolean }) {
   const [state, action, pending] = useActionState(createFirstAdmin, {});
+
+  useEffect(() => {
+    if (state?.redirect) window.location.assign(state.redirect);
+  }, [state]);
   return (
     <form action={action} className="mt-5 space-y-4">
       <div className="grid grid-cols-2 gap-3">
