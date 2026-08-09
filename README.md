@@ -81,21 +81,37 @@ npm run dev                   # http://localhost:3000
 
 - **Foundation (done):** complete data model, auth + RBAC, seed data, public site,
   registration with duplicate detection + waiver capture, team-build board,
-  facility agreement tracker, compliance dashboard, coaches/schedule/payments views.
+  facility agreement tracker, compliance dashboard.
 - **Phase 1 (done):** pool → team **assignment engine** (overlapping pools, cap/gate
-  enforcement, publish gate), **Stripe hosted checkout** with payment-request-after-
-  assignment and webhook reconciliation, and the **communications system** —
+  enforcement, publish gate); **Stripe hosted checkout** with payment-request-after-
+  assignment and webhook reconciliation; the **communications system** —
   audience-resolved messaging (in-app + email + SMS) with per-recipient delivery
-  logging, plus automatic team-assignment and payment-request triggers.
-- **Phase 1 (remaining):** session cancellation flows and the rest of the triggered-
-  message table (practice cancelled via SMS, waiver/DUPR reminders).
-- **Phase 2 (before league):** ACP setup, **DUPR verification** + submission retry
-  queue, fixture generation, 7-day notice + 48-hour availability confirmation with
-  escalation, line-up DUPR validation, forfeits, line-by-line scoring, month-end
-  facility statements, coach payout register.
-- **Phase 3 (Week 7+):** à la carte catalog & revenue split, championship bracket,
-  P&L + retention reporting.
-- **Phase 4 (post-season):** close-out, year-end 1099 totals, rollover to Spring 2027.
+  logging and automatic triggers; and **scheduling** — season generation (blackout
+  aware), cancellation with per-type rules + practice-cancelled SMS, and courtside
+  attendance.
+- **Phase 2 (done):** **fixture generation** (round-robin, blackout/Dec-5-6 aware),
+  7-day notice + **48-hour availability confirmation with escalation**, **line-up
+  DUPR validation** for outside teams, **line-by-line scoring**, **forfeits** with
+  championship-eligibility rules, the **DUPR submission queue** (identity-verified,
+  retry/error state, forfeits excluded), public standings/results/schedule,
+  **month-end facility statements**, and the **coach payout register**.
+- **Phase 3 (mostly done):** **à la carte** catalog, booking, and revenue split
+  (done); **P&L + retention reporting** and **CSV export** (done). Remaining:
+  championship bracket.
+- **Phase 4 (partial):** year-end **coach 1099 totals** export (done). Remaining:
+  season close-out and rollover to Spring 2027.
+
+### Not yet built / deliberately deferred
+- Championship bracket drawing and management.
+- The remaining triggered messages (waiver-outstanding and DUPR-outstanding
+  reminders) and a scheduled job to fire the 48-hour escalation automatically —
+  the escalation logic exists and is triggered manually from the dashboard today.
+- Monthly-installment Stripe plans (pay-in-full is wired; the model carries an
+  `installmentPlan` flag).
+- Live DUPR API submission (schema to be confirmed with DUPR first — the queue,
+  identity checks, and retry/error states are all built around it).
+- Production hardening: switch Prisma to PostgreSQL, encryption at rest for
+  minors'/medical data, automated backups with tested restore.
 
 ## Requirements mapping
 
