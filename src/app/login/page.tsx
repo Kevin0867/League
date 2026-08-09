@@ -1,17 +1,20 @@
-"use client";
-
-import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Brand";
-import { loginAction } from "./actions";
 
-export default function LoginPage() {
-  const [state, action, pending] = useActionState(loginAction, {});
+export const dynamic = "force-dynamic";
 
-  // Full-page navigation once the session cookie is set, so the browser sends it.
-  useEffect(() => {
-    if (state?.redirect) window.location.assign(state.redirect);
-  }, [state]);
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const message =
+    error === "invalid"
+      ? "Invalid email or password."
+      : error === "missing"
+      ? "Email and password are required."
+      : null;
 
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-br from-slate-50 to-brand-50 px-4">
@@ -24,7 +27,8 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-slate-500">
             Players, parents, coaches, and staff.
           </p>
-          <form action={action} className="mt-5 space-y-4">
+          {/* Native form POST → route handler sets the session cookie reliably. */}
+          <form method="POST" action="/api/auth/login" className="mt-5 space-y-4">
             <div>
               <label className="label" htmlFor="email">Email</label>
               <input id="email" name="email" type="email" autoComplete="email" required className="input" />
@@ -33,14 +37,10 @@ export default function LoginPage() {
               <label className="label" htmlFor="password">Password</label>
               <input id="password" name="password" type="password" autoComplete="current-password" required className="input" />
             </div>
-            {state?.error && (
-              <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {state.error}
-              </p>
+            {message && (
+              <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{message}</p>
             )}
-            <button type="submit" disabled={pending} className="btn-primary w-full">
-              {pending ? "Signing in…" : "Sign in"}
-            </button>
+            <button type="submit" className="btn-primary w-full">Sign in</button>
           </form>
         </div>
         <p className="mt-4 text-center text-sm text-slate-500">

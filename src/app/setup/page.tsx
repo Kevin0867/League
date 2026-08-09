@@ -1,13 +1,26 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { Logo } from "@/components/Brand";
-import { SetupForm } from "./SetupForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const userCount = await prisma.user.count().catch(() => -1);
   const needsToken = !!process.env.SETUP_TOKEN;
+
+  const message =
+    error === "fields"
+      ? "All fields are required."
+      : error === "short"
+      ? "Password must be at least 8 characters."
+      : error === "token"
+      ? "Invalid setup token."
+      : null;
 
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-br from-brand-50 to-white px-4">
@@ -36,7 +49,38 @@ export default async function SetupPage() {
                 This creates the Chief Operating Officer account with full access.
                 Do this once, right after deploying.
               </p>
-              <SetupForm needsToken={needsToken} />
+              <form method="POST" action="/api/setup" className="mt-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label" htmlFor="firstName">First name</label>
+                    <input id="firstName" name="firstName" required className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="lastName">Last name</label>
+                    <input id="lastName" name="lastName" required className="input" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label" htmlFor="email">Email</label>
+                  <input id="email" name="email" type="email" required className="input" />
+                </div>
+                <div>
+                  <label className="label" htmlFor="password">Password</label>
+                  <input id="password" name="password" type="password" required minLength={8} className="input" />
+                </div>
+                {needsToken && (
+                  <div>
+                    <label className="label" htmlFor="token">Setup token</label>
+                    <input id="token" name="token" required className="input" />
+                  </div>
+                )}
+                {message && (
+                  <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{message}</p>
+                )}
+                <button type="submit" className="btn-primary w-full">
+                  Create administrator &amp; sign in
+                </button>
+              </form>
             </>
           )}
         </div>

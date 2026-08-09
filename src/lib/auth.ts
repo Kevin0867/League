@@ -6,9 +6,28 @@ import { prisma } from "./db";
 import type { Role } from "./enums";
 
 const COOKIE = "pa_session";
+export const SESSION_COOKIE = COOKIE;
 const secret = new TextEncoder().encode(
   process.env.AUTH_SECRET ?? "dev-secret-change-me"
 );
+
+/** Cookie options shared by server-action and route-handler session writes. */
+export const sessionCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: 60 * 60 * 24 * 7,
+};
+
+/** Sign a session JWT (for setting the cookie on a route-handler response). */
+export async function signSession(payload: SessionPayload): Promise<string> {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(secret);
+}
 
 export type SessionPayload = {
   userId: string;
