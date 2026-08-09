@@ -17,11 +17,18 @@
  */
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
-import { prisma } from "../src/lib/db";
+import { PrismaClient } from "@prisma/client";
 import {
   previewEnrollments,
   runEnrollmentImport,
 } from "../src/lib/domain/runEnrollmentImport";
+
+// A PLAIN client (no encryption extension): this script runs outside the app
+// (CI) and has no access to the app's field-encryption key, so writing
+// encrypted values would be unreadable in production. Storing the few
+// encryptable fields (emergency contact, medical notes) as plaintext is read
+// back correctly by the app's legacy-plaintext path.
+const prisma = new PrismaClient();
 
 function loadCsv(): string {
   const argPath = process.argv[2];

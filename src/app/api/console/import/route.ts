@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSession, verifyActionTicket } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -46,8 +47,8 @@ export async function POST(req: Request) {
     return back(p.toString());
   }
 
-  // --- Commit ---
-  const result = await runEnrollmentImport(prisma, text);
+  // --- Commit --- (encryption-extended client so sensitive fields are encrypted)
+  const result = await runEnrollmentImport(prisma as unknown as PrismaClient, text);
 
   await audit({
     actorId,

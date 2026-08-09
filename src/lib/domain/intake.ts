@@ -1,4 +1,5 @@
 import "server-only";
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
 import { isLikelyDuplicate } from "./registrations";
 
@@ -60,7 +61,15 @@ function computeIsMinor(dob: Date | null): boolean {
   return age < 18;
 }
 
-export async function ingestRegistration(input: IntakeInput): Promise<IntakeResult> {
+export async function ingestRegistration(
+  input: IntakeInput,
+  // The Prisma client to write with. Defaults to the encryption-extended
+  // singleton (so the web form / API encrypt sensitive fields with the app's
+  // key). The bulk importer may pass a plain client when it runs outside the
+  // app (e.g. CI) and cannot access the app's encryption key — those fields are
+  // then stored as plaintext, which the app reads via its legacy-plaintext path.
+  db: PrismaClient = prisma as unknown as PrismaClient
+): Promise<IntakeResult> {
   const firstName = input.firstName?.trim();
   const lastName = input.lastName?.trim();
   const email = input.email?.toLowerCase().trim() || null;
@@ -71,10 +80,10 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
 
   // Resolve the season (default: active PURE Academy season).
   const season = input.seasonId
-    ? await prisma.season.findUnique({ where: { id: input.seasonId } })
+    ? await db.season.findUnique({ where: { id: input.seasonId } })
     : input.seasonName
-    ? await prisma.season.findFirst({ where: { name: input.seasonName } })
-    : await prisma.season.findFirst({
+    ? await db.season.findFirst({ where: { name: input.seasonName } })
+    : await db.season.findFirst({
         where: { active: true, program: "PURE_ACADEMY" },
         orderBy: { startDate: "desc" },
       });
@@ -83,7 +92,7 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
   // Resolve division by id or name.
   let divisionId = input.divisionId ?? null;
   if (!divisionId && input.divisionName) {
-    const div = await prisma.division.findFirst({
+    const div = await db.division.findFirst({
       where: { seasonId: season.id, name: { equals: input.divisionName, mode: "insensitive" } },
     });
     divisionId = div?.id ?? null;
@@ -96,7 +105,7 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
 
   // Duplicate detection — match on name + (email OR phone) (§3).
   const candidate = { id: "new", firstName, lastName, email, phone };
-  const existing = await prisma.person.findMany({
+  const existing = await db.person.findMany({
     where: {
       OR: [email ? { email } : undefined, phone ? { phone } : undefined].filter(Boolean) as object[],
     },
@@ -107,7 +116,7 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
   if (match) {
     // Reuse the surviving record; fill gaps but don't overwrite existing values.
     personId = match.id;
-    await prisma.person.update({
+    await db.person.update({
       where: { id: match.id },
       data: {
         email: match.email ?? email,
@@ -122,7 +131,7 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
       },
     });
   } else {
-    const person = await prisma.person.create({
+    const person = await db.person.create({
       data: {
         firstName,
         lastName,
@@ -146,7 +155,7 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
   // Idempotent bulk import: if this person is already registered for this
   // season+division, reuse that registration instead of creating a duplicate.
   if (input.skipIfRegistered) {
-    const already = await prisma.registration.findFirst({
+    const already = await db.registration.findFirst({
       where: { personId, seasonId: season.id, divisionId },
     });
     if (already) {
@@ -161,7 +170,7 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
   }
 
   if (waiverSigned) {
-    await prisma.waiver.create({
+    await db.waiver.create({
       data: {
         personId,
         seasonId: season.id,
@@ -174,7 +183,7 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
     });
   }
 
-  const registration = await prisma.registration.create({
+  const registration = await db.registration.create({
     data: {
       personId,
       seasonId: season.id,
@@ -197,13 +206,13 @@ export async function ingestRegistration(input: IntakeInput): Promise<IntakeResu
     const lp = prefs[i];
     let facilityId = lp.facilityId ?? null;
     if (!facilityId && lp.facilityName) {
-      const f = await prisma.facility.findFirst({
+      const f = await db.facility.findFirst({
         where: { name: { equals: lp.facilityName, mode: "insensitive" } },
       });
       facilityId = f?.id ?? null;
     }
     if (facilityId || lp.marketName) {
-      await prisma.locationPreference.create({
+      await db.locationPreference.create({
         data: {
           registrationId: registration.id,
           facilityId: facilityId ?? undefined,

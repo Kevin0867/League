@@ -1,9 +1,6 @@
+import type { PrismaClient } from "@prisma/client";
 import { ingestRegistration } from "./intake";
 import { parseEnrollments, distinctDivisions } from "./enrollmentImport";
-
-// The encryption-extended client type (from src/lib/db). ingestRegistration
-// uses that same singleton internally, so callers pass it here too.
-type Db = typeof import("../db").prisma;
 
 // Shared enrollment-import logic used by BOTH the console route handler and the
 // standalone CLI/CI import script, so the two can never drift. Given the CSV
@@ -49,7 +46,7 @@ export function previewEnrollments(text: string): ImportPreview {
 }
 
 export async function runEnrollmentImport(
-  prisma: Db,
+  prisma: PrismaClient,
   text: string
 ): Promise<ImportResult> {
   const { rows } = parseEnrollments(text);
@@ -108,7 +105,7 @@ export async function runEnrollmentImport(
         locationPrefs: r.markets.map((m, i) => ({ marketName: m, rank: i + 1 })),
         source: "import",
         skipIfRegistered: true,
-      });
+      }, prisma);
       res.registrationCreated ? created++ : duplicates++;
     } catch {
       errors++;
