@@ -1,0 +1,950 @@
+// PURE Academy & Arizona Club Pickleball — Season Management CRM
+// ---------------------------------------------------------------------------
+// Data model is the spine of this system. Per the requirements spec (§2):
+//   "Get these entities right and the rest follows. Get them wrong and every
+//    report is a workaround."
+//
+// Runs on PostgreSQL (managed migrations, encryption at rest, backups). The
+// schema keeps a deliberately portable shape:
+//   - enum-like values are Strings with the allowed set documented inline and
+//     validated in application code (see src/lib/enums.ts). This trades
+//     DB-level enum enforcement for zero-churn value changes across seasons;
+//     CHECK constraints can be layered via a migration if desired.
+//   - "arrays" are modeled as related rows or JSON strings.
+//   - money is stored as INTEGER CENTS (never floats) to avoid rounding drift.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl is used for migrations. With a connection pooler (PgBouncer,
+  // Supabase, Neon) point DATABASE_URL at the pooler and DIRECT_URL at the
+  // direct connection. Locally both are the same.
+  directUrl = env("DIRECT_URL")
+}
+
+// ===========================================================================
+// AUTH & IDENTITY
+// ===========================================================================
+
+/// A login account. Separate from Person so a household adult can hold one
+/// login yet manage several minors, and so staff logins map cleanly to roles.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  /// Role: COO | CEO | DIRECTOR | COACH | PLAYER | PARENT  (see enums.ts)
+  role         String   @default("PLAYER")
+  personId     String?  @unique
+  person       Person?  @relation(fields: [personId], references: [id])
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  // Brute-force protection: lock the account for a cool-down after repeated fails.
+  failedLoginCount Int   @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sentMessages Message[] @relation("MessageSender")
+  auditEvents  AuditLog[]
+  resetTokens  PasswordResetToken[]
+}
+
+// Self-service password reset (§17/§18). We store only a SHA-256 hash of the
+// token; the raw token lives only in the emailed link.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ===========================================================================
+// CORE DATA MODEL (spec §2)
+// ===========================================================================
+
+/// One record per human, regardless of role (§2). A player-coach is ONE
+/// person, not two. Roles are contextual via the linked Coach / Registration /
+/// Team-membership records rather than duplicated Person rows.
+model Person {
+  id                 String    @id @default(cuid())
+  firstName          String
+  lastName           String
+  dob                DateTime?
+  email              String?
+  phone              String?
+
+  // Emergency contact
+  emergencyName      String?
+  emergencyPhone     String?
+  emergencyRelation  String?
+
+  // DUPR (Dynamic Universal Pickleball Rating)
+  duprId             String?
+  duprRating         Float?
+  duprVerified       Boolean   @default(false)
+  duprVerifiedAt     DateTime?
+  /// Under-18s need parental consent captured WITH the waiver, not in October (§12)
+  duprParentalConsent Boolean  @default(false)
+
+  // Waiver / media (§3). Media consent is opt-OUT by written notice; a withheld
+  // consent must be recorded and honored against the person record.
+  waiverSignedAt     DateTime?
+  mediaOptOut        Boolean   @default(false)
+
+  // Minor handling (§17 — records may contain minors' data)
+  isMinor            Boolean   @default(false)
+  guardianId         String?
+  guardian           Person?   @relation("Guardianship", fields: [guardianId], references: [id])
+  dependents         Person[]  @relation("Guardianship")
+
+  medicalNotes       String?   // encrypted-at-rest in production
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user               User?
+  coach              Coach?
+  registrations      Registration[]
+  waivers            Waiver[]
+  teamMemberships    TeamMember[]
+  teamContactFor     Team[]           @relation("TeamContact")
+  attendance         Attendance[]
+  paymentsMade       Payment[]        @relation("PaymentParty")
+  availability       AvailabilityConfirmation[]
+  pairingsAsA        Pairing[]        @relation("PairingPlayerA")
+  pairingsAsB        Pairing[]        @relation("PairingPlayerB")
+  messageReceipts    MessageRecipient[]
+  alaCarteBookings   AlaCarteBooking[] @relation("AlaCarteClient")
+  recruitedByCoachId String?
+  recruitedByCoach   Coach?           @relation("CoachRecruits", fields: [recruitedByCoachId], references: [id])
+
+  @@index([lastName, firstName])
+  @@index([email])
+  @@index([phone])
+}
+
+/// A person's request to join — capturing a SINGLE division (§3). Distinct from
+/// a team assignment. A player between bands is placed by the Director after the
+/// Week-1 assessment, not by selecting two divisions.
+model Registration {
+  id                 String   @id @default(cuid())
+  personId           String
+  person             Person   @relation(fields: [personId], references: [id])
+  seasonId           String
+  season             Season   @relation(fields: [seasonId], references: [id])
+
+  divisionId         String?
+  division           Division? @relation(fields: [divisionId], references: [id])
+  skillLevel         String?
+  duprRatingAtReg    Float?
+
+  practiceTimePref   String?   // e.g. "weeknight", "weekend"
+  daysThatDontWork   String?   // JSON array of weekday strings
+  partnerRequests    String?   // free text / names
+  medicalDisclosures String?
+  mediaOptOut        Boolean   @default(false)
+
+  /// Coach fee is waived; a coach registers through the same flow (§3)
+  isCoachRegistration Boolean  @default(false)
+  feeWaived          Boolean   @default(false)
+
+  /// Recruitment attribution — which coach this registration came through (§5)
+  recruitedByCoachId String?
+  recruitedByCoach   Coach?    @relation(fields: [recruitedByCoachId], references: [id])
+
+  /// Status: SUBMITTED | DUPLICATE | MERGED | ASSIGNED | WAITLISTED | WITHDRAWN
+  status             String    @default("SUBMITTED")
+  /// Duplicate detection (§3): points at the surviving record after a merge
+  mergedIntoId       String?
+
+  locationPrefs      LocationPreference[]
+
+  submittedAt        DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([seasonId, divisionId, status])
+  @@index([personId])
+}
+
+/// Ranked location preference rows for a registration (§3 — "ranked location
+/// preferences"). Modeled as rows so ranking is queryable and reportable.
+model LocationPreference {
+  id             String       @id @default(cuid())
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  facilityId     String?
+  facility       Facility?    @relation(fields: [facilityId], references: [id])
+  marketName     String?
+  rank           Int
+
+  @@index([registrationId, rank])
+}
+
+/// A team (§2). Complete only when all SIX fields are set: division, level band,
+/// market, coach, facility, day, time. Cap 8 / minimum 6.
+/// IMPORTANT (§12, §14): a coach is NOT required. Outside ACP teams are run by a
+/// captain/organizer with no coach. Permissions attach to the team-contact role.
+model Team {
+  id            String    @id @default(cuid())
+  name          String
+  seasonId      String
+  season        Season    @relation(fields: [seasonId], references: [id])
+
+  divisionId    String?
+  division      Division? @relation(fields: [divisionId], references: [id])
+  levelBand     String?
+  market        String?
+
+  /// Nullable by design — outside teams have no coach (§14)
+  coachId       String?
+  coach         Coach?    @relation("TeamCoach", fields: [coachId], references: [id])
+  /// The person who holds the roster, submits line-ups, confirms availability,
+  /// answers reschedule requests. For a PURE team this is the coach; for an
+  /// outside team, a captain/organizer (§14 "Team contact").
+  teamContactId String?
+  teamContact   Person?   @relation("TeamContact", fields: [teamContactId], references: [id])
+
+  facilityId    String?
+  facility      Facility? @relation(fields: [facilityId], references: [id])
+  dayOfWeek     String?   // MON..SUN
+  startTime     String?   // "HH:MM"
+
+  /// True where the coach plays on the team they coach (§2, §4). A player-coach
+  /// keeps their own team; no second coach is assigned to it.
+  coachPlays    Boolean   @default(false)
+
+  /// Origin — must NOT assume a team belongs to PURE Academy (§12)
+  /// PURE_ACADEMY | ACP_CLUB
+  origin        String    @default("PURE_ACADEMY")
+  clubName      String?   // for outside ACP clubs
+
+  /// Team cannot be published to families until the facility agreement is
+  /// executed (§4 publication gate).
+  published     Boolean   @default(false)
+  publishedAt   DateTime?
+
+  forfeitCount  Int       @default(0)
+  /// Championship eligibility; two forfeits ends it (§12). Restorable only by
+  /// joint Director+COO override, recorded explicitly.
+  champEligible Boolean   @default(true)
+  eligibilityOverrideById String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  members       TeamMember[]
+  homeFixtures  Fixture[] @relation("HomeTeam")
+  awayFixtures  Fixture[] @relation("AwayTeam")
+  pairings      Pairing[]
+  sessions      SessionTeam[]
+
+  @@index([seasonId, divisionId])
+  @@index([coachId])
+}
+
+/// Roster row linking a Person to a Team (many-to-many with attributes).
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id])
+  /// PLAYER | COACH_PLAYER | ASSISTANT | CAPTAIN
+  roleOnTeam String  @default("PLAYER")
+  joinedAt  DateTime @default(now())
+
+  @@unique([teamId, personId])
+  @@index([personId])
+}
+
+/// Coach profile (§5). One-to-one with a Person.
+model Coach {
+  id                  String    @id @default(cuid())
+  personId            String    @unique
+  person              Person    @relation(fields: [personId], references: [id])
+
+  rpoCertLevel        String?
+  /// Hard gate (§5): no team assignment without a completed background check…
+  backgroundCheckDate DateTime?
+  backgroundCheckExpiry DateTime?
+  /// …and curriculum onboarding
+  onboardingCompletedAt DateTime?
+
+  marketsCovered      String?   // JSON array
+  /// Pro Coach / Assistant differentiate payout rate (§9)
+  isProCoach          Boolean   @default(false)
+
+  // Contractor tax (§9) — W-9 capture, 1099 totals at year end
+  w9OnFile            Boolean   @default(false)
+  w9ReceivedAt        DateTime?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  teams               Team[]         @relation("TeamCoach")
+  availabilityBlocks  AvailabilityBlock[]
+  recruits            Person[]       @relation("CoachRecruits")
+  recruitedRegs       Registration[]
+  payouts             CoachPayoutLine[]
+  alaCarteOfferings   AlaCarteOffering[]
+  alaCarteBookings    AlaCarteBooking[] @relation("AlaCarteCoach")
+}
+
+/// Coach availability by day + time block (§5), matched against facility court
+/// blocks before a team's day/time is published.
+model AvailabilityBlock {
+  id        String @id @default(cuid())
+  coachId   String
+  coach     Coach  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  dayOfWeek String // MON..SUN
+  startTime String // "HH:MM"
+  endTime   String
+
+  @@index([coachId])
+}
+
+/// Facility & court inventory (§6).
+model Facility {
+  id               String    @id @default(cuid())
+  name             String
+  market           String?
+  courtCount       Int       @default(0)
+
+  /// Agreement status: IDENTIFIED | VERBAL | AGREEMENT_SENT | EXECUTED (§6)
+  agreementStatus  String    @default("IDENTIFIED")
+
+  /// Fee basis: NONE | PER_COURT | PER_HOUR | PER_SESSION | PERCENTAGE (§2/§6)
+  feeBasis         String    @default("NONE")
+  weekdayRateCents Int       @default(0)
+  weekendRateCents Int       @default(0)
+  percentageRate   Float?    // for PERCENTAGE basis (on On-Site Practice Revenue)
+  paymentTerms     String?
+
+  primaryContact   String?
+  contactEmail     String?
+  contactPhone     String?
+
+  /// Access instructions and exact location live behind login only (§15). A
+  /// private residence/court appears publicly by market + general area only —
+  /// never owner name, never street address.
+  isPrivate        Boolean   @default(false)
+  generalArea      String?   // public-safe descriptor, e.g. "North Scottsdale"
+  exactAddress     String?   // behind login, released to assigned players only
+  accessInstructions String?
+
+  /// À la carte eligibility must be negotiated per agreement, not assumed (§11)
+  alaCarteAllowed  Boolean   @default(false)
+
+  /// ACP league option (§6): held courts, confirm-by date, auto-release
+  acpLeagueOption  Boolean   @default(false)
+  acpHeldCourts    Int?
+  acpConfirmBy     DateTime?
+  championshipHostInterest Boolean @default(false)
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  courtBlocks      CourtBlock[]
+  blackoutDates    BlackoutDate[]
+  sessions         Session[]
+  teams            Team[]
+  fixtures         Fixture[]
+  locationPrefs    LocationPreference[]
+  statements       FacilityStatement[]
+  alaCarteOfferings AlaCarteOffering[]
+
+  @@index([market])
+  @@index([agreementStatus])
+}
+
+/// A bookable block of courts at a facility. Cannot be published against a
+/// non-executed agreement without explicit override (§6).
+model CourtBlock {
+  id           String   @id @default(cuid())
+  facilityId   String
+  facility     Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  dayOfWeek    String
+  startTime    String
+  endTime      String
+  courtCount   Int      @default(1)
+  overrideNonExecuted Boolean @default(false)
+
+  @@index([facilityId])
+}
+
+/// Blackout dates enforced against a facility (§6). Thanksgiving week Nov 23–29
+/// is dark: no practices, no league matches, no rescheduled fixtures.
+model BlackoutDate {
+  id         String   @id @default(cuid())
+  facilityId String?
+  facility   Facility? @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  /// Global blackout when facilityId is null (e.g. Thanksgiving week for all)
+  date       DateTime
+  reason     String?
+
+  @@index([date])
+}
+
+/// The atomic scheduling unit (§2). Every court charge and every coach payment
+/// derives from a session record.
+model Session {
+  id           String   @id @default(cuid())
+  seasonId     String
+  season       Season   @relation(fields: [seasonId], references: [id])
+
+  /// Type: PRACTICE | LEAGUE_MATCH | CHAMPIONSHIP | ALA_CARTE (§2)
+  type         String
+  facilityId   String?
+  facility     Facility? @relation(fields: [facilityId], references: [id])
+  date         DateTime
+  startTime    String
+  endTime      String
+  courtCount   Int      @default(1)
+
+  /// Status: SCHEDULED | DELIVERED | CANCELLED | RESCHEDULED (§2)
+  status       String   @default("SCHEDULED")
+  /// Cancellation reason: HEAT | WEATHER | FACILITY_CLOSURE | SAFETY | OTHER (§7)
+  cancelReason String?
+  /// Relocation to indoor court preserves the session as delivered (§7)
+  relocatedFacilityId String?
+
+  weekNumber   Int?     // 1..12 within the team's season plan
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teams        SessionTeam[]
+  coaches      SessionCoach[]
+  attendance   Attendance[]
+  payments     Payment[]
+  fixture      Fixture?
+
+  @@index([seasonId, date])
+  @@index([status])
+}
+
+model SessionTeam {
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, teamId])
+}
+
+/// Coach on a session — supports substitute/backup coverage per session (§5)
+/// and assistant-coach payout at 50% (§9).
+model SessionCoach {
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  coachId   String
+  /// PRIMARY | ASSISTANT | SUBSTITUTE | BACKUP
+  role      String  @default("PRIMARY")
+  /// Whether this coach is paid for a session PURE cancels — modeled as a
+  /// per-session payable flag so policy can flip without rework (§9).
+  paidIfCancelled Boolean @default(false)
+
+  @@unique([sessionId, coachId])
+  @@index([coachId])
+}
+
+/// Attendance per session, per player, marked by the coach (§7).
+model Attendance {
+  id        String  @id @default(cuid())
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person  @relation(fields: [personId], references: [id])
+  /// PRESENT | ABSENT | EXCUSED
+  status    String  @default("PRESENT")
+  markedAt  DateTime @default(now())
+
+  @@unique([sessionId, personId])
+}
+
+// ===========================================================================
+// PAYMENTS (spec §8, §9, §10)
+// ===========================================================================
+
+/// Direction in/out (§2). Never stores card data — Stripe hosted checkout only.
+model Payment {
+  id            String   @id @default(cuid())
+  /// IN | OUT
+  direction     String
+  partyId       String?
+  party         Person?  @relation("PaymentParty", fields: [partyId], references: [id])
+
+  amountCents   Int
+  /// Method: STRIPE | CHECK | ACH | IN_KIND | CREDIT
+  method        String   @default("STRIPE")
+  /// Status: REQUESTED | PENDING | PAID | FAILED | REFUNDED | WAIVED | CREDITED
+  status        String   @default("REQUESTED")
+
+  /// PLAYER_FEE | COACH_PAYOUT | FACILITY_FEE | ALA_CARTE | REFUND
+  category      String
+
+  seasonId      String?
+  season        Season?  @relation(fields: [seasonId], references: [id])
+  sessionId     String?
+  session       Session? @relation(fields: [sessionId], references: [id])
+
+  // Stripe references — never raw card data (§18)
+  stripeCheckoutId String?
+  stripePaymentIntentId String?
+
+  /// Monthly-vs-full for player fees (§8)
+  installmentPlan Boolean @default(false)
+
+  description   String?
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([direction, category, status])
+  @@index([partyId])
+}
+
+/// Configurable rate sets (§0, §9, §11). Both the coach-teaches and
+/// director-teaches à-la-carte splits live here; the applied rates are STAMPED
+/// onto each transaction so historical payouts survive a rate change.
+model RateConfig {
+  id                String   @id @default(cuid())
+  seasonId          String?
+  /// Player season fee (§8) — default $495
+  seasonFeeCents    Int      @default(49500)
+  /// Coach per-session pay (§9) — default $100, $1,200 across 12 sessions
+  coachPerSessionCents Int   @default(10000)
+  assistantPct      Float    @default(0.5)
+  proCoachPerSessionCents Int?
+
+  // À la carte split (§0, §11) — court cost off the top, then split net
+  alaCoachSharePct     Float @default(0.5)  // assigned coach teaches
+  alaDirectorSharePct  Float @default(0.1)
+  alaPurePct           Float @default(0.4)
+  // Director-teaches variant: coach line moves to director (70% total), PURE 30%
+  alaDirCoachSharePct  Float @default(0.6)
+  alaDirDirectorSharePct Float @default(0.1)
+  alaDirPurePct        Float @default(0.3)
+
+  effectiveFrom     DateTime @default(now())
+  createdAt         DateTime @default(now())
+}
+
+/// A payout run per coach per period (§9): sessions delivered, à la carte
+/// earnings, total. Exportable for the payment rail.
+model PayoutRun {
+  id          String   @id @default(cuid())
+  seasonId    String?
+  periodStart DateTime
+  periodEnd   DateTime
+  status      String   @default("DRAFT") // DRAFT | FINALIZED | EXPORTED | PAID
+  createdAt   DateTime @default(now())
+
+  lines       CoachPayoutLine[]
+}
+
+model CoachPayoutLine {
+  id             String    @id @default(cuid())
+  payoutRunId    String
+  payoutRun      PayoutRun @relation(fields: [payoutRunId], references: [id], onDelete: Cascade)
+  coachId        String
+  coach          Coach     @relation(fields: [coachId], references: [id])
+  sessionsDelivered Int    @default(0)
+  sessionPayCents   Int    @default(0)
+  alaCarteCents     Int    @default(0)
+  totalCents        Int    @default(0)
+
+  @@index([coachId])
+}
+
+/// One statement per facility per month (§10) — a contractual obligation.
+model FacilityStatement {
+  id             String   @id @default(cuid())
+  facilityId     String
+  facility       Facility @relation(fields: [facilityId], references: [id])
+  periodStart    DateTime
+  periodEnd      DateTime
+  sessionsDelivered Int   @default(0)
+  /// Revenue on which a percentage payment is calculated — On-Site Practice
+  /// Revenue only, net of refunds and processing charges (§10).
+  onSiteRevenueCents Int  @default(0)
+  amountDueCents Int      @default(0)
+  status         String   @default("DRAFT") // DRAFT | ISSUED | PAID
+  createdAt      DateTime @default(now())
+
+  @@index([facilityId, periodStart])
+}
+
+// ===========================================================================
+// SEASON / DIVISION / LEAGUE (spec §12–§14)
+// ===========================================================================
+
+model Season {
+  id         String   @id @default(cuid())
+  name       String
+  /// PURE_ACADEMY | ACP
+  program    String   @default("PURE_ACADEMY")
+  startDate  DateTime
+  endDate    DateTime
+  opensOn    DateTime?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  divisions     Division[]
+  teams         Team[]
+  registrations Registration[]
+  sessions      Session[]
+  payments      Payment[]
+  fixtures      Fixture[]
+  messages      Message[]
+}
+
+/// Divisions by school level (youth) or DUPR band (adults). Bands lock at
+/// Week 2 (§12) — placement holds through Championship regardless of mid-season
+/// rating movement.
+model Division {
+  id          String   @id @default(cuid())
+  seasonId    String
+  season      Season   @relation(fields: [seasonId], references: [id])
+  name        String
+  /// SCHOOL_LEVEL | DUPR_BAND
+  divisionType String  @default("DUPR_BAND")
+  minRating   Float?
+  maxRating   Float?
+  bandsLocked Boolean  @default(false)
+  bandsLockedAt DateTime?
+
+  teams         Team[]
+  registrations Registration[]
+
+  @@index([seasonId])
+}
+
+/// A league fixture between two teams (§14). Team references are nullable-safe
+/// for byes; hub venue + court allocation captured for match-night ops.
+model Fixture {
+  id          String   @id @default(cuid())
+  seasonId    String
+  season      Season   @relation(fields: [seasonId], references: [id])
+  weekNumber  Int
+  scheduledAt DateTime
+  facilityId  String?
+  facility    Facility? @relation(fields: [facilityId], references: [id])
+  courtAllocation String?
+  arrivalInstructions String?
+
+  homeTeamId  String?
+  homeTeam    Team?    @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeamId  String?
+  awayTeam    Team?    @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  /// Status: SCHEDULED | CONFIRMED | RESCHEDULED | FORFEITED | COMPLETED (§14)
+  status      String   @default("SCHEDULED")
+  /// Which team forfeited (if any). Forfeits recorded 3–0, NEVER submitted to
+  /// DUPR (§12) — the submission pipeline excludes them by rule.
+  forfeitedById String?
+
+  /// Optional link to the underlying Session (court booking moves with the
+  /// fixture on an accepted reschedule).
+  sessionId   String?  @unique
+  session     Session? @relation(fields: [sessionId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lines        LineMatchup[]
+  confirmations AvailabilityConfirmation[]
+  rescheduleRequests RescheduleRequest[]
+  duprSubmission DuprSubmission?
+
+  @@index([seasonId, weekNumber])
+  @@index([status])
+}
+
+/// A line matchup within a fixture (§12). Line 1 v 1, 2 v 2, 3 v 3; a 4th line
+/// where a team carries 8 is EXHIBITION — recorded in full but non-counting.
+model LineMatchup {
+  id          String   @id @default(cuid())
+  fixtureId   String
+  fixture     Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  lineNumber  Int      // 1..4
+  /// The 4th line does not count toward the match result (§12)
+  isCounting  Boolean  @default(true)
+  homePairingId String?
+  awayPairingId String?
+  /// HOME | AWAY | null — computed from games (2 of 3)
+  lineWinner  String?
+
+  games       GameScore[]
+
+  @@unique([fixtureId, lineNumber])
+}
+
+/// Individual game score per line (§12). "The data model must store individual
+/// game scores per line" — best of three to 11, win by 2, switch ends at 6 in G3.
+model GameScore {
+  id           String @id @default(cuid())
+  lineId       String
+  line         LineMatchup @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  gameNumber   Int    // 1..3
+  homeScore    Int    @default(0)
+  awayScore    Int    @default(0)
+
+  @@unique([lineId, gameNumber])
+}
+
+/// A ranked pairing for a team in a given week (§12/§14). Line-ranking history
+/// is retained and auditable — holding a strong pair at line 3 distorts ratings.
+model Pairing {
+  id         String  @id @default(cuid())
+  teamId     String
+  team       Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  weekNumber Int
+  rank       Int     // 1..4 (4 = exhibition)
+  playerAId  String
+  playerA    Person  @relation("PairingPlayerA", fields: [playerAId], references: [id])
+  playerBId  String
+  playerB    Person  @relation("PairingPlayerB", fields: [playerBId], references: [id])
+  /// Combined DUPR — validated for non-PURE teams: line1 > line2 > line3 (§14)
+  combinedDupr Float?
+  createdAt  DateTime @default(now())
+
+  @@index([teamId, weekNumber])
+}
+
+/// Player-entered availability for a fixture (§14). The 48-hour rule: not
+/// relayed through a coach. Fuels the escalation alert to coach+Director+COO.
+model AvailabilityConfirmation {
+  id         String   @id @default(cuid())
+  fixtureId  String
+  fixture    Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  personId   String
+  person     Person   @relation(fields: [personId], references: [id])
+  /// PLAYING | NOT_PLAYING | UNCONFIRMED
+  status     String   @default("UNCONFIRMED")
+  confirmedAt DateTime?
+
+  @@unique([fixtureId, personId])
+}
+
+/// Reschedule request (§14). Blocked by the system inside 7 days. Opposing
+/// contact accepts/rejects in-platform; the Director is copied on both.
+model RescheduleRequest {
+  id            String   @id @default(cuid())
+  fixtureId     String
+  fixture       Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  requestedByTeamId String
+  proposedAt    DateTime
+  reason        String?
+  /// PENDING | ACCEPTED | REJECTED
+  status        String   @default("PENDING")
+  respondedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([fixtureId])
+}
+
+/// DUPR submission with a retry queue and explicit error state (§12). Forfeited
+/// fixtures are excluded by rule — never submitted.
+model DuprSubmission {
+  id          String   @id @default(cuid())
+  fixtureId   String   @unique
+  fixture     Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  /// PENDING | SUBMITTED | REJECTED | EXCLUDED (forfeit/no-play)
+  status      String   @default("PENDING")
+  attempts    Int      @default(0)
+  lastError   String?
+  submittedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ===========================================================================
+// À LA CARTE (spec §11)
+// ===========================================================================
+
+/// Player-facing catalog entry (§11). Priced by PURE per venue — coaches do NOT
+/// set their own prices. Venue eligibility gated on Facility.alaCarteAllowed.
+model AlaCarteOffering {
+  id          String   @id @default(cuid())
+  /// PRIVATE | SEMI_PRIVATE | CLINIC
+  type        String
+  title       String
+  facilityId  String
+  facility    Facility @relation(fields: [facilityId], references: [id])
+  coachId     String?
+  coach       Coach?   @relation(fields: [coachId], references: [id])
+  priceCents  Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  bookings    AlaCarteBooking[]
+
+  @@index([facilityId])
+}
+
+/// A booking. Court cost comes off the top, then the split is applied to net;
+/// the applied rate set is STAMPED here so historical payouts survive a rate
+/// change (§0, §11).
+model AlaCarteBooking {
+  id            String   @id @default(cuid())
+  offeringId    String
+  offering      AlaCarteOffering @relation(fields: [offeringId], references: [id])
+  clientId      String
+  client        Person   @relation("AlaCarteClient", fields: [clientId], references: [id])
+  coachId       String?
+  coach         Coach?   @relation("AlaCarteCoach", fields: [coachId], references: [id])
+  /// Whether the Academy Director taught (resolves which split applies)
+  directorTaught Boolean @default(false)
+  /// REQUESTED | ACCEPTED | DECLINED | DELIVERED | CANCELLED
+  status        String   @default("REQUESTED")
+
+  grossCents    Int      @default(0)
+  courtCostCents Int     @default(0)
+  netCents      Int      @default(0)
+  // Stamped splits (cents)
+  coachCents    Int      @default(0)
+  directorCents Int      @default(0)
+  pureCents     Int      @default(0)
+  // Stamped rates for auditability
+  appliedCoachPct    Float?
+  appliedDirectorPct Float?
+  appliedPurePct     Float?
+
+  scheduledAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([clientId])
+  @@index([coachId])
+}
+
+// ===========================================================================
+// COMMUNICATIONS (spec §13) — a core capability, not a notification layer.
+// ===========================================================================
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String?
+  sender      User?    @relation("MessageSender", fields: [senderId], references: [id])
+  seasonId    String?
+  season      Season?  @relation(fields: [seasonId], references: [id])
+
+  /// Audience scope: ALL_PLAYERS | ALL_COACHES | MARKET | DIVISION | TEAM |
+  /// SINGLE_COACH | SINGLE_PERSON | OPPOSING_CONTACT (§13)
+  audienceType String
+  audienceRef  String?  // id of the team/division/market/person as applicable
+
+  /// Channels this message was mirrored to: comma set of IN_APP,EMAIL,SMS (§13)
+  channels     String   @default("IN_APP,EMAIL")
+
+  /// Trigger type when system-generated (§13 triggered-message table), else null
+  triggerType  String?
+  subject      String?
+  body         String
+
+  sentAt       DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  recipients   MessageRecipient[]
+
+  @@index([audienceType, audienceRef])
+  @@index([triggerType])
+}
+
+/// Per-person delivery record (§13). A message log per person and per team so
+/// "we told them" is verifiable; delivery failure is an ERROR state, not a
+/// silent drop.
+model MessageRecipient {
+  id         String   @id @default(cuid())
+  messageId  String
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  personId   String
+  person     Person   @relation(fields: [personId], references: [id])
+  /// per-channel delivery: QUEUED | SENT | DELIVERED | FAILED | READ
+  inAppStatus String  @default("QUEUED")
+  emailStatus String?
+  smsStatus   String?
+  readAt      DateTime?
+  failedReason String?
+
+  @@unique([messageId, personId])
+  @@index([personId])
+}
+
+// ===========================================================================
+// COMPLIANCE & AUDIT (spec §3, §17, §18)
+// ===========================================================================
+
+/// Waiver capture with signature date (§3). No player appears on a court-ready
+/// roster without one. Records media consent (opt-out honored).
+model Waiver {
+  id          String   @id @default(cuid())
+  personId    String
+  person      Person   @relation(fields: [personId], references: [id])
+  seasonId    String?
+  signedAt    DateTime
+  signatureName String
+  mediaConsent Boolean @default(true)
+  /// Parental consent captured alongside the participation waiver for minors
+  parentalConsent Boolean @default(false)
+  documentVersion String?
+
+  @@index([personId])
+}
+
+/// A championship bracket match (§14 — championship week Dec 7–13). Teams are
+/// seeded from division standings; the bracket is single-elimination and byes
+/// auto-advance. Team/division/season references are stored as ids (resolved in
+/// app code) to keep the bracket self-contained. Format is deliberately simple —
+/// the spec leaves championship format "not yet set … it follows from the number
+/// of teams" — so a match records a winner and an optional score.
+model ChampionshipMatch {
+  id           String   @id @default(cuid())
+  seasonId     String
+  divisionId   String
+  round        Int      // 1 = first round; increases toward the final
+  slot         Int      // position within the round (0-indexed)
+  homeTeamId   String?
+  awayTeamId   String?
+  homeSeed     Int?
+  awaySeed     Int?
+  winnerTeamId String?
+  homeScore    Int?
+  awayScore    Int?
+  /// PENDING | READY | COMPLETED | BYE
+  status       String   @default("PENDING")
+  scheduledAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([seasonId, divisionId, round, slot])
+  @@index([seasonId, divisionId])
+}
+
+/// Audit trail on assignments, cancellations, waivers, and payments (§18).
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  entityType String   // Team | Session | Waiver | Payment | Registration ...
+  entityId   String
+  action     String   // CREATE | UPDATE | ASSIGN | CANCEL | OVERRIDE | ...
+  summary    String?
+  metadata   String?  // JSON before/after
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+}

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/dev-db.sh\" >> /tmp/pure-dev-db.log 2>&1 || true",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}

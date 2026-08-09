@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f4f5f6; /* light section background, matching the site */
+  --foreground: #0e1d34; /* deep navy text */
+
+  /* Elegant serif for display headings (the site's signature look), with a
+     web-safe fallback chain since external fonts can't be fetched here. */
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino,
+    "Book Antiqua", Georgia, "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Serif display treatment for marketing/public headings. Pair a roman phrase
+   with an italic accent span, e.g.:
+   <h1 class="display">Premier <em class="text-accent-500">Player Academy</em></h1> */
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+.display em {
+  font-style: italic;
+}
+
+/* Uppercase tracked eyebrow with a leading dash — the site's label device. */
+.eyebrow {
+  @apply inline-flex items-center text-xs font-semibold uppercase tracking-[0.16em] text-accent-700;
+}
+.eyebrow::before {
+  content: "";
+  @apply mr-2 inline-block h-px w-6 bg-current align-middle;
+}
+.eyebrow-light {
+  @apply text-accent-400;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
+      text-sm font-semibold transition-colors focus:outline-none focus:ring-2
+      focus:ring-accent-400 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-800 text-white hover:bg-brand-900;
+  }
+  /* High-energy CTA — bright lime pill with dark navy text, like the site. */
+  .btn-accent {
+    @apply btn bg-accent-500 font-bold text-brand-900 hover:bg-accent-400;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50;
+  }
+  .btn-ghost {
+    @apply btn text-brand-500 hover:bg-brand-100;
+  }
+  .card {
+    @apply rounded-xl bg-white p-5 shadow-card ring-1 ring-brand-200/60;
+  }
+  .label {
+    @apply block text-sm font-medium text-slate-700 mb-1;
+  }
+  .input {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
+      shadow-sm focus:border-accent-500 focus:outline-none focus:ring-1
+      focus:ring-accent-500;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+}

@@ -1,0 +1,119 @@
+import { prisma } from "@/lib/db";
+import { PageHeader } from "@/components/RoadmapNote";
+import { PoolCard } from "@/components/PoolCard";
+import { buildPools, type PoolRegistration } from "@/lib/domain/pools";
+import { TEAM_CAP } from "@/lib/enums";
+
+export const dynamic = "force-dynamic";
+
+// Registrations still in the assignment pool — everything not yet placed.
+const UNASSIGNED = ["SUBMITTED", "WAITLISTED"];
+
+export default async function PoolsPage() {
+  const season = await prisma.season.findFirst({
+    where: { active: true, program: "PURE_ACADEMY" },
+    orderBy: { startDate: "desc" },
+  });
+
+  if (!season) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Assignment pools" />
+        <p className="text-slate-500">No active PURE Academy season.</p>
+      </div>
+    );
+  }
+
+  const [registrations, teams] = await Promise.all([
+    prisma.registration.findMany({
+      where: { seasonId: season.id, status: { in: UNASSIGNED } },
+      include: {
+        person: true,
+        division: true,
+        locationPrefs: { include: { facility: true }, orderBy: { rank: "asc" } },
+      },
+    }),
+    prisma.team.findMany({
+      where: { seasonId: season.id },
+      include: { _count: { select: { members: true } }, division: true },
+    }),
+  ]);
+
+  const poolRegs: PoolRegistration[] = registrations.map((r) => ({
+    registrationId: r.id,
+    personId: r.personId,
+    personName: `${r.person.firstName} ${r.person.lastName}`,
+    duprRating: r.person.duprRating ?? r.duprRatingAtReg ?? null,
+    waiverSigned: !!r.person.waiverSignedAt,
+    divisionId: r.divisionId,
+    divisionName: r.division?.name ?? null,
+    timePref: r.practiceTimePref,
+    locationPrefs: r.locationPrefs
+      .filter((lp) => lp.facility)
+      .map((lp) => ({ facilityId: lp.facilityId!, facilityName: lp.facility!.name, rank: lp.rank })),
+  }));
+
+  const pools = buildPools(poolRegs);
+
+  const teamOptions = teams.map((t) => ({
+    id: t.id,
+    name: t.name,
+    divisionId: t.divisionId,
+    remaining: Math.max(0, TEAM_CAP - t._count.members - (t.coachPlays ? 1 : 0)),
+  }));
+
+  const totalUnassigned = registrations.length;
+  const launchable = pools.filter((p) => p.viability === "launchable").length;
+
+  // Group pools by division for display.
+  const byDivision = new Map<string, typeof pools>();
+  for (const p of pools) {
+    const key = p.divisionName ?? "Unplaced";
+    if (!byDivision.has(key)) byDivision.set(key, []);
+    byDivision.get(key)!.push(p);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <PageHeader
+          title="Assignment pools"
+          subtitle="Every viable division × location × time. Pools overlap — assigning a player removes them from the others. Assign at four; build from two; launch at six."
+        />
+        <div className="flex gap-3 text-sm">
+          <Pill label="Unassigned" value={totalUnassigned} />
+          <Pill label="Pools" value={pools.length} />
+          <Pill label="Launchable" value={launchable} tone="emerald" />
+        </div>
+      </div>
+
+      {pools.length === 0 ? (
+        <div className="card">
+          <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+            No unassigned registrations. Everyone is placed, or none have registered yet.
+          </p>
+        </div>
+      ) : (
+        [...byDivision.entries()].map(([division, dpools]) => (
+          <section key={division}>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{division}</h2>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {dpools.map((pool) => (
+                <PoolCard key={pool.key} pool={pool} seasonId={season.id} teams={teamOptions} />
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+    </div>
+  );
+}
+
+function Pill({ label, value, tone = "slate" }: { label: string; value: number; tone?: "slate" | "emerald" }) {
+  const tones = { slate: "bg-slate-100 text-slate-700", emerald: "bg-emerald-100 text-emerald-800" };
+  return (
+    <div className={`rounded-lg px-3 py-1.5 ${tones[tone]}`}>
+      <span className="font-bold">{value}</span> <span className="text-xs">{label}</span>
+    </div>
+  );
+}
