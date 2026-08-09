@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
+import { startCheckout } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -128,17 +129,32 @@ export default async function PortalHome() {
             <div className="card text-sm text-slate-500">No payments requested yet.</div>
           ) : (
             payments.map((p) => (
-              <div key={p.id} className="card flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-slate-800">{formatCents(p.amountCents)}</div>
-                  <div className="text-xs text-slate-400">{p.description ?? p.category.replace(/_/g, " ")}</div>
+              <div key={p.id} className="card">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-slate-800">{formatCents(p.amountCents)}</div>
+                    <div className="text-xs text-slate-400">
+                      {p.description ?? p.category.replace(/_/g, " ")}
+                      {p.installmentPlan ? " · monthly plan" : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <StatusBadge status={p.status} />
+                    {(p.status === "REQUESTED" || p.status === "PENDING") && (
+                      <form action={startCheckout}>
+                        <input type="hidden" name="paymentId" value={p.id} />
+                        <button className="btn-primary">Pay now</button>
+                      </form>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={p.status} />
-                  {(p.status === "REQUESTED" || p.status === "PENDING") && (
-                    <button className="btn-primary" disabled title="Stripe checkout — Phase 1 payments">Pay now</button>
-                  )}
-                </div>
+                {(p.status === "REQUESTED" || p.status === "PENDING") && (
+                  <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    The season fee reserves a place on a team, not a session count. There are
+                    no make-ups: individual practices PURE cancels are not refunded or credited.
+                    Secure checkout is hosted by Stripe — we never see your card details.
+                  </p>
+                )}
               </div>
             ))
           )}

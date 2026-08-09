@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -54,10 +55,10 @@ export default async function TeamBuildBoard() {
             const roster = rosterStatus(t._count.members, t.coachPlays);
             const publish = canPublishTeam(t, t.facility);
             return (
-              <div key={t.id} className="card">
+              <div key={t.id} className="card transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-semibold text-slate-900">{t.name}</h3>
+                    <Link href={`/console/teams/${t.id}`} className="font-semibold text-slate-900 hover:text-brand-700">{t.name}</Link>
                     <p className="text-xs text-slate-400">
                       {t.origin === "ACP_CLUB" ? t.clubName ?? "Outside club" : "PURE Academy"}
                     </p>
@@ -106,6 +107,12 @@ export default async function TeamBuildBoard() {
                   {publish.ok && !t.published && (
                     <p className="text-emerald-700">✓ Eligible to publish to families</p>
                   )}
+                </div>
+
+                <div className="mt-3 border-t border-slate-100 pt-2 text-right">
+                  <Link href={`/console/teams/${t.id}`} className="text-xs font-medium text-brand-600 hover:underline">
+                    Manage team →
+                  </Link>
                 </div>
               </div>
             );
