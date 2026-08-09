@@ -130,10 +130,10 @@ export function receiptEmailHtml(r: Receipt): string {
 
   return `<!doctype html><html><body style="margin:0;background:#f1f5f9;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
   <table style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0">
-    <tr><td style="padding:18px 22px;background:#0b1220">
+    <tr><td style="padding:16px 22px;background:#ffffff;border-bottom:1px solid #e2e8f0">
       <table style="width:100%"><tr>
-        <td style="text-align:left"><img src="${base}${ACADEMY_LOGO}" alt="PURE Academy" height="40" style="height:40px"></td>
-        <td style="text-align:right"><img src="${base}${PADEL_LOGO}" alt="PURE Pickleball & Padel" height="40" style="height:40px"></td>
+        <td style="text-align:left"><img src="${base}${ACADEMY_LOGO}" alt="PURE Academy" height="38" style="height:38px;border-radius:6px"></td>
+        <td style="text-align:right"><img src="${base}${PADEL_LOGO}" alt="PURE Pickleball & Padel" height="42" style="height:42px"></td>
       </tr></table>
     </td></tr>
     <tr><td style="padding:26px 22px 8px">

@@ -41,11 +41,11 @@ export default async function PaymentSuccess({
   return (
     <div className="mx-auto max-w-lg py-10">
       {/* Brand header: PURE Academy (left) + PURE Pickleball & Padel (right) */}
-      <div className="mb-6 flex items-center justify-between rounded-xl bg-brand-950 px-4 py-3">
+      <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={ACADEMY_LOGO} alt="PURE Academy" className="h-9 w-auto" />
+        <img src={ACADEMY_LOGO} alt="PURE Academy" className="h-9 w-auto rounded-md" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={PADEL_LOGO} alt="PURE Pickleball & Padel" className="h-9 w-auto" />
+        <img src={PADEL_LOGO} alt="PURE Pickleball & Padel" className="h-10 w-auto" />
       </div>
 
       <div className="card text-center">
