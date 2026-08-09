@@ -9,6 +9,8 @@ import {
   sendPaymentConfirmation,
 } from "@/lib/payments/receipt";
 import { audit } from "@/lib/audit";
+import { sendEmail } from "@/lib/notify";
+import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
 
 // Player-portal mutations as native-form-POST route handlers with ticket auth.
 // Route handlers 303-redirect to a fresh GET (which carries the session cookie),
@@ -211,6 +213,39 @@ export async function POST(req: Request) {
       });
 
       return NextResponse.redirect(checkout.url!, 303);
+    }
+
+    // Lesson / clinic request — emailed to the team inbox for follow-up (§11).
+    case "requestLesson": {
+      const f = (k: string) => String(formData.get(k) ?? "").trim();
+      const list = (k: string) => formData.getAll(k).map((v) => String(v).trim()).filter(Boolean);
+
+      const contactName = f("contactName") || "A player";
+      const contactEmail = f("contactEmail");
+      const contactPhone = f("contactPhone");
+      const forWho = f("forWho");
+      const rating = f("rating");
+      const lessonType = f("lessonType");
+      const locations = list("location");
+      const dayTimes = list("dayTime");
+      const dayTimeOther = f("dayTimeOther");
+      const notes = f("notes");
+
+      const lines = [
+        `New lesson request from ${contactName}.`,
+        ``,
+        `Contact: ${contactEmail || "—"}${contactPhone ? ` · ${contactPhone}` : ""}`,
+        `For: ${forWho || "—"}`,
+        `Skill / rating: ${rating || "—"}`,
+        `Lesson type: ${lessonType || "—"}`,
+        `Locations: ${locations.length ? locations.join(", ") : "—"}`,
+        `Day/time preferences: ${[...dayTimes, dayTimeOther].filter(Boolean).join(", ") || "—"}`,
+        ``,
+        `Notes: ${notes || "—"}`,
+      ];
+      await sendEmail(SUPPORT_EMAIL, `Lesson request — ${contactName}`, lines.join("\n"));
+      await audit({ actorId: actor.userId, entityType: "LessonRequest", entityId: personId ?? "unknown", action: "REQUESTED", summary: `Lesson request emailed to ${SUPPORT_EMAIL}` });
+      return NextResponse.redirect(new URL("/portal/lessons?sent=1", origin), 303);
     }
 
     default:

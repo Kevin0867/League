@@ -3,6 +3,11 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+import {
+  sendRegistrationConfirmation,
+  notifyTeamOfRegistration,
+  type EnrolledPlayer,
+} from "@/lib/domain/registrationEmail";
 
 export type RegisterState = { error?: string };
 
@@ -221,17 +226,14 @@ export async function registerAction(
     primaryId = primary.id;
   }
 
+  const enrolled: EnrolledPlayer[] = [];
+
   // The adult (contact) plays: enroll them, reusing the primary Person.
   if (adultPlaying) {
+    const team = g("primaryTeam");
+    const skill = g("primarySkill");
     await enrollPlayer({
-      player: {
-        firstName,
-        lastName,
-        dob: g("primaryDob"),
-        team: g("primaryTeam"),
-        skill: g("primarySkill"),
-        isChild: false,
-      },
+      player: { firstName, lastName, dob: g("primaryDob"), team, skill, isChild: false },
       seasonId,
       divisions,
       signatureName,
@@ -244,6 +246,7 @@ export async function registerAction(
       email: email || undefined,
       phone: phone || undefined,
     });
+    enrolled.push({ name: `${firstName} ${lastName}`, program: programLabel(team, skill) });
   }
 
   // Children (up to 4), each guardian-signed on the same waiver.
@@ -281,6 +284,7 @@ export async function registerAction(
         comments,
         guardianId: primaryId,
       });
+      enrolled.push({ name: `${kid.firstName} ${kid.lastName}`, program: programLabel(kid.team, kid.skill) });
     }
   }
 
@@ -296,6 +300,25 @@ export async function registerAction(
           personId: primaryId,
         },
       });
+    }
+  }
+
+  // Confirmation to the registrant + a heads-up to the team inbox. Email
+  // failures never block a successful registration.
+  if (email && enrolled.length) {
+    const summary = {
+      toEmail: email,
+      recipientName: firstName,
+      seasonName: season?.name ?? "PURE Academy",
+      players: enrolled,
+      locations,
+      practiceTimes,
+    };
+    try {
+      await sendRegistrationConfirmation(summary);
+      await notifyTeamOfRegistration(summary);
+    } catch {
+      // swallow — registration already succeeded
     }
   }
 
