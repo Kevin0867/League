@@ -3,7 +3,8 @@ import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
-import { startCheckout, markMessageRead } from "./actions";
+import { startCheckout, markMessageRead, confirmAvailability } from "./actions";
+import { NOTICE_DAYS } from "@/lib/domain/availability";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,28 @@ export default async function PortalHome() {
         orderBy: { createdAt: "desc" },
       })
     : [];
+
+  // Upcoming league fixtures for the household's teams (§14 — 7-day notice + 48h).
+  const teamIds = memberships.map((m) => m.teamId);
+  const now = new Date();
+  const horizon = new Date(now.getTime() + NOTICE_DAYS * 24 * 60 * 60 * 1000);
+  const fixtures = teamIds.length
+    ? await prisma.fixture.findMany({
+        where: {
+          status: { in: ["SCHEDULED", "CONFIRMED", "RESCHEDULED"] },
+          scheduledAt: { gte: new Date(now.getTime() - 6 * 60 * 60 * 1000), lte: horizon },
+          OR: [{ homeTeamId: { in: teamIds } }, { awayTeamId: { in: teamIds } }],
+        },
+        include: {
+          homeTeam: true, awayTeam: true, facility: true,
+          confirmations: { where: { personId: { in: peopleIds } } },
+        },
+        orderBy: { scheduledAt: "asc" },
+      })
+    : [];
+
+  // Which household member is on each fixture's team?
+  const memberByTeam = new Map(memberships.map((m) => [m.teamId, m.person]));
 
   const inbox = peopleIds.length
     ? await prisma.messageRecipient.findMany({
@@ -160,6 +183,55 @@ export default async function PortalHome() {
                 </dl>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* Upcoming matches — availability confirmation (§14) */}
+      {fixtures.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Upcoming matches</h2>
+          <div className="space-y-3">
+            {fixtures.map((f) => {
+              const myTeamId = teamIds.find((id) => id === f.homeTeamId || id === f.awayTeamId)!;
+              const person = memberByTeam.get(myTeamId);
+              if (!person) return null;
+              const current = f.confirmations.find((c) => c.personId === person.id)?.status ?? "UNCONFIRMED";
+              const hoursOut = Math.round((f.scheduledAt.getTime() - now.getTime()) / 3.6e6);
+              return (
+                <div key={f.id} className="card">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium text-slate-800">
+                        {f.homeTeam?.name} <span className="text-slate-400">vs</span> {f.awayTeam?.name}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {f.scheduledAt.toLocaleDateString()} · {f.facility?.name ?? "hub TBD"} · {person.firstName}
+                        {hoursOut <= 48 && hoursOut > 0 && <span className="ml-2 text-amber-600">confirm within {hoursOut}h</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {["PLAYING", "NOT_PLAYING"].map((opt) => (
+                        <form key={opt} action={confirmAvailability}>
+                          <input type="hidden" name="fixtureId" value={f.id} />
+                          <input type="hidden" name="personId" value={person.id} />
+                          <input type="hidden" name="status" value={opt} />
+                          <button
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                              current === opt
+                                ? opt === "PLAYING" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {opt === "PLAYING" ? "Playing" : "Not playing"}
+                          </button>
+                        </form>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}

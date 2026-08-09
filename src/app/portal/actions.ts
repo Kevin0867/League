@@ -7,6 +7,28 @@ import { getSession } from "@/lib/auth";
 import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 
+/**
+ * Player-entered availability for a fixture (§14). Player marks Playing or Not
+ * playing themselves — not relayed through a coach. Scoped to the household.
+ */
+export async function confirmAvailability(formData: FormData) {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  const fixtureId = String(formData.get("fixtureId") ?? "");
+  const personId = String(formData.get("personId") ?? "");
+  const status = String(formData.get("status") ?? "UNCONFIRMED");
+
+  const household = await householdPersonIds(session.personId);
+  if (!household.includes(personId)) throw new Error("Not authorized.");
+
+  await prisma.availabilityConfirmation.upsert({
+    where: { fixtureId_personId: { fixtureId, personId } },
+    create: { fixtureId, personId, status, confirmedAt: new Date() },
+    update: { status, confirmedAt: new Date() },
+  });
+  revalidatePath("/portal");
+}
+
 /** Mark a received message as read for the current user's household. */
 export async function markMessageRead(formData: FormData) {
   const session = await getSession();
