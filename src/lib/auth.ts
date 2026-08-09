@@ -37,6 +37,51 @@ export type SessionPayload = {
   name: string;
 };
 
+/**
+ * On this runtime the httpOnly session cookie is reliably present on GET
+ * navigations (server components can read it) but is NOT delivered on POSTs to
+ * route handlers — an authenticated form POST arrives with no cookies at all.
+ * To authorize a mutating POST we therefore mint a short-lived signed "action
+ * ticket" server-side while rendering the page (where the session IS readable),
+ * embed it as a hidden form field, and verify the ticket on POST instead of
+ * relying on the cookie. The ticket travels in the request body, so it always
+ * arrives.
+ */
+export type ActionTicket = {
+  userId: string;
+  role: Role;
+  scope: string;
+};
+
+export async function signActionTicket(
+  t: ActionTicket,
+  ttlSeconds = 60 * 30
+): Promise<string> {
+  return new SignJWT({ ...t, kind: "action" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + ttlSeconds)
+    .sign(secret);
+}
+
+export async function verifyActionTicket(
+  token: string | undefined | null,
+  scope: string
+): Promise<ActionTicket | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    if (payload.kind !== "action" || payload.scope !== scope) return null;
+    return {
+      userId: String(payload.userId),
+      role: payload.role as Role,
+      scope: String(payload.scope),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function hashPassword(pw: string) {
   return bcrypt.hash(pw, 10);
 }

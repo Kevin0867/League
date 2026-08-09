@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyActionTicket } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { ingestRegistration } from "@/lib/domain/intake";
 import { parseEnrollments, distinctDivisions } from "@/lib/domain/enrollmentImport";
 
-// Enrollment import as a ROUTE HANDLER (not a server action): on this runtime,
-// server actions — especially multipart/file uploads — don't reliably see the
-// session cookie, while route handlers do. Returns the same shapes the form
-// renders. mode=preview parses only; mode=commit writes.
+// Enrollment import as a route handler driven by a NATIVE form POST (not fetch):
+// on this deployment a fetch upload arrived with no cookies, while native form
+// posts (used by login/setup) carry the session reliably. Results are passed
+// back via query params to /console/import.
 export const dynamic = "force-dynamic";
 
 const DEFAULT_SEASON = {
@@ -20,47 +19,46 @@ const DEFAULT_SEASON = {
 };
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) {
-    const jar = await cookies();
-    const names = jar.getAll().map((c) => c.name);
-    return NextResponse.json(
-      { error: `DIAG: route handler got no session. Cookies received: [${names.join(", ") || "none"}].` },
-      { status: 401 }
-    );
-  }
-  if (!["COO", "DIRECTOR"].includes(session.role)) {
-    return NextResponse.json({ error: "Importing needs a COO or Director account." }, { status: 403 });
-  }
+  const origin = new URL(req.url).origin;
+  const back = (qs: string) => NextResponse.redirect(new URL(`/console/import?${qs}`, origin), 303);
 
   const formData = await req.formData();
+
+  // Authorize off the signed action ticket carried in the form body (the
+  // session cookie is not delivered on POSTs here), falling back to the cookie
+  // session if it happens to be present.
+  const ticket = await verifyActionTicket(
+    formData.get("ticket")?.toString(),
+    "console.import"
+  );
+  const session = ticket ?? (await getSession());
+  if (!session) return back("err=auth");
+  if (!["COO", "DIRECTOR"].includes(session.role)) return back("err=role");
+  const actorId = "userId" in session ? session.userId : "";
+
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "Choose a CSV file to upload." }, { status: 400 });
-  }
+  if (!(file instanceof File) || file.size === 0) return back("err=file");
 
   const text = await file.text();
   const { rows, skipped, total } = parseEnrollments(text);
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "No valid rows found. Is this the enrollment CSV export?" }, { status: 400 });
-  }
+  if (rows.length === 0) return back("err=empty");
   const divisions = distinctDivisions(rows);
   const markets = [...new Set(rows.flatMap((r) => r.markets))];
 
   if (formData.get("mode") !== "commit") {
-    return NextResponse.json({
-      preview: {
-        total,
-        mapped: rows.length,
-        skipped,
-        childCount: rows.filter((r) => r.isChild).length,
-        divisions: divisions.map((d) => d.name),
-        markets,
-      },
+    const p = new URLSearchParams({
+      preview: "1",
+      total: String(total),
+      mapped: String(rows.length),
+      skipped: String(skipped),
+      child: String(rows.filter((r) => r.isChild).length),
+      divc: String(divisions.length),
+      markets: markets.join(","),
     });
+    return back(p.toString());
   }
 
-  // --- Commit: ensure season + divisions, then ingest each row ---
+  // --- Commit ---
   let season = await prisma.season.findFirst({
     where: { active: true, program: "PURE_ACADEMY" },
     orderBy: { startDate: "desc" },
@@ -85,7 +83,6 @@ export async function POST(req: Request) {
   let created = 0,
     duplicates = 0,
     errors = 0;
-  const sampleErrors: string[] = [];
   for (const r of rows) {
     try {
       const res = await ingestRegistration({
@@ -106,28 +103,26 @@ export async function POST(req: Request) {
         source: "import",
       });
       res.duplicate ? duplicates++ : created++;
-    } catch (e) {
+    } catch {
       errors++;
-      if (sampleErrors.length < 5) sampleErrors.push(`${r.firstName} ${r.lastName}: ${(e as Error).message}`);
     }
   }
 
   await audit({
-    actorId: session.userId,
+    actorId,
     entityType: "Season",
     entityId: season.id,
     action: "enrollments.import",
     summary: `Imported ${created} new / ${duplicates} duplicate registrations from CSV`,
   });
 
-  return NextResponse.json({
-    result: {
-      created,
-      duplicates,
-      errors,
-      divisionsEnsured: toCreate.length,
-      seasonName: season.name,
-      sampleErrors,
-    },
+  const p = new URLSearchParams({
+    done: "1",
+    created: String(created),
+    dup: String(duplicates),
+    div: String(toCreate.length),
+    err: String(errors),
+    season: season.name,
   });
+  return back(p.toString());
 }
