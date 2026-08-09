@@ -1,6 +1,9 @@
 import { ConsoleShell } from "@/components/ConsoleShell";
 import { requireStaff } from "@/lib/rbac";
 
+// Never serve a cached/prerendered authed shell — always resolve the session.
+export const dynamic = "force-dynamic";
+
 export default async function ConsoleLayout({
   children,
 }: {
