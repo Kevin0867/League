@@ -886,6 +886,35 @@ model Waiver {
   @@index([personId])
 }
 
+/// A championship bracket match (§14 — championship week Dec 7–13). Teams are
+/// seeded from division standings; the bracket is single-elimination and byes
+/// auto-advance. Team/division/season references are stored as ids (resolved in
+/// app code) to keep the bracket self-contained. Format is deliberately simple —
+/// the spec leaves championship format "not yet set … it follows from the number
+/// of teams" — so a match records a winner and an optional score.
+model ChampionshipMatch {
+  id           String   @id @default(cuid())
+  seasonId     String
+  divisionId   String
+  round        Int      // 1 = first round; increases toward the final
+  slot         Int      // position within the round (0-indexed)
+  homeTeamId   String?
+  awayTeamId   String?
+  homeSeed     Int?
+  awaySeed     Int?
+  winnerTeamId String?
+  homeScore    Int?
+  awayScore    Int?
+  /// PENDING | READY | COMPLETED | BYE
+  status       String   @default("PENDING")
+  scheduledAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([seasonId, divisionId, round, slot])
+  @@index([seasonId, divisionId])
+}
+
 /// Audit trail on assignments, cancellations, waivers, and payments (§18).
 model AuditLog {
   id         String   @id @default(cuid())

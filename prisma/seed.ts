@@ -19,6 +19,7 @@ function d(iso: string) {
 async function main() {
   console.log("Clearing existing data…");
   // Order matters for FK integrity.
+  await prisma.championshipMatch.deleteMany();
   await prisma.gameScore.deleteMany();
   await prisma.lineMatchup.deleteMany();
   await prisma.duprSubmission.deleteMany();

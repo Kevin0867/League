@@ -14,6 +14,7 @@ export async function PublicNav() {
           <Link href="/programs" className="hover:text-brand-700">Programs</Link>
           <Link href="/locations" className="hover:text-brand-700">Locations</Link>
           <Link href="/standings" className="hover:text-brand-700">League Standings</Link>
+          <Link href="/championship" className="hover:text-brand-700">Championship</Link>
           <Link href="/schedule" className="hover:text-brand-700">Schedule</Link>
         </nav>
         <div className="flex items-center gap-2">
