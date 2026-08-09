@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Logo } from "@/components/Brand";
+import { Logo, PadelLogo } from "@/components/Brand";
 import { requireUser } from "@/lib/rbac";
 
 export default async function PortalLayout({
@@ -17,6 +17,7 @@ export default async function PortalLayout({
             <Link href="/portal/lessons" className="font-medium text-brand-700 hover:underline">Lessons</Link>
             <span className="hidden text-slate-500 sm:inline">{session.name}</span>
             <Link href="/logout" prefetch={false} className="btn-ghost">Sign out</Link>
+            <PadelLogo className="hidden h-8 sm:block" />
           </div>
         </div>
       </header>

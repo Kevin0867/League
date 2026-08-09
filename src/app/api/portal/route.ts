@@ -11,6 +11,7 @@ import {
 import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/notify";
 import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { brandedEmailHtml } from "@/lib/email/branded";
 
 // Player-portal mutations as native-form-POST route handlers with ticket auth.
 // Route handlers 303-redirect to a fresh GET (which carries the session cookie),
@@ -243,7 +244,28 @@ export async function POST(req: Request) {
         ``,
         `Notes: ${notes || "—"}`,
       ];
-      await sendEmail(SUPPORT_EMAIL, `Lesson request — ${contactName}`, lines.join("\n"));
+      const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const rowsHtml = [
+        ["Contact", `${contactEmail || "—"}${contactPhone ? ` · ${contactPhone}` : ""}`],
+        ["For", forWho || "—"],
+        ["Skill / rating", rating || "—"],
+        ["Lesson type", lessonType || "—"],
+        ["Locations", locations.length ? locations.join(", ") : "—"],
+        ["Day/time", [...dayTimes, dayTimeOther].filter(Boolean).join(", ") || "—"],
+        ["Notes", notes || "—"],
+      ]
+        .map(
+          ([k, v]) =>
+            `<tr><td style="padding:6px 0;color:#64748b;font-size:13px;width:34%;vertical-align:top">${k}</td>` +
+            `<td style="padding:6px 0;color:#0f172a;font-size:14px">${esc(String(v))}</td></tr>`
+        )
+        .join("");
+      const lessonHtml = brandedEmailHtml({
+        heading: "New lesson request",
+        intro: `From ${esc(contactName)}`,
+        contentHtml: `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:6px 16px"><table style="width:100%;border-collapse:collapse">${rowsHtml}</table></div>`,
+      });
+      await sendEmail(SUPPORT_EMAIL, `Lesson request — ${contactName}`, lines.join("\n"), lessonHtml);
       await audit({ actorId: actor.userId, entityType: "LessonRequest", entityId: personId ?? "unknown", action: "REQUESTED", summary: `Lesson request emailed to ${SUPPORT_EMAIL}` });
       return NextResponse.redirect(new URL("/portal/lessons?sent=1", origin), 303);
     }

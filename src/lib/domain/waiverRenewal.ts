@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { SignJWT, jwtVerify } from "jose";
 import { appUrl } from "@/lib/stripe";
 import { sendEmail } from "@/lib/notify";
+import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
 
 // When a minor turns 18, their parent-signed waiver is no longer valid — they
 // must sign their own adult waiver. A daily job flags them and emails a signed,
@@ -72,12 +73,15 @@ export async function flagAndNotify(
     `Happy 18th! Now that you're an adult, the waiver your parent or guardian signed for you is no longer valid. ` +
     `Please sign your own participation waiver before your next practice:\n\n${link}\n\n` +
     `It only takes a minute. Thanks!\n— PURE Academy`;
-  const html =
-    `<p>Hi ${person.firstName},</p>` +
-    `<p>Happy 18th! Now that you're an adult, the waiver your parent or guardian signed for you is no longer valid. ` +
-    `Please sign your own participation waiver before your next practice:</p>` +
-    `<p><a href="${link}" style="display:inline-block;background:#0b1220;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Sign my waiver</a></p>` +
-    `<p style="color:#64748b;font-size:12px">Or paste this link: ${link}</p><p>— PURE Academy</p>`;
+  const html = brandedEmailHtml({
+    heading: `Happy 18th, ${person.firstName}!`,
+    intro:
+      "Now that you're an adult, the waiver your parent or guardian signed for you is no longer valid.",
+    contentHtml:
+      `<p style="margin:0 0 14px;font-size:14px;color:#475569">Please sign your own participation waiver before your next practice — it only takes a minute.</p>` +
+      emailButton(link, "Sign my waiver", { primary: true }) +
+      `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8">Or paste this link into your browser: ${link}</p>`,
+  });
   await sendEmail(person.email, subject, text, html);
   return "flagged";
 }

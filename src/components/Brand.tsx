@@ -22,3 +22,17 @@ export function Logo({
     </Link>
   );
 }
+
+// PURE Pickleball & Padel parent-brand logo (navy on transparent). Sits top-right
+// across the app so every surface shows PURE Academy's association with PURE
+// Pickleball & Padel. Paired with <Logo /> (Academy) on the top-left.
+export function PadelLogo({ className = "h-9" }: { className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/pure-pickleball-padel.png"
+      alt="PURE Pickleball & Padel"
+      className={`${className} w-auto`}
+    />
+  );
+}

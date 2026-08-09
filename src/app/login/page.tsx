@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Logo } from "@/components/Brand";
+import { Logo, PadelLogo } from "@/components/Brand";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +21,9 @@ export default async function LoginPage({
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-br from-slate-50 to-brand-50 px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex justify-center">
+        <div className="mb-6 flex items-center justify-between">
           <Logo />
+          <PadelLogo className="h-9" />
         </div>
         <div className="card">
           <h1 className="text-xl font-bold text-slate-900">Member login</h1>

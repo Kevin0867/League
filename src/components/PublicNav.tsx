@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Logo } from "./Brand";
+import { Logo, PadelLogo } from "./Brand";
 import { getSession } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
 
@@ -17,7 +17,7 @@ export async function PublicNav() {
           <Link href="/championship" className="hover:text-brand-900">Championship</Link>
           <Link href="/schedule" className="hover:text-brand-900">Schedule</Link>
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {home ? (
             <Link href={home} className="btn-accent text-xs uppercase tracking-wide">My Dashboard</Link>
           ) : (
@@ -26,6 +26,7 @@ export async function PublicNav() {
               <Link href="/register" className="btn-accent text-xs uppercase tracking-wide">Register</Link>
             </>
           )}
+          <PadelLogo className="hidden h-8 sm:block" />
         </div>
       </div>
     </header>

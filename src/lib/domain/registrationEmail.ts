@@ -3,6 +3,10 @@ import { sendEmail } from "@/lib/notify";
 import { brandedEmailHtml } from "@/lib/email/branded";
 import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
 
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export type EnrolledPlayer = { name: string; program: string };
 
 export type RegistrationSummary = {
@@ -75,5 +79,24 @@ export async function notifyTeamOfRegistration(s: RegistrationSummary) {
     s.locations.length ? `Locations: ${s.locations.join(", ")}` : "",
     s.practiceTimes.length ? `Practice times: ${s.practiceTimes.join(", ")}` : "",
   ].filter(Boolean);
-  return sendEmail(SUPPORT_EMAIL, `New registration — ${s.recipientName}`, lines.join("\n"));
+
+  const contentHtml =
+    `<p style="margin:0 0 8px;font-size:14px;color:#475569">Contact: ${esc(s.recipientName)} — ${esc(s.toEmail)}</p>` +
+    `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px">` +
+    `<table style="width:100%;border-collapse:collapse">${playerRows(s.players)}</table>` +
+    ((s.locations.length || s.practiceTimes.length)
+      ? `<p style="margin:10px 0 0;font-size:13px;color:#64748b">` +
+        [s.locations.length ? `Locations: ${esc(s.locations.join(", "))}` : "", s.practiceTimes.length ? `Practice: ${esc(s.practiceTimes.join(", "))}` : ""]
+          .filter(Boolean)
+          .join(" &nbsp;·&nbsp; ") +
+        `</p>`
+      : "") +
+    `</div>`;
+
+  return sendEmail(
+    SUPPORT_EMAIL,
+    `New registration — ${s.recipientName}`,
+    lines.join("\n"),
+    brandedEmailHtml({ heading: "New registration", intro: `${s.seasonName}`, contentHtml })
+  );
 }

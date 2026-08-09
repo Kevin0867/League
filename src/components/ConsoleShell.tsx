@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { Logo, PadelLogo } from "@/components/Brand";
 import type { Role } from "@/lib/enums";
 import { ROLE_LABELS } from "@/lib/enums";
 
@@ -44,11 +45,16 @@ export function ConsoleShell({
     <div className="min-h-screen bg-slate-50">
       {/* Top bar (mobile-first) */}
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden">
-        <button onClick={() => setOpen((v) => !v)} className="btn-ghost" aria-label="Menu">
-          ☰
-        </button>
-        <span className="font-bold text-brand-800">PURE Console</span>
-        <Link href="/logout" prefetch={false} className="text-sm text-slate-500">Sign out</Link>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setOpen((v) => !v)} className="btn-ghost" aria-label="Menu">
+            ☰
+          </button>
+          <Logo href="/console" className="h-7" />
+        </div>
+        <div className="flex items-center gap-3">
+          <PadelLogo className="h-7" />
+          <Link href="/logout" prefetch={false} className="text-sm text-slate-500">Sign out</Link>
+        </div>
       </div>
 
       <div className="mx-auto flex max-w-7xl">
@@ -93,10 +99,16 @@ export function ConsoleShell({
         {/* Main */}
         <main className="min-w-0 flex-1">
           <div className="hidden items-center justify-between border-b border-slate-200 bg-white px-6 py-3 md:flex">
-            <div className="text-sm text-slate-500">
-              Signed in as <span className="font-semibold text-slate-800">{name}</span>
+            <div className="flex items-center gap-3">
+              <Logo href="/console" className="h-8" />
+              <span className="text-sm text-slate-500">
+                Signed in as <span className="font-semibold text-slate-800">{name}</span>
+              </span>
             </div>
-            <Link href="/logout" prefetch={false} className="btn-ghost text-sm">Sign out</Link>
+            <div className="flex items-center gap-4">
+              <Link href="/logout" prefetch={false} className="btn-ghost text-sm">Sign out</Link>
+              <PadelLogo className="h-8" />
+            </div>
           </div>
           <div className="p-4 md:p-6">{children}</div>
         </main>
