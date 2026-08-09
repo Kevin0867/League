@@ -1,30 +1,58 @@
 import { NextResponse } from "next/server";
-import { authenticate, signSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { verifyPassword, signSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
+import type { Role } from "@/lib/enums";
 
 // Session login via a route handler so the Set-Cookie is reliably emitted
-// (server actions can drop it on the deployed runtime). Plain form POST →
-// authenticate → set cookie on the redirect response.
+// (server actions can drop it on the deployed runtime). Includes brute-force
+// lockout after repeated failures.
 export const dynamic = "force-dynamic";
+
+const MAX_FAILS = 5;
+const LOCK_MINUTES = 15;
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
+  const to = (path: string) => NextResponse.redirect(new URL(path, origin), 303);
+
   const form = await req.formData();
-  const email = String(form.get("email") ?? "");
+  const email = String(form.get("email") ?? "").toLowerCase().trim();
   const password = String(form.get("password") ?? "");
+  if (!email || !password) return to("/login?error=missing");
 
-  if (!email || !password) {
-    return NextResponse.redirect(new URL("/login?error=missing", origin), 303);
+  const user = await prisma.user.findUnique({ where: { email }, include: { person: true } });
+  if (!user || !user.active) return to("/login?error=invalid");
+  if (user.lockedUntil && user.lockedUntil > new Date()) return to("/login?error=locked");
+
+  const ok = await verifyPassword(password, user.passwordHash);
+  if (!ok) {
+    const fails = user.failedLoginCount + 1;
+    const locked = fails >= MAX_FAILS;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginCount: fails,
+        lockedUntil: locked ? new Date(Date.now() + LOCK_MINUTES * 60_000) : null,
+      },
+    });
+    return to(locked ? "/login?error=locked" : "/login?error=invalid");
   }
 
-  const session = await authenticate(email, password);
-  if (!session) {
-    return NextResponse.redirect(new URL("/login?error=invalid", origin), 303);
-  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() },
+  });
 
-  const token = await signSession(session);
-  const dest = isStaff(session.role) ? "/console" : "/portal";
-  const res = NextResponse.redirect(new URL(dest, origin), 303);
+  const name = user.person ? `${user.person.firstName} ${user.person.lastName}` : user.email;
+  const token = await signSession({
+    userId: user.id,
+    email: user.email,
+    role: user.role as Role,
+    personId: user.personId ?? null,
+    name,
+  });
+  const res = to(isStaff(user.role as Role) ? "/console" : "/portal");
   res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
   return res;
 }

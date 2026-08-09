@@ -14,6 +14,8 @@ export default async function LoginPage({
       ? "Invalid email or password."
       : error === "missing"
       ? "Email and password are required."
+      : error === "locked"
+      ? "Too many attempts. This account is locked for 15 minutes — or reset your password."
       : null;
 
   return (
@@ -42,6 +44,11 @@ export default async function LoginPage({
             )}
             <button type="submit" className="btn-primary w-full">Sign in</button>
           </form>
+          <div className="mt-4 text-center">
+            <Link href="/forgot" className="text-sm text-brand-600 hover:text-brand-800">
+              Forgot your password?
+            </Link>
+          </div>
         </div>
         <p className="mt-4 text-center text-sm text-slate-500">
           New to PURE?{" "}
