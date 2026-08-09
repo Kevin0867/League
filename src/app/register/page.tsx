@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { RegisterForm } from "@/components/RegisterForm";
 import { prisma } from "@/lib/db";
+import { ACADEMY_MARKETS } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +31,15 @@ export default async function RegisterPage() {
     );
   }
 
-  // Public-safe facility labels — private courts appear by general area only (§15).
-  const facilityOptions = facilities.map((f) => ({
-    id: f.id,
-    name: f.isPrivate
-      ? `${f.generalArea ?? f.market ?? "Private court"} (private)`
-      : f.name,
-  }));
+  // Location options are the academy's markets (cities) players can attend —
+  // the base list plus any additional markets found on facilities — so the
+  // dropdowns are always populated even before facilities are added.
+  const locations = Array.from(
+    new Set([
+      ...ACADEMY_MARKETS,
+      ...facilities.map((f) => f.market ?? "").filter(Boolean),
+    ])
+  );
 
   return (
     <div>
@@ -53,7 +56,7 @@ export default async function RegisterPage() {
         <RegisterForm
           seasonId={season.id}
           divisions={season.divisions.map((d) => ({ id: d.id, name: d.name }))}
-          facilities={facilityOptions}
+          locations={locations}
         />
       </div>
     </div>

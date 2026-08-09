@@ -8,11 +8,11 @@ type Option = { id: string; name: string };
 export function RegisterForm({
   seasonId,
   divisions,
-  facilities,
+  locations,
 }: {
   seasonId: string;
   divisions: Option[];
-  facilities: Option[];
+  locations: string[];
 }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(
     registerAction,
@@ -40,7 +40,23 @@ export function RegisterForm({
               }}
             />
           </div>
-          <Field label="Skill level" name="skillLevel" placeholder="Beginner / Intermediate / Advanced" />
+          <div>
+            <label className="label" htmlFor="gender">Gender</label>
+            <select id="gender" name="gender" className="input" defaultValue="">
+              <option value="">— Select —</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="skillLevel">Skill level</label>
+            <select id="skillLevel" name="skillLevel" className="input" defaultValue="">
+              <option value="">— Select —</option>
+              <option value="Beginner">Beginner</option>
+              <option value="Intermediate">Intermediate</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
         </div>
       </Section>
 
@@ -69,15 +85,15 @@ export function RegisterForm({
         )}
       </Section>
 
-      <Section title="Preferences" subtitle="Pools overlap on location and time. Rank your locations and tell us what doesn't work.">
+      <Section title="Preferences" subtitle="Pools overlap on location and time. Rank the locations you're willing to attend — pick as many as work for you.">
         <div className="grid gap-4 sm:grid-cols-3">
           {[1, 2, 3].map((r) => (
             <div key={r}>
               <label className="label" htmlFor={`locationPref${r}`}>Location #{r}</label>
-              <select id={`locationPref${r}`} name={`locationPref${r}`} className="input">
-                <option value="">—</option>
-                {facilities.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+              <select id={`locationPref${r}`} name={`locationPref${r}`} className="input" defaultValue="">
+                <option value="">— Select a location —</option>
+                {locations.map((loc) => (
+                  <option key={loc} value={loc}>{loc}</option>
                 ))}
               </select>
             </div>

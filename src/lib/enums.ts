@@ -24,6 +24,10 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const STAFF_ROLES: Role[] = ["COO", "CEO", "DIRECTOR", "COACH"];
 export const ADMIN_ROLES: Role[] = ["COO", "CEO", "DIRECTOR"];
 
+/// Markets (cities) the academy serves — the location options players rank on
+/// the registration form. Facility-specific assignments happen later.
+export const ACADEMY_MARKETS = ["Scottsdale", "Phoenix", "Gilbert", "Mesa"] as const;
+
 export const AGREEMENT_STATUS = [
   "IDENTIFIED",
   "VERBAL",

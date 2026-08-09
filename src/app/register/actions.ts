@@ -67,6 +67,7 @@ export async function registerAction(
         phone: phone || null,
         dob,
         isMinor,
+        gender: g("gender") || null,
         mediaOptOut,
         emergencyName: g("emergencyName") || null,
         emergencyPhone: g("emergencyPhone") || null,
@@ -108,12 +109,14 @@ export async function registerAction(
     },
   });
 
-  // Ranked location preferences (up to 3).
+  // Ranked location preferences (up to 3) — stored by market/city name.
+  const seenMarkets = new Set<string>();
   for (let rank = 1; rank <= 3; rank++) {
-    const fid = g(`locationPref${rank}`);
-    if (fid) {
+    const market = g(`locationPref${rank}`);
+    if (market && !seenMarkets.has(market)) {
+      seenMarkets.add(market);
       await prisma.locationPreference.create({
-        data: { registrationId: registration.id, facilityId: fid, rank },
+        data: { registrationId: registration.id, marketName: market, rank },
       });
     }
   }
