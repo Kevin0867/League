@@ -1,5 +1,3 @@
-import { recordChampResult } from "@/app/console/championship/actions";
-
 export type BracketMatch = {
   id: string;
   round: number;
@@ -26,10 +24,12 @@ export function Bracket({
   matches,
   teamNames,
   editable = false,
+  ticket,
 }: {
   matches: BracketMatch[];
   teamNames: Record<string, string>;
   editable?: boolean;
+  ticket?: string;
 }) {
   if (matches.length === 0) {
     return <p className="text-sm text-slate-400">No bracket drawn yet.</p>;
@@ -48,7 +48,7 @@ export function Bracket({
           </h3>
           <div className="flex h-full flex-col justify-around gap-3">
             {(byRound[round] ?? []).map((m) => (
-              <MatchCard key={m.id} m={m} teamNames={teamNames} editable={editable} />
+              <MatchCard key={m.id} m={m} teamNames={teamNames} editable={editable} ticket={ticket} />
             ))}
           </div>
         </div>
@@ -71,7 +71,7 @@ function TeamRow({
   );
 }
 
-function MatchCard({ m, teamNames, editable }: { m: BracketMatch; teamNames: Record<string, string>; editable: boolean }) {
+function MatchCard({ m, teamNames, editable, ticket }: { m: BracketMatch; teamNames: Record<string, string>; editable: boolean; ticket?: string }) {
   const canRecord = editable && m.status === "READY" && m.homeTeamId && m.awayTeamId;
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
@@ -82,7 +82,9 @@ function MatchCard({ m, teamNames, editable }: { m: BracketMatch; teamNames: Rec
       {m.status === "BYE" && <div className="mt-1 text-center text-[11px] text-slate-400">bye — advances</div>}
 
       {canRecord && (
-        <form action={recordChampResult} className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+        <form method="POST" action="/api/console/championship" className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+          <input type="hidden" name="ticket" value={ticket ?? ""} />
+          <input type="hidden" name="op" value="recordResult" />
           <input type="hidden" name="matchId" value={m.id} />
           <div className="flex items-center gap-1">
             <input name="homeScore" type="number" min={0} placeholder="H" className="input px-1 py-0.5 text-center text-xs" />

@@ -4,12 +4,38 @@ import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } from "@/lib/domain/teams";
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
-import { updateTeam, removePlayer, publishTeam, unpublishTeam, requestSeasonFees } from "./actions";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const OK_MSG: Record<string, string> = {
+  updateTeam: "Team fields saved.",
+  removePlayer: "Player removed back to the pool.",
+  publishTeam: "Team published to families.",
+  unpublishTeam: "Team unpublished.",
+  requestSeasonFees: "Season fee requests sent.",
+};
+
+const ERR_MSG: Record<string, string> = {
+  auth: "Not authorized to manage teams.",
+  team: "Missing team.",
+  coach: "Cannot assign this coach — not cleared (background check + onboarding required).",
+  player: "Missing player.",
+  notfound: "Team not found.",
+  publish: "Team cannot be published yet.",
+  op: "Unknown action.",
+};
+
+export default async function TeamDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const { ok, err } = await searchParams;
+  const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
     where: { id },
     include: {
@@ -57,6 +83,13 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
+      {ok && OK_MSG[ok] && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{OK_MSG[ok]}</div>
+      )}
+      {err && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{ERR_MSG[err] ?? "Something went wrong."}</div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Roster */}
         <div className="lg:col-span-1 space-y-4">
@@ -85,7 +118,9 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ id:
                         {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
                       </div>
                     </div>
-                    <form action={removePlayer}>
+                    <form method="POST" action="/api/console/teams">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="removePlayer" />
                       <input type="hidden" name="teamId" value={team.id} />
                       <input type="hidden" name="personId" value={m.personId} />
                       <button className="text-xs text-rose-600 hover:underline">remove</button>
@@ -105,13 +140,17 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ id:
             {team.published ? (
               <>
                 <p className="text-sm text-emerald-700">Published to families{team.publishedAt ? ` on ${team.publishedAt.toLocaleDateString()}` : ""}.</p>
-                <form action={unpublishTeam} className="mt-3">
+                <form method="POST" action="/api/console/teams" className="mt-3">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="unpublishTeam" />
                   <input type="hidden" name="teamId" value={team.id} />
                   <button className="btn-ghost text-sm">Unpublish</button>
                 </form>
               </>
             ) : publish.ok ? (
-              <form action={publishTeam}>
+              <form method="POST" action="/api/console/teams">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="publishTeam" />
                 <input type="hidden" name="teamId" value={team.id} />
                 <p className="mb-3 text-sm text-slate-600">Ready to publish. Families will see the team, coach, location, day, and time.</p>
                 <button className="btn-primary text-sm">Publish to families</button>
@@ -129,7 +168,9 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ id:
             ) : feesToRequest === 0 ? (
               <p className="text-sm text-emerald-700">All rostered players have a fee request or payment.</p>
             ) : (
-              <form action={requestSeasonFees}>
+              <form method="POST" action="/api/console/teams">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="requestSeasonFees" />
                 <input type="hidden" name="teamId" value={team.id} />
                 <p className="mb-3 text-sm text-slate-600">
                   {feesToRequest} player{feesToRequest > 1 ? "s" : ""} not yet billed. Requesting
@@ -143,7 +184,9 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ id:
 
         {/* Six fields editor */}
         <div className="lg:col-span-2">
-          <form action={updateTeam} className="card space-y-4">
+          <form method="POST" action="/api/console/teams" className="card space-y-4">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="updateTeam" />
             <input type="hidden" name="teamId" value={team.id} />
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-slate-900">Team fields</h2>

@@ -3,13 +3,33 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { COACH_TEACHES, DIRECTOR_TEACHES } from "@/lib/domain/splits";
-import { createOffering, respondToBooking, deliverBooking } from "./actions";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 const TYPE_LABEL: Record<string, string> = { PRIVATE: "Private", SEMI_PRIVATE: "Semi-private", CLINIC: "Clinic" };
 
-export default async function AlaCartePage() {
+const ERRORS: Record<string, string> = {
+  auth: "Not authorized to manage à la carte.",
+  facility: "Facility not found.",
+  notallowed: "That venue does not permit à la carte use — negotiate it into the agreement first.",
+  notfound: "Booking not found.",
+  op: "Unknown operation.",
+};
+
+const OKS: Record<string, string> = {
+  createOffering: "Offering added.",
+  respondToBooking: "Booking updated.",
+  deliverBooking: "Booking delivered and split recorded.",
+};
+
+export default async function AlaCartePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const [offerings, bookings, alaFacilities, coaches] = await Promise.all([
     prisma.alaCarteOffering.findMany({ include: { facility: true, coach: { include: { person: true } } }, orderBy: { createdAt: "desc" } }),
     prisma.alaCarteBooking.findMany({
@@ -24,6 +44,13 @@ export default async function AlaCartePage() {
     <div className="space-y-6">
       <PageHeader title="À la carte lessons & clinics" subtitle="PURE sets prices by venue. Court cost comes off the top, then the split — the applied rates are stamped onto each transaction." />
 
+      {sp.ok && OKS[sp.ok] && (
+        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OKS[sp.ok]}</p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{ERRORS[sp.err] ?? "Action failed."}</p>
+      )}
+
       {/* Split reference */}
       <div className="grid gap-4 sm:grid-cols-2">
         <SplitCard title="Assigned coach teaches" rates={COACH_TEACHES} />
@@ -31,7 +58,9 @@ export default async function AlaCartePage() {
       </div>
 
       {/* Create offering */}
-      <form action={createOffering} className="card grid gap-3 sm:grid-cols-5 sm:items-end">
+      <form method="POST" action="/api/console/alacarte" className="card grid gap-3 sm:grid-cols-5 sm:items-end">
+        <input type="hidden" name="ticket" value={ticket} />
+        <input type="hidden" name="op" value="createOffering" />
         <div className="sm:col-span-2">
           <label className="label">Title</label>
           <input name="title" className="input" placeholder="60-min private lesson" required />
@@ -113,13 +142,15 @@ export default async function AlaCartePage() {
 
                 {b.status === "REQUESTED" && (
                   <div className="mt-2 flex gap-2">
-                    <form action={respondToBooking}><input type="hidden" name="bookingId" value={b.id} /><input type="hidden" name="decision" value="ACCEPT" /><button className="btn-secondary text-xs">Accept</button></form>
-                    <form action={respondToBooking}><input type="hidden" name="bookingId" value={b.id} /><input type="hidden" name="decision" value="DECLINE" /><button className="btn-ghost text-xs">Decline</button></form>
+                    <form method="POST" action="/api/console/alacarte"><input type="hidden" name="ticket" value={ticket} /><input type="hidden" name="op" value="respondToBooking" /><input type="hidden" name="bookingId" value={b.id} /><input type="hidden" name="decision" value="ACCEPT" /><button className="btn-secondary text-xs">Accept</button></form>
+                    <form method="POST" action="/api/console/alacarte"><input type="hidden" name="ticket" value={ticket} /><input type="hidden" name="op" value="respondToBooking" /><input type="hidden" name="bookingId" value={b.id} /><input type="hidden" name="decision" value="DECLINE" /><button className="btn-ghost text-xs">Decline</button></form>
                   </div>
                 )}
 
                 {b.status === "ACCEPTED" && (
-                  <form action={deliverBooking} className="mt-2 flex flex-wrap items-end gap-2">
+                  <form method="POST" action="/api/console/alacarte" className="mt-2 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="deliverBooking" />
                     <input type="hidden" name="bookingId" value={b.id} />
                     <label className="flex items-center gap-1 text-xs text-slate-600">
                       <input type="checkbox" name="directorTaught" /> Director taught

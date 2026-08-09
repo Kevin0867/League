@@ -1,20 +1,17 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import { buildFirstRound, advanceTarget, totalRounds } from "@/lib/domain/bracket";
+import { buildFirstRound, advanceTarget } from "@/lib/domain/bracket";
 import { computeStandings, type FixtureResult } from "@/lib/domain/standings";
 
-async function requireManager() {
-  const session = await getSession();
-  if (!session || !can(session.role, "manageScheduling")) {
-    throw new Error("Not authorized to manage the championship.");
-  }
-  return session;
-}
+// Championship mutations as native-form-POST route handlers with ticket auth.
+// Route handlers 303-redirect to a fresh GET (which carries the session
+// cookie), so unlike a server action they don't re-render inline under the
+// cookieless POST and bounce through the console layout's auth. See
+// /api/console/facilities.
+export const dynamic = "force-dynamic";
 
 // Championship week starts Monday Dec 7, 2026; division events run Mon–Fri.
 function roundDate(round: number): Date {
@@ -70,16 +67,37 @@ async function placeWinner(seasonId: string, divisionId: string, round: number, 
   }
 }
 
+export async function POST(req: Request) {
+  const origin = new URL(req.url).origin;
+  const back = (qs: string) =>
+    NextResponse.redirect(new URL(`/console/championship${qs}`, origin), 303);
+
+  const formData = await req.formData();
+  const actor = await actorFromForm(formData);
+  // Both operations preserve the original requireManager() gate: manageScheduling.
+  if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+
+  const op = String(formData.get("op") ?? "");
+
+  if (op === "generateBracket") return generateBracket(formData, actor, back);
+  if (op === "recordResult") return recordChampResult(formData, actor, back);
+
+  return back("?err=op");
+}
+
 /** Draw (or redraw) a division's single-elimination bracket from standings. */
-export async function generateBracket(formData: FormData) {
-  const session = await requireManager();
+async function generateBracket(
+  formData: FormData,
+  actor: { userId: string; role: string },
+  back: (qs: string) => NextResponse
+) {
   const divisionId = String(formData.get("divisionId") ?? "");
   const division = await prisma.division.findUnique({ where: { id: divisionId } });
-  if (!division) throw new Error("Division not found.");
+  if (!division) return back("?err=division");
   const seasonId = division.seasonId;
 
   const seeded = await seedTeams(seasonId, divisionId);
-  if (seeded.length < 2) throw new Error("Need at least two eligible teams to draw a bracket.");
+  if (seeded.length < 2) return back("?err=eligible");
 
   // Fresh draw.
   await prisma.championshipMatch.deleteMany({ where: { seasonId, divisionId } });
@@ -118,24 +136,26 @@ export async function generateBracket(formData: FormData) {
     }
   }
 
-  await audit({ actorId: session.userId, entityType: "ChampionshipMatch", entityId: divisionId, action: "GENERATE_BRACKET", summary: `Drew a ${size}-team bracket (${rounds} rounds) from ${seeded.length} seeds` });
-  revalidatePath("/console/championship");
-  revalidatePath("/championship");
+  await audit({ actorId: actor.userId, entityType: "ChampionshipMatch", entityId: divisionId, action: "GENERATE_BRACKET", summary: `Drew a ${size}-team bracket (${rounds} rounds) from ${seeded.length} seeds` });
+  return back("?ok=bracket");
 }
 
 /** Record a championship match result and advance the winner. */
-export async function recordChampResult(formData: FormData) {
-  const session = await requireManager();
+async function recordChampResult(
+  formData: FormData,
+  actor: { userId: string; role: string },
+  back: (qs: string) => NextResponse
+) {
   const matchId = String(formData.get("matchId") ?? "");
   const winnerTeamId = String(formData.get("winnerTeamId") ?? "");
   const homeScore = formData.get("homeScore") !== null && String(formData.get("homeScore")) !== "" ? Number(formData.get("homeScore")) : null;
   const awayScore = formData.get("awayScore") !== null && String(formData.get("awayScore")) !== "" ? Number(formData.get("awayScore")) : null;
 
   const match = await prisma.championshipMatch.findUnique({ where: { id: matchId } });
-  if (!match) throw new Error("Match not found.");
-  if (!match.homeTeamId || !match.awayTeamId) throw new Error("Both teams must be set before recording a result.");
+  if (!match) return back("?err=match");
+  if (!match.homeTeamId || !match.awayTeamId) return back("?err=teams");
   if (winnerTeamId !== match.homeTeamId && winnerTeamId !== match.awayTeamId) {
-    throw new Error("Winner must be one of the two teams.");
+    return back("?err=winner");
   }
 
   await prisma.championshipMatch.update({
@@ -146,7 +166,6 @@ export async function recordChampResult(formData: FormData) {
   const seed = winnerTeamId === match.homeTeamId ? match.homeSeed : match.awaySeed;
   await placeWinner(match.seasonId, match.divisionId, match.round, match.slot, winnerTeamId, seed ?? null);
 
-  await audit({ actorId: session.userId, entityType: "ChampionshipMatch", entityId: matchId, action: "RESULT", summary: `Winner ${winnerTeamId}` });
-  revalidatePath("/console/championship");
-  revalidatePath("/championship");
+  await audit({ actorId: actor.userId, entityType: "ChampionshipMatch", entityId: matchId, action: "RESULT", summary: `Winner ${winnerTeamId}` });
+  return back("?ok=result");
 }

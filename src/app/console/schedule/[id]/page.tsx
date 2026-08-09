@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
-import { cancelSession, relocateSession, markAttendance } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +12,30 @@ const TYPE_LABEL: Record<string, string> = {
   PRACTICE: "Practice", LEAGUE_MATCH: "League match", CHAMPIONSHIP: "Championship", ALA_CARTE: "À la carte",
 };
 
-export default async function SessionDetail({ params }: { params: Promise<{ id: string }> }) {
+const OK_LABEL: Record<string, string> = {
+  cancel: "Session cancelled.",
+  relocate: "Session relocated.",
+  attendance: "Attendance saved.",
+};
+
+const ERR_LABEL: Record<string, string> = {
+  auth: "You are not authorized to perform that action.",
+  session: "Session not found.",
+  facility: "Choose a facility to relocate to.",
+  op: "Unknown action.",
+};
+
+export default async function SessionDetail({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const { ok, err } = await searchParams;
+  const ticket = await mintConsoleTicket();
+  const returnTo = `/console/schedule/${id}`;
   const s = await prisma.session.findUnique({
     where: { id },
     include: {
@@ -50,9 +72,19 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
         )}
       </div>
 
+      {ok && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OK_LABEL[ok] ?? "Done."}</div>
+      )}
+      {err && (
+        <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{ERR_LABEL[err] ?? "Something went wrong."}</div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Attendance — mobile-first (§18) */}
-        <form action={markAttendance} className="card lg:col-span-2">
+        <form method="POST" action="/api/console/schedule" className="card lg:col-span-2">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="op" value="attendance" />
+          <input type="hidden" name="returnTo" value={returnTo} />
           <input type="hidden" name="sessionId" value={s.id} />
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-slate-900">Attendance</h2>
@@ -90,7 +122,10 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
         {/* Session controls */}
         <div className="space-y-4">
           {active && (
-            <form action={cancelSession} className="card">
+            <form method="POST" action="/api/console/schedule" className="card">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="cancel" />
+              <input type="hidden" name="returnTo" value={returnTo} />
               <h2 className="mb-2 font-semibold text-slate-900">Cancel session</h2>
               <p className="mb-3 text-xs text-slate-500">{outcome.note}</p>
               <label className="label" htmlFor="reason">Reason</label>
@@ -104,7 +139,10 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
             </form>
           )}
 
-          <form action={relocateSession} className="card">
+          <form method="POST" action="/api/console/schedule" className="card">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="relocate" />
+            <input type="hidden" name="returnTo" value={returnTo} />
             <h2 className="mb-2 font-semibold text-slate-900">Relocate</h2>
             <p className="mb-3 text-xs text-slate-500">Move to an indoor/alternative court to preserve the session as delivered.</p>
             <input type="hidden" name="sessionId" value={s.id} />

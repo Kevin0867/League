@@ -1,15 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import {
-  createSeason,
-  activateSeason,
-  addDivision,
-  deleteDivision,
-  addStandardDivisions,
-} from "./actions";
 
-export function CreateSeasonForm() {
+export function CreateSeasonForm({ ticket }: { ticket: string }) {
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
@@ -19,7 +12,9 @@ export function CreateSeasonForm() {
     );
   }
   return (
-    <form action={createSeason} className="card space-y-3">
+    <form method="POST" action="/api/console/setup" className="card space-y-3">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="createSeason" />
       <h3 className="font-semibold text-brand-900">New season</h3>
       <div>
         <label className="label" htmlFor="name">Name</label>
@@ -59,37 +54,45 @@ export function CreateSeasonForm() {
   );
 }
 
-export function ActivateButton({ seasonId }: { seasonId: string }) {
+export function ActivateButton({ seasonId, ticket }: { seasonId: string; ticket: string }) {
   return (
-    <form action={activateSeason}>
+    <form method="POST" action="/api/console/setup">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="activateSeason" />
       <input type="hidden" name="seasonId" value={seasonId} />
       <button className="btn-ghost text-xs">Make active</button>
     </form>
   );
 }
 
-export function StandardDivisionsButton({ seasonId }: { seasonId: string }) {
+export function StandardDivisionsButton({ seasonId, ticket }: { seasonId: string; ticket: string }) {
   return (
-    <form action={addStandardDivisions}>
+    <form method="POST" action="/api/console/setup">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="addStandardDivisions" />
       <input type="hidden" name="seasonId" value={seasonId} />
       <button className="btn-secondary text-xs">+ Add standard divisions</button>
     </form>
   );
 }
 
-export function DeleteDivisionButton({ divisionId }: { divisionId: string }) {
+export function DeleteDivisionButton({ divisionId, ticket }: { divisionId: string; ticket: string }) {
   return (
-    <form action={deleteDivision}>
+    <form method="POST" action="/api/console/setup">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="deleteDivision" />
       <input type="hidden" name="divisionId" value={divisionId} />
       <button className="text-xs text-rose-600 hover:underline">Remove</button>
     </form>
   );
 }
 
-export function AddDivisionForm({ seasonId }: { seasonId: string }) {
+export function AddDivisionForm({ seasonId, ticket }: { seasonId: string; ticket: string }) {
   const [type, setType] = useState("DUPR_BAND");
   return (
-    <form action={addDivision} className="flex flex-wrap items-end gap-2">
+    <form method="POST" action="/api/console/setup" className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="addDivision" />
       <input type="hidden" name="seasonId" value={seasonId} />
       <div>
         <label className="label text-xs">Division name</label>

@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { sendMessage, type ComposeState } from "@/app/console/messages/actions";
+import { useState } from "react";
 
 type Opt = { id: string; name: string };
 
@@ -12,6 +11,7 @@ export function MessageComposer({
   coaches,
   people,
   markets,
+  ticket,
 }: {
   canBroadcast: boolean;
   teams: Opt[];
@@ -19,8 +19,8 @@ export function MessageComposer({
   coaches: Opt[];
   people: Opt[];
   markets: string[];
+  ticket: string;
 }) {
-  const [state, action, pending] = useActionState<ComposeState, FormData>(sendMessage, {});
   const [audienceType, setAudienceType] = useState(canBroadcast ? "ALL_PLAYERS" : "TEAM");
 
   const needsRef = ["TEAM", "DIVISION", "MARKET", "SINGLE_COACH", "SINGLE_PERSON"].includes(audienceType);
@@ -33,7 +33,9 @@ export function MessageComposer({
     : [];
 
   return (
-    <form action={action} className="card space-y-4">
+    <form method="POST" action="/api/console/messages" className="card space-y-4">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="send" />
       <h2 className="font-semibold text-slate-900">Compose message</h2>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -87,16 +89,10 @@ export function MessageComposer({
         </div>
       </div>
 
-      {state?.message && (
-        <p className={`rounded-lg px-3 py-2 text-sm ${state.ok ? (state.failures ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700") : "bg-rose-50 text-rose-700"}`}>
-          {state.message}
-        </p>
-      )}
-
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-400">Everything is logged per person and per team.</p>
-        <button type="submit" disabled={pending} className="btn-primary">
-          {pending ? "Sending…" : "Send"}
+        <button type="submit" className="btn-primary">
+          Send
         </button>
       </div>
     </form>

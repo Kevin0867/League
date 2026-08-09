@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { assignToTeam, createTeamFromPool } from "@/app/console/pools/actions";
 import { VIABILITY_LABEL, type Pool } from "@/lib/domain/pools";
 
 type TeamOption = { id: string; name: string; divisionId: string | null; remaining: number };
@@ -10,17 +9,23 @@ export function PoolCard({
   pool,
   seasonId,
   teams,
+  ticket,
 }: {
   pool: Pool;
   seasonId: string;
   teams: TeamOption[];
+  ticket: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
+  const [teamName, setTeamName] = useState(
+    `${pool.divisionName ?? "Team"} — ${pool.facilityName ?? "TBD"}`.slice(0, 60)
+  );
+  const [teamId, setTeamId] = useState("");
   const v = VIABILITY_LABEL[pool.viability];
 
   // Existing teams in this pool's division are valid assignment targets.
   const targets = teams.filter((t) => t.divisionId === pool.divisionId);
+  const noSelection = selected.size === 0;
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -29,30 +34,15 @@ export function PoolCard({
       return next;
     });
 
-  const suggestedName = `${pool.divisionName ?? "Team"} — ${pool.facilityName ?? "TBD"}`.slice(0, 60);
-
-  async function run(action: (fd: FormData) => Promise<void>, extra: Record<string, string>) {
-    setError(null);
-    if (selected.size === 0) {
-      setError("Select at least one player.");
-      return;
-    }
-    const fd = new FormData();
-    for (const id of selected) fd.append("reg", id);
-    fd.set("seasonId", seasonId);
-    fd.set("divisionId", pool.divisionId ?? "");
-    fd.set("facilityId", pool.facilityId ?? "");
-    for (const [k, val] of Object.entries(extra)) fd.set(k, val);
-    try {
-      await action(fd);
-      setSelected(new Set());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Assignment failed.");
-    }
-  }
-
+  // Native POST to /api/console/pools carrying the ticket. Checkboxes named
+  // "reg" ride along in the body; the two submit buttons distinguish op.
   return (
-    <div className="card">
+    <form method="POST" action="/api/console/pools" className="card">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="seasonId" value={seasonId} />
+      <input type="hidden" name="divisionId" value={pool.divisionId ?? ""} />
+      <input type="hidden" name="facilityId" value={pool.facilityId ?? ""} />
+
       <div className="flex items-start justify-between">
         <div>
           <h3 className="font-semibold text-slate-900">{pool.facilityName ?? "No location preference"}</h3>
@@ -72,6 +62,8 @@ export function PoolCard({
           <li key={m.registrationId} className="flex items-center gap-3 py-2">
             <input
               type="checkbox"
+              name="reg"
+              value={m.registrationId}
               className="h-4 w-4"
               checked={selected.has(m.registrationId)}
               onChange={() => toggle(m.registrationId)}
@@ -98,8 +90,6 @@ export function PoolCard({
         ))}
       </ul>
 
-      {error && <p className="mt-2 rounded bg-rose-50 px-2 py-1 text-xs text-rose-700">{error}</p>}
-
       <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span>{selected.size} selected</span>
@@ -110,49 +100,50 @@ export function PoolCard({
         </div>
 
         {/* Form a new team from the selection */}
-        <NewTeamForm
-          defaultName={suggestedName}
-          disabled={selected.size === 0}
-          onSubmit={(name) => run(createTeamFromPool, { name })}
-        />
+        <div className="flex gap-2">
+          <input
+            className="input text-sm"
+            name="name"
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            placeholder="New team name"
+          />
+          <button
+            type="submit"
+            name="op"
+            value="create"
+            disabled={noSelection}
+            className="btn-primary whitespace-nowrap text-sm"
+          >
+            Form team
+          </button>
+        </div>
 
         {/* Assign to an existing team in this division */}
         {targets.length > 0 && (
-          <AssignForm
-            teams={targets}
-            disabled={selected.size === 0}
-            onSubmit={(teamId) => run(assignToTeam, { teamId })}
-          />
+          <div className="flex gap-2">
+            <select
+              className="input text-sm"
+              name="teamId"
+              value={teamId || targets[0]?.id || ""}
+              onChange={(e) => setTeamId(e.target.value)}
+            >
+              {targets.map((t) => (
+                <option key={t.id} value={t.id}>{t.name} ({t.remaining} left)</option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              name="op"
+              value="assign"
+              disabled={noSelection}
+              className="btn-secondary whitespace-nowrap text-sm"
+            >
+              Add to team
+            </button>
+          </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function NewTeamForm({ defaultName, disabled, onSubmit }: { defaultName: string; disabled: boolean; onSubmit: (name: string) => void }) {
-  const [name, setName] = useState(defaultName);
-  return (
-    <div className="flex gap-2">
-      <input className="input text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="New team name" />
-      <button type="button" disabled={disabled} className="btn-primary whitespace-nowrap text-sm" onClick={() => onSubmit(name)}>
-        Form team
-      </button>
-    </div>
-  );
-}
-
-function AssignForm({ teams, disabled, onSubmit }: { teams: TeamOption[]; disabled: boolean; onSubmit: (teamId: string) => void }) {
-  const [teamId, setTeamId] = useState(teams[0]?.id ?? "");
-  return (
-    <div className="flex gap-2">
-      <select className="input text-sm" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-        {teams.map((t) => (
-          <option key={t.id} value={t.id}>{t.name} ({t.remaining} left)</option>
-        ))}
-      </select>
-      <button type="button" disabled={disabled || !teamId} className="btn-secondary whitespace-nowrap text-sm" onClick={() => onSubmit(teamId)}>
-        Add to team
-      </button>
-    </div>
+    </form>
   );
 }

@@ -2,12 +2,32 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
-import { generateFixtures, sendMatchNotice, sendEscalationAlert } from "./actions";
+import { mintConsoleTicket } from "@/lib/auth";
 import { teamConfirmation, shouldEscalate, MIN_CONFIRMED_PLAYERS } from "@/lib/domain/availability";
 
 export const dynamic = "force-dynamic";
 
-export default async function LeaguePage() {
+const OK: Record<string, string> = {
+  generateFixtures: "Fixtures generated.",
+  sendMatchNotice: "7-day match notice sent.",
+  sendEscalationAlert: "48-hour alert sent.",
+};
+
+const ERRORS: Record<string, string> = {
+  auth: "Not authorized to manage the league.",
+  noseason: "No ACP season found.",
+  nofixture: "Fixture not found.",
+  norisk: "No teams are currently at risk — nothing to escalate.",
+  op: "Unknown operation.",
+};
+
+export default async function LeaguePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
 
   const fixtures = await prisma.fixture.findMany({
@@ -46,6 +66,13 @@ export default async function LeaguePage() {
     <div className="space-y-6">
       <PageHeader title="ACP League" subtitle="Doubles-only, three ranked lines, DUPR-recorded. Fixtures across five league weeks; 48-hour confirmation with escalation." />
 
+      {sp.ok && (
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
+      )}
+
       {/* Generate fixtures */}
       {season && fixtures.length === 0 && (
         <div className="card">
@@ -54,7 +81,9 @@ export default async function LeaguePage() {
             Round-robin across five league weeks from {season.startDate.toLocaleDateString()}, skipping
             blackout weeks and the Dec 5–6 weekend. {totalTeams} team(s) in the season.
           </p>
-          <form action={generateFixtures}>
+          <form method="POST" action="/api/console/league">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="generateFixtures" />
             <input type="hidden" name="seasonId" value={season.id} />
             <button className="btn-primary">Generate fixtures</button>
           </form>
@@ -78,12 +107,16 @@ export default async function LeaguePage() {
                     <span className="ml-2 text-xs text-slate-400">Wk {f.weekNumber} · {f.scheduledAt.toLocaleDateString()}</span>
                   </div>
                   <div className="flex gap-2">
-                    <form action={sendMatchNotice}>
+                    <form method="POST" action="/api/console/league">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="sendMatchNotice" />
                       <input type="hidden" name="fixtureId" value={f.id} />
                       <button className="btn-ghost text-xs">Send 7-day notice</button>
                     </form>
                     {anyRisk && (
-                      <form action={sendEscalationAlert}>
+                      <form method="POST" action="/api/console/league">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="sendEscalationAlert" />
                         <input type="hidden" name="fixtureId" value={f.id} />
                         <button className="btn-secondary text-xs text-rose-700 ring-rose-200 hover:bg-rose-50">Send 48h alert</button>
                       </form>

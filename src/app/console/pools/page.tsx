@@ -3,13 +3,34 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { PoolCard } from "@/components/PoolCard";
 import { buildPools, type PoolRegistration } from "@/lib/domain/pools";
 import { TEAM_CAP } from "@/lib/enums";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // Registrations still in the assignment pool — everything not yet placed.
 const UNASSIGNED = ["SUBMITTED", "WAITLISTED"];
 
-export default async function PoolsPage() {
+const ERRORS: Record<string, string> = {
+  auth: "Not authorized to assign players.",
+  select: "Select at least one player and a team.",
+  cap: `That assignment would exceed the team cap of ${TEAM_CAP}.`,
+  fields: "Team name and season are required.",
+  notfound: "Team not found.",
+  op: "Unknown operation.",
+};
+
+const OKS: Record<string, string> = {
+  assign: "Players assigned to the team.",
+  create: "New team formed from the pool.",
+};
+
+export default async function PoolsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const season = await prisma.season.findFirst({
     where: { active: true, program: "PURE_ACADEMY" },
     orderBy: { startDate: "desc" },
@@ -75,6 +96,12 @@ export default async function PoolsPage() {
 
   return (
     <div className="space-y-6">
+      {sp.ok && OKS[sp.ok] && (
+        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OKS[sp.ok]}</p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{ERRORS[sp.err] ?? "Assignment failed."}</p>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PageHeader
           title="Assignment pools"
@@ -99,7 +126,7 @@ export default async function PoolsPage() {
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{division}</h2>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {dpools.map((pool) => (
-                <PoolCard key={pool.key} pool={pool} seasonId={season.id} teams={teamOptions} />
+                <PoolCard key={pool.key} pool={pool} seasonId={season.id} teams={teamOptions} ticket={ticket} />
               ))}
             </div>
           </section>

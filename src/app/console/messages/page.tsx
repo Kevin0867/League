@@ -3,7 +3,18 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { MessageComposer } from "@/components/MessageComposer";
 import { requireStaff } from "@/lib/rbac";
 import { can } from "@/lib/rbac";
+import { mintConsoleTicket } from "@/lib/auth";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
+
+const ERRORS: Record<string, string> = {
+  auth: "Not signed in.",
+  body: "Message body is required.",
+  channels: "Select at least one channel.",
+  perm: "You don't have permission to message that audience.",
+  team: "You can only message your own team.",
+  norecipients: "No recipients matched that audience.",
+  op: "Unknown operation.",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +28,23 @@ const TRIGGERS = [
   ["Forfeit recorded", "Both teams, contacts, Director, COO", "Immediate"],
 ];
 
-export default async function MessagesPage() {
+export default async function MessagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
   const session = await requireStaff();
   const canBroadcast = can(session.role, "broadcastAll");
+  const ticket = await mintConsoleTicket();
+
+  const successNote = sp.ok
+    ? `Sent to ${sp.n ?? "0"} recipient${sp.n === "1" ? "" : "s"}` +
+      (sp.failed && sp.failed !== "0"
+        ? ` · ${sp.failed} delivery failure${sp.failed === "1" ? "" : "s"} flagged`
+        : "")
+    : null;
+  const hasFailures = sp.ok && sp.failed && sp.failed !== "0";
 
   const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });
 
@@ -46,6 +71,15 @@ export default async function MessagesPage() {
     <div className="space-y-6">
       <PageHeader title="Communications" subtitle="A core capability — every message logged per person and per team, so “we told them” is verifiable." />
 
+      {successNote && (
+        <p className={`rounded-lg px-3 py-2 text-sm ${hasFailures ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>
+          {successNote}
+        </p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
+      )}
+
       <div className="flex flex-wrap gap-2 text-xs">
         <Chan label="In-app" on />
         <Chan label="Email" on={emailConfigured()} note={emailConfigured() ? undefined : "simulated"} />
@@ -60,6 +94,7 @@ export default async function MessagesPage() {
           coaches={coaches.map((c) => ({ id: c.id, name: `${c.person.firstName} ${c.person.lastName}` }))}
           people={people.map((p) => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }))}
           markets={markets}
+          ticket={ticket}
         />
 
         <div className="space-y-6">

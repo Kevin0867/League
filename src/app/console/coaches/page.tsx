@@ -1,14 +1,29 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { coachAssignmentGate } from "@/lib/domain/teams";
-import { getSession } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { StaffForm } from "./StaffForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function CoachesPage() {
+const ERRORS: Record<string, string> = {
+  auth: "Not authorized to create accounts.",
+  fields: "All fields are required.",
+  short: "Password must be at least 8 characters.",
+  role: "Invalid role, or only the COO can create Director or CEO accounts.",
+  exists: "A user with that email already exists.",
+  op: "Unknown operation.",
+};
+
+export default async function CoachesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
   // Auth enforced by the console layout; read the session only to gate the form.
   const session = await getSession();
+  const ticket = await mintConsoleTicket();
   const coaches = await prisma.coach.findMany({
     include: { person: true, _count: { select: { teams: true, recruits: true } } },
     orderBy: { person: { lastName: "asc" } },
@@ -17,7 +32,13 @@ export default async function CoachesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
-      {session && ["COO", "DIRECTOR"].includes(session.role) && <StaffForm role={session.role} />}
+      {sp.ok && (
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Account created.</p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
+      )}
+      {session && ["COO", "DIRECTOR"].includes(session.role) && <StaffForm role={session.role} ticket={ticket} />}
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">

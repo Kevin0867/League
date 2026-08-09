@@ -2,13 +2,19 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
-import { generateFacilityStatements, generatePayoutRun } from "./actions";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export default async function PaymentsPage() {
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const now = new Date();
   const [inbound, outbound, payoutRuns, statements] = await Promise.all([
     prisma.payment.findMany({ where: { direction: "IN" }, include: { party: true }, orderBy: { createdAt: "desc" }, take: 50 }),
@@ -30,6 +36,16 @@ export default async function PaymentsPage() {
     <div className="space-y-6">
       <PageHeader title="Payments" subtitle="Fees in, coaches and facilities out. Card data never touches our servers — Stripe hosted checkout." />
 
+      {sp.ok === "statements" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Facility statements generated.</div>
+      )}
+      {sp.ok === "payouts" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Coach payout run generated.</div>
+      )}
+      {sp.err === "auth" && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Not authorized to run payouts.</div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Collected" value={formatCents(collected)} tone="emerald" />
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
@@ -43,7 +59,7 @@ export default async function PaymentsPage() {
             <h2 className="font-semibold text-slate-900">Coach payout register</h2>
             <p className="text-sm text-slate-500">Sessions delivered × flat rate (assistant 50%) plus à la carte earnings.</p>
           </div>
-          <MonthForm action={generatePayoutRun} label="Generate payout run" now={now} />
+          <MonthForm op="payouts" ticket={ticket} label="Generate payout run" now={now} />
         </div>
         {payoutRuns.length === 0 ? (
           <p className="text-sm text-slate-400">No payout runs yet.</p>
@@ -88,7 +104,7 @@ export default async function PaymentsPage() {
             <h2 className="font-semibold text-slate-900">Monthly facility statements</h2>
             <p className="text-sm text-slate-500">Delivered sessions, on-site practice revenue, and payment due — a contractual obligation.</p>
           </div>
-          <MonthForm action={generateFacilityStatements} label="Generate statements" now={now} />
+          <MonthForm op="statements" ticket={ticket} label="Generate statements" now={now} />
         </div>
         {statements.length === 0 ? (
           <p className="text-sm text-slate-400">No statements generated yet.</p>
@@ -159,10 +175,12 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "eme
   );
 }
 
-function MonthForm({ action, label, now }: { action: (fd: FormData) => Promise<void>; label: string; now: Date }) {
+function MonthForm({ op, ticket, label, now }: { op: string; ticket: string; label: string; now: Date }) {
   const y = now.getUTCFullYear();
   return (
-    <form action={action} className="flex items-end gap-2">
+    <form method="POST" action="/api/console/payments" className="flex items-end gap-2">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value={op} />
       <div>
         <label className="sr-only">Month</label>
         <select name="month" defaultValue={now.getUTCMonth() + 1} className="input py-1.5 text-sm">

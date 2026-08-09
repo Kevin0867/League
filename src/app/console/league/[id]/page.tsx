@@ -2,14 +2,42 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
-import { submitLineup, enterScores, recordForfeit, submitToDupr } from "./actions";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+const OK: Record<string, string> = {
+  submitLineup: "Line-up submitted.",
+  enterScores: "Scores saved.",
+  recordForfeit: "Forfeit recorded.",
+  submitToDupr: "DUPR submission processed.",
+};
+
+const ERRORS: Record<string, string> = {
+  auth: "Not authorized.",
+  notfound: "Fixture or team not found.",
+  nofixture: "Fixture not found.",
+  selfpair: "A player can't be paired with themselves.",
+  minlines: "Submit at least three lines.",
+  dupplayer: "A player appears on more than one line.",
+  lineup: "Line-up rejected.",
+  noteam: "Select a forfeiting team.",
+  forfeited: "Forfeited fixtures are never submitted to DUPR.",
+  op: "Unknown operation.",
+};
+
 type RosterMember = { personId: string; person: { firstName: string; lastName: string; duprRating: number | null } };
 
-export default async function FixtureDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function FixtureDetail({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const fixture = await prisma.fixture.findUnique({
     where: { id },
     include: {
@@ -38,6 +66,14 @@ export default async function FixtureDetail({ params }: { params: Promise<{ id: 
 
   return (
     <div className="space-y-6">
+      {sp.ok && (
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>
+      )}
+      {sp.err && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {sp.err === "lineup" && sp.msg ? sp.msg : ERRORS[sp.err] ?? "Something went wrong."}
+        </p>
+      )}
       <div>
         <Link href="/console/league" className="text-sm text-brand-600 hover:underline">← League</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
@@ -56,6 +92,7 @@ export default async function FixtureDetail({ params }: { params: Promise<{ id: 
         {teams.map((team) => (
           <LineupForm
             key={team.id}
+            ticket={ticket}
             fixtureId={fixture.id}
             teamId={team.id}
             teamName={team.name}
@@ -68,7 +105,9 @@ export default async function FixtureDetail({ params }: { params: Promise<{ id: 
 
       {/* Score entry */}
       {!forfeited && (
-        <form action={enterScores} className="card">
+        <form method="POST" action="/api/console/league" className="card">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="op" value="enterScores" />
           <input type="hidden" name="fixtureId" value={fixture.id} />
           <h2 className="mb-1 font-semibold text-slate-900">Line-by-line scores</h2>
           <p className="mb-4 text-sm text-slate-500">
@@ -127,7 +166,9 @@ export default async function FixtureDetail({ params }: { params: Promise<{ id: 
               {dupr?.status === "SUBMITTED" ? (
                 <p className="text-sm text-emerald-700">Submitted{dupr.submittedAt ? ` on ${dupr.submittedAt.toLocaleDateString()}` : ""}. Every game reported, including line 4.</p>
               ) : (
-                <form action={submitToDupr}>
+                <form method="POST" action="/api/console/league">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="submitToDupr" />
                   <input type="hidden" name="fixtureId" value={fixture.id} />
                   <button className="btn-primary text-sm">
                     {dupr?.status === "REJECTED" ? "Retry submission" : "Submit to DUPR"}
@@ -141,7 +182,9 @@ export default async function FixtureDetail({ params }: { params: Promise<{ id: 
 
         {/* Forfeit */}
         {!forfeited && (
-          <form action={recordForfeit} className="card">
+          <form method="POST" action="/api/console/league" className="card">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="recordForfeit" />
             <input type="hidden" name="fixtureId" value={fixture.id} />
             <h2 className="mb-2 font-semibold text-slate-900">Record forfeit</h2>
             <p className="mb-3 text-xs text-slate-500">
@@ -161,8 +204,9 @@ export default async function FixtureDetail({ params }: { params: Promise<{ id: 
 }
 
 function LineupForm({
-  fixtureId, teamId, teamName, origin, roster, existing,
+  ticket, fixtureId, teamId, teamName, origin, roster, existing,
 }: {
+  ticket: string;
   fixtureId: string;
   teamId: string;
   teamName: string;
@@ -177,7 +221,9 @@ function LineupForm({
   }));
 
   return (
-    <form action={submitLineup} className="card">
+    <form method="POST" action="/api/console/league" className="card">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="submitLineup" />
       <input type="hidden" name="fixtureId" value={fixtureId} />
       <input type="hidden" name="teamId" value={teamId} />
       <div className="mb-1 flex items-center justify-between">

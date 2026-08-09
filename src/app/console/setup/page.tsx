@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import {
   CreateSeasonForm,
@@ -12,10 +12,36 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function SetupPage() {
+const OK_MESSAGE: Record<string, string> = {
+  createSeason: "Season created.",
+  activateSeason: "Season activated.",
+  addDivision: "Division added.",
+  deleteDivision: "Division removed.",
+  addStandardDivisions: "Standard divisions added.",
+};
+
+const ERR_MESSAGE: Record<string, string> = {
+  auth: "You are not authorized to manage season setup.",
+  fields: "Please fill in the required fields.",
+  notfound: "Season not found.",
+  hasregistrations: "Can't delete a division that has registrations.",
+  season: "A season is required.",
+  op: "Unknown action.",
+};
+
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   // Auth enforced by the console layout; only refine role (never bounce to /login).
   const session = await getSession();
   if (session && session.role !== "COO" && session.role !== "DIRECTOR") redirect("/console");
+
+  const ticket = await mintConsoleTicket();
+  const sp = await searchParams;
+  const okMsg = sp.ok ? OK_MESSAGE[sp.ok] : undefined;
+  const errMsg = sp.err ? ERR_MESSAGE[sp.err] : undefined;
 
   const seasons = await prisma.season.findMany({
     orderBy: [{ active: "desc" }, { startDate: "desc" }],
@@ -38,6 +64,17 @@ export default async function SetupPage() {
         </p>
       </div>
 
+      {okMsg && (
+        <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800 ring-1 ring-accent-200">
+          {okMsg}
+        </div>
+      )}
+      {errMsg && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800 ring-1 ring-rose-200">
+          {errMsg}
+        </div>
+      )}
+
       {/* Readiness checklist */}
       <div className="card">
         <h2 className="font-semibold text-brand-900">Launch readiness</h2>
@@ -54,7 +91,7 @@ export default async function SetupPage() {
         </ul>
       </div>
 
-      <CreateSeasonForm />
+      <CreateSeasonForm ticket={ticket} />
 
       {seasons.length === 0 && (
         <p className="text-slate-500">No seasons yet — create one to get started.</p>
@@ -77,7 +114,7 @@ export default async function SetupPage() {
                 {new Date(s.endDate).toLocaleDateString()} · {s._count.registrations} registrations
               </p>
             </div>
-            {!s.active && <ActivateButton seasonId={s.id} />}
+            {!s.active && <ActivateButton seasonId={s.id} ticket={ticket} />}
           </div>
 
           <div>
@@ -85,7 +122,7 @@ export default async function SetupPage() {
               <h3 className="text-sm font-semibold text-slate-700">
                 Divisions ({s.divisions.length})
               </h3>
-              {s.divisions.length === 0 && <StandardDivisionsButton seasonId={s.id} />}
+              {s.divisions.length === 0 && <StandardDivisionsButton seasonId={s.id} ticket={ticket} />}
             </div>
             {s.divisions.length > 0 && (
               <ul className="mb-3 divide-y divide-slate-100 rounded-lg ring-1 ring-slate-200">
@@ -102,13 +139,13 @@ export default async function SetupPage() {
                     </span>
                     <span className="flex items-center gap-3">
                       <span className="text-xs text-slate-400">{d._count.registrations} reg.</span>
-                      {d._count.registrations === 0 && <DeleteDivisionButton divisionId={d.id} />}
+                      {d._count.registrations === 0 && <DeleteDivisionButton divisionId={d.id} ticket={ticket} />}
                     </span>
                   </li>
                 ))}
               </ul>
             )}
-            <AddDivisionForm seasonId={s.id} />
+            <AddDivisionForm seasonId={s.id} ticket={ticket} />
           </div>
         </div>
       ))}

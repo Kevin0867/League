@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { mintConsoleTicket } from "@/lib/auth";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
-import { generateSchedule } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,21 @@ const TYPE_LABEL: Record<string, string> = {
   ALA_CARTE: "À la carte",
 };
 
-export default async function SchedulePage() {
+const ERR_LABEL: Record<string, string> = {
+  auth: "Not authorized to manage scheduling.",
+  team: "Team not found.",
+  config: "Set the team's day, time, and facility before generating a schedule.",
+  exists: "This team already has a practice schedule.",
+  op: "Unknown action.",
+};
+
+export default async function SchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const { ok, err } = await searchParams;
+  const ticket = await mintConsoleTicket();
   const [sessions, teams] = await Promise.all([
     prisma.session.findMany({
       include: { facility: true, teams: { include: { team: true } } },
@@ -35,6 +49,13 @@ export default async function SchedulePage() {
     <div className="space-y-6">
       <PageHeader title="Schedule" subtitle="The twelve-session season: six practice weeks, five league weeks, championship week." />
 
+      {ok === "generate" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Practice schedule generated.</div>
+      )}
+      {err && (
+        <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{ERR_LABEL[err] ?? "Something went wrong."}</div>
+      )}
+
       {ungenerated.length > 0 && (
         <div className="card">
           <h2 className="mb-1 font-semibold text-slate-900">Generate practice season</h2>
@@ -43,7 +64,10 @@ export default async function SchedulePage() {
           </p>
           <div className="flex flex-wrap gap-2">
             {ungenerated.map((t) => (
-              <form key={t.id} action={generateSchedule}>
+              <form key={t.id} method="POST" action="/api/console/schedule">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="generate" />
+                <input type="hidden" name="returnTo" value="/console/schedule" />
                 <input type="hidden" name="teamId" value={t.id} />
                 <button className="btn-secondary text-sm">
                   Generate · {t.name} ({t.dayOfWeek} {t.startTime})

@@ -1,11 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { createStaff } from "./actions";
 import type { Role } from "@/lib/enums";
 
-export function StaffForm({ role }: { role: Role }) {
-  const [state, action, pending] = useActionState(createStaff, {});
+export function StaffForm({ role, ticket }: { role: Role; ticket: string }) {
   const isCOO = role === "COO";
   return (
     <div className="card">
@@ -14,7 +11,9 @@ export function StaffForm({ role }: { role: Role }) {
         Creates a console account. Share the password securely — the person can change
         it after signing in.
       </p>
-      <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2">
+      <form method="POST" action="/api/console/coaches" className="mt-4 grid gap-3 sm:grid-cols-2">
+        <input type="hidden" name="ticket" value={ticket} />
+        <input type="hidden" name="op" value="create" />
         <div>
           <label className="label">First name</label>
           <input name="firstName" className="input" required />
@@ -40,17 +39,11 @@ export function StaffForm({ role }: { role: Role }) {
           <input name="password" type="password" minLength={8} className="input" required />
         </div>
         <div className="flex items-end">
-          <button type="submit" disabled={pending} className="btn-primary w-full">
-            {pending ? "Creating…" : "Create account"}
+          <button type="submit" className="btn-primary w-full">
+            Create account
           </button>
         </div>
       </form>
-      {state?.error && (
-        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{state.error}</p>
-      )}
-      {state?.ok && (
-        <p className="mt-3 rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{state.ok}</p>
-      )}
     </div>
   );
 }

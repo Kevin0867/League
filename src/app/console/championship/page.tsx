@@ -1,11 +1,26 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
-import { generateBracket } from "./actions";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function ChampionshipPage() {
+const ERR_MESSAGES: Record<string, string> = {
+  auth: "Not authorized to manage the championship.",
+  division: "Division not found.",
+  eligible: "Need at least two eligible teams to draw a bracket.",
+  match: "Match not found.",
+  teams: "Both teams must be set before recording a result.",
+  winner: "Winner must be one of the two teams.",
+};
+
+export default async function ChampionshipPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   // Divisions across active seasons that have teams.
   const divisions = await prisma.division.findMany({
     where: { season: { active: true } },
@@ -20,6 +35,16 @@ export default async function ChampionshipPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Championship" subtitle="Championship week, Dec 7–13. Teams are seeded from division standings; the bracket is single-elimination and byes auto-advance." />
+
+      {sp.ok === "bracket" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Bracket drawn.</div>
+      )}
+      {sp.ok === "result" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Result recorded.</div>
+      )}
+      {sp.err && ERR_MESSAGES[sp.err] && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{ERR_MESSAGES[sp.err]}</div>
+      )}
 
       {divisions.filter((d) => d.teams.length > 0).length === 0 && (
         <p className="text-slate-500">No divisions with teams yet.</p>
@@ -40,7 +65,9 @@ export default async function ChampionshipPage() {
                     {eligible < d.teams.length ? ` (${d.teams.length - eligible} ineligible)` : ""}
                   </p>
                 </div>
-                <form action={generateBracket}>
+                <form method="POST" action="/api/console/championship">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="generateBracket" />
                   <input type="hidden" name="divisionId" value={d.id} />
                   <button className="btn-secondary text-sm" disabled={eligible < 2}>
                     {matches.length > 0 ? "Redraw bracket" : "Draw bracket"}
@@ -48,7 +75,7 @@ export default async function ChampionshipPage() {
                 </form>
               </div>
               {matches.length > 0 ? (
-                <Bracket matches={matches} teamNames={teamNames} editable />
+                <Bracket matches={matches} teamNames={teamNames} editable ticket={ticket} />
               ) : (
                 <p className="text-sm text-slate-400">
                   {eligible < 2 ? "Need at least two eligible teams to draw." : "Not drawn yet."}

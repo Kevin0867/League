@@ -1,8 +1,6 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import {
@@ -12,13 +10,11 @@ import {
   type DeliveredSession,
 } from "@/lib/domain/finance";
 
-async function requireFinance() {
-  const session = await getSession();
-  if (!session || !can(session.role, "runPayouts")) {
-    throw new Error("Not authorized to run payouts.");
-  }
-  return session;
-}
+// Payments mutations as native-form-POST route handlers with ticket auth. Route
+// handlers 303-redirect to a fresh GET (which carries the session cookie), so
+// unlike a server action they don't re-render inline under the cookieless POST
+// and bounce through the console layout's auth. See /api/console/facilities.
+export const dynamic = "force-dynamic";
 
 function monthRange(year: number, month: number) {
   // month is 1-12
@@ -27,13 +23,40 @@ function monthRange(year: number, month: number) {
   return { start, end };
 }
 
+export async function POST(req: Request) {
+  const origin = new URL(req.url).origin;
+  const back = (qs: string) =>
+    NextResponse.redirect(new URL(`/console/payments${qs}`, origin), 303);
+
+  const formData = await req.formData();
+  const actor = await actorFromForm(formData);
+  // Both operations preserve the original requireFinance() gate: runPayouts.
+  if (!actor || !can(actor.role, "runPayouts")) return back("?err=auth");
+
+  const op = String(formData.get("op") ?? "");
+
+  if (op === "statements") {
+    await generateFacilityStatements(formData, actor);
+    return back("?ok=statements");
+  }
+
+  if (op === "payouts") {
+    await generatePayoutRun(formData, actor);
+    return back("?ok=payouts");
+  }
+
+  return back("?err=op");
+}
+
 /**
  * Generate one monthly statement per facility (§10) — delivered sessions only,
  * fee by basis, on-site practice revenue for percentage sites. Cancelled
  * sessions are excluded automatically because only DELIVERED sessions are read.
  */
-export async function generateFacilityStatements(formData: FormData) {
-  const session = await requireFinance();
+async function generateFacilityStatements(
+  formData: FormData,
+  actor: { userId: string; role: string }
+) {
   const year = Number(formData.get("year") ?? new Date().getUTCFullYear());
   const month = Number(formData.get("month") ?? new Date().getUTCMonth() + 1);
   const { start, end } = monthRange(year, month);
@@ -97,16 +120,17 @@ export async function generateFacilityStatements(formData: FormData) {
     created++;
   }
 
-  await audit({ actorId: session.userId, entityType: "FacilityStatement", entityId: `${year}-${month}`, action: "GENERATE", summary: `Generated ${created} facility statement(s)` });
-  revalidatePath("/console/payments");
+  await audit({ actorId: actor.userId, entityType: "FacilityStatement", entityId: `${year}-${month}`, action: "GENERATE", summary: `Generated ${created} facility statement(s)` });
 }
 
 /**
  * Generate a coach payout run for a period (§9): sessions delivered × flat rate
  * (assistant 50%), plus à la carte earnings, per coach.
  */
-export async function generatePayoutRun(formData: FormData) {
-  const session = await requireFinance();
+async function generatePayoutRun(
+  formData: FormData,
+  actor: { userId: string; role: string }
+) {
   const year = Number(formData.get("year") ?? new Date().getUTCFullYear());
   const month = Number(formData.get("month") ?? new Date().getUTCMonth() + 1);
   const { start, end } = monthRange(year, month);
@@ -160,6 +184,5 @@ export async function generatePayoutRun(formData: FormData) {
     lines++;
   }
 
-  await audit({ actorId: session.userId, entityType: "PayoutRun", entityId: run.id, action: "GENERATE", summary: `Payout run with ${lines} coach line(s)` });
-  revalidatePath("/console/payments");
+  await audit({ actorId: actor.userId, entityType: "PayoutRun", entityId: run.id, action: "GENERATE", summary: `Payout run with ${lines} coach line(s)` });
 }
