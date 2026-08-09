@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -114,21 +115,24 @@ export default async function LeaguePage() {
         <h2 className="mb-3 font-semibold text-slate-900">Fixtures</h2>
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-            <tr><th className="py-2">Wk</th><th>Date</th><th>Home</th><th>Away</th><th>Hub</th><th>Status</th></tr>
+            <tr><th className="py-2">Wk</th><th>Date</th><th>Home</th><th>Away</th><th>Hub</th><th>Status</th><th></th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {fixtures.map((f) => (
-              <tr key={f.id}>
+              <tr key={f.id} className="hover:bg-slate-50">
                 <td className="py-2 text-slate-500">{f.weekNumber}</td>
                 <td className="text-slate-700">{f.scheduledAt.toLocaleDateString()}</td>
                 <td className="text-slate-700">{f.homeTeam?.name ?? "TBD"}</td>
                 <td className="text-slate-700">{f.awayTeam?.name ?? "TBD"}</td>
                 <td className="text-slate-600">{f.facility?.name ?? "—"}</td>
                 <td><StatusBadge status={f.status} /></td>
+                <td className="text-right">
+                  <Link href={`/console/league/${f.id}`} className="text-xs font-medium text-brand-600 hover:underline">match night →</Link>
+                </td>
               </tr>
             ))}
             {fixtures.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-slate-400">No fixtures generated yet.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-slate-400">No fixtures generated yet.</td></tr>
             )}
           </tbody>
         </table>
