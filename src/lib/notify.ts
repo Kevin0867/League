@@ -46,7 +46,8 @@ export async function sendSms(to: string | null | undefined, body: string): Prom
 export async function sendEmail(
   to: string | null | undefined,
   subject: string,
-  body: string
+  body: string,
+  html?: string
 ): Promise<SendResult> {
   if (!to) return { ok: false, simulated: false, error: "no email on record" };
   if (!emailConfigured()) {
@@ -65,6 +66,7 @@ export async function sendEmail(
         to,
         subject,
         text: body,
+        ...(html ? { html } : {}),
       }),
     });
     if (!res.ok) {

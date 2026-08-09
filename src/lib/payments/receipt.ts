@@ -159,10 +159,33 @@ export function receiptEmailSubject(r: Receipt): string {
     : `You're enrolled — ${r.seasonName} (3-payment plan)`;
 }
 
+/** Plain-text fallback for email clients that don't render HTML. */
+export function receiptEmailText(r: Receipt): string {
+  const lines = [
+    `You're enrolled, ${r.name}!`,
+    ``,
+    `${r.seasonName}`,
+    ...r.items.map((it) => `  - ${it.division} (${it.program})`),
+    ``,
+    r.plan === "UPFRONT"
+      ? `Paid in full: ${formatCents(r.amountCents)}`
+      : `Total: ${formatCents(r.amountCents)} in 3 monthly payments (charged automatically, nothing today):\n` +
+        r.installments.map((p, i) => `  ${i + 1}. ${p.date} — ${formatCents(p.amountCents)}`).join("\n"),
+    ``,
+    `Any issues, please contact us at ${r.supportEmail}${r.supportPhone ? ` or ${r.supportPhone}` : ""}.`,
+  ];
+  return lines.join("\n");
+}
+
 /** Send the branded confirmation email for a payment. Safe to call more than
  * once; callers should guard on their own idempotency where it matters. */
 export async function sendPaymentConfirmation(paymentId: string) {
   const receipt = await loadReceipt(paymentId);
   if (!receipt?.email) return { ok: false, simulated: false, error: "no receipt/email" };
-  return sendEmail(receipt.email, receiptEmailSubject(receipt), receiptEmailHtml(receipt));
+  return sendEmail(
+    receipt.email,
+    receiptEmailSubject(receipt),
+    receiptEmailText(receipt),
+    receiptEmailHtml(receipt)
+  );
 }
