@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
+import { FacilityForm } from "./FacilityForm";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +30,15 @@ export default async function FacilitiesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Facility agreement tracker</h1>
-        <p className="text-slate-500">
-          {executed}/{facilities.length} executed. Court blocks can&apos;t be published
-          against a non-executed agreement without an explicit override.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Facility agreement tracker</h1>
+          <p className="text-slate-500">
+            {executed}/{facilities.length} executed. Court blocks can&apos;t be published
+            against a non-executed agreement without an explicit override.
+          </p>
+        </div>
+        <FacilityForm />
       </div>
 
       <div className="card overflow-x-auto">
