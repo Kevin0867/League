@@ -16,7 +16,7 @@ export default async function PortalLayout({
           <div className="flex items-center gap-3 text-sm">
             <Link href="/portal/lessons" className="font-medium text-brand-700 hover:underline">Lessons</Link>
             <span className="hidden text-slate-500 sm:inline">{session.name}</span>
-            <Link href="/logout" className="btn-ghost">Sign out</Link>
+            <Link href="/logout" prefetch={false} className="btn-ghost">Sign out</Link>
           </div>
         </div>
       </header>

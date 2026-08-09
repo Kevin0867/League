@@ -3,13 +3,14 @@ import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
-import { startCheckout, markMessageRead, confirmAvailability } from "./actions";
+import { mintConsoleTicket } from "@/lib/auth";
 import { NOTICE_DAYS } from "@/lib/domain/availability";
 
 export const dynamic = "force-dynamic";
 
 export default async function PortalHome() {
   const session = await requireUser();
+  const ticket = await mintConsoleTicket();
 
   // The logged-in adult, plus any dependents they manage.
   const me = session.personId
@@ -123,7 +124,9 @@ export default async function PortalHome() {
                     </div>
                   </div>
                   {!r.readAt && (
-                    <form action={markMessageRead}>
+                    <form method="POST" action="/api/portal">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="markMessageRead" />
                       <input type="hidden" name="recipientId" value={r.id} />
                       <button className="btn-ghost text-xs whitespace-nowrap">Mark read</button>
                     </form>
@@ -212,7 +215,9 @@ export default async function PortalHome() {
                     </div>
                     <div className="flex gap-2">
                       {["PLAYING", "NOT_PLAYING"].map((opt) => (
-                        <form key={opt} action={confirmAvailability}>
+                        <form key={opt} method="POST" action="/api/portal">
+                          <input type="hidden" name="ticket" value={ticket} />
+                          <input type="hidden" name="op" value="confirmAvailability" />
                           <input type="hidden" name="fixtureId" value={f.id} />
                           <input type="hidden" name="personId" value={person.id} />
                           <input type="hidden" name="status" value={opt} />
@@ -256,7 +261,9 @@ export default async function PortalHome() {
                   <div className="flex items-center gap-3">
                     <StatusBadge status={p.status} />
                     {(p.status === "REQUESTED" || p.status === "PENDING") && (
-                      <form action={startCheckout}>
+                      <form method="POST" action="/api/portal">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="startCheckout" />
                         <input type="hidden" name="paymentId" value={p.id} />
                         <button className="btn-primary">Pay now</button>
                       </form>

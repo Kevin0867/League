@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
-import { bookOffering } from "../actions";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,7 @@ const TYPE_LABEL: Record<string, string> = { PRIVATE: "Private", SEMI_PRIVATE: "
 
 export default async function LessonsPage() {
   const session = await requireUser();
+  const ticket = await mintConsoleTicket();
   const me = session.personId
     ? await prisma.person.findUnique({ where: { id: session.personId }, include: { dependents: true } })
     : null;
@@ -77,7 +78,9 @@ export default async function LessonsPage() {
                 <div className="mt-1 text-xs text-slate-400">
                   {TYPE_LABEL[o.type]} · {o.facility.name}{o.coach ? ` · ${o.coach.person.firstName} ${o.coach.person.lastName}` : ""}
                 </div>
-                <form action={bookOffering} className="mt-3 flex gap-2">
+                <form method="POST" action="/api/portal" className="mt-3 flex gap-2">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="bookOffering" />
                   <input type="hidden" name="offeringId" value={o.id} />
                   {household.length > 1 ? (
                     <select name="clientId" className="input py-1 text-sm">
