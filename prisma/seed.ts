@@ -1,7 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { encryptionExtension } from "../src/lib/prisma-encryption";
 
-const prisma = new PrismaClient();
+// Use the encrypted client so seeded emergency/medical fields are stored
+// encrypted, exactly like real writes.
+const prisma = new PrismaClient().$extends(encryptionExtension);
 
 const DEMO_PASSWORD = "pickleball";
 
@@ -158,13 +161,18 @@ async function main() {
   console.log("Seeding players / parents & registrations…");
   async function makePlayer(
     first: string, last: string, email: string | null,
-    opts: { division: string; dupr?: string; rating?: number; waiver?: boolean; login?: boolean; phone?: string; minor?: boolean }
+    opts: { division: string; dupr?: string; rating?: number; waiver?: boolean; login?: boolean; phone?: string; minor?: boolean; emergency?: { name: string; phone: string; relation: string }; medical?: string }
   ) {
     const person = await prisma.person.create({
       data: {
         firstName: first, lastName: last, email, phone: opts.phone,
         duprId: opts.dupr ?? null, duprRating: opts.rating ?? null, isMinor: opts.minor ?? false,
         waiverSignedAt: opts.waiver ? d("2026-08-20") : null,
+        // Encrypted-at-rest by the client extension.
+        emergencyName: opts.emergency?.name ?? null,
+        emergencyPhone: opts.emergency?.phone ?? null,
+        emergencyRelation: opts.emergency?.relation ?? null,
+        medicalNotes: opts.medical ?? null,
       },
     });
     if (opts.login && email) {
@@ -184,13 +192,13 @@ async function main() {
     return person;
   }
 
-  const p1 = await makePlayer("Emma", "Johnson", "emma.player@example.com", { division: divAdult40.id, dupr: "DUPR-EJOHN", rating: 4.2, waiver: true, login: true, phone: "480-555-0101" });
+  const p1 = await makePlayer("Emma", "Johnson", "emma.player@example.com", { division: divAdult40.id, dupr: "DUPR-EJOHN", rating: 4.2, waiver: true, login: true, phone: "480-555-0101", emergency: { name: "Dana Johnson", phone: "480-555-0199", relation: "Spouse" } });
   const p2 = await makePlayer("Liam", "Johnson", "liam.player@example.com", { division: divAdult40.id, dupr: "DUPR-LJOHN", rating: 4.1, waiver: true, phone: "480-555-0102" });
   await makePlayer("Olivia", "Martinez", "olivia@example.com", { division: divAdult40.id, dupr: "DUPR-OMART", rating: 4.3, waiver: true });
   await makePlayer("Noah", "Williams", "noah@example.com", { division: divAdult40.id, dupr: "DUPR-NWILL", rating: 4.0, waiver: false }); // waiver outstanding
   await makePlayer("Ava", "Brown", "ava@example.com", { division: divAdult30.id, rating: 3.2, waiver: true });
   await makePlayer("Mason", "Davis", "mason@example.com", { division: divAdult30.id, rating: 3.4, waiver: true });
-  await makePlayer("Sophia", "Garcia", "sophia@example.com", { division: divYouthHS.id, waiver: true, minor: true });
+  await makePlayer("Sophia", "Garcia", "sophia@example.com", { division: divYouthHS.id, waiver: true, minor: true, emergency: { name: "Maria Garcia", phone: "480-555-0177", relation: "Mother" }, medical: "Mild peanut allergy — carries an EpiPen." });
 
   // Duplicate: same person, two registrations (name + phone match) — demonstrates dedup
   await makePlayer("Emma", "Johnson", null, { division: divAdult40.id, waiver: false, phone: "480-555-0101" });

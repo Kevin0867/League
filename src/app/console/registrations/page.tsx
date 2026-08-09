@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { findDuplicateGroups } from "@/lib/domain/registrations";
@@ -73,7 +74,9 @@ export default async function RegistrationsPage() {
             {registrations.map((r) => (
               <tr key={r.id}>
                 <td className="py-2">
-                  <div className="font-medium text-slate-800">{r.person.firstName} {r.person.lastName}</div>
+                  <Link href={`/console/people/${r.person.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">
+                    {r.person.firstName} {r.person.lastName}
+                  </Link>
                   <div className="text-xs text-slate-400">{r.person.email ?? r.person.phone ?? "—"}</div>
                 </td>
                 <td className="text-slate-600">{r.division?.name ?? <span className="text-slate-400">unplaced</span>}</td>
