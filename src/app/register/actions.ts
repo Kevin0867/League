@@ -68,6 +68,8 @@ export async function registerAction(
         dob,
         isMinor,
         gender: g("gender") || null,
+        address: g("address") || null,
+        howHeard: g("howHeard") || null,
         mediaOptOut,
         emergencyName: g("emergencyName") || null,
         emergencyPhone: g("emergencyPhone") || null,

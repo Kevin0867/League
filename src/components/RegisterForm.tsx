@@ -59,6 +59,20 @@ export function RegisterForm({
               <option value="Advanced">Advanced</option>
             </select>
           </div>
+          <Field label="Address" name="address" placeholder="Street, city, ZIP" />
+          <div>
+            <label className="label" htmlFor="howHeard">How did you hear about us?</label>
+            <select id="howHeard" name="howHeard" className="input" defaultValue="">
+              <option value="">— Select —</option>
+              <option value="Friend or family">Friend or family</option>
+              <option value="Social media">Social media</option>
+              <option value="Google or web search">Google or web search</option>
+              <option value="Community event">Community event</option>
+              <option value="Flyer or sign">Flyer or sign</option>
+              <option value="Coach or staff">Coach or staff</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
         </div>
       </Section>
 

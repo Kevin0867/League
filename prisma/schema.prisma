@@ -107,6 +107,9 @@ model Person {
   // consent must be recorded and honored against the person record.
   waiverSignedAt     DateTime?
   mediaOptOut        Boolean   @default(false)
+  /// Set when a minor turns 18 and their parent-signed waiver must be replaced
+  /// by an adult self-signed waiver. Cleared when they sign the new one.
+  waiverRenewalRequiredAt DateTime?
 
   // Minor handling (§17 — records may contain minors' data)
   isMinor            Boolean   @default(false)
