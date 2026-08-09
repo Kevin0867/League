@@ -20,9 +20,15 @@ spec's own advice, it's fine to run later phases manually at first.
 - [ ] 👤 Generate and securely store secrets: `AUTH_SECRET` and `FIELD_ENCRYPTION_KEY` (`openssl rand -base64 32`). **Losing `FIELD_ENCRYPTION_KEY` makes encrypted medical/emergency data unrecoverable** — store it in a password manager / secret store.
 
 ### Auth product gaps
-- [ ] 🤖 **Password reset / forgot-password** flow (none today).
-- [ ] 🤖 **Staff & coach account creation** — admin invite/create (today accounts come only from registration or the seed).
-- [ ] 🤖 **Login rate-limiting** / basic brute-force protection.
+- [x] 🤖 **Password reset / forgot-password** flow — `/forgot` + `/reset`, single-use 1-hour tokens (emails via Resend when configured; simulated/logged otherwise).
+- [x] 🤖 **First-admin bootstrap** — `/setup` creates the initial COO (locks after).
+- [x] 🤖 **Staff & coach account creation** — Coaches page → "Add a staff/coach login".
+- [x] 🤖 **Login rate-limiting** — account locks 15 min after 5 failed attempts.
+
+> ⚠️ **Vercel gotcha (resolved):** Vercel **Deployment Protection** (Vercel
+> Authentication) strips the app's own cookies on the *preview* URL, which breaks
+> login there. Keep it **off** for the `league` project's previews (Settings →
+> Deployment Protection). It does **not** affect the production domain.
 
 ### Payments (Stripe)
 - [ ] 👤 Complete Stripe **business onboarding** (bank account, EIN) to receive funds.
