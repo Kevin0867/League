@@ -36,7 +36,7 @@ export function ImportForm() {
     setPending(true);
     setState({});
     try {
-      const res = await fetch("/api/console/import", { method: "POST", body: fd });
+      const res = await fetch("/api/console/import", { method: "POST", body: fd, credentials: "include" });
       const json = (await res.json()) as ImportState;
       setState(json);
     } catch {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -20,7 +21,14 @@ const DEFAULT_SEASON = {
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
+  if (!session) {
+    const jar = await cookies();
+    const names = jar.getAll().map((c) => c.name);
+    return NextResponse.json(
+      { error: `DIAG: route handler got no session. Cookies received: [${names.join(", ") || "none"}].` },
+      { status: 401 }
+    );
+  }
   if (!["COO", "DIRECTOR"].includes(session.role)) {
     return NextResponse.json({ error: "Importing needs a COO or Director account." }, { status: 403 });
   }
