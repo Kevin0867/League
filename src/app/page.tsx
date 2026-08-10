@@ -71,7 +71,7 @@ export default async function HomePage() {
                   "2-hour weekly coach-led practices and matches",
                   "Youth teams: Elementary, Middle, High School age groups",
                   "Adult teams: Men's and Women's 2.5, 3.0, 3.5, 4.0, and 4.5+",
-                  "Scottsdale, Chandler, Gilbert, Mesa, PV, or Tempe",
+                  "Scottsdale, Chandler, Gilbert, Mesa, Phoenix, or Tempe",
                 ].map((line) => (
                   <li key={line} className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400" />

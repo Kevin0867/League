@@ -1,0 +1,44 @@
+name: Cleanup test artifacts
+
+# Manually-triggered, targeted cleanup of test/dev artifacts that leaked into the
+# live database — a "TEST" division and its teams, LESSON-type divisions
+# (lessons aren't league divisions) and their teams, and a stray "✎" appended to
+# a division name. Rostered players are returned to the pool, never dropped.
+#
+# Requires repo secret DATABASE_URL (the Neon connection string).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "CLEANUP" to confirm removing test-division artifacts'
+        required: true
+        default: ""
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Guard — confirmation required
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "CLEANUP" ]; then
+            echo "::error::Type CLEANUP in the confirm box to run this."
+            exit 1
+          fi
+      - name: Verify DATABASE_URL is configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Purge test artifacts
+        run: npx tsx --tsconfig tsconfig.scripts.json scripts/cleanup-artifacts.ts

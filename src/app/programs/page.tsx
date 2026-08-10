@@ -4,10 +4,21 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+// Public-safe grade bands for school-level divisions so parents can self-serve.
+function schoolBand(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("elementary")) return "Elementary · grades K–5";
+  if (n.includes("middle")) return "Middle school · grades 6–8";
+  if (n.includes("high school")) return "High school · grades 9–12";
+  return "By school level";
+}
+
 export default async function ProgramsPage() {
   const seasons = await prisma.season.findMany({
     where: { active: true },
-    include: { divisions: { orderBy: { name: "asc" } } },
+    // Lessons are not competitive divisions — never list them here. Ordered so
+    // school levels read youngest→oldest, then DUPR bands.
+    include: { divisions: { where: { divisionType: { not: "LESSON" } }, orderBy: { name: "asc" } } },
     orderBy: { startDate: "desc" },
   });
 
@@ -42,7 +53,7 @@ export default async function ProgramsPage() {
                     <div className="text-xs text-slate-500">
                       {d.divisionType === "DUPR_BAND"
                         ? `DUPR ${d.minRating ?? "?"}–${d.maxRating ?? "?"}`
-                        : "By school level"}
+                        : schoolBand(d.name)}
                     </div>
                     <span className="mt-2 text-xs font-semibold text-brand-600 opacity-0 transition-opacity group-hover:opacity-100">
                       Sign up for this group →

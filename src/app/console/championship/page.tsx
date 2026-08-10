@@ -23,7 +23,8 @@ export default async function ChampionshipPage({
   const ticket = await mintConsoleTicket();
   // Divisions across active seasons that have teams.
   const divisions = await prisma.division.findMany({
-    where: { season: { active: true } },
+    // Lessons aren't competitive divisions — no championship bracket for them.
+    where: { season: { active: true }, divisionType: { not: "LESSON" } },
     include: { season: true, teams: true },
     orderBy: { name: "asc" },
   });

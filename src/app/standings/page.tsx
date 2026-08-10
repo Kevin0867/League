@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 
 export default async function StandingsPage() {
   const divisions = await prisma.division.findMany({
+    // Lessons aren't competitive divisions — keep them off the leaderboard.
+    where: { divisionType: { not: "LESSON" } },
     include: {
       teams: true,
       season: true,
