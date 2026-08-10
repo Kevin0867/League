@@ -3,11 +3,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "PURE Academy & Arizona Club Pickleball",
+    default: "PURE Academy — Arizona's Premier Player Development Academy",
     template: "%s · PURE Academy",
   },
   description:
-    "Season management for PURE Academy and Arizona Club Pickleball — registration, teams, scheduling, league play, and payments.",
+    "PURE Academy is Arizona's premier player development academy. We believe team training accelerates player development — players train, compete, and improve together. Fall 2026 season now enrolling, all ages and skill levels.",
 };
 
 export const viewport: Viewport = {

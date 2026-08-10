@@ -14,45 +14,83 @@ export default async function HomePage() {
     <div>
       <PublicNav />
 
-      {/* Hero */}
+      {/* Hero — mirrors the PURE Academy marketing page */}
       <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 text-white">
         {/* subtle accent glow */}
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent-500/20 blur-3xl" />
-        <div className="relative mx-auto max-w-6xl px-4 py-24">
-          <p className="eyebrow eyebrow-light mb-5">
-            {season ? season.name : "PURE Academy · Fall 2026"}
-          </p>
-          <h1 className="display max-w-3xl text-4xl text-white sm:text-6xl">
-            Youth &amp; adult pickleball,{" "}
-            <em className="text-accent-400">organized end to end.</em>
-          </h1>
-          <p className="mt-6 max-w-xl text-lg text-brand-100">
-            Register, get placed on a team, and play a DUPR-recorded league —
-            all in one place. Coaches manage rosters, attendance, and match
-            nights from their phone.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/register" className="btn-accent px-6 py-3 text-base">
-              Register for the season
-            </Link>
-            <Link href="/standings" className="btn bg-white/10 px-6 py-3 text-base text-white ring-1 ring-white/25 hover:bg-white/20">
-              View league standings
-            </Link>
+        <div className="relative mx-auto max-w-6xl px-4 py-20 sm:py-24">
+          <div className="grid items-center gap-10 lg:grid-cols-2">
+            {/* Left — headline, ethos quote, attribution */}
+            <div>
+              <p className="eyebrow eyebrow-light mb-5">PURE Academy</p>
+              <h1 className="display text-4xl text-white sm:text-5xl">
+                Arizona&apos;s Premier{" "}
+                <em className="text-accent-400">Player Development Academy</em>
+              </h1>
+              <blockquote className="mt-6 max-w-xl text-lg italic text-brand-100">
+                &ldquo;We believe team training accelerates player development. Players train,
+                compete, and improve together.&rdquo;
+              </blockquote>
+              <p className="mt-3 text-sm text-brand-200">
+                <span className="font-semibold text-white">Stephanie Newton</span>, Director &amp; Head Coach, PURE Academy ELITE TEAMS
+              </p>
+            </div>
+
+            {/* Right — Elite Team image */}
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/pure-academy-elite.png"
+                alt="PURE Academy ELITE Team"
+                className="w-full rounded-2xl shadow-2xl ring-1 ring-white/10"
+              />
+            </div>
           </div>
-          <p className="mt-6 text-sm text-brand-300">
-            Enroll today, pay later — payment is requested only after you&apos;re
-            placed on a team, coach, location, day, and time.
-          </p>
+
+          {/* CTA + program details */}
+          <div className="mt-10 grid gap-8 lg:grid-cols-2 lg:items-start">
+            <div>
+              <Link
+                href="/register"
+                className="btn-accent inline-flex flex-col items-center rounded-2xl px-8 py-5 text-center"
+              >
+                <span className="text-base font-extrabold uppercase tracking-wide">Fall 2026 Season — Now Enrolling</span>
+                <span className="mt-0.5 text-xs font-medium uppercase tracking-wide text-brand-900/70">All ages &amp; skill levels</span>
+              </Link>
+            </div>
+
+            <div>
+              <p className="eyebrow eyebrow-light mb-3">$495 per player · enroll today, pay later</p>
+              <ul className="space-y-2 text-sm text-brand-100">
+                {[
+                  "12-week season: September 14–December 13 (off Thanksgiving week)",
+                  "6 weeks of team practices, team ladders, and competition preparation",
+                  "5 weeks of Arizona Club Pickleball league play",
+                  "Final week: Arizona Club Pickleball championship",
+                  "6 to 8 players per team; placement by age and skill level",
+                  "2-hour weekly coach-led practices and matches",
+                  "Youth teams: Elementary, Middle, High School age groups",
+                  "Adult teams: Men's and Women's 2.5, 3.0, 3.5, 4.0, and 4.5+",
+                  "Scottsdale, Chandler, Gilbert, Mesa, PV, or Tempe",
+                ].map((line) => (
+                  <li key={line} className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Capability grid */}
+      {/* What the season includes */}
       <section className="mx-auto max-w-6xl px-4 py-16">
-        <p className="eyebrow">The platform</p>
+        <p className="eyebrow">The season</p>
         <h2 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">
-          Everything a season <em className="text-accent-600">needs</em>
+          Everything the season <em className="text-accent-600">includes</em>
         </h2>
-        <p className="mt-2 text-slate-600">One platform across the whole operation.</p>
+        <p className="mt-2 text-slate-600">From your first practice to championship week.</p>
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {CAPS.map((c) => (
             <div key={c.title} className="card">
@@ -150,12 +188,12 @@ export default async function HomePage() {
 }
 
 const CAPS = [
-  { icon: "📝", title: "Registration & records", body: "One profile per person — player, parent, or coach — with waivers, DUPR, and emergency contacts." },
-  { icon: "🧩", title: "Team placement", body: "Pool-and-assign by division, location, and time. You pick one division; the Director places you after Week 1." },
-  { icon: "📅", title: "Scheduling", body: "A twelve-session season per team: six practice weeks, five league weeks, and championship week." },
-  { icon: "🏆", title: "League & championship", body: "Line-by-line scoring, standings, seedings, and a championship bracket — all DUPR-recorded." },
-  { icon: "💳", title: "Payments", body: "Secure hosted checkout. Pay in full or monthly. We never store card details." },
-  { icon: "💬", title: "Communications", body: "Team, coach, and league messages in-app, mirrored to email, with SMS for time-critical alerts." },
+  { icon: "📝", title: "Simple enrollment", body: "Enroll each player once — waiver, skill level, and emergency contacts, all in one place." },
+  { icon: "🧩", title: "Team placement", body: "Pick one division; the Director places you on the right team by age and skill after Week 1." },
+  { icon: "📅", title: "A full season", body: "A twelve-session season: six practice weeks, five league weeks, and championship week." },
+  { icon: "🏆", title: "League & championship", body: "Line-by-line scoring, live standings, and a championship bracket — every game DUPR-recorded." },
+  { icon: "💳", title: "Enroll today, pay later", body: "$495 per player. Secure checkout, pay in full or monthly — requested only after you're placed." },
+  { icon: "💬", title: "Stay in the loop", body: "Team, coach, and league updates in-app and by email, with texts for time-critical alerts." },
 ];
 
 const STATS = [
