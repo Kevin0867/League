@@ -2,7 +2,7 @@
 // Pickleball at Riverwalk HoldCo, LLC, DBA PURE Pickleball & Padel - Scottsdale.
 // Bump WAIVER_VERSION whenever the text changes so signatures are versioned.
 
-export const WAIVER_VERSION = "2026-08";
+export const WAIVER_VERSION = "2026-08-08";
 export const WAIVER_TITLE =
   "Acknowledgment of Risk, Waiver, and Release of Liability";
 
@@ -12,6 +12,17 @@ export function WaiverText() {
       <h4 className="text-center text-base font-bold uppercase text-slate-900">
         {WAIVER_TITLE}
       </h4>
+      <p>
+        I hereby represent and warrant to{" "}
+        <strong>
+          Pickleball at Riverwalk HoldCo, LLC, DBA PURE Pickleball &amp; Padel -
+          Scottsdale
+        </strong>{" "}
+        that I am the parent or court-appointed legal guardian of the Minor
+        Child(ren) listed above and agree to hold harmless, defend (including
+        attorneys’ fees and costs), and indemnify the Organization for any loss
+        or injury if this representation is false.
+      </p>
       <p>
         <strong>
           Pickleball at Riverwalk HoldCo, LLC, DBA PURE Pickleball &amp; Padel -
@@ -120,8 +131,8 @@ export function WaiverText() {
         of any photographs, videos, or likenesses of me or my minor child(ren)
         taken during the Activities for promotional, marketing, or instructional
         purposes, without compensation to me or my child(ren). If I do not
-        consent, I will indicate so below (or notify the Organization in writing
-        prior to participation).
+        consent, I will notify the Organization in writing prior to
+        participation.
       </p>
       <p>
         <strong>Governing Law and Severability:</strong>
@@ -144,6 +155,16 @@ export function WaiverText() {
         understand its terms and understand that I am giving up substantial
         rights on behalf of myself or my minor child(ren) by signing it. I sign
         it freely and voluntarily without any inducement.
+      </p>
+      <p className="pt-1">
+        <a
+          href="/waiver/pure-participation-waiver.pdf"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-brand-600 underline"
+        >
+          Download a copy of this waiver (PDF)
+        </a>
       </p>
     </div>
   );
