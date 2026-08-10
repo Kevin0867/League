@@ -66,9 +66,9 @@ export function ConsoleShell({
         <aside
           className={`${open ? "block" : "hidden"} w-full shrink-0 bg-brand-900 md:block md:w-64`}
         >
-          <div className="hidden items-center gap-2 px-5 py-4 md:flex">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent-500 text-sm font-extrabold text-brand-900">
-              PA
+          <div className="hidden items-center gap-3 px-5 py-4 md:flex">
+            <span className="inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm">
+              <Logo href="/console" className="h-7" />
             </span>
             <div className="leading-tight">
               <div className="text-sm font-extrabold uppercase tracking-wide text-white">Academy Console</div>
