@@ -34,6 +34,41 @@ export async function POST(req: Request) {
   switch (op) {
     // ---- Top-level ops (src/app/console/league/actions.ts) --------------------
 
+    // Edit a single fixture: reschedule, change hub, or set status.
+    case "editFixture": {
+      const id = String(formData.get("fixtureId") ?? "");
+      if (!id) return back("?err=nofixture");
+      const dateStr = String(formData.get("scheduledAt") ?? "").trim();
+      const timeStr = String(formData.get("scheduledTime") ?? "").trim() || "18:00";
+      const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
+      const status = String(formData.get("status") ?? "").trim();
+      const scheduledAt = dateStr ? new Date(`${dateStr}T${timeStr}`) : null;
+      await prisma.fixture.update({
+        where: { id },
+        data: {
+          ...(scheduledAt && !isNaN(scheduledAt.getTime()) ? { scheduledAt } : {}),
+          facilityId,
+          ...(status ? { status } : {}),
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: id, action: "fixture.update", summary: "Edited fixture" });
+      return back("?ok=editFixture");
+    }
+
+    // Clear all fixtures for a season so they can be regenerated.
+    case "clearFixtures": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      if (!seasonId) return back("?err=noseason");
+      const fx = await prisma.fixture.findMany({ where: { seasonId }, select: { id: true } });
+      const ids = fx.map((f) => f.id);
+      if (ids.length) {
+        await prisma.availabilityConfirmation.deleteMany({ where: { fixtureId: { in: ids } } });
+        await prisma.fixture.deleteMany({ where: { id: { in: ids } } });
+      }
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "fixture.clear", summary: `Cleared ${ids.length} fixtures` });
+      return back("?ok=clearFixtures");
+    }
+
     case "generateFixtures": {
       const seasonId = String(formData.get("seasonId") ?? "");
       const season = seasonId

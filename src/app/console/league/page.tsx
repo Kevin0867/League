@@ -1,14 +1,19 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
-import { StatusBadge } from "@/components/StatusBadge";
 import { mintConsoleTicket } from "@/lib/auth";
 import { teamConfirmation, shouldEscalate, MIN_CONFIRMED_PLAYERS } from "@/lib/domain/availability";
+import { EditableFixtureRow } from "@/components/EditableFixtureRow";
 
 export const dynamic = "force-dynamic";
 
+const iso = (d: Date) => new Date(d).toISOString().slice(0, 10);
+const hhmm = (d: Date) => new Date(d).toISOString().slice(11, 16);
+
 const OK: Record<string, string> = {
   generateFixtures: "Fixtures generated.",
+  editFixture: "Fixture updated.",
+  clearFixtures: "Fixtures cleared — regenerate when ready.",
   sendMatchNotice: "7-day match notice sent.",
   sendEscalationAlert: "48-hour alert sent.",
 };
@@ -29,6 +34,8 @@ export default async function LeaguePage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
+  const facilities = await prisma.facility.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const acpTeamCount = season ? await prisma.team.count({ where: { seasonId: season.id } }) : 0;
 
   const fixtures = await prisma.fixture.findMany({
     where: season ? { seasonId: season.id } : {},
@@ -71,6 +78,48 @@ export default async function LeaguePage({
       )}
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
+      )}
+
+      {/* Guided league setup */}
+      {(() => {
+        const steps = [
+          { done: !!season, label: "Activate an Arizona Club Pickleball (ACP) season", href: "/console/setup", cta: "Season Setup" },
+          { done: acpTeamCount >= 2, label: "Have at least two ACP teams", href: "/console/teams", cta: "Team Build" },
+          { done: fixtures.length > 0, label: "Generate the fixture schedule", href: null, cta: "Generate below" },
+          { done: fixtures.some((f) => f.status !== "SCHEDULED"), label: "Run match nights & confirmations", href: null, cta: "" },
+        ];
+        const next = steps.find((s) => !s.done);
+        return (
+          <div className="card border-l-4 border-brand-500">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-brand-900">League setup</h2>
+                {next ? (
+                  <p className="mt-0.5 text-sm text-slate-600">Next: <span className="font-medium text-slate-800">{next.label}</span></p>
+                ) : (
+                  <p className="mt-0.5 text-sm text-emerald-700">Your league is up and running. 🎉</p>
+                )}
+              </div>
+              {next?.href && <Link href={next.href} className="btn-primary text-sm">{next.cta} →</Link>}
+            </div>
+            <ol className="mt-3 space-y-2 text-sm">
+              {steps.map((s, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${s.done ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>{s.done ? "✓" : i + 1}</span>
+                  <span className={s.done ? "text-slate-500 line-through" : "text-slate-700"}>{s.label}</span>
+                  {!s.done && s.href && <Link href={s.href} className="text-xs text-accent-700 underline">{s.cta}</Link>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        );
+      })()}
+
+      {!season && (
+        <div className="card text-sm text-slate-600">
+          No active ACP season yet. Create and activate an <span className="font-medium">Arizona Club Pickleball</span> season
+          in <Link href="/console/setup" className="text-accent-700 underline">Season Setup</Link>, then come back to generate fixtures.
+        </div>
       )}
 
       {/* Generate fixtures */}
@@ -145,24 +194,40 @@ export default async function LeaguePage({
 
       {/* All fixtures */}
       <div className="card overflow-x-auto">
-        <h2 className="mb-3 font-semibold text-slate-900">Fixtures</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900">Fixtures</h2>
+          {season && fixtures.length > 0 && (
+            <form method="POST" action="/api/console/league">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="clearFixtures" />
+              <input type="hidden" name="seasonId" value={season.id} />
+              <button className="text-xs text-rose-600 hover:underline">Clear &amp; regenerate</button>
+            </form>
+          )}
+        </div>
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr><th className="py-2">Wk</th><th>Date</th><th>Home</th><th>Away</th><th>Hub</th><th>Status</th><th></th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {fixtures.map((f) => (
-              <tr key={f.id} className="hover:bg-slate-50">
-                <td className="py-2 text-slate-500">{f.weekNumber}</td>
-                <td className="text-slate-700">{f.scheduledAt.toLocaleDateString()}</td>
-                <td className="text-slate-700">{f.homeTeam?.name ?? "TBD"}</td>
-                <td className="text-slate-700">{f.awayTeam?.name ?? "TBD"}</td>
-                <td className="text-slate-600">{f.facility?.name ?? "—"}</td>
-                <td><StatusBadge status={f.status} /></td>
-                <td className="text-right">
-                  <Link href={`/console/league/${f.id}`} className="text-xs font-medium text-brand-600 hover:underline">match night →</Link>
-                </td>
-              </tr>
+              <EditableFixtureRow
+                key={f.id}
+                ticket={ticket}
+                facilities={facilities}
+                fixture={{
+                  id: f.id,
+                  weekNumber: f.weekNumber,
+                  dateISO: iso(f.scheduledAt),
+                  timeHHMM: hhmm(f.scheduledAt),
+                  dateLabel: f.scheduledAt.toLocaleDateString(),
+                  home: f.homeTeam?.name ?? "TBD",
+                  away: f.awayTeam?.name ?? "TBD",
+                  facilityId: f.facilityId ?? null,
+                  facilityName: f.facility?.name ?? "—",
+                  status: f.status,
+                }}
+              />
             ))}
             {fixtures.length === 0 && (
               <tr><td colSpan={7} className="py-8 text-center text-slate-400">No fixtures generated yet.</td></tr>
