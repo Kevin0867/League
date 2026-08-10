@@ -9,10 +9,12 @@ const STATUSES = ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "PLAYED", "FORFEIT", 
 export function EditableFixtureRow({
   ticket,
   facilities,
+  teams,
   fixture,
 }: {
   ticket: string;
   facilities: { id: string; name: string }[];
+  teams: { id: string; name: string }[];
   fixture: {
     id: string;
     weekNumber: number;
@@ -21,6 +23,8 @@ export function EditableFixtureRow({
     dateLabel: string;
     home: string;
     away: string;
+    homeTeamId: string | null;
+    awayTeamId: string | null;
     facilityId: string | null;
     facilityName: string;
     status: string;
@@ -53,6 +57,20 @@ export function EditableFixtureRow({
           <input type="hidden" name="ticket" value={ticket} />
           <input type="hidden" name="op" value="editFixture" />
           <input type="hidden" name="fixtureId" value={fixture.id} />
+          <div>
+            <label className="label text-xs">Home</label>
+            <select name="homeTeamId" defaultValue={fixture.homeTeamId ?? ""} className="input py-1">
+              <option value="">— TBD —</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label text-xs">Away</label>
+            <select name="awayTeamId" defaultValue={fixture.awayTeamId ?? ""} className="input py-1">
+              <option value="">— TBD —</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
           <div>
             <label className="label text-xs">Date</label>
             <input name="scheduledAt" type="date" defaultValue={fixture.dateISO} className="input py-1" />

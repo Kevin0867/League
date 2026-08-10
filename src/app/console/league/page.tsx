@@ -39,6 +39,9 @@ export default async function LeaguePage({
   const ticket = await mintConsoleTicket();
   const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
   const facilities = await prisma.facility.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const acpTeams = season
+    ? await prisma.team.findMany({ where: { seasonId: season.id }, select: { id: true, name: true }, orderBy: { name: "asc" } })
+    : [];
 
   // --- Phase data --------------------------------------------------------
   const acpTeamCount = season ? await prisma.team.count({ where: { seasonId: season.id } }) : 0;
@@ -387,6 +390,7 @@ export default async function LeaguePage({
                 key={f.id}
                 ticket={ticket}
                 facilities={facilities}
+                teams={acpTeams}
                 fixture={{
                   id: f.id,
                   weekNumber: f.weekNumber,
@@ -395,6 +399,8 @@ export default async function LeaguePage({
                   dateLabel: f.scheduledAt.toLocaleDateString(),
                   home: f.homeTeam?.name ?? "TBD",
                   away: f.awayTeam?.name ?? "TBD",
+                  homeTeamId: f.homeTeamId ?? null,
+                  awayTeamId: f.awayTeamId ?? null,
                   facilityId: f.facilityId ?? null,
                   facilityName: f.facility?.name ?? "—",
                   status: f.status,

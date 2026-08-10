@@ -81,6 +81,19 @@ export async function POST(req: Request) {
 
   if (op === "generateBracket") return generateBracket(formData, actor, back);
   if (op === "recordResult") return recordChampResult(formData, actor, back);
+  if (op === "setStart") {
+    const seasonId = String(formData.get("seasonId") ?? "");
+    if (!seasonId) return back("?err=division");
+    const dateStr = String(formData.get("date") ?? "").trim();
+    const timeStr = String(formData.get("time") ?? "").trim() || "09:00";
+    const startsAt = dateStr ? new Date(`${dateStr}T${timeStr}`) : null;
+    await prisma.season.update({
+      where: { id: seasonId },
+      data: { championshipStartsAt: startsAt && !isNaN(startsAt.getTime()) ? startsAt : null },
+    });
+    await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "championship.setStart", summary: startsAt ? `Championship start ${startsAt.toISOString()}` : "Cleared championship start" });
+    return back("?ok=start");
+  }
 
   return back("?err=op");
 }

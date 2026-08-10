@@ -637,6 +637,9 @@ model Season {
   /// Optional registration-close date. After this, the public form stops
   /// accepting new signups (null = open until the season is deactivated).
   closesOn   DateTime?
+  /// When the year-end championship tournament begins (one event; individual
+  /// bracket matches aren't separately scheduled).
+  championshipStartsAt DateTime?
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 

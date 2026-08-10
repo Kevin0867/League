@@ -42,12 +42,16 @@ export async function POST(req: Request) {
       const timeStr = String(formData.get("scheduledTime") ?? "").trim() || "18:00";
       const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
       const status = String(formData.get("status") ?? "").trim();
+      const homeTeamId = String(formData.get("homeTeamId") ?? "").trim() || null;
+      const awayTeamId = String(formData.get("awayTeamId") ?? "").trim() || null;
       const scheduledAt = dateStr ? new Date(`${dateStr}T${timeStr}`) : null;
       await prisma.fixture.update({
         where: { id },
         data: {
           ...(scheduledAt && !isNaN(scheduledAt.getTime()) ? { scheduledAt } : {}),
           facilityId,
+          homeTeamId,
+          awayTeamId,
           ...(status ? { status } : {}),
         },
       });

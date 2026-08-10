@@ -32,6 +32,13 @@ export default async function ChampionshipPage({
   const teams = await prisma.team.findMany({ select: { id: true, name: true } });
   const teamNames: Record<string, string> = Object.fromEntries(teams.map((t) => [t.id, t.name]));
 
+  // Distinct active seasons that have championship divisions — each is one
+  // tournament with a single start time (matches aren't separately scheduled).
+  const seasonMap = new Map(divisions.map((d) => [d.seasonId, d.season]));
+  const seasons = [...seasonMap.values()];
+  const iso = (d: Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+  const hhmm = (d: Date | null) => (d ? new Date(d).toISOString().slice(11, 16) : "09:00");
+
   return (
     <div className="space-y-6">
       <PageHeader title="Championship" subtitle="Championship week, Dec 7–13. Teams are seeded from division standings; the bracket is single-elimination and byes auto-advance." />
@@ -42,9 +49,42 @@ export default async function ChampionshipPage({
       {sp.ok === "result" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Result recorded.</div>
       )}
+      {sp.ok === "start" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Tournament start time saved.</div>
+      )}
       {sp.err && ERR_MESSAGES[sp.err] && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{ERR_MESSAGES[sp.err]}</div>
       )}
+
+      {/* Tournament start — one time for the whole bracketed event */}
+      {seasons.map((s) => (
+        <div key={s.id} className="card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">Tournament start — {s.name}</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                {s.championshipStartsAt
+                  ? `Starts ${new Date(s.championshipStartsAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+                  : "No start time set — the whole bracket plays from this time."}
+              </p>
+            </div>
+            <form method="POST" action="/api/console/championship" className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="setStart" />
+              <input type="hidden" name="seasonId" value={s.id} />
+              <div>
+                <label className="label text-xs">Date</label>
+                <input name="date" type="date" className="input py-1.5" defaultValue={iso(s.championshipStartsAt)} />
+              </div>
+              <div>
+                <label className="label text-xs">Time</label>
+                <input name="time" type="time" className="input py-1.5" defaultValue={hhmm(s.championshipStartsAt)} />
+              </div>
+              <button className="btn-secondary py-1.5 text-sm">Save</button>
+            </form>
+          </div>
+        </div>
+      ))}
 
       {divisions.filter((d) => d.teams.length > 0).length === 0 && (
         <p className="text-slate-500">No divisions with teams yet.</p>
