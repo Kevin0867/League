@@ -23,7 +23,7 @@ async function seasonTeamIds(seasonId: string): Promise<string[]> {
   return teams.map((t) => t.id);
 }
 
-async function notifyAssignment(teamId: string, personId: string, seasonId: string) {
+async function notifyAssignment(teamId: string, personId: string, seasonId: string, opts?: { emailOnly?: boolean }) {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
     include: { facility: true, coach: { include: { person: true } }, members: { include: { person: true } } },
@@ -44,7 +44,7 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
   });
   await dispatchMessage({
     seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
-    channels: ["IN_APP", "EMAIL"], triggerType: "TEAM_ASSIGNMENT",
+    channels: opts?.emailOnly ? ["EMAIL"] : ["IN_APP", "EMAIL"], triggerType: "TEAM_ASSIGNMENT",
     subject: email.subject, body: email.text, html: email.html,
   });
 }
@@ -106,9 +106,11 @@ export async function POST(req: Request) {
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
       if (!person) continue;
       const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      // Resend = email only. The original request already posted an in-app
+      // announcement; re-nudging shouldn't pile up duplicates in the portal.
       await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? seasonScope ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
-        channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
       });
       sent++;
     }
@@ -306,7 +308,7 @@ export async function POST(req: Request) {
         ? await prisma.teamMember.findFirst({ where: { personId, teamId: { in: ids } } })
         : null;
       if (!membership) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=notassigned`, origin), 303);
-      await notifyAssignment(membership.teamId, personId, reg.seasonId);
+      await notifyAssignment(membership.teamId, personId, reg.seasonId, { emailOnly: true });
       await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "RESEND", summary: "Resent assignment email" });
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=resent`, origin), 303);
     }
@@ -321,9 +323,10 @@ export async function POST(req: Request) {
       });
       if (!person || !pay) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nopayment`, origin), 303);
       const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      // Resend = email only (no new in-app announcement — see resendAllFees).
       await dispatchMessage({
         senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
-        channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
       });
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "RESEND", summary: "Resent fee request" });
       const dest = String(fd.get("from") ?? "") === "list"

@@ -80,7 +80,9 @@ export default async function PortalHome() {
 
   const inbox = peopleIds.length
     ? await prisma.messageRecipient.findMany({
-        where: { personId: { in: peopleIds } },
+        // Only in-app announcements belong in the portal inbox; email-only
+        // sends (e.g. fee-request resends) deliver by email without cluttering it.
+        where: { personId: { in: peopleIds }, message: { channels: { contains: "IN_APP" } } },
         include: { message: true },
         orderBy: { message: { sentAt: "desc" } },
         take: 20,
