@@ -7,6 +7,16 @@ import { StaffForm } from "./StaffForm";
 
 export const dynamic = "force-dynamic";
 
+function parseMarkets(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 const ERRORS: Record<string, string> = {
   auth: "Not authorized to create accounts.",
   fields: "All fields are required.",
@@ -32,7 +42,14 @@ export default async function CoachesPage({
     where: { role: "COACH" },
     include: {
       person: {
-        include: { coach: { include: { _count: { select: { teams: true, recruits: true } } } } },
+        include: {
+          coach: {
+            include: {
+              _count: { select: { teams: true, recruits: true } },
+              availabilityBlocks: { select: { id: true } },
+            },
+          },
+        },
       },
     },
     orderBy: { person: { lastName: "asc" } },
@@ -40,6 +57,16 @@ export default async function CoachesPage({
   const coaches = coachUsers
     .filter((u) => u.person)
     .map((u) => ({ person: u.person!, coach: u.person!.coach }));
+
+  // Availability completeness — a coach only shows up as a location/day match in
+  // Coach matching once they've set both locations and day/time blocks.
+  const availabilityOf = (coach: (typeof coaches)[number]["coach"]) => {
+    const hasLocations = parseMarkets(coach?.marketsCovered ?? null).length > 0;
+    const hasDayTimes = (coach?.availabilityBlocks?.length ?? 0) > 0;
+    const missing = [!hasLocations && "locations", !hasDayTimes && "day/time"].filter(Boolean) as string[];
+    return { complete: missing.length === 0, missing };
+  };
+  const incompleteCount = coaches.filter((c) => c.coach && !availabilityOf(c.coach).complete).length;
 
   return (
     <div className="space-y-6">
@@ -53,6 +80,21 @@ export default async function CoachesPage({
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
       )}
       {session && ["COO", "DIRECTOR"].includes(session.role) && <StaffForm role={session.role} ticket={ticket} />}
+
+      {incompleteCount > 0 && (
+        <div className="card border-l-4 border-amber-400">
+          <p className="text-sm font-medium text-amber-800">
+            {incompleteCount} coach{incompleteCount === 1 ? "" : "es"} haven&apos;t finished their availability
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Coaches only appear as location/day matches in{" "}
+            <Link href="/console/matching" className="text-brand-700 hover:underline">Coach matching</Link>{" "}
+            once they&apos;ve set both their locations and day/time availability. Ask them to complete their
+            profile, or fill it in from their Edit page.
+          </p>
+        </div>
+      )}
+
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
@@ -60,6 +102,7 @@ export default async function CoachesPage({
               <th className="py-2">Coach</th>
               <th>Cert</th>
               <th>Screening</th>
+              <th>Availability</th>
               <th>Teams</th>
               <th>Recruited</th>
               <th>W-9</th>
@@ -69,6 +112,7 @@ export default async function CoachesPage({
           <tbody className="divide-y divide-slate-100">
             {coaches.map(({ person, coach }) => {
               const gate = coach ? coachAssignmentGate(coach) : { ok: false, reasons: ["no profile yet"] };
+              const avail = coach ? availabilityOf(coach) : { complete: false, missing: ["no profile yet"] };
               return (
                 <tr key={person.id}>
                   <td className="py-2 font-medium text-slate-800">
@@ -80,6 +124,11 @@ export default async function CoachesPage({
                     {gate.ok
                       ? <span className="badge bg-emerald-100 text-emerald-800">cleared</span>
                       : <span className="badge bg-amber-100 text-amber-800" title={gate.reasons.join(", ")}>{gate.reasons.length} issue{gate.reasons.length > 1 ? "s" : ""}</span>}
+                  </td>
+                  <td>
+                    {avail.complete
+                      ? <span className="badge bg-emerald-100 text-emerald-800">complete</span>
+                      : <span className="badge bg-amber-100 text-amber-800" title={`Missing: ${avail.missing.join(", ")}`}>needs {avail.missing.join(" + ")}</span>}
                   </td>
                   <td className="text-slate-600">{coach?._count.teams ?? 0}</td>
                   <td className="text-slate-600">
@@ -94,7 +143,7 @@ export default async function CoachesPage({
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={7} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
           </tbody>
         </table>
