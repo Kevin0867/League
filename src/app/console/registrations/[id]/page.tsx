@@ -5,6 +5,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { decryptField } from "@/lib/crypto";
+import { ACADEMY_MARKETS } from "@/lib/enums";
 
 // Sensitive fields are encrypted at rest and only decrypted for staff here.
 // A key mismatch yields a marker — show blank so we never re-save the marker.
@@ -63,6 +64,10 @@ export default async function RegistrationDetail({
   const outstanding = payments.find((x) => x.category === "PLAYER_FEE" && ["REQUESTED", "PENDING"].includes(x.status));
   const paid = payments.find((x) => x.category === "PLAYER_FEE" && x.status === "PAID");
   const raw = (reg.importRaw && typeof reg.importRaw === "object" ? reg.importRaw : null) as Record<string, string> | null;
+
+  const currentMarkets = reg.locationPrefs.map((l) => l.marketName ?? l.facility?.market ?? "").filter(Boolean);
+  const marketOptions = Array.from(new Set([...ACADEMY_MARKETS, ...currentMarkets]));
+  const dollars = (c: number | null | undefined) => (c != null ? (c / 100).toFixed(2) : "");
 
   const hidden = (
     <>
@@ -180,23 +185,36 @@ export default async function RegistrationDetail({
           </div>
         </div>
 
+        {/* Intake & preferences — editable */}
+        <div className="border-t border-slate-100 pt-4">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">Intake &amp; preferences</h3>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[1, 2, 3].map((rank) => (
+              <div key={rank}>
+                <label className="label">Location #{rank}</label>
+                <select name={`locationPref${rank}`} defaultValue={currentMarkets[rank - 1] ?? ""} className="input">
+                  <option value="">—</option>
+                  {marketOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Per-class rate ($)" name="perClassRate" type="number" defaultValue={dollars(reg.perClassRateCents)} />
+            <Field label="Enrollment fee ($)" name="enrollmentFee" type="number" defaultValue={dollars(reg.enrollmentFeeCents)} />
+            <Field label="Source status" name="sourceStatus" defaultValue={reg.sourceStatus ?? ""} />
+            <Field label="Submitted date" name="submittedAt" type="date" defaultValue={reg.submittedAt ? reg.submittedAt.toISOString().slice(0, 10) : ""} />
+            <Field label="Stripe customer ID" name="stripeCustomerId" defaultValue={p.stripeCustomerId ?? ""} />
+            <Field label="Stripe subscription ID" name="stripeSubscriptionId" defaultValue={reg.stripeSubscriptionId ?? ""} />
+          </div>
+          <label className="mt-4 flex items-center gap-2 text-sm">
+            <input type="checkbox" name="waiverSigned" defaultChecked={!!p.waiverSignedAt} />
+            <span>Waiver on file{p.waiverSignedAt ? ` (signed ${p.waiverSignedAt.toISOString().slice(0, 10)})` : ""}</span>
+          </label>
+        </div>
+
         <button type="submit" className="btn-primary">Save changes</button>
       </form>
-
-      {/* Read-only intake + location prefs */}
-      <div className="card space-y-3">
-        <h2 className="font-semibold text-slate-900">Intake &amp; preferences</h2>
-        <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-          <Row label="Location preferences" value={reg.locationPrefs.map((l) => l.facility?.name ?? l.marketName).filter(Boolean).join(" › ") || "—"} />
-          <Row label="Submitted" value={reg.submittedAt ? reg.submittedAt.toISOString().slice(0, 10) : "—"} />
-          <Row label="Per-class rate" value={reg.perClassRateCents != null ? formatCents(reg.perClassRateCents) : "—"} />
-          <Row label="Enrollment fee" value={reg.enrollmentFeeCents != null ? formatCents(reg.enrollmentFeeCents) : "—"} />
-          <Row label="Source status" value={reg.sourceStatus ?? "—"} />
-          <Row label="Stripe customer" value={p.stripeCustomerId ?? "—"} />
-          <Row label="Stripe subscription" value={reg.stripeSubscriptionId ?? "—"} />
-          <Row label="Waiver" value={p.waiverSignedAt ? `signed ${p.waiverSignedAt.toISOString().slice(0, 10)}` : "outstanding"} />
-        </dl>
-      </div>
 
       {raw && (
         <details className="card">
@@ -235,11 +253,3 @@ function Select({ label, name, defaultValue, options }: { label: string; name: s
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-slate-400">{label}</dt>
-      <dd className="text-right font-medium text-slate-700">{value}</dd>
-    </div>
-  );
-}

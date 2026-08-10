@@ -110,7 +110,9 @@ export async function POST(req: Request) {
         data: { status: "ASSIGNED" },
       });
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Assigned/moved ${personId}` });
-      await notifyAssignment(teamId, personId, team.seasonId);
+      // The board moves players provisionally; it sets silent=1 so a placement
+      // email isn't fired on every drag (staff send it explicitly afterward).
+      if (String(fd.get("silent") ?? "") !== "1") await notifyAssignment(teamId, personId, team.seasonId);
       return back("?ok=assign");
     }
 
@@ -158,6 +160,13 @@ export async function POST(req: Request) {
       if (!reg) return back("?err=fields");
       const g = (k: string) => String(fd.get(k) ?? "").trim();
       const nn = (k: string) => g(k) || null;
+      const cents = (k: string) => (g(k) ? Math.round(parseFloat(g(k)) * 100) : null);
+
+      // Waiver: keep an existing signed date; set now when newly checked; clear when unchecked.
+      const existingPerson = await prisma.person.findUnique({ where: { id: personId }, select: { waiverSignedAt: true } });
+      const waiverChecked = fd.get("waiverSigned") === "on";
+      const waiverSignedAt = waiverChecked ? existingPerson?.waiverSignedAt ?? new Date() : null;
+
       await prisma.person.update({
         where: { id: personId },
         data: {
@@ -169,6 +178,8 @@ export async function POST(req: Request) {
           gender: nn("gender"),
           address: nn("address"),
           howHeard: nn("howHeard"),
+          stripeCustomerId: nn("stripeCustomerId"),
+          waiverSignedAt,
           // Encrypted fields: only write when a value is supplied, so a blank
           // (e.g. undecryptable on this key) never clobbers existing ciphertext.
           ...(g("emergencyName") ? { emergencyName: g("emergencyName") } : {}),
@@ -186,9 +197,26 @@ export async function POST(req: Request) {
           schedule: nn("schedule"),
           partnerRequests: nn("partnerRequests"),
           daysThatDontWork: nn("daysThatDontWork"),
+          perClassRateCents: cents("perClassRate"),
+          enrollmentFeeCents: cents("enrollmentFee"),
+          sourceStatus: nn("sourceStatus"),
+          stripeSubscriptionId: nn("stripeSubscriptionId"),
+          ...(g("submittedAt") ? { submittedAt: new Date(g("submittedAt")) } : {}),
           ...(g("status") ? { status: g("status") } : {}),
         },
       });
+
+      // Location preferences — replace from the ranked market dropdowns.
+      const markets = [1, 2, 3].map((i) => g(`locationPref${i}`)).filter(Boolean);
+      const seen = new Set<string>();
+      await prisma.locationPreference.deleteMany({ where: { registrationId: reg.id } });
+      let rank = 1;
+      for (const m of markets) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        await prisma.locationPreference.create({ data: { registrationId: reg.id, marketName: m, rank: rank++ } });
+      }
+
       await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "UPDATE", summary: "Edited registration" });
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=edit`, origin), 303);
     }
