@@ -101,18 +101,16 @@ export function ConsoleShell({
 
         {/* Main */}
         <main className="min-w-0 flex-1">
-          <div className="sticky top-0 z-30 hidden grid-cols-3 items-center border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur md:grid">
-            <div className="justify-self-start">
-              <Logo href="/console" className="h-9" />
-            </div>
-            <div className="justify-self-center text-base font-semibold tracking-tight text-brand-900">
+          <div className="sticky top-0 z-30 hidden items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur md:flex">
+            <Logo href="/console" className="h-9" />
+            <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-base font-semibold tracking-tight text-brand-900 lg:block">
               Academy Console
             </div>
-            <div className="flex items-center gap-4 justify-self-end">
-              <span className="hidden text-sm text-slate-500 lg:inline">
+            <div className="flex items-center gap-4 whitespace-nowrap">
+              <span className="hidden text-sm text-slate-500 xl:inline">
                 Signed in as <span className="font-semibold text-slate-800">{name}</span>
               </span>
-              <Link href="/logout" prefetch={false} className="btn-ghost text-sm">Sign out</Link>
+              <Link href="/logout" prefetch={false} className="btn-ghost whitespace-nowrap text-sm">Sign out</Link>
               <PadelLogo className="h-8" />
             </div>
           </div>
