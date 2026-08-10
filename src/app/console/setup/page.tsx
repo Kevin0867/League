@@ -37,6 +37,30 @@ const ERR_MESSAGE: Record<string, string> = {
 };
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+const fmt = (d: Date) => new Date(d).toLocaleDateString();
+
+// Describe the registration window state for a season, from opensOn/closesOn.
+function regWindowState(s: { opensOn: Date | null; closesOn: Date | null; active: boolean }) {
+  const now = new Date();
+  if (!s.active) return "inactive" as const;
+  if (s.opensOn && s.opensOn > now) return "scheduled" as const;
+  if (s.closesOn && s.closesOn < now) return "closed" as const;
+  return "open" as const;
+}
+function regWindowLabel(s: { opensOn: Date | null; closesOn: Date | null; active: boolean }) {
+  switch (regWindowState(s)) {
+    case "inactive": return "Closed — season is inactive";
+    case "scheduled": return `Opens ${fmt(s.opensOn!)}${s.closesOn ? ` · closes ${fmt(s.closesOn)}` : ""}`;
+    case "closed": return `Closed ${fmt(s.closesOn!)}`;
+    default: return s.closesOn ? `Open until ${fmt(s.closesOn)}` : "Open (no close date)";
+  }
+}
+function regWindowTone(s: { opensOn: Date | null; closesOn: Date | null; active: boolean }) {
+  const st = regWindowState(s);
+  if (st === "open") return "text-emerald-700";
+  if (st === "scheduled") return "text-amber-700";
+  return "text-slate-500";
+}
 
 export default async function SetupPage({
   searchParams,
@@ -137,13 +161,16 @@ export default async function SetupPage({
                   : <span className="badge bg-slate-100 text-slate-500">Inactive</span>}
               </h2>
               <p className="text-xs text-slate-500">
-                {s.program} · {new Date(s.startDate).toLocaleDateString()} – {new Date(s.endDate).toLocaleDateString()}
-                {s.opensOn ? ` · opens ${new Date(s.opensOn).toLocaleDateString()}` : ""} · {s._count.registrations} registrations
+                {s.program} · {new Date(s.startDate).toLocaleDateString()} – {new Date(s.endDate).toLocaleDateString()} · {s._count.registrations} registrations
+              </p>
+              <p className="mt-0.5 text-xs">
+                <span className="font-medium text-slate-600">Registration:</span>{" "}
+                <span className={regWindowTone(s)}>{regWindowLabel(s)}</span>
               </p>
             </div>
             <div className="flex items-center gap-3">
               {!s.active && <ActivateButton seasonId={s.id} ticket={ticket} />}
-              <EditSeasonForm ticket={ticket} season={{ id: s.id, name: s.name, program: s.program, startDate: iso(s.startDate), endDate: iso(s.endDate), opensOn: iso(s.opensOn) }} />
+              <EditSeasonForm ticket={ticket} season={{ id: s.id, name: s.name, program: s.program, startDate: iso(s.startDate), endDate: iso(s.endDate), opensOn: iso(s.opensOn), closesOn: iso(s.closesOn) }} />
               <DeleteSeasonButton seasonId={s.id} ticket={ticket} disabled={s._count.registrations > 0} />
             </div>
           </div>

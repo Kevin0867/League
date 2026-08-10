@@ -171,6 +171,14 @@ export async function registerAction(
   const seasonId = g("seasonId");
   if (!seasonId) return { error: "No active season is open for registration." };
 
+  // Re-check the registration window server-side — the form may have been open
+  // in a browser tab when the season closed (or hasn't opened yet).
+  const windowSeason = await prisma.season.findUnique({ where: { id: seasonId } });
+  if (!windowSeason || !windowSeason.active) return { error: "This season is no longer accepting registrations." };
+  const nowTs = new Date();
+  if (windowSeason.opensOn && windowSeason.opensOn > nowTs) return { error: `Registration opens on ${windowSeason.opensOn.toLocaleDateString()}.` };
+  if (windowSeason.closesOn && windowSeason.closesOn < nowTs) return { error: `Registration closed on ${windowSeason.closesOn.toLocaleDateString()}.` };
+
   const mode = g("mode") || "adult"; // "adult" | "child" | "both"
   const adultPlaying = mode === "adult" || mode === "both";
   const hasChildren = mode === "child" || mode === "both";

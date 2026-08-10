@@ -32,7 +32,7 @@ export function CreateSeasonForm({ ticket }: { ticket: string }) {
           <input type="checkbox" name="active" defaultChecked /> Make active
         </label>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label" htmlFor="startDate">Start date</label>
           <input id="startDate" name="startDate" type="date" className="input" required />
@@ -42,8 +42,12 @@ export function CreateSeasonForm({ ticket }: { ticket: string }) {
           <input id="endDate" name="endDate" type="date" className="input" required />
         </div>
         <div>
-          <label className="label" htmlFor="opensOn">Registration opens</label>
+          <label className="label" htmlFor="opensOn">Registration opens <span className="font-normal text-slate-400">(optional)</span></label>
           <input id="opensOn" name="opensOn" type="date" className="input" />
+        </div>
+        <div>
+          <label className="label" htmlFor="closesOn">Registration closes <span className="font-normal text-slate-400">(optional)</span></label>
+          <input id="closesOn" name="closesOn" type="date" className="input" />
         </div>
       </div>
       <div className="flex gap-2">
@@ -59,7 +63,7 @@ export function EditSeasonForm({
   season,
 }: {
   ticket: string;
-  season: { id: string; name: string; program: string; startDate: string; endDate: string; opensOn: string };
+  season: { id: string; name: string; program: string; startDate: string; endDate: string; opensOn: string; closesOn: string };
 }) {
   const [open, setOpen] = useState(false);
   if (!open) {
@@ -81,7 +85,8 @@ export function EditSeasonForm({
         </div>
         <div><label className="label">Start date</label><input name="startDate" type="date" className="input" defaultValue={season.startDate} /></div>
         <div><label className="label">End date</label><input name="endDate" type="date" className="input" defaultValue={season.endDate} /></div>
-        <div><label className="label">Registration opens</label><input name="opensOn" type="date" className="input" defaultValue={season.opensOn} /></div>
+        <div><label className="label">Registration opens <span className="font-normal text-slate-400">(optional)</span></label><input name="opensOn" type="date" className="input" defaultValue={season.opensOn} /></div>
+        <div><label className="label">Registration closes <span className="font-normal text-slate-400">(optional)</span></label><input name="closesOn" type="date" className="input" defaultValue={season.closesOn} /></div>
       </div>
       <div className="flex gap-2">
         <button type="submit" className="btn-primary">Save season</button>

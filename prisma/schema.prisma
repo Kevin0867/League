@@ -634,6 +634,9 @@ model Season {
   startDate  DateTime
   endDate    DateTime
   opensOn    DateTime?
+  /// Optional registration-close date. After this, the public form stops
+  /// accepting new signups (null = open until the season is deactivated).
+  closesOn   DateTime?
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
 

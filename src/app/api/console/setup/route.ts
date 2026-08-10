@@ -36,6 +36,7 @@ export async function POST(req: Request) {
       const startDate = toDate(formData.get("startDate"));
       const endDate = toDate(formData.get("endDate"));
       const opensOn = toDate(formData.get("opensOn"));
+      const closesOn = toDate(formData.get("closesOn"));
       const active = formData.get("active") === "on";
 
       if (!name || !startDate || !endDate) return back("?err=fields");
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
         await prisma.season.updateMany({ where: { program, active: true }, data: { active: false } });
       }
       const season = await prisma.season.create({
-        data: { name, program, startDate, endDate, opensOn, active },
+        data: { name, program, startDate, endDate, opensOn, closesOn, active },
       });
       await audit({
         actorId: actor.userId,
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
       const startDate = toDate(formData.get("startDate"));
       const endDate = toDate(formData.get("endDate"));
       const opensOn = toDate(formData.get("opensOn"));
+      const closesOn = toDate(formData.get("closesOn"));
       if (!id || !name) return back("?err=fields");
       const season = await prisma.season.findUnique({ where: { id } });
       if (!season) return back("?err=notfound");
@@ -74,6 +76,7 @@ export async function POST(req: Request) {
           startDate: startDate ?? undefined,
           endDate: endDate ?? undefined,
           opensOn: opensOn,
+          closesOn: closesOn,
         },
       });
       await audit({ actorId: actor.userId, entityType: "Season", entityId: id, action: "season.update", summary: `Edited season ${name}` });

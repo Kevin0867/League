@@ -18,13 +18,28 @@ export default async function RegisterPage() {
     select: { id: true, name: true, isPrivate: true, generalArea: true, market: true },
   });
 
-  if (!season) {
+  // Respect the season's registration window. A season can be active but not
+  // yet open (opensOn in the future) or already closed (closesOn in the past).
+  const now = new Date();
+  const notYetOpen = season?.opensOn && season.opensOn > now;
+  const alreadyClosed = season?.closesOn && season.closesOn < now;
+
+  if (!season || notYetOpen || alreadyClosed) {
+    const heading = alreadyClosed ? "Registration has closed" : "Registration isn't open yet";
+    const detail = alreadyClosed
+      ? `Enrollment for ${season!.name} closed on ${season!.closesOn!.toLocaleDateString()}.`
+      : notYetOpen
+      ? `Enrollment for ${season!.name} opens on ${season!.opensOn!.toLocaleDateString()}.`
+      : "No active season is currently accepting registrations.";
     return (
       <div>
         <PublicNav />
         <div className="mx-auto max-w-2xl px-4 py-20 text-center">
-          <h1 className="text-2xl font-bold text-slate-900">Registration isn&apos;t open yet</h1>
-          <p className="mt-2 text-slate-500">No active season is currently accepting registrations.</p>
+          <h1 className="text-2xl font-bold text-slate-900">{heading}</h1>
+          <p className="mt-2 text-slate-500">{detail}</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Questions? Email <a href="mailto:team@purepickleball.com" className="text-brand-600 underline">team@purepickleball.com</a>.
+          </p>
           <Link href="/" className="btn-secondary mt-6">Back home</Link>
         </div>
       </div>
