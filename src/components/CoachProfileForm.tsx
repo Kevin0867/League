@@ -30,6 +30,22 @@ export function CoachProfileForm({
     backgroundCheck: boolean;
     backgroundCheckDate: string;
     backgroundCheckCompany: string;
+    w9: {
+      onFile: boolean;
+      receivedAt: string;
+      name: string;
+      businessName: string;
+      taxClass: string;
+      llcClass: string;
+      otherClass: string;
+      address: string;
+      city: string;
+      state: string;
+      zip: string;
+      tinType: string;
+      tinLast4: string;
+      signedName: string;
+    };
   };
   /** Admin-only compensation. Present only in the admin edit context, so a
    *  coach editing their own profile never sees (or can post) pay fields. */
@@ -47,6 +63,9 @@ export function CoachProfileForm({
     initial.availability.length ? initial.availability : [{ dayOfWeek: "MON", startTime: "", endTime: "" }]
   );
   const [bgCheck, setBgCheck] = useState(initial.backgroundCheck);
+  const [taxClass, setTaxClass] = useState(initial.w9.taxClass || "INDIVIDUAL");
+  const [tinType, setTinType] = useState(initial.w9.tinType || "SSN");
+  const w9OnFile = initial.w9.onFile;
 
   return (
     <form method="POST" action="/api/console/coach-profile" className="space-y-6">
@@ -120,6 +139,135 @@ export function CoachProfileForm({
                 <input name="bgCompany" className="input" defaultValue={initial.backgroundCheckCompany} placeholder="e.g. Sterling, Checkr" />
               </div>
             </>
+          )}
+        </div>
+      </section>
+
+      <section className="card space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-slate-900">Form W-9 — Taxpayer Identification &amp; Certification</h2>
+            {w9OnFile ? (
+              <span className="badge bg-emerald-100 text-emerald-800">on file</span>
+            ) : (
+              <span className="badge bg-amber-100 text-amber-800">needed</span>
+            )}
+          </div>
+          <p className="text-sm text-slate-500">
+            Required to be paid as a PURE Academy coach (IRS Form W-9, Rev. March 2024). Your
+            taxpayer ID number is encrypted at rest — after you save it, only the last four digits
+            are ever shown back.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="label">1. Name (as shown on your income tax return)</label>
+            <input name="w9Name" className="input" defaultValue={initial.w9.name} placeholder="Full legal name" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">2. Business name / disregarded entity name, if different from above</label>
+            <input name="w9BusinessName" className="input" defaultValue={initial.w9.businessName} placeholder="Optional" />
+          </div>
+        </div>
+
+        <div>
+          <label className="label">3a. Federal tax classification</label>
+          <select name="w9TaxClass" className="input" value={taxClass} onChange={(e) => setTaxClass(e.target.value)}>
+            <option value="INDIVIDUAL">Individual / sole proprietor</option>
+            <option value="C_CORP">C corporation</option>
+            <option value="S_CORP">S corporation</option>
+            <option value="PARTNERSHIP">Partnership</option>
+            <option value="TRUST_ESTATE">Trust / estate</option>
+            <option value="LLC">Limited liability company (LLC)</option>
+            <option value="OTHER">Other</option>
+          </select>
+          {taxClass === "LLC" && (
+            <div className="mt-2">
+              <label className="label">LLC tax classification (C = C corporation, S = S corporation, P = Partnership)</label>
+              <select name="w9LlcClass" className="input" defaultValue={initial.w9.llcClass || "C"}>
+                <option value="C">C — C corporation</option>
+                <option value="S">S — S corporation</option>
+                <option value="P">P — Partnership</option>
+              </select>
+            </div>
+          )}
+          {taxClass === "OTHER" && (
+            <div className="mt-2">
+              <label className="label">Other — describe</label>
+              <input name="w9OtherClass" className="input" defaultValue={initial.w9.otherClass} placeholder="See W-9 instructions" />
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-6">
+          <div className="sm:col-span-6">
+            <label className="label">5. Address (number, street, and apt. or suite no.)</label>
+            <input name="w9Address" className="input" defaultValue={initial.w9.address} />
+          </div>
+          <div className="sm:col-span-3">
+            <label className="label">6. City</label>
+            <input name="w9City" className="input" defaultValue={initial.w9.city} />
+          </div>
+          <div className="sm:col-span-1">
+            <label className="label">State</label>
+            <input name="w9State" className="input" defaultValue={initial.w9.state} maxLength={2} placeholder="AZ" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">ZIP code</label>
+            <input name="w9Zip" className="input" defaultValue={initial.w9.zip} inputMode="numeric" />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label">Part I — Taxpayer Identification Number (TIN) type</label>
+            <select name="w9TinType" className="input" value={tinType} onChange={(e) => setTinType(e.target.value)}>
+              <option value="SSN">Social security number (SSN)</option>
+              <option value="EIN">Employer identification number (EIN)</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">{tinType === "EIN" ? "EIN" : "SSN"}</label>
+            <input
+              name="w9Tin"
+              className="input"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder={w9OnFile && initial.w9.tinLast4 ? `On file — ends in ${initial.w9.tinLast4}` : tinType === "EIN" ? "12-3456789" : "123-45-6789"}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              {w9OnFile && initial.w9.tinLast4
+                ? `A number ending in ${initial.w9.tinLast4} is on file. Leave blank to keep it, or type a new one to replace it.`
+                : "Digits only — dashes optional."}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+          <p className="font-semibold text-slate-700">Part II — Certification</p>
+          <p className="mt-1">Under penalties of perjury, I certify that:</p>
+          <ol className="mt-1 list-decimal space-y-1 pl-5">
+            <li>The number shown on this form is my correct taxpayer identification number (or I am waiting for a number to be issued to me); and</li>
+            <li>I am not subject to backup withholding because: (a) I am exempt from backup withholding, or (b) I have not been notified by the Internal Revenue Service (IRS) that I am subject to backup withholding as a result of a failure to report all interest or dividends, or (c) the IRS has notified me that I am no longer subject to backup withholding; and</li>
+            <li>I am a U.S. citizen or other U.S. person (as defined in the Form W-9 instructions); and</li>
+            <li>The FATCA code(s) entered on this form (if any) indicating that I am exempt from FATCA reporting is correct.</li>
+          </ol>
+          <p className="mt-2 text-slate-500">
+            The IRS does not require your consent to any provision of this document other than the certifications required to
+            avoid backup withholding.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label">Signature — type your full legal name to certify</label>
+            <input name="w9SignedName" className="input" defaultValue={initial.w9.signedName} placeholder="Type your full name" />
+          </div>
+          {w9OnFile && initial.w9.receivedAt && (
+            <div className="flex items-end">
+              <p className="text-sm text-slate-500">On file since {initial.w9.receivedAt}</p>
+            </div>
           )}
         </div>
       </section>

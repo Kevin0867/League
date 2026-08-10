@@ -54,6 +54,41 @@ export async function POST(req: Request) {
     backgroundCheckCompany: bgChecked ? (g("bgCompany") || null) : null,
   };
 
+  // W-9. The TIN is encrypted at rest by the Prisma encryption extension, so we
+  // pass the raw digits straight into `w9Tin` and never read the ciphertext back
+  // to the client — only the clear last-4 is surfaced. A blank TIN input means
+  // "keep what's on file", so we only touch the TIN fields when new digits arrive.
+  const existing = await prisma.coach.findUnique({
+    where: { personId },
+    select: { w9OnFile: true, w9TinLast4: true },
+  });
+  const rawTin = g("w9Tin").replace(/\D/g, "");
+  const w9Name = g("w9Name") || null;
+  const w9SignedName = g("w9SignedName") || null;
+  const hasTinOnFile = !!existing?.w9TinLast4;
+  data.w9Name = w9Name;
+  data.w9BusinessName = g("w9BusinessName") || null;
+  data.w9TaxClass = g("w9TaxClass") || null;
+  data.w9LlcClass = g("w9TaxClass") === "LLC" ? (g("w9LlcClass") || null) : null;
+  data.w9OtherClass = g("w9TaxClass") === "OTHER" ? (g("w9OtherClass") || null) : null;
+  data.w9Address = g("w9Address") || null;
+  data.w9City = g("w9City") || null;
+  data.w9State = g("w9State").toUpperCase() || null;
+  data.w9Zip = g("w9Zip") || null;
+  data.w9TinType = g("w9TinType") || null;
+  data.w9SignedName = w9SignedName;
+  if (rawTin) {
+    data.w9Tin = rawTin; // encrypted on write by the extension
+    data.w9TinLast4 = rawTin.slice(-4);
+  }
+  // Considered "on file" once the certifying name, signature, and a TIN are all
+  // present (either newly entered or already stored).
+  const w9Complete = !!w9Name && !!w9SignedName && (!!rawTin || hasTinOnFile);
+  if (w9Complete) {
+    data.w9OnFile = true;
+    if (!existing?.w9OnFile) data.w9ReceivedAt = new Date();
+  }
+
   // Compensation is admin-only. It is written only when the form was rendered
   // with the pay section (payVisible=1) AND the actor may manage coaches — so a
   // coach editing their own profile (where the section isn't shown) can neither
