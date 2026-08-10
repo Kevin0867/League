@@ -52,6 +52,9 @@ export default async function PortalHome() {
         orderBy: { createdAt: "desc" },
       })
     : [];
+  // Outstanding fees drive a top-of-page call to action; the rest is history.
+  const outstandingPayments = payments.filter((p) => p.status === "REQUESTED" || p.status === "PENDING");
+  const paymentHistory = payments.filter((p) => p.status !== "REQUESTED" && p.status !== "PENDING");
 
   // Upcoming league fixtures for the household's teams (§14 — 7-day notice + 48h).
   const teamIds = memberships.map((m) => m.teamId);
@@ -101,6 +104,46 @@ export default async function PortalHome() {
             A signed waiver is required before appearing on a court-ready roster.
           </p>
         </div>
+      )}
+
+      {/* Outstanding season fees — top-of-page call to action */}
+      {outstandingPayments.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            {outstandingPayments.length > 1 ? "Season fees due" : "Season fee due"}
+          </h2>
+          <div className="space-y-3">
+            {outstandingPayments.map((p) => (
+              <div key={p.id} className="card border-l-4 border-brand-500 ring-1 ring-brand-100">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-bold text-slate-900">{formatCents(p.amountCents)}</div>
+                    <div className="text-xs text-slate-500">
+                      {p.description ?? p.category.replace(/_/g, " ")}
+                      {p.installmentPlan ? " · monthly plan" : ""}
+                    </div>
+                  </div>
+                  <form method="POST" action="/api/portal" className="flex flex-wrap items-center justify-end gap-2">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="startCheckout" />
+                    <input type="hidden" name="paymentId" value={p.id} />
+                    <button name="plan" value="full" className="btn-primary">Pay in full</button>
+                    <button name="plan" value="installments" className="btn-secondary">
+                      3 payments of {formatCents(Math.round(p.amountCents / 3))}
+                    </button>
+                  </form>
+                </div>
+                <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  The season fee reserves a place on a team, not a session count. Choose{" "}
+                  <span className="font-medium">pay in full</span>, or the{" "}
+                  <span className="font-medium">3-payment plan</span> — 3 equal charges billed automatically
+                  at the end of each of your first three training months (nothing charged today). Secure
+                  checkout is hosted by Stripe — we never see your card details.
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Announcements / inbox */}
@@ -246,14 +289,12 @@ export default async function PortalHome() {
         </section>
       )}
 
-      {/* Payments */}
-      <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Payments</h2>
-        <div className="space-y-3">
-          {payments.length === 0 ? (
-            <div className="card text-sm text-slate-500">No payments requested yet.</div>
-          ) : (
-            payments.map((p) => (
+      {/* Payment history (paid / refunded) */}
+      {paymentHistory.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Payment history</h2>
+          <div className="space-y-3">
+            {paymentHistory.map((p) => (
               <div key={p.id} className="card">
                 <div className="flex items-center justify-between">
                   <div>
@@ -263,36 +304,13 @@ export default async function PortalHome() {
                       {p.installmentPlan ? " · monthly plan" : ""}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <StatusBadge status={p.status} />
-                    {(p.status === "REQUESTED" || p.status === "PENDING") && (
-                      <form method="POST" action="/api/portal" className="flex flex-wrap items-center justify-end gap-2">
-                        <input type="hidden" name="ticket" value={ticket} />
-                        <input type="hidden" name="op" value="startCheckout" />
-                        <input type="hidden" name="paymentId" value={p.id} />
-                        <button name="plan" value="full" className="btn-primary">Pay in full</button>
-                        <button name="plan" value="installments" className="btn-secondary">
-                          3 payments of {formatCents(Math.round(p.amountCents / 3))}
-                        </button>
-                      </form>
-                    )}
-                  </div>
+                  <StatusBadge status={p.status} />
                 </div>
-                {(p.status === "REQUESTED" || p.status === "PENDING") && (
-                  <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                    The season fee reserves a place on a team, not a session count. There are
-                    no make-ups: individual practices PURE cancels are not refunded or credited.
-                    Choose <span className="font-medium">pay in full</span>, or the{" "}
-                    <span className="font-medium">3-payment plan</span> — 3 equal charges billed
-                    automatically at the end of each of your first three training months (nothing
-                    charged today). Secure checkout is hosted by Stripe — we never see your card details.
-                  </p>
-                )}
               </div>
-            ))
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
