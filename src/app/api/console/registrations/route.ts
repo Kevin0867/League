@@ -8,6 +8,9 @@ import { dispatchMessage } from "@/lib/messaging";
 import { sendEmail } from "@/lib/notify";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
+import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
+import { signWaiverToken } from "@/lib/domain/waiverRenewal";
+import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
 
@@ -238,6 +241,26 @@ export async function POST(req: Request) {
       });
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: payment.id, action: "REQUESTED", summary: "Fee requested" });
       return back("?ok=fee");
+    }
+
+    // Email the player (or a minor's parent/guardian) a tokenized, no-login link
+    // to complete the participation waiver. Their record updates on signing.
+    case "sendWaiver": {
+      if (!actor) return back("?err=auth");
+      const person = await prisma.person.findUnique({ where: { id: personId } });
+      if (!person) return back("?err=fields");
+      if (!person.email) return back("?err=noemail");
+
+      const token = await signWaiverToken(person.id);
+      const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
+      const email = waiverRequestEmail({ name: person.firstName, link, isMinor: person.isMinor });
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: reg?.seasonId ?? null, audienceType: "SINGLE_PERSON", audienceRef: person.id,
+        channels: ["IN_APP", "EMAIL"], triggerType: "WAIVER_REQUEST",
+        subject: email.subject, body: email.text, html: email.html,
+      });
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "WAIVER_REQUESTED", summary: "Waiver request sent" });
+      return back("?ok=waiverSent");
     }
 
     // Edit the registration + the player's core details from the detail page.

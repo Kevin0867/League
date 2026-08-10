@@ -23,11 +23,13 @@ const OK: Record<string, string> = {
   assign: "Player assigned.",
   fee: "Season fee requested.",
   refund: "Refund started.",
+  waiverSent: "Waiver request emailed.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
   nopayment: "No outstanding fee to resend.",
   fields: "Missing information.",
+  noemail: "No email on file for this player — add one before sending the waiver.",
 };
 
 const STATUSES = ["SUBMITTED", "ASSIGNED", "WAITLISTED", "WITHDRAWN", "DUPLICATE"];
@@ -215,6 +217,29 @@ export default async function RegistrationDetail({
 
         <button type="submit" className="btn-primary">Save changes</button>
       </form>
+
+      {/* Waiver request — email a no-login signing link to the player/parent. */}
+      <div className="card flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-slate-900">Participation waiver</h2>
+          <p className="text-sm text-slate-500">
+            {p.waiverSignedAt
+              ? `On file — signed ${p.waiverSignedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`
+              : p.isMinor
+                ? "Not on file. Sends a link for a parent/guardian to sign on this minor's behalf."
+                : "Not on file. Sends the player a link to complete their waiver."}
+          </p>
+        </div>
+        <form method="POST" action="/api/console/registrations">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="op" value="sendWaiver" />
+          <input type="hidden" name="personId" value={p.id} />
+          <input type="hidden" name="registrationId" value={reg.id} />
+          <button className="btn-secondary text-sm">
+            {p.waiverSignedAt ? "Resend waiver link" : "Send waiver request"}
+          </button>
+        </form>
+      </div>
 
       {raw && (
         <details className="card">
