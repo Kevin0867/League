@@ -1,29 +1,34 @@
 import Link from "next/link";
-import { Logo } from "@/components/Brand";
+import { Logo, PadelLogo } from "@/components/Brand";
 
 export const dynamic = "force-dynamic";
 
 export default async function ResetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string; error?: string }>;
+  searchParams: Promise<{ token?: string; error?: string; invite?: string }>;
 }) {
-  const { token, error } = await searchParams;
+  const { token, error, invite } = await searchParams;
   const invalid = error === "invalid" || !token;
   const message = error === "short" ? "Password must be at least 8 characters." : null;
+  const isInvite = invite === "1";
 
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-br from-slate-50 to-brand-50 px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex justify-center">
+        <div className="mb-6 flex items-center justify-between">
           <Logo />
+          <PadelLogo className="h-9" />
         </div>
         <div className="card">
-          <h1 className="text-xl font-bold text-slate-900">Set a new password</h1>
+          <h1 className="text-xl font-bold text-slate-900">{isInvite ? "Welcome — set your password" : "Set a new password"}</h1>
+          {isInvite && !invalid && (
+            <p className="mt-1 text-sm text-slate-500">Create a password to activate your PURE Academy Console access.</p>
+          )}
           {invalid ? (
             <>
               <p className="mt-2 text-sm text-rose-700">
-                This reset link is invalid or has expired. Request a new one.
+                This {isInvite ? "invite" : "reset"} link is invalid or has expired. Request a new one.
               </p>
               <Link href="/forgot" className="btn-primary mt-4">Request a new link</Link>
             </>

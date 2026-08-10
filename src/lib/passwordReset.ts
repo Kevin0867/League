@@ -10,13 +10,16 @@ function hashToken(raw: string): string {
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
-export async function createResetToken(userId: string): Promise<string> {
+export async function createResetToken(userId: string, ttlMs: number = TTL_MS): Promise<string> {
   const raw = crypto.randomBytes(32).toString("hex");
   await prisma.passwordResetToken.create({
-    data: { userId, tokenHash: hashToken(raw), expiresAt: new Date(Date.now() + TTL_MS) },
+    data: { userId, tokenHash: hashToken(raw), expiresAt: new Date(Date.now() + ttlMs) },
   });
   return raw;
 }
+
+/** Invite tokens live longer (7 days) so a new user has time to set up access. */
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Validate + consume a raw token, returning the userId, or null if invalid. */
 export async function consumeResetToken(raw: string): Promise<string | null> {

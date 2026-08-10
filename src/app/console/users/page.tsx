@@ -11,6 +11,12 @@ const ERRORS: Record<string, string> = {
   self: "You can't change your own access.",
   notfound: "User not found.",
   fields: "Missing information.",
+  exists: "A user with that email already exists.",
+};
+const OKS: Record<string, string> = {
+  role: "Role updated.",
+  active: "Access updated.",
+  invited: "Invitation sent — they'll get an email to set their password.",
 };
 
 export default async function UsersPage({
@@ -32,9 +38,33 @@ export default async function UsersPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Access" subtitle="Assign roles and access. Admin roles (COO, CEO, Director) can only be granted by the COO." />
-      {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Access updated.</p>}
+      <PageHeader title="Access" subtitle="Invite people and assign roles. Admin roles (COO, CEO, Director) can only be granted by the COO." />
+      {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OKS[sp.ok] ?? "Done."}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
+
+      {/* Invite a new user */}
+      <form method="POST" action="/api/console/users" className="card space-y-4">
+        <input type="hidden" name="ticket" value={ticket} />
+        <input type="hidden" name="op" value="invite" />
+        <div>
+          <h2 className="font-semibold text-slate-900">Invite someone</h2>
+          <p className="text-sm text-slate-500">They&apos;ll get an email to set their password and sign in.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div><label className="label">First name</label><input name="firstName" className="input" required /></div>
+          <div><label className="label">Last name</label><input name="lastName" className="input" required /></div>
+          <div><label className="label">Email</label><input name="email" type="email" className="input" required /></div>
+          <div>
+            <label className="label">Role</label>
+            <select name="role" className="input" defaultValue="COACH">
+              {(isCOO ? allRoles : allRoles.filter((r) => !ADMIN_ROLES.includes(r as never))).map((r) => (
+                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <button type="submit" className="btn-primary">Send invite</button>
+      </form>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">

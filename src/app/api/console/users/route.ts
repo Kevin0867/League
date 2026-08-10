@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { actorFromForm } from "@/lib/auth";
+import { actorFromForm, hashPassword } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { ADMIN_ROLES, ROLE_LABELS } from "@/lib/enums";
 import { audit } from "@/lib/audit";
+import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
+import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
+import { appUrl } from "@/lib/stripe";
+import crypto from "crypto";
 
 // Assign access/roles to existing users (§17). COO/DIRECTOR may manage users;
 // only the COO may grant admin roles (COO/CEO/DIRECTOR). Granting COACH ensures
@@ -21,6 +25,39 @@ export async function POST(req: Request) {
   if (!actor || !can(actor.role, "manageUsers")) return back("?err=auth");
 
   const op = String(fd.get("op") ?? "");
+
+  // Invite a brand-new user — creates the account and emails a set-password link.
+  if (op === "invite") {
+    const email = String(fd.get("email") ?? "").toLowerCase().trim();
+    const firstName = String(fd.get("firstName") ?? "").trim();
+    const lastName = String(fd.get("lastName") ?? "").trim();
+    const role = String(fd.get("role") ?? "").trim();
+    if (!email || !firstName || !lastName || !ASSIGNABLE.includes(role)) return back("?err=fields");
+    if (ADMIN_ROLES.includes(role as never) && actor.role !== "COO") return back("?err=role");
+    if (await prisma.user.findUnique({ where: { email } })) return back("?err=exists");
+
+    const person =
+      (await prisma.person.findFirst({ where: { email } })) ??
+      (await prisma.person.create({ data: { firstName, lastName, email } }));
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: await hashPassword(crypto.randomBytes(24).toString("hex")),
+        role,
+        personId: person.id,
+        active: true,
+      },
+    });
+    if (role === "COACH" && !(await prisma.coach.findUnique({ where: { personId: person.id } }))) {
+      await prisma.coach.create({ data: { personId: person.id } });
+    }
+    const token = await createResetToken(user.id, INVITE_TTL_MS);
+    const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
+    await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
+    await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: `Invited ${email} as ${role}` });
+    return back("?ok=invited");
+  }
+
   const userId = String(fd.get("userId") ?? "");
   if (!userId) return back("?err=fields");
 
