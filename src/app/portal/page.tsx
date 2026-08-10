@@ -6,7 +6,7 @@ import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
 import { NOTICE_DAYS } from "@/lib/domain/availability";
 import { MessageFrame } from "@/components/MessageFrame";
-import { formatTime12 } from "@/lib/time";
+import { formatTime12, formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -247,7 +247,7 @@ export default async function PortalHome() {
                     <div className="min-w-0">
                       <div className="font-medium text-slate-800">{r.message.subject ?? "Message from PURE Academy"}</div>
                       <div className="mt-0.5 text-xs text-slate-400">
-                        {r.message.sentAt.toLocaleDateString()} · {r.message.channels.replace(/,/g, ", ")}
+                        {formatDate(r.message.sentAt)} · {r.message.channels.replace(/,/g, ", ")}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -307,7 +307,7 @@ export default async function PortalHome() {
                         {f.homeTeam?.name} <span className="text-slate-400">vs</span> {f.awayTeam?.name}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {f.scheduledAt.toLocaleDateString()} · {f.facility?.name ?? "hub TBD"} · {person.firstName}
+                        {formatDate(f.scheduledAt)} · {f.facility?.name ?? "hub TBD"} · {person.firstName}
                         {hoursOut <= 48 && hoursOut > 0 && <span className="ml-2 text-amber-600">confirm within {hoursOut}h</span>}
                       </div>
                     </div>

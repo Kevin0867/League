@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
+import { formatDate } from "@/lib/time";
 import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -109,7 +110,7 @@ export default async function PaymentsPage({
               <div key={run.id} className="rounded-lg border border-slate-200">
                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-sm">
                   <span className="font-medium text-slate-700">
-                    {run.periodStart.toLocaleDateString()} – {new Date(run.periodEnd.getTime() - 1).toLocaleDateString()}
+                    {formatDate(run.periodStart)} – {formatDate(new Date(run.periodEnd.getTime() - 1))}
                   </span>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={run.status} />

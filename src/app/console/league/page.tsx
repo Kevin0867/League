@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDate } from "@/lib/time";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
@@ -280,7 +281,7 @@ export default async function LeaguePage({
         <div className="card">
           <h2 className="mb-1 font-semibold text-slate-900">Generate league fixtures</h2>
           <p className="mb-3 text-sm text-slate-500">
-            Round-robin across {LEAGUE_TARGET} league weeks from {season.startDate.toLocaleDateString()}, skipping
+            Round-robin across {LEAGUE_TARGET} league weeks from {formatDate(season.startDate)}, skipping
             blackout weeks. {totalTeams} team(s) in the season.
           </p>
           <form method="POST" action="/api/console/league">
@@ -306,7 +307,7 @@ export default async function LeaguePage({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm">
                     <span className="font-medium text-slate-800">{f.homeTeam?.name} vs {f.awayTeam?.name}</span>
-                    <span className="ml-2 text-xs text-slate-400">Wk {f.weekNumber} · {f.scheduledAt.toLocaleDateString()}</span>
+                    <span className="ml-2 text-xs text-slate-400">Wk {f.weekNumber} · {formatDate(f.scheduledAt)}</span>
                   </div>
                   <div className="flex gap-2">
                     <form method="POST" action="/api/console/league">
@@ -508,7 +509,7 @@ export default async function LeaguePage({
                   weekNumber: f.weekNumber,
                   dateISO: iso(f.scheduledAt),
                   timeHHMM: hhmm(f.scheduledAt),
-                  dateLabel: f.scheduledAt.toLocaleDateString(),
+                  dateLabel: formatDate(f.scheduledAt),
                   home: f.homeTeam?.name ?? "TBD",
                   away: f.awayTeam?.name ?? "TBD",
                   homeTeamId: f.homeTeamId ?? null,

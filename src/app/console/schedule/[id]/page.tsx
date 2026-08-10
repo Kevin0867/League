@@ -5,7 +5,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
-import { formatTimeRange12 } from "@/lib/time";
+import { formatTimeRange12, formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +72,7 @@ export default async function SessionDetail({
         <Link href="/console/schedule" className="text-sm text-brand-600 hover:underline">← Schedule</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-900">
-            {TYPE_LABEL[s.type] ?? s.type} · {s.date.toLocaleDateString()}
+            {TYPE_LABEL[s.type] ?? s.type} · {formatDate(s.date)}
           </h1>
           <StatusBadge status={s.status} />
         </div>

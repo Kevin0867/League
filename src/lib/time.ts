@@ -31,3 +31,32 @@ export function formatDayTime12(day: string | null | undefined, time: string | n
   if (day && t) return `${day} at ${t}`;
   return day || t || "";
 }
+
+// US date formatting for all user-facing DISPLAYS (MM/DD/YYYY). Note: <input
+// type="date"> values must stay ISO "YYYY-MM-DD" — the control requires it —
+// so keep .toISOString().slice(0,10) for defaultValue, and use these only for
+// text people read.
+export function formatDate(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  return dt.toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+/** MM/DD/YYYY, h:MM AM/PM (e.g. "09/14/2026, 6:00 PM"). */
+export function formatDateTime12(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  return dt.toLocaleString("en-US", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  });
+}
+
+/** MM/DD/YYYY – MM/DD/YYYY range. */
+export function formatDateRange(a: Date | string | null | undefined, b: Date | string | null | undefined): string {
+  const s = formatDate(a), e = formatDate(b);
+  if (s && e) return `${s} – ${e}`;
+  return s || e || "";
+}

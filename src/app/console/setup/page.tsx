@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
+import { formatDate, formatDateRange } from "@/lib/time";
 import { redirect } from "next/navigation";
 import {
   CreateSeasonForm,
@@ -37,7 +38,7 @@ const ERR_MESSAGE: Record<string, string> = {
 };
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-const fmt = (d: Date) => new Date(d).toLocaleDateString();
+const fmt = (d: Date) => formatDate(d);
 
 // Describe the registration window state for a season, from opensOn/closesOn.
 function regWindowState(s: { opensOn: Date | null; closesOn: Date | null; active: boolean }) {
@@ -161,7 +162,7 @@ export default async function SetupPage({
                   : <span className="badge bg-slate-100 text-slate-500">Inactive</span>}
               </h2>
               <p className="text-xs text-slate-500">
-                {s.program} · {new Date(s.startDate).toLocaleDateString()} – {new Date(s.endDate).toLocaleDateString()} · {s._count.registrations} registrations
+                {s.program} · {formatDateRange(s.startDate, s.endDate)} · {s._count.registrations} registrations
               </p>
               <p className="mt-0.5 text-xs">
                 <span className="font-medium text-slate-600">Registration:</span>{" "}

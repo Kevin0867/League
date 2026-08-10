@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDate } from "@/lib/time";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -147,7 +148,7 @@ export default async function TeamDetailPage({
             <h2 className="mb-2 font-semibold text-slate-900">Publication</h2>
             {team.published ? (
               <>
-                <p className="text-sm text-emerald-700">Published to families{team.publishedAt ? ` on ${team.publishedAt.toLocaleDateString()}` : ""}.</p>
+                <p className="text-sm text-emerald-700">Published to families{team.publishedAt ? ` on ${formatDate(team.publishedAt)}` : ""}.</p>
                 <form method="POST" action="/api/console/teams" className="mt-3">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="unpublishTeam" />

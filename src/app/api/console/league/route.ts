@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatDate } from "@/lib/time";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
@@ -186,7 +187,7 @@ export async function POST(req: Request) {
       });
       if (!fixture) return back("?err=nofixture");
 
-      const detail = `${fixture.homeTeam?.name} vs ${fixture.awayTeam?.name} on ${fixture.scheduledAt.toLocaleDateString()} at ${fixture.facility?.name ?? "the hub venue"} (${fixture.courtAllocation ?? "courts TBA"}). Please confirm availability in your portal.`;
+      const detail = `${fixture.homeTeam?.name} vs ${fixture.awayTeam?.name} on ${formatDate(fixture.scheduledAt)} at ${fixture.facility?.name ?? "the hub venue"} (${fixture.courtAllocation ?? "courts TBA"}). Please confirm availability in your portal.`;
 
       for (const teamId of [fixture.homeTeamId, fixture.awayTeamId].filter(Boolean) as string[]) {
         await dispatchMessage({
@@ -240,7 +241,7 @@ export async function POST(req: Request) {
         where: { role: { in: ["DIRECTOR", "COO"] }, personId: { not: null } },
         select: { personId: true },
       });
-      const body = `48-hour alert: ${atRisk.join("; ")} short of the minimum confirmed players for the fixture on ${fixture.scheduledAt.toLocaleDateString()}. Courts may need to be released.`;
+      const body = `48-hour alert: ${atRisk.join("; ")} short of the minimum confirmed players for the fixture on ${formatDate(fixture.scheduledAt)}. Courts may need to be released.`;
 
       for (const a of admins) {
         if (!a.personId) continue;
@@ -414,12 +415,12 @@ export async function POST(req: Request) {
           audienceType: "TEAM", audienceRef: teamId,
           channels: ["IN_APP", "EMAIL"], triggerType: "FORFEIT_RECORDED",
           subject: "Forfeit recorded",
-          body: `The fixture on ${fixture.scheduledAt.toLocaleDateString()} was recorded as a forfeit (3–0). ${team.forfeitCount >= 2 ? "This is the team's second forfeit — Championship eligibility is now ended pending joint exception." : ""}`,
+          body: `The fixture on ${formatDate(fixture.scheduledAt)} was recorded as a forfeit (3–0). ${team.forfeitCount >= 2 ? "This is the team's second forfeit — Championship eligibility is now ended pending joint exception." : ""}`,
         });
       }
       const admins = await prisma.user.findMany({ where: { role: { in: ["DIRECTOR", "COO"] }, personId: { not: null } }, select: { personId: true } });
       for (const a of admins) {
-        if (a.personId) await dispatchMessage({ senderId: actor.userId, seasonId: fixture.seasonId, audienceType: "SINGLE_PERSON", audienceRef: a.personId, channels: ["IN_APP", "EMAIL"], triggerType: "FORFEIT_RECORDED", subject: "Forfeit recorded", body: `${team.forfeitCount === 1 ? "First" : "Second"} forfeit recorded for a team in the fixture on ${fixture.scheduledAt.toLocaleDateString()}.` });
+        if (a.personId) await dispatchMessage({ senderId: actor.userId, seasonId: fixture.seasonId, audienceType: "SINGLE_PERSON", audienceRef: a.personId, channels: ["IN_APP", "EMAIL"], triggerType: "FORFEIT_RECORDED", subject: "Forfeit recorded", body: `${team.forfeitCount === 1 ? "First" : "Second"} forfeit recorded for a team in the fixture on ${formatDate(fixture.scheduledAt)}.` });
       }
 
       await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "FORFEIT", summary: `Forfeit by team ${forfeitingTeamId}; forfeitCount now ${team.forfeitCount}` });

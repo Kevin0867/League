@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDate } from "@/lib/time";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -83,7 +84,7 @@ export default async function FixtureDetail({
           <StatusBadge status={fixture.status} />
         </div>
         <p className="text-sm text-slate-500">
-          Week {fixture.weekNumber} · {fixture.scheduledAt.toLocaleDateString()} · {fixture.facility?.name ?? "hub TBD"} · {fixture.courtAllocation}
+          Week {fixture.weekNumber} · {formatDate(fixture.scheduledAt)} · {fixture.facility?.name ?? "hub TBD"} · {fixture.courtAllocation}
         </p>
       </div>
 
@@ -164,7 +165,7 @@ export default async function FixtureDetail({
               </div>
               {dupr?.lastError && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{dupr.lastError}</p>}
               {dupr?.status === "SUBMITTED" ? (
-                <p className="text-sm text-emerald-700">Submitted{dupr.submittedAt ? ` on ${dupr.submittedAt.toLocaleDateString()}` : ""}. Every game reported, including line 4.</p>
+                <p className="text-sm text-emerald-700">Submitted{dupr.submittedAt ? ` on ${formatDate(dupr.submittedAt)}` : ""}. Every game reported, including line 4.</p>
               ) : (
                 <form method="POST" action="/api/console/league">
                   <input type="hidden" name="ticket" value={ticket} />

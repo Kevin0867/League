@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+import { formatDate } from "@/lib/time";
 import {
   sendRegistrationConfirmation,
   notifyTeamOfRegistration,
@@ -193,8 +194,8 @@ export async function registerAction(
   const windowSeason = await prisma.season.findUnique({ where: { id: seasonId } });
   if (!windowSeason || !windowSeason.active) return { error: "This season is no longer accepting registrations." };
   const nowTs = new Date();
-  if (windowSeason.opensOn && windowSeason.opensOn > nowTs) return { error: `Registration opens on ${windowSeason.opensOn.toLocaleDateString()}.` };
-  if (windowSeason.closesOn && windowSeason.closesOn < nowTs) return { error: `Registration closed on ${windowSeason.closesOn.toLocaleDateString()}.` };
+  if (windowSeason.opensOn && windowSeason.opensOn > nowTs) return { error: `Registration opens on ${formatDate(windowSeason.opensOn)}.` };
+  if (windowSeason.closesOn && windowSeason.closesOn < nowTs) return { error: `Registration closed on ${formatDate(windowSeason.closesOn)}.` };
 
   const mode = g("mode") || "adult"; // "adult" | "child" | "both"
   const adultPlaying = mode === "adult" || mode === "both";

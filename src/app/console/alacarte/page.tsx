@@ -7,6 +7,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { LessonSetupForm } from "@/components/LessonSetupForm";
 import Link from "next/link";
+import { formatDateTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -158,7 +159,7 @@ export default async function AlaCartePage({
                   </div>
                   {o.scheduledAt && (
                     <div className="mt-1 text-xs text-slate-500">
-                      {new Date(o.scheduledAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      {formatDateTime12(o.scheduledAt)}
                     </div>
                   )}
                   {o.capacity != null && (

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
 import { mintConsoleTicket } from "@/lib/auth";
+import { formatDateTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function ChampionshipPage({
               <h2 className="font-semibold text-slate-900">Tournament start — {s.name}</h2>
               <p className="mt-0.5 text-sm text-slate-500">
                 {s.championshipStartsAt
-                  ? `Starts ${new Date(s.championshipStartsAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}`
+                  ? `Starts ${formatDateTime12(s.championshipStartsAt)}`
                   : "No start time set — the whole bracket plays from this time."}
               </p>
             </div>

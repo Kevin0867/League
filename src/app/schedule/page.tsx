@@ -1,6 +1,7 @@
 import { PublicNav } from "@/components/PublicNav";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
+import { formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function PublicSchedulePage() {
                         {f.homeTeam?.name ?? "TBD"} <span className="text-slate-400">vs</span> {f.awayTeam?.name ?? "TBD"}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {f.scheduledAt.toLocaleDateString()} · {f.facility?.name ?? "hub TBD"}
+                        {formatDate(f.scheduledAt)} · {f.facility?.name ?? "hub TBD"}
                         {f.homeTeam?.division ? ` · ${f.homeTeam.division.name}` : ""}
                       </div>
                     </div>

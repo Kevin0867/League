@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDate } from "@/lib/time";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -54,7 +55,7 @@ export default async function PersonDetail({ params }: { params: Promise<{ id: s
           <dl className="space-y-2 text-sm">
             <Row label="Email" value={person.email} />
             <Row label="Phone" value={person.phone} />
-            <Row label="Date of birth" value={person.dob ? person.dob.toLocaleDateString() : null} />
+            <Row label="Date of birth" value={person.dob ? formatDate(person.dob) : null} />
             {person.guardian && <Row label="Guardian" value={`${person.guardian.firstName} ${person.guardian.lastName}`} />}
             {person.dependents.length > 0 && <Row label="Dependents" value={person.dependents.map((dpt) => `${dpt.firstName} ${dpt.lastName}`).join(", ")} />}
           </dl>

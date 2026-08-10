@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatDate } from "@/lib/time";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
@@ -151,8 +152,8 @@ export async function POST(req: Request) {
         triggerType: isPractice ? "PRACTICE_CANCELLED" : "SESSION_RESCHEDULED",
         subject: isPractice ? `Practice cancelled (${reasonLabel})` : `Match to be rescheduled (${reasonLabel})`,
         body: isPractice
-          ? `Your ${st.team.name} practice on ${s.date.toLocaleDateString()} is cancelled (${reasonLabel}). There is no make-up — your place on the team is unchanged.`
-          : `Your ${st.team.name} fixture on ${s.date.toLocaleDateString()} will be rescheduled within 14 days (${reasonLabel}). Details to follow.`,
+          ? `Your ${st.team.name} practice on ${formatDate(s.date)} is cancelled (${reasonLabel}). There is no make-up — your place on the team is unchanged.`
+          : `Your ${st.team.name} fixture on ${formatDate(s.date)} will be rescheduled within 14 days (${reasonLabel}). Details to follow.`,
       });
     }
 

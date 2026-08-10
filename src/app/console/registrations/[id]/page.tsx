@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { decryptField } from "@/lib/crypto";
 import { ACADEMY_MARKETS } from "@/lib/enums";
+import { formatDate } from "@/lib/time";
 
 // Sensitive fields are encrypted at rest and only decrypted for staff here.
 // A key mismatch yields a marker — show blank so we never re-save the marker.
@@ -222,7 +223,7 @@ export default async function RegistrationDetail({
           </div>
           <label className="mt-4 flex items-center gap-2 text-sm">
             <input type="checkbox" name="waiverSigned" defaultChecked={!!p.waiverSignedAt} />
-            <span>Waiver on file{p.waiverSignedAt ? ` (signed ${p.waiverSignedAt.toISOString().slice(0, 10)})` : ""}</span>
+            <span>Waiver on file{p.waiverSignedAt ? ` (signed ${formatDate(p.waiverSignedAt)})` : ""}</span>
           </label>
         </div>
 
@@ -235,7 +236,7 @@ export default async function RegistrationDetail({
           <h2 className="font-semibold text-slate-900">Participation waiver</h2>
           <p className="text-sm text-slate-500">
             {p.waiverSignedAt
-              ? `On file — signed ${p.waiverSignedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`
+              ? `On file — signed ${formatDate(p.waiverSignedAt)}.`
               : p.isMinor
                 ? "Not on file. Sends a link for a parent/guardian to sign on this minor's behalf."
                 : "Not on file. Sends the player a link to complete their waiver."}

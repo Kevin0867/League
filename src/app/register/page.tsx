@@ -3,6 +3,7 @@ import { PublicNav } from "@/components/PublicNav";
 import { RegisterForm } from "@/components/RegisterForm";
 import { prisma } from "@/lib/db";
 import { ACADEMY_MARKETS } from "@/lib/enums";
+import { formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +49,9 @@ export default async function RegisterPage({
   if (!season || notYetOpen || alreadyClosed) {
     const heading = alreadyClosed ? "Registration has closed" : "Registration isn't open yet";
     const detail = alreadyClosed
-      ? `Enrollment for ${season!.name} closed on ${season!.closesOn!.toLocaleDateString()}.`
+      ? `Enrollment for ${season!.name} closed on ${formatDate(season!.closesOn)}.`
       : notYetOpen
-      ? `Enrollment for ${season!.name} opens on ${season!.opensOn!.toLocaleDateString()}.`
+      ? `Enrollment for ${season!.name} opens on ${formatDate(season!.opensOn)}.`
       : "No active season is currently accepting registrations.";
     return (
       <div>

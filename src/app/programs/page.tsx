@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { prisma } from "@/lib/db";
+import { formatDateRange } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function ProgramsPage() {
                 <span className="badge bg-brand-100 text-brand-800">{s.program.replace("_", " ")}</span>
               </div>
               <p className="mt-1 text-sm text-slate-500">
-                {s.startDate.toLocaleDateString()} – {s.endDate.toLocaleDateString()}
+                {formatDateRange(s.startDate, s.endDate)}
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {s.divisions.map((d) => (

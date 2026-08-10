@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatTime12, formatTimeRange12 } from "@/lib/time";
+import { formatTime12, formatTimeRange12, formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +96,7 @@ export default async function SchedulePage({
           <tbody className="divide-y divide-slate-100">
             {sessions.map((s) => (
               <tr key={s.id} className="hover:bg-slate-50">
-                <td className="py-2 text-slate-700">{s.date.toLocaleDateString()}</td>
+                <td className="py-2 text-slate-700">{formatDate(s.date)}</td>
                 <td className="hidden text-slate-500 lg:table-cell">{s.weekNumber ?? "—"}</td>
                 <td className="hidden text-slate-600 md:table-cell">{TYPE_LABEL[s.type] ?? s.type}</td>
                 <td className="hidden text-slate-600 sm:table-cell">{s.teams.map((t) => t.team.name).join(", ") || "—"}</td>
