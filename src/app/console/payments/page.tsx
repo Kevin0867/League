@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -17,7 +18,7 @@ export default async function PaymentsPage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const now = new Date();
-  const [inbound, outbound, payoutRuns, statements] = await Promise.all([
+  const [inbound, outbound, payoutRuns, statements, failed] = await Promise.all([
     prisma.payment.findMany({ where: { direction: "IN" }, include: { party: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.payment.findMany({ where: { direction: "OUT" }, include: { party: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.payoutRun.findMany({
@@ -27,6 +28,7 @@ export default async function PaymentsPage({
     prisma.facilityStatement.findMany({
       orderBy: { createdAt: "desc" }, take: 12, include: { facility: true },
     }),
+    prisma.payment.findMany({ where: { direction: "IN", status: "FAILED" }, include: { party: true }, orderBy: { updatedAt: "desc" } }),
   ]);
 
   const outstanding = inbound.filter((p) => p.status === "REQUESTED" || p.status === "PENDING");
@@ -66,6 +68,40 @@ export default async function PaymentsPage({
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
         <Stat label="Paid out" value={formatCents(paidOut)} tone="slate" />
       </div>
+
+      {failed.length > 0 && (
+        <div className="card border-l-4 border-rose-500 bg-rose-50/40">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚠️</span>
+            <h2 className="font-semibold text-rose-800">
+              {failed.length} unsuccessful payment{failed.length === 1 ? "" : "s"}
+            </h2>
+          </div>
+          <p className="mt-1 text-sm text-rose-700/80">
+            A charge was declined or failed. Follow up with the payer to collect the balance.
+          </p>
+          <ul className="mt-3 divide-y divide-rose-100 text-sm">
+            {failed.map((p) => (
+              <li key={p.id} className="flex items-center justify-between py-2">
+                <div>
+                  {p.party ? (
+                    <Link href={`/console/people/${p.partyId}`} className="font-medium text-rose-900 hover:underline">
+                      {p.party.firstName} {p.party.lastName}
+                    </Link>
+                  ) : (
+                    <span className="font-medium text-rose-900">Unknown payer</span>
+                  )}
+                  <span className="ml-2 text-xs text-rose-700/70">
+                    {p.category.replace(/_/g, " ").toLowerCase()}
+                    {p.installmentPlan ? ` · installment ${Math.min(p.installmentsPaid + 1, p.installmentsTotal ?? 3)}/${p.installmentsTotal ?? 3}` : ""}
+                  </span>
+                </div>
+                <span className="font-semibold text-rose-900">{formatCents(p.amountCents)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Fee reminders — bulk resend + preview */}
       <div className="card flex flex-wrap items-center justify-between gap-3">

@@ -192,7 +192,7 @@ const CAPS = [
   { icon: "🧩", title: "Team placement", body: "Pick one division; the Director places you on the right team by age and skill after Week 1." },
   { icon: "📅", title: "A full season", body: "A twelve-session season: six practice weeks, five league weeks, and championship week." },
   { icon: "🏆", title: "League & championship", body: "Line-by-line scoring, live standings, and a championship bracket — every game DUPR-recorded." },
-  { icon: "💳", title: "Enroll today, pay later", body: "$495 per player. Secure checkout, pay in full or monthly — requested only after you're placed." },
+  { icon: "💳", title: "Enroll today, flexible payments", body: "$495 per player. Secure checkout — pay in full, or in 3 payments (today, +30 and +60 days)." },
   { icon: "💬", title: "Stay in the loop", body: "Team, coach, and league updates in-app and by email, with texts for time-critical alerts." },
 ];
 

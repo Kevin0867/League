@@ -27,10 +27,10 @@ export function paymentRequestEmail(opts: {
     `</div>` +
     emailButton(payFull, `Pay in full — ${full}`, { primary: true }) +
     emailButton(payInstall, `Pay in 3 payments`, {
-      sub: `${per} per month × ${INSTALLMENT_COUNT} — nothing charged today`,
+      sub: `${per} today, then 2 more every 30 days`,
     }) +
     `<p style="margin:14px 0 0;font-size:12px;color:#94a3b8">The fee reserves a place on a team, not a session count. ` +
-    `The 3-payment plan bills automatically at the end of each of your first three training months. ` +
+    `The 3-payment plan charges the first payment today and the next two automatically 30 and 60 days later. ` +
     `Secure checkout is hosted by Stripe — we never see your card details.</p>`;
 
   const text = [
@@ -39,7 +39,7 @@ export function paymentRequestEmail(opts: {
     `Your ${full} season fee (${opts.description}) is ready.`,
     ``,
     `Pay in full: ${payFull}`,
-    `Pay in 3 payments of ${per} (nothing today): ${payInstall}`,
+    `Pay in 3 payments of ${per} (first today, then +30 and +60 days): ${payInstall}`,
     ``,
     `The fee reserves a place on a team, not a session count.`,
     `Any issues, contact us at ${SUPPORT_ADDRESS}.`,

@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
-import { INSTALLMENT_COUNT, installmentChargeDates, sendPaymentConfirmation } from "@/lib/payments/receipt";
+import { INSTALLMENT_COUNT, INSTALLMENT_INTERVAL_DAYS, sendPaymentConfirmation } from "@/lib/payments/receipt";
 import { audit } from "@/lib/audit";
 
 // Shared season-fee checkout. Used by both the authenticated portal (which adds
@@ -43,6 +43,8 @@ export async function createCheckoutRedirect(opts: {
         method: "STRIPE",
         installmentPlan: installments,
         installmentsTotal: installments ? INSTALLMENT_COUNT : null,
+        // First installment is charged at registration, so it's already 1/3 paid.
+        installmentsPaid: installments ? 1 : 0,
         status: installments ? "PENDING" : "PAID",
         paidAt: installments ? null : new Date(),
         description: (payment.description ?? "") + " [simulated — Stripe not configured]",
@@ -54,16 +56,9 @@ export async function createCheckoutRedirect(opts: {
   }
 
   if (installments) {
-    // Save the card and schedule 3 equal monthly charges; the first is deferred
-    // to season start + 1 month, and the webhook cancels after the 3rd clears.
-    const seasonStart = payment.seasonId
-      ? (await prisma.season.findUnique({ where: { id: payment.seasonId } }))?.startDate ?? new Date()
-      : new Date();
-    const firstCharge = installmentChargeDates(seasonStart)[0];
-    const trialEnd = Math.max(
-      Math.floor(firstCharge.getTime() / 1000),
-      Math.floor(Date.now() / 1000) + 3600
-    );
+    // 3-payment plan anchored at registration: the FIRST charge is taken now at
+    // checkout, then two more every 30 days (≈ +30 and +60 days). The webhook
+    // counts each cleared invoice and cancels the subscription after the 3rd.
     const perCharge = Math.round(payment.amountCents / INSTALLMENT_COUNT);
 
     const checkout = await stripe().checkout.sessions.create({
@@ -74,12 +69,12 @@ export async function createCheckoutRedirect(opts: {
           price_data: {
             currency: "usd",
             unit_amount: perCharge,
-            recurring: { interval: "month" },
+            recurring: { interval: "day", interval_count: INSTALLMENT_INTERVAL_DAYS },
             product_data: { name: `${productName} — 3-payment plan` },
           },
         },
       ],
-      subscription_data: { trial_end: trialEnd, metadata: { paymentId: payment.id }, description: productBlurb },
+      subscription_data: { metadata: { paymentId: payment.id }, description: productBlurb },
       metadata: { paymentId: payment.id },
       success_url: success,
       cancel_url: cancel,

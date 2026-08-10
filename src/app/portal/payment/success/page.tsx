@@ -83,7 +83,7 @@ export default async function PaymentSuccess({
                     <span>Total</span>
                     <span>{formatCents(receipt.amountCents)}</span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">3 monthly payments — charged automatically, nothing today:</p>
+                  <p className="mt-1 text-xs text-slate-500">3 payments — the first today, then 30 and 60 days later (charged automatically):</p>
                   <ul className="mt-2 space-y-1">
                     {receipt.installments.map((p, i) => (
                       <li key={i} className="flex items-center justify-between text-sm text-slate-600">

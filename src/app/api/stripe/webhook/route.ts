@@ -3,6 +3,30 @@ import { prisma } from "@/lib/db";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 import { sendPaymentConfirmation } from "@/lib/payments/receipt";
+import { notifyAdminsPaymentFailed } from "@/lib/payments/adminAlert";
+
+// Resolve the local Payment for a Stripe subscription. Normally it's linked by
+// stripeSubscriptionId (set on checkout.session.completed), but the first
+// invoice.paid can race ahead of that event now that the 1st charge is
+// immediate — so fall back to the subscription's metadata.paymentId and backfill.
+async function paymentForSubscription(subscriptionId: string) {
+  const found = await prisma.payment.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
+  if (found) return found;
+  try {
+    const sub = await stripe().subscriptions.retrieve(subscriptionId);
+    const pid = (sub.metadata as Record<string, string> | undefined)?.paymentId;
+    if (pid) {
+      const p = await prisma.payment.findUnique({ where: { id: pid } });
+      if (p && !p.stripeSubscriptionId) {
+        await prisma.payment.update({ where: { id: p.id }, data: { stripeSubscriptionId: subscriptionId } });
+      }
+      return p;
+    }
+  } catch (e) {
+    console.error("subscription retrieve failed", e);
+  }
+  return null;
+}
 
 // Stripe webhook — the source of truth for payment completion. We verify the
 // signature and mark the Payment PAID on checkout.session.completed. Card data
@@ -63,7 +87,7 @@ export async function POST(req: Request) {
       // Payment PAID and cancel the subscription so no further charges occur.
       const inv = event.data.object as { subscription?: string; payment_intent?: string };
       if (inv.subscription) {
-        const payment = await prisma.payment.findFirst({ where: { stripeSubscriptionId: inv.subscription } });
+        const payment = await paymentForSubscription(inv.subscription);
         if (payment) {
           const paidCount = payment.installmentsPaid + 1;
           const total = payment.installmentsTotal ?? 3;
@@ -85,17 +109,37 @@ export async function POST(req: Request) {
       break;
     }
     case "invoice.payment_failed": {
-      const inv = event.data.object as { subscription?: string };
+      // An installment charge failed (e.g. a saved card declined at +30 / +60
+      // days). Mark it FAILED and alert every admin so they can follow up.
+      const inv = event.data.object as { subscription?: string; amount_due?: number };
       if (inv.subscription) {
-        await prisma.payment.updateMany({
-          where: { stripeSubscriptionId: inv.subscription, status: { not: "PAID" } },
-          data: { status: "FAILED" },
-        });
+        const payment = await paymentForSubscription(inv.subscription);
+        if (payment) {
+          await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
+          const n = payment.installmentsPaid + 1;
+          const total = payment.installmentsTotal ?? 3;
+          await audit({ entityType: "Payment", entityId: payment.id, action: "INSTALLMENT_FAILED", summary: `Installment ${n}/${total} failed` });
+          await notifyAdminsPaymentFailed(payment.id, {
+            installmentLabel: `installment ${n} of ${total}`,
+            failedAmountCents: inv.amount_due,
+          });
+        }
       }
       break;
     }
-    case "checkout.session.expired":
     case "checkout.session.async_payment_failed": {
+      // A one-time charge (e.g. ACH) failed after checkout. Reset to REQUESTED so
+      // it re-appears as owed, and alert admins.
+      const s = event.data.object as { metadata?: { paymentId?: string } };
+      const paymentId = s.metadata?.paymentId;
+      if (paymentId) {
+        await prisma.payment.updateMany({ where: { id: paymentId, status: "PENDING" }, data: { status: "FAILED" } });
+        await audit({ entityType: "Payment", entityId: paymentId, action: "PAYMENT_FAILED", summary: "Async payment failed" });
+        await notifyAdminsPaymentFailed(paymentId);
+      }
+      break;
+    }
+    case "checkout.session.expired": {
       const s = event.data.object as { metadata?: { paymentId?: string } };
       const paymentId = s.metadata?.paymentId;
       if (paymentId) {

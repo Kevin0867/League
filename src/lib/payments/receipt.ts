@@ -25,12 +25,16 @@ export const ACADEMY_LOGO = "/brand/pure-academy-navy.png";
 export const PADEL_LOGO = "/brand/pure-pickleball-padel.png";
 
 export const INSTALLMENT_COUNT = 3;
+export const INSTALLMENT_INTERVAL_DAYS = 30;
 
-/** The three installment charge dates: season start + 1, + 2, + 3 months. */
-export function installmentChargeDates(seasonStart: Date): Date[] {
+/**
+ * The three installment charge dates, anchored at REGISTRATION: the 1st charges
+ * that day, the 2nd 30 days later, the 3rd 60 days later.
+ */
+export function installmentChargeDates(registeredAt: Date): Date[] {
   return Array.from({ length: INSTALLMENT_COUNT }, (_, i) => {
-    const d = new Date(seasonStart);
-    d.setMonth(d.getMonth() + i + 1);
+    const d = new Date(registeredAt);
+    d.setDate(d.getDate() + i * INSTALLMENT_INTERVAL_DAYS);
     return d;
   });
 }
@@ -86,12 +90,14 @@ export async function loadReceipt(paymentId: string): Promise<Receipt | null> {
   }));
 
   const plan = payment.installmentPlan ? "INSTALLMENTS_3" : "UPFRONT";
-  const seasonStart = payment.season?.startDate ?? new Date();
+  // Installments are anchored at registration (the payment record's creation),
+  // charging on that day, +30 days, and +60 days.
+  const registeredAt = payment.createdAt ?? new Date();
   const installments =
     plan === "INSTALLMENTS_3"
       ? splitInstallments(payment.amountCents).map((amountCents, i) => ({
           amountCents,
-          date: fmtDate(installmentChargeDates(seasonStart)[i]),
+          date: fmtDate(installmentChargeDates(registeredAt)[i]),
         }))
       : [];
 
@@ -127,15 +133,15 @@ export function receiptEmailHtml(r: Receipt): string {
         )}</strong></p>`
       : `<p style="margin:0 0 6px;font-size:15px;color:#0f172a"><strong>Total: ${formatCents(
           r.amountCents
-        )}</strong> — 3 monthly payments</p>` +
+        )}</strong> — 3 payments (today, then 30 and 60 days later)</p>` +
         `<table style="width:100%;border-collapse:collapse;font-size:14px">${r.installments
           .map(
             (p, i) =>
-              `<tr><td style="padding:3px 0;color:#64748b">Payment ${i + 1} — ${p.date}</td>` +
+              `<tr><td style="padding:3px 0;color:#64748b">Payment ${i + 1} — ${p.date}${i === 0 ? " (today)" : ""}</td>` +
               `<td style="padding:3px 0;color:#0f172a;text-align:right">${formatCents(p.amountCents)}</td></tr>`
           )
           .join("")}</table>` +
-        `<p style="margin:8px 0 0;font-size:12px;color:#94a3b8">Your card is charged automatically on each date. Nothing is charged today.</p>`;
+        `<p style="margin:8px 0 0;font-size:12px;color:#94a3b8">The first payment is charged today; the next two are charged automatically to your card on the dates above.</p>`;
 
   const phone = r.supportPhone ? ` or ${r.supportPhone}` : "";
 
@@ -180,8 +186,8 @@ export function receiptEmailText(r: Receipt): string {
     ``,
     r.plan === "UPFRONT"
       ? `Paid in full: ${formatCents(r.amountCents)}`
-      : `Total: ${formatCents(r.amountCents)} in 3 monthly payments (charged automatically, nothing today):\n` +
-        r.installments.map((p, i) => `  ${i + 1}. ${p.date} — ${formatCents(p.amountCents)}`).join("\n"),
+      : `Total: ${formatCents(r.amountCents)} in 3 payments — the first today, then 30 and 60 days later (charged automatically):\n` +
+        r.installments.map((p, i) => `  ${i + 1}. ${p.date}${i === 0 ? " (today)" : ""} — ${formatCents(p.amountCents)}`).join("\n"),
     ``,
     `Any issues, please contact us at ${r.supportEmail}${r.supportPhone ? ` or ${r.supportPhone}` : ""}.`,
   ];

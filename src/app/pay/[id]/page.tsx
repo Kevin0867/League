@@ -169,11 +169,11 @@ function PayCard({
           }`}
         >
           <span className="block font-semibold text-slate-900">
-            Pay in {INSTALLMENT_COUNT} — {per} per month
+            Pay in {INSTALLMENT_COUNT} — {per} today, then 2 more
           </span>
           <span className="block text-xs text-slate-500">
-            {INSTALLMENT_COUNT} equal charges billed automatically at the end of each of your first
-            three training months. Nothing is charged today.
+            {per} charged today, then two more every 30 days ({INSTALLMENT_COUNT} equal payments).
+            Automatic — nothing else to do.
           </span>
         </button>
       </form>

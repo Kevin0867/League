@@ -142,8 +142,8 @@ export default async function PortalHome() {
                 <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
                   The season fee reserves a place on a team, not a session count. Choose{" "}
                   <span className="font-medium">pay in full</span>, or the{" "}
-                  <span className="font-medium">3-payment plan</span> — 3 equal charges billed automatically
-                  at the end of each of your first three training months (nothing charged today). Secure
+                  <span className="font-medium">3-payment plan</span> — 3 equal charges, the first today and
+                  the next two automatically 30 and 60 days later. Secure
                   checkout is hosted by Stripe — we never see your card details.
                 </p>
               </div>
