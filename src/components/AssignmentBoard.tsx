@@ -21,10 +21,21 @@ export type BoardColumn = {
   location?: string;
   subtitle?: string;
   cap: number | null;
+  /** Players needed to be launch-ready (teams only). */
+  min?: number | null;
   divisionId?: string | null;
   market?: string | null;
   cards: Card[];
 };
+
+// Team roster status from live card count — updates as you drag.
+function teamStatus(col: BoardColumn): { label: string; cls: string } | null {
+  if (col.kind !== "team" || col.cap == null) return null;
+  const n = col.cards.length;
+  if (n >= col.cap) return { label: "Full", cls: "bg-rose-100 text-rose-700" };
+  if (col.min != null && n >= col.min) return { label: "Ready to launch", cls: "bg-emerald-100 text-emerald-800" };
+  return { label: "Building", cls: "bg-amber-100 text-amber-800" };
+}
 
 export function AssignmentBoard({
   ticket,
@@ -126,6 +137,14 @@ export function AssignmentBoard({
           {col.cap != null ? `${col.cards.length}/${col.cap}` : col.cards.length}
         </span>
       </div>
+      {(() => {
+        const st = teamStatus(col);
+        return st ? (
+          <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${st.cls}`}>
+            {st.label}
+          </span>
+        ) : null;
+      })()}
       <p className="mt-0.5 text-xs text-slate-400">
         {[col.level, col.location, col.subtitle].filter(Boolean).join(" · ")}
       </p>

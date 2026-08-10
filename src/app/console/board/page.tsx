@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { AssignmentBoard, type BoardColumn } from "@/components/AssignmentBoard";
-import { TEAM_CAP } from "@/lib/enums";
+import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +113,7 @@ export default async function BoardPage() {
     location: t.facility?.name ?? t.market ?? "TBD",
     subtitle: t.coach ? `${t.coach.person.firstName} ${t.coach.person.lastName}` : undefined,
     cap: TEAM_CAP - (t.coachPlays ? 1 : 0),
+    min: TEAM_MIN - (t.coachPlays ? 1 : 0),
     cards: t.members.map((m) => regByPerson.get(m.personId)).filter((r): r is NonNullable<typeof r> => !!r).map(toCard),
   }));
 
