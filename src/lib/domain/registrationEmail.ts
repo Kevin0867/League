@@ -1,7 +1,8 @@
 import "server-only";
 import { sendEmail } from "@/lib/notify";
-import { brandedEmailHtml } from "@/lib/email/branded";
+import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
 import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { appUrl } from "@/lib/stripe";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -41,10 +42,12 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
       ? `<p style="margin:12px 0 0;font-size:13px;color:#64748b">${prefs.join(" &nbsp;·&nbsp; ")}</p>`
       : "") +
     `</div>` +
-    `<p style="margin:16px 0 0;font-size:14px;color:#475569">Our team is matching ${
+    `<p style="margin:16px 0 12px;font-size:14px;color:#475569">Our team is matching ${
       s.players.length > 1 ? "each player" : "you"
     } to the right team, coach, and location, and we'll reach out to confirm. ` +
-    `Enroll today, pay later — no payment is due until placement is set.</p>`;
+    `Enroll today, pay later — no payment is due until placement is set. ` +
+    `We'll email your team placement and, separately, a secure link to pay the season fee.</p>` +
+    emailButton(`${appUrl()}/programs`, "Explore PURE Academy programs", { primary: true });
 
   const text = [
     `Thanks, ${s.recipientName}! We received your ${s.seasonName} registration.`,
@@ -54,6 +57,9 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
     ...prefs,
     ``,
     `Our team will match placement and reach out to confirm. No payment is due yet.`,
+    `We'll email your team placement and a secure link to pay the season fee.`,
+    ``,
+    `Explore PURE Academy programs: ${appUrl()}/programs`,
     `Any issues, contact us at ${SUPPORT_EMAIL}.`,
   ].join("\n");
 

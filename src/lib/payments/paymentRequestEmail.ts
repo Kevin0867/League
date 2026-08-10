@@ -5,7 +5,8 @@ import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
 import { INSTALLMENT_COUNT, splitInstallments, SUPPORT_EMAIL } from "@/lib/payments/receipt";
 
 // Branded fee-request email with two CTAs — pay in full, or 3 equal payments —
-// each deep-linking to the focused /portal/pay page with the plan preselected.
+// each deep-linking to the PUBLIC /pay page with the plan preselected — payable
+// with no login, so parents without an account can pay straight from the email.
 
 export function paymentRequestEmail(opts: {
   name: string;
@@ -16,8 +17,8 @@ export function paymentRequestEmail(opts: {
   const base = appUrl();
   const full = formatCents(opts.amountCents);
   const per = formatCents(splitInstallments(opts.amountCents)[1]); // even monthly amount
-  const payFull = `${base}/portal/pay/${opts.paymentId}?plan=full`;
-  const payInstall = `${base}/portal/pay/${opts.paymentId}?plan=installments`;
+  const payFull = `${base}/pay/${opts.paymentId}?plan=full`;
+  const payInstall = `${base}/pay/${opts.paymentId}?plan=installments`;
 
   const contentHtml =
     `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:16px">` +
