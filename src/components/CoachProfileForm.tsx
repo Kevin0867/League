@@ -12,6 +12,7 @@ export function CoachProfileForm({
   email,
   targetPersonId,
   initial,
+  pay,
 }: {
   ticket: string;
   email: string;
@@ -29,6 +30,17 @@ export function CoachProfileForm({
     backgroundCheck: boolean;
     backgroundCheckDate: string;
     backgroundCheckCompany: string;
+  };
+  /** Admin-only compensation. Present only in the admin edit context, so a
+   *  coach editing their own profile never sees (or can post) pay fields. */
+  pay?: {
+    seasonRate: string;
+    seasonPct: string;
+    lessonRate: string;
+    lessonPct: string;
+    clinicRate: string;
+    clinicPct: string;
+    notes: string;
   };
 }) {
   const [blocks, setBlocks] = useState<Block[]>(
@@ -111,6 +123,69 @@ export function CoachProfileForm({
           )}
         </div>
       </section>
+
+      {pay && (
+        <section className="card space-y-4 ring-1 ring-amber-200 bg-amber-50/40">
+          <div>
+            <h2 className="font-semibold text-slate-900">Compensation</h2>
+            <p className="text-sm text-slate-500">
+              Admin only — not visible to the coach. Enter a flat rate and/or a percentage for each work type.
+              Leave a field blank if it doesn&apos;t apply.
+            </p>
+          </div>
+          <input type="hidden" name="payVisible" value="1" />
+
+          <div className="space-y-4">
+            {([
+              ["season", "Regular season", "per team / season", "e.g. 60"],
+              ["lesson", "Private / semi-private lessons", "per lesson or hour", "e.g. 70"],
+              ["clinic", "Clinics", "per participant or session", "e.g. 50"],
+            ] as const).map(([key, label, rateHint, pctHint]) => (
+              <div key={key} className="grid gap-3 sm:grid-cols-[1fr_1fr] rounded-lg bg-white/70 p-3 ring-1 ring-slate-100">
+                <div className="sm:col-span-2 text-sm font-semibold text-slate-800">{label}</div>
+                <div>
+                  <label className="label">Flat rate ({rateHint})</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                    <input
+                      name={`${key}Rate`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      className="input pl-6"
+                      defaultValue={pay[`${key}Rate` as const]}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Percentage</label>
+                  <div className="relative">
+                    <input
+                      name={`${key}Pct`}
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      inputMode="numeric"
+                      className="input pr-7"
+                      defaultValue={pay[`${key}Pct` as const]}
+                      placeholder={pctHint}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div>
+              <label className="label">Pay notes</label>
+              <textarea name="payNotes" rows={2} className="input" defaultValue={pay.notes}
+                placeholder="Tiers, guarantees, per-hour vs per-session, bonuses…" />
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="card space-y-3">
         <h2 className="font-semibold text-slate-900">Location availability</h2>

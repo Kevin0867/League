@@ -323,6 +323,18 @@ model Coach {
   w9OnFile            Boolean   @default(false)
   w9ReceivedAt        DateTime?
 
+  /// Compensation (§9) — admin-only. A rate and/or a percentage per work type:
+  /// regular-season coaching, private/semi-private lessons, and clinics. Rates
+  /// stored in cents; percentages as whole numbers (e.g. 60 = 60%). payNotes
+  /// captures the "etc." (per-hour vs per-session, tiers, guarantees).
+  seasonPayCents      Int?
+  seasonPayPct        Int?
+  lessonPayCents      Int?
+  lessonPayPct        Int?
+  clinicPayCents      Int?
+  clinicPayPct        Int?
+  payNotes            String?
+
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

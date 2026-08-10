@@ -76,6 +76,15 @@ export default async function EditCoachPage({
           backgroundCheckDate: coach?.backgroundCheckDate ? new Date(coach.backgroundCheckDate).toISOString().slice(0, 10) : "",
           backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
         }}
+        pay={{
+          seasonRate: coach?.seasonPayCents != null ? (coach.seasonPayCents / 100).toFixed(2) : "",
+          seasonPct: coach?.seasonPayPct != null ? String(coach.seasonPayPct) : "",
+          lessonRate: coach?.lessonPayCents != null ? (coach.lessonPayCents / 100).toFixed(2) : "",
+          lessonPct: coach?.lessonPayPct != null ? String(coach.lessonPayPct) : "",
+          clinicRate: coach?.clinicPayCents != null ? (coach.clinicPayCents / 100).toFixed(2) : "",
+          clinicPct: coach?.clinicPayPct != null ? String(coach.clinicPayPct) : "",
+          notes: coach?.payNotes ?? "",
+        }}
       />
     </div>
   );
