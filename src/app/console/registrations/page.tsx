@@ -145,9 +145,9 @@ export default async function RegistrationsPage({
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="py-2">Player</th>
-              <th>Division</th>
-              <th>Location prefs</th>
-              <th>Waiver</th>
+              <th className="hidden sm:table-cell">Division</th>
+              <th className="hidden md:table-cell">Location prefs</th>
+              <th className="hidden sm:table-cell">Waiver</th>
               <th>Status</th>
               <th className="text-right">Actions</th>
             </tr>
@@ -161,13 +161,13 @@ export default async function RegistrationsPage({
                   </Link>
                   <div className="text-xs text-slate-400">{r.person.email ?? r.person.phone ?? "—"}</div>
                 </td>
-                <td className="text-slate-600">{r.division?.name ?? <span className="text-slate-400">unplaced</span>}</td>
-                <td className="text-slate-600">
+                <td className="hidden text-slate-600 sm:table-cell">{r.division?.name ?? <span className="text-slate-400">unplaced</span>}</td>
+                <td className="hidden text-slate-600 md:table-cell">
                   {r.locationPrefs.length
                     ? r.locationPrefs.map((lp) => lp.facility?.name ?? lp.marketName).filter(Boolean).join(" › ")
                     : "—"}
                 </td>
-                <td>
+                <td className="hidden sm:table-cell">
                   {r.person.waiverSignedAt
                     ? <span className="badge bg-emerald-100 text-emerald-800">signed</span>
                     : <span className="badge bg-amber-100 text-amber-800">outstanding</span>}
