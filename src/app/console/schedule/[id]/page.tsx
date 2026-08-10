@@ -5,6 +5,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
+import { formatTimeRange12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function SessionDetail({
           <StatusBadge status={s.status} />
         </div>
         <p className="text-sm text-slate-500">
-          {s.teams.map((t) => t.team.name).join(", ")} · {s.facility?.name ?? "no facility"} · {s.startTime}–{s.endTime}
+          {s.teams.map((t) => t.team.name).join(", ")} · {s.facility?.name ?? "no facility"} · {formatTimeRange12(s.startTime, s.endTime)}
           {s.weekNumber ? ` · week ${s.weekNumber}` : ""}
         </p>
         {s.cancelReason && (

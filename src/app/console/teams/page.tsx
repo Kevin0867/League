@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
+import { formatTime12 } from "@/lib/time";
 import {
   teamMissingFields,
   rosterStatus,
@@ -146,7 +147,7 @@ export default async function TeamBuildBoard({
                   <Field label="Market" value={t.market} />
                   <Field label="Coach" value={t.coach ? `${t.coach.person.firstName} ${t.coach.person.lastName}` : t.origin === "ACP_CLUB" ? "n/a (contact)" : null} />
                   <Field label="Facility" value={t.facility?.name} />
-                  <Field label="Day / time" value={t.dayOfWeek ? `${t.dayOfWeek} ${t.startTime ?? ""}` : null} />
+                  <Field label="Day / time" value={t.dayOfWeek ? `${t.dayOfWeek} ${formatTime12(t.startTime)}`.trim() : null} />
                 </dl>
 
                 {/* Roster meter */}

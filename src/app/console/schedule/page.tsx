@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
+import { formatTime12, formatTimeRange12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,7 @@ export default async function SchedulePage({
                 <input type="hidden" name="returnTo" value="/console/schedule" />
                 <input type="hidden" name="teamId" value={t.id} />
                 <button className="btn-secondary text-sm">
-                  Generate · {t.name} ({t.dayOfWeek} {t.startTime})
+                  Generate · {t.name} ({t.dayOfWeek} {formatTime12(t.startTime)})
                 </button>
               </form>
             ))}
@@ -100,7 +101,7 @@ export default async function SchedulePage({
                 <td className="hidden text-slate-600 md:table-cell">{TYPE_LABEL[s.type] ?? s.type}</td>
                 <td className="hidden text-slate-600 sm:table-cell">{s.teams.map((t) => t.team.name).join(", ") || "—"}</td>
                 <td className="hidden text-slate-600 md:table-cell">{s.facility?.name ?? "—"}</td>
-                <td className="text-slate-500">{s.startTime}–{s.endTime}</td>
+                <td className="text-slate-500">{formatTimeRange12(s.startTime, s.endTime)}</td>
                 <td><StatusBadge status={s.status} /></td>
                 <td className="text-right">
                   <Link href={`/console/schedule/${s.id}`} className="text-xs font-medium text-brand-600 hover:underline">

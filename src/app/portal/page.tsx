@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
 import { NOTICE_DAYS } from "@/lib/domain/availability";
 import { MessageFrame } from "@/components/MessageFrame";
+import { formatTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -197,7 +198,7 @@ export default async function PortalHome() {
                 <dl className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-600">
                   <div><dt className="text-xs text-slate-400">Coach</dt><dd>{m.team.coach ? `${m.team.coach.person.firstName} ${m.team.coach.person.lastName}` : "TBA"}</dd></div>
                   <div><dt className="text-xs text-slate-400">Location</dt><dd>{m.team.facility?.name ?? "TBA"}</dd></div>
-                  <div><dt className="text-xs text-slate-400">Day / time</dt><dd>{m.team.dayOfWeek ?? "TBA"} {m.team.startTime ?? ""}</dd></div>
+                  <div><dt className="text-xs text-slate-400">Day / time</dt><dd>{m.team.dayOfWeek ?? "TBA"} {formatTime12(m.team.startTime)}</dd></div>
                   <div><dt className="text-xs text-slate-400">Player</dt><dd>{m.person.firstName}</dd></div>
                 </dl>
               </div>

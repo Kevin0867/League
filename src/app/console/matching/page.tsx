@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { coachAssignmentGate } from "@/lib/domain/teams";
+import { formatTime12, formatTimeRange12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -112,7 +113,7 @@ export default async function MatchingPage({
                       <div className="font-semibold text-slate-900">{team.name}</div>
                       <div className="mt-0.5 text-xs text-slate-500">
                         {team.division?.name ?? team.levelBand ?? "Level TBD"} · {team.facility?.name ?? teamMarket ?? "Location TBD"}
-                        {team.dayOfWeek ? ` · ${team.dayOfWeek}${team.startTime ? ` ${team.startTime}` : ""}` : ""}
+                        {team.dayOfWeek ? ` · ${team.dayOfWeek}${team.startTime ? ` ${formatTime12(team.startTime)}` : ""}` : ""}
                       </div>
                     </div>
                     {team.coach ? (
@@ -194,7 +195,7 @@ export default async function MatchingPage({
                   <td className="text-slate-600">{c.markets.length ? c.markets.join(", ") : <span className="text-slate-400">—</span>}</td>
                   <td className="text-slate-600">
                     {c.blocks.length
-                      ? c.blocks.map((b) => `${b.dayOfWeek} ${b.startTime}–${b.endTime}`).join(", ")
+                      ? c.blocks.map((b) => `${b.dayOfWeek} ${formatTimeRange12(b.startTime, b.endTime)}`).join(", ")
                       : <span className="text-slate-400">not set</span>}
                   </td>
                   <td className="text-right text-slate-600">{c.teamCount}</td>

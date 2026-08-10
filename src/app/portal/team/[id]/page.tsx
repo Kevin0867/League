@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
+import { formatTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const coach = team.coach?.person;
   const coachContact = [coach?.email, coach?.phone].filter(Boolean).join(" · ");
   const when = team.dayOfWeek
-    ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}`
+    ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
     : "A day and time to be confirmed";
   const address = team.facility?.exactAddress ?? team.facility?.generalArea ?? null;
 
