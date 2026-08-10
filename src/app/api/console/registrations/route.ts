@@ -155,7 +155,11 @@ export async function POST(req: Request) {
       if (!team) return back("?err=team");
 
       const alreadyOn = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId, personId } } });
-      if (!alreadyOn && team._count.members + (team.coachPlays ? 1 : 0) + 1 > TEAM_CAP) return back("?err=cap");
+      // Cap is a soft limit for admins: they may exceed TEAM_CAP with override=1
+      // (e.g. to honor a "play with my friend" request onto a full team). Only
+      // reachable here because manageTeams is already enforced above (admin-only).
+      const override = String(fd.get("override") ?? "") === "1";
+      if (!alreadyOn && !override && team._count.members + (team.coachPlays ? 1 : 0) + 1 > TEAM_CAP) return back("?err=cap");
 
       // Remove from any other team in the same season (this makes it a move).
       const ids = (await seasonTeamIds(team.seasonId)).filter((id) => id !== teamId);
@@ -174,6 +178,8 @@ export async function POST(req: Request) {
       // The board moves players provisionally; it sets silent=1 so a placement
       // email isn't fired on every drag (staff send it explicitly afterward).
       if (String(fd.get("silent") ?? "") !== "1") await notifyAssignment(teamId, personId, team.seasonId);
+      if (String(fd.get("from") ?? "") === "requests")
+        return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
       return back("?ok=assign");
     }
 
