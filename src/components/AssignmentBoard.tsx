@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 type Card = {
@@ -10,31 +11,38 @@ type Card = {
   rating: number | null;
   divisionName: string | null;
 };
-type Column = { id: string; title: string; subtitle?: string; cap: number | null; cards: Card[] };
 
-const POOL = "pool";
+export type BoardColumn = {
+  id: string;
+  kind: "pool" | "team";
+  title: string;
+  subtitle?: string;
+  cap: number | null;
+  divisionId?: string | null;
+  cards: Card[];
+};
 
-export function AssignmentBoard({ ticket, columns: initial }: { ticket: string; columns: Column[] }) {
-  const [columns, setColumns] = useState<Column[]>(initial);
+export function AssignmentBoard({ ticket, columns: initial }: { ticket: string; columns: BoardColumn[] }) {
+  const [columns, setColumns] = useState<BoardColumn[]>(initial);
   const [dragging, setDragging] = useState<{ card: Card; from: string } | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
-  const teamCount = (c: Column) => c.cards.length;
-  const isFull = (c: Column) => c.id !== POOL && c.cap != null && teamCount(c) >= c.cap;
+  const isFull = (c: BoardColumn) => c.kind === "team" && c.cap != null && c.cards.length >= c.cap;
 
-  async function persist(card: Card, toId: string): Promise<boolean> {
+  async function persist(card: Card, dest: BoardColumn): Promise<boolean> {
     const fd = new FormData();
     fd.set("ticket", ticket);
     fd.set("personId", card.personId);
     fd.set("registrationId", card.registrationId);
-    if (toId === POOL) {
-      fd.set("op", "unassign");
-    } else {
+    if (dest.kind === "team") {
       fd.set("op", "assignToTeam");
-      fd.set("teamId", toId);
+      fd.set("teamId", dest.id);
       fd.set("silent", "1");
+    } else {
+      fd.set("op", "repool");
+      fd.set("divisionId", dest.divisionId ?? "");
     }
     try {
       const res = await fetch("/api/console/registrations", { method: "POST", body: fd });
@@ -57,7 +65,6 @@ export function AssignmentBoard({ ticket, columns: initial }: { ticket: string; 
       return;
     }
 
-    // Optimistic move.
     const snapshot = columns;
     setColumns((cols) =>
       cols.map((c) => {
@@ -67,10 +74,10 @@ export function AssignmentBoard({ ticket, columns: initial }: { ticket: string; 
       })
     );
     setBusy(true);
-    const ok = await persist(card, toId);
+    const ok = await persist(card, dest);
     setBusy(false);
     if (!ok) {
-      setColumns(snapshot); // revert
+      setColumns(snapshot);
       setFlash("Couldn't save that move — try again.");
       setTimeout(() => setFlash(null), 2500);
     }
@@ -79,7 +86,7 @@ export function AssignmentBoard({ ticket, columns: initial }: { ticket: string; 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 text-sm text-slate-500">
-        <span>Drag a player onto a team to assign, or back to the pool to unassign.</span>
+        <span>Drag a player onto a team to assign, onto a pool to unassign, or between pools to change division.</span>
         {busy && <span className="text-brand-600">saving…</span>}
         {flash && <span className="rounded bg-rose-50 px-2 py-0.5 text-rose-700">{flash}</span>}
       </div>
@@ -92,13 +99,16 @@ export function AssignmentBoard({ ticket, columns: initial }: { ticket: string; 
             onDragLeave={() => setOver((o) => (o === col.id ? null : o))}
             onDrop={() => onDrop(col.id)}
             className={`w-64 shrink-0 rounded-xl border p-3 ${
-              over === col.id ? "border-brand-400 bg-brand-50" : "border-slate-200 bg-slate-50"
-            } ${col.id === POOL ? "sticky left-0 z-10" : ""}`}
+              over === col.id ? "border-brand-400 bg-brand-50" : col.kind === "team" ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50"
+            }`}
           >
-            <div className="mb-2 flex items-baseline justify-between">
-              <h3 className="text-sm font-semibold text-slate-800">{col.title}</h3>
-              <span className={`text-xs ${isFull(col) ? "font-semibold text-rose-600" : "text-slate-400"}`}>
-                {col.cap != null ? `${teamCount(col)}/${col.cap}` : col.cards.length}
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold text-slate-800">
+                {col.kind === "team" && <span className="mr-1 text-brand-500">▦</span>}
+                {col.title}
+              </h3>
+              <span className={`shrink-0 text-xs ${isFull(col) ? "font-semibold text-rose-600" : "text-slate-400"}`}>
+                {col.cap != null ? `${col.cards.length}/${col.cap}` : col.cards.length}
               </span>
             </div>
             {col.subtitle && <p className="mb-2 -mt-1 text-xs text-slate-400">{col.subtitle}</p>}
@@ -112,7 +122,13 @@ export function AssignmentBoard({ ticket, columns: initial }: { ticket: string; 
                   className="cursor-grab rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm active:cursor-grabbing"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-slate-800">{card.name}</span>
+                    <Link
+                      href={`/console/registrations/${card.registrationId}`}
+                      draggable={false}
+                      className="text-sm font-medium text-slate-800 hover:text-brand-700 hover:underline"
+                    >
+                      {card.name}
+                    </Link>
                     {!card.waiver && <span title="Waiver outstanding" className="text-xs text-amber-500">⚠</span>}
                   </div>
                   <div className="text-xs text-slate-400">

@@ -116,6 +116,18 @@ export async function POST(req: Request) {
       return back("?ok=assign");
     }
 
+    // Board: drop a player into a division pool — unassign from any team and set
+    // that division (empty = unplaced). Keeps them in the assignment pool.
+    case "repool": {
+      if (!reg) return back("?err=fields");
+      const divisionId = String(fd.get("divisionId") ?? "") || null;
+      const ids = await seasonTeamIds(reg.seasonId);
+      if (ids.length) await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: ids } } });
+      await prisma.registration.update({ where: { id: reg.id }, data: { divisionId, status: "SUBMITTED" } });
+      await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "REPOOL", summary: "Moved to pool / division" });
+      return back("?ok=repool");
+    }
+
     // Send a player back to the pool for their season.
     case "unassign": {
       if (!reg) return back("?err=fields");
