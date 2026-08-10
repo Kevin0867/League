@@ -148,10 +148,30 @@ export default async function PortalHome() {
 
       {/* Announcements / inbox */}
       <section>
-        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Announcements
-          {unread > 0 && <span className="badge bg-brand-100 text-brand-800">{unread} new</span>}
-        </h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Announcements
+            {unread > 0 && <span className="badge bg-brand-100 text-brand-800">{unread} new</span>}
+          </h2>
+          {inbox.length > 0 && (
+            <div className="flex items-center gap-3">
+              {unread > 0 && (
+                <form method="POST" action="/api/portal">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="markAllMessagesRead" />
+                  <button className="text-xs font-medium text-brand-700 hover:underline">Mark all read</button>
+                </form>
+              )}
+              {inbox.some((r) => r.readAt) && (
+                <form method="POST" action="/api/portal">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="clearReadMessages" />
+                  <button className="text-xs font-medium text-slate-500 hover:underline">Clear read</button>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
         {inbox.length === 0 ? (
           <div className="card text-sm text-slate-500">No messages yet.</div>
         ) : (
@@ -166,14 +186,20 @@ export default async function PortalHome() {
                       {r.message.sentAt.toLocaleDateString()} · {r.message.channels.replace(/,/g, ", ")}
                     </div>
                   </div>
-                  {!r.readAt && (
+                  <div className="flex shrink-0 items-center gap-2">
                     <form method="POST" action="/api/portal">
                       <input type="hidden" name="ticket" value={ticket} />
-                      <input type="hidden" name="op" value="markMessageRead" />
+                      <input type="hidden" name="op" value={r.readAt ? "markMessageUnread" : "markMessageRead"} />
                       <input type="hidden" name="recipientId" value={r.id} />
-                      <button className="btn-ghost text-xs whitespace-nowrap">Mark read</button>
+                      <button className="btn-ghost text-xs whitespace-nowrap">{r.readAt ? "Mark unread" : "Mark read"}</button>
                     </form>
-                  )}
+                    <form method="POST" action="/api/portal">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="deleteMessage" />
+                      <input type="hidden" name="recipientId" value={r.id} />
+                      <button className="text-xs font-medium text-rose-600 hover:underline">Delete</button>
+                    </form>
+                  </div>
                 </div>
               </div>
             ))}

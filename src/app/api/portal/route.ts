@@ -88,6 +88,43 @@ export async function POST(req: Request) {
       return NextResponse.redirect(new URL("/portal", origin), 303);
     }
 
+    case "markMessageUnread": {
+      const recipientId = String(formData.get("recipientId") ?? "");
+      const household = await householdPersonIds(personId);
+      await prisma.messageRecipient.updateMany({
+        where: { id: recipientId, personId: { in: household } },
+        data: { readAt: null, inAppStatus: "DELIVERED" },
+      });
+      return NextResponse.redirect(new URL("/portal", origin), 303);
+    }
+
+    case "deleteMessage": {
+      const recipientId = String(formData.get("recipientId") ?? "");
+      const household = await householdPersonIds(personId);
+      // Remove only this household's copy of the announcement.
+      await prisma.messageRecipient.deleteMany({
+        where: { id: recipientId, personId: { in: household } },
+      });
+      return NextResponse.redirect(new URL("/portal", origin), 303);
+    }
+
+    case "markAllMessagesRead": {
+      const household = await householdPersonIds(personId);
+      await prisma.messageRecipient.updateMany({
+        where: { personId: { in: household }, readAt: null },
+        data: { readAt: new Date(), inAppStatus: "READ" },
+      });
+      return NextResponse.redirect(new URL("/portal", origin), 303);
+    }
+
+    case "clearReadMessages": {
+      const household = await householdPersonIds(personId);
+      await prisma.messageRecipient.deleteMany({
+        where: { personId: { in: household }, readAt: { not: null } },
+      });
+      return NextResponse.redirect(new URL("/portal", origin), 303);
+    }
+
     /**
      * Begin checkout for a requested payment. Uses Stripe hosted checkout when
      * configured; otherwise simulates a completed payment so the flow is
