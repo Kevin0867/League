@@ -17,11 +17,13 @@ export function RegisterForm({
   locations,
   preselectedDivision = null,
   preselectedLocation = null,
+  preferredFacility = null,
 }: {
   seasonId: string;
   locations: string[];
   preselectedDivision?: string | null;
   preselectedLocation?: string | null;
+  preferredFacility?: { id: string; label: string } | null;
 }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, {});
   const [mode, setMode] = useState<Mode>("adult");
@@ -37,6 +39,7 @@ export function RegisterForm({
       <input type="hidden" name="seasonId" value={seasonId} />
       <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
       {preselectedDivision && <input type="hidden" name="preferredDivision" value={preselectedDivision} />}
+      {preferredFacility && <input type="hidden" name="preferredFacilityId" value={preferredFacility.id} />}
 
       {/* 01 — Who's playing */}
       <Section n="01" title="Who's playing?">
@@ -125,6 +128,11 @@ export function RegisterForm({
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
             <label className="label">Location <span className="text-slate-400">(choose all that work)</span></label>
+            {preferredFacility?.label && (
+              <p className="mt-1 mb-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800 ring-1 ring-brand-100">
+                Selected court: <span className="font-semibold">{preferredFacility.label}</span> — your registration will be placed here.
+              </p>
+            )}
             <div className="mt-1 space-y-2">
               {locations.map((loc) => (
                 <label key={loc} className="flex items-center gap-2 text-sm">

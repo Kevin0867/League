@@ -9,7 +9,7 @@ export default async function LocationsPage() {
 
   // Group by market. Private courts are generalized to market + general area only —
   // never owner name, never street address (§15, a contractual privacy obligation).
-  const byMarket = new Map<string, { label: string; sub: string; private: boolean }[]>();
+  const byMarket = new Map<string, { id: string; label: string; sub: string; private: boolean }[]>();
   for (const f of facilities) {
     const market = f.market ?? "Other";
     const label = f.isPrivate ? `${f.generalArea ?? market} — private court` : f.name;
@@ -17,7 +17,7 @@ export default async function LocationsPage() {
       ? "Exact location shared with assigned players after login."
       : `${f.courtCount} court${f.courtCount === 1 ? "" : "s"}`;
     if (!byMarket.has(market)) byMarket.set(market, []);
-    byMarket.get(market)!.push({ label, sub, private: f.isPrivate });
+    byMarket.get(market)!.push({ id: f.id, label, sub, private: f.isPrivate });
   }
 
   return (
@@ -43,10 +43,10 @@ export default async function LocationsPage() {
                 )}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                {items.map((it, i) => (
+                {items.map((it) => (
                   <Link
-                    key={i}
-                    href={`/register?location=${encodeURIComponent(market)}`}
+                    key={it.id}
+                    href={`/register?facility=${encodeURIComponent(it.id)}`}
                     className="group card flex flex-col transition-colors hover:border-brand-300 hover:ring-brand-200"
                   >
                     <div className="flex items-center justify-between gap-2">

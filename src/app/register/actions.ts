@@ -92,6 +92,10 @@ async function enrollPlayer(opts: {
   // as a fallback when the player's own track doesn't resolve a division.
   preferredDivisionId?: string | null;
   preferredDivisionName?: string | null;
+  // A specific facility chosen from the Locations page — stored as the top-ranked
+  // location preference so the registration is placed at that court.
+  preferredFacilityId?: string | null;
+  preferredFacilityMarket?: string | null;
 }): Promise<void> {
   const { player } = opts;
   const dob = player.dob ? new Date(player.dob) : null;
@@ -154,9 +158,18 @@ async function enrollPlayer(opts: {
     },
   });
 
-  for (let i = 0; i < opts.locations.length; i++) {
+  // Top-rank the specific facility if one was chosen, then the market prefs —
+  // skipping the facility's own market to avoid a duplicate.
+  let rank = 1;
+  if (opts.preferredFacilityId) {
     await prisma.locationPreference.create({
-      data: { registrationId: registration.id, marketName: opts.locations[i], rank: i + 1 },
+      data: { registrationId: registration.id, facilityId: opts.preferredFacilityId, marketName: opts.preferredFacilityMarket ?? null, rank: rank++ },
+    });
+  }
+  for (const market of opts.locations) {
+    if (opts.preferredFacilityMarket && market.toLowerCase() === opts.preferredFacilityMarket.toLowerCase()) continue;
+    await prisma.locationPreference.create({
+      data: { registrationId: registration.id, marketName: market, rank: rank++ },
     });
   }
 }
@@ -223,6 +236,13 @@ export async function registerAction(
     ? divisions.find((d) => d.name.toLowerCase() === preferredDivisionName.toLowerCase())?.id ?? null
     : null;
 
+  // Specific facility chosen from the Locations page.
+  const preferredFacilityId = g("preferredFacilityId") || null;
+  const preferredFacility = preferredFacilityId
+    ? await prisma.facility.findUnique({ where: { id: preferredFacilityId }, select: { id: true, market: true } }).catch(() => null)
+    : null;
+  const preferredFacilityMarket = preferredFacility?.market ?? null;
+
   // Reuse an existing person by email so families don't create duplicates.
   const existing = await prisma.person.findFirst({ where: { email } });
   let primaryId: string;
@@ -265,6 +285,8 @@ export async function registerAction(
       phone: phone || undefined,
       preferredDivisionId,
       preferredDivisionName,
+      preferredFacilityId: preferredFacility?.id ?? null,
+      preferredFacilityMarket,
     });
     enrolled.push({ name: `${firstName} ${lastName}`, program: programLabel(team, skill) || preferredDivisionName || "" });
   }
@@ -305,6 +327,8 @@ export async function registerAction(
         guardianId: primaryId,
         preferredDivisionId,
         preferredDivisionName,
+      preferredFacilityId: preferredFacility?.id ?? null,
+      preferredFacilityMarket,
       });
       enrolled.push({ name: `${kid.firstName} ${kid.lastName}`, program: programLabel(kid.team, kid.skill) || preferredDivisionName || "" });
     }

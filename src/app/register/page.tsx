@@ -9,9 +9,25 @@ export const dynamic = "force-dynamic";
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ division?: string; location?: string }>;
+  searchParams: Promise<{ division?: string; location?: string; facility?: string }>;
 }) {
-  const { division: preselectedDivision, location: preselectedLocation } = await searchParams;
+  const { division: preselectedDivision, location: preselectedLocation, facility: facilityParam } = await searchParams;
+
+  // A specific facility can be preselected from the Locations page. Resolve it to
+  // a public-safe label (private courts never expose name/address) + its market.
+  const preferredFacility = facilityParam
+    ? await prisma.facility
+        .findUnique({ where: { id: facilityParam }, select: { id: true, name: true, market: true, isPrivate: true, generalArea: true } })
+        .catch(() => null)
+    : null;
+  const facilityLabel = preferredFacility
+    ? preferredFacility.isPrivate
+      ? `${preferredFacility.generalArea ?? preferredFacility.market ?? "Private"} — private court`
+      : preferredFacility.name
+    : null;
+  // If a facility was chosen, its market is the effective location preselect.
+  const effectiveLocation = preferredFacility?.market ?? preselectedLocation ?? null;
+
   const season = await prisma.season.findFirst({
     where: { active: true, program: "PURE_ACADEMY" },
     orderBy: { startDate: "desc" },
@@ -80,16 +96,21 @@ export default async function RegisterPage({
             one waiver covers one adult and up to four kids.
           </p>
         </div>
-        {(preselectedDivision || preselectedLocation) && (
+        {(preselectedDivision || effectiveLocation || facilityLabel) && (
           <div className="mb-6 rounded-xl border-l-4 border-brand-500 bg-brand-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Signing up for</p>
             <p className="text-lg font-bold text-brand-900">
-              {preselectedDivision ?? "PURE Academy"}
-              {preselectedLocation ? <span className="font-semibold text-brand-700"> · {preselectedLocation}</span> : null}
+              {facilityLabel ?? preselectedDivision ?? "PURE Academy"}
+              {facilityLabel && preselectedDivision ? <span className="font-semibold text-brand-700"> · {preselectedDivision}</span> : null}
+              {!facilityLabel && effectiveLocation ? <span className="font-semibold text-brand-700"> · {effectiveLocation}</span> : null}
             </p>
             <p className="mt-0.5 text-sm text-slate-600">
-              {preselectedLocation ? `We've selected ${preselectedLocation} as your location — ` : ""}
-              You can still adjust your {preselectedDivision ? "track and " : ""}location below.
+              {facilityLabel
+                ? `We've set ${facilityLabel} as your location — your registration will be placed here. `
+                : effectiveLocation
+                  ? `We've selected ${effectiveLocation} as your location — `
+                  : ""}
+              You can still adjust your {preselectedDivision ? "track and " : ""}preferences below.
             </p>
           </div>
         )}
@@ -97,7 +118,8 @@ export default async function RegisterPage({
           seasonId={season.id}
           locations={locations}
           preselectedDivision={preselectedDivision ?? null}
-          preselectedLocation={preselectedLocation ?? null}
+          preselectedLocation={effectiveLocation}
+          preferredFacility={preferredFacility ? { id: preferredFacility.id, label: facilityLabel ?? "" } : null}
         />
       </div>
     </div>
