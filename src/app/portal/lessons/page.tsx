@@ -28,6 +28,13 @@ export default async function LessonsPage({
     : null;
   const fullName = me ? `${me.firstName} ${me.lastName}` : "";
 
+  // Coaches the requester can ask for by name (or leave blank to be matched).
+  const coachRows = await prisma.coach.findMany({
+    include: { person: true },
+    orderBy: { person: { lastName: "asc" } },
+  });
+  const coaches = coachRows.map((c) => `${c.person.firstName} ${c.person.lastName}`);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -84,6 +91,14 @@ export default async function LessonsPage({
               <option>Semi-private</option>
               <option>Clinic</option>
             </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Preferred coach <span className="text-slate-400">(optional)</span></label>
+            <select name="coachPreference" className="input" defaultValue="">
+              <option value="">No preference — match me with an available coach</option>
+              {coaches.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">Leave blank and we&apos;ll pair you with a coach who fits your level, location, and times.</p>
           </div>
         </div>
 

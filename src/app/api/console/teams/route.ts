@@ -99,6 +99,23 @@ export async function POST(req: Request) {
       return back("?ok=updateTeam");
     }
 
+    // Assign / move / clear a team's coach from the matching board. A partial
+    // update (unlike updateTeam, which rewrites every field), honoring the
+    // screening gate. Empty coachId clears the assignment.
+    case "assignCoach": {
+      if (!teamId) return back("?err=team");
+      const coachId = String(formData.get("coachId") ?? "").trim() || null;
+      if (coachId) {
+        const coach = await prisma.coach.findUnique({ where: { id: coachId } });
+        if (!coach) return back("?err=coach");
+        const gate = coachAssignmentGate(coach);
+        if (!gate.ok) return back("?err=coach");
+      }
+      await prisma.team.update({ where: { id: teamId }, data: { coachId } });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: coachId ? `Assigned coach ${coachId}` : "Cleared coach" });
+      return NextResponse.redirect(new URL(`/console/matching?ok=${coachId ? "assignedCoach" : "clearedCoach"}`, origin), 303);
+    }
+
     case "removePlayer": {
       // Remove a player from a team; their registration re-enters the pool.
       const personId = String(formData.get("personId") ?? "");

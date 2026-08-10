@@ -18,6 +18,7 @@ const NAV: NavItem[] = [
   { href: "/console/board", label: "Board", icon: "🔀", roles: ["COO", "DIRECTOR"] },
   { href: "/console/teams", label: "Team Build", icon: "🧩", roles: ["COO", "DIRECTOR", "COACH"] },
   { href: "/console/coaches", label: "Coaches", icon: "🎯", roles: ["COO", "DIRECTOR"] },
+  { href: "/console/matching", label: "Coach matching", icon: "🧭", roles: ["COO", "DIRECTOR"] },
   { href: "/console/users", label: "Access", icon: "🔑", roles: ["COO", "DIRECTOR"] },
   { href: "/console/profile", label: "My Profile", icon: "👤", roles: ["COACH"] },
   { href: "/console/facilities", label: "Facilities", icon: "🏟️", roles: ["COO", "CEO", "DIRECTOR"] },

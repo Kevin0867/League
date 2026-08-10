@@ -165,6 +165,7 @@ export async function POST(req: Request) {
       const forWho = f("forWho");
       const rating = f("rating");
       const lessonType = f("lessonType");
+      const coachPreference = f("coachPreference");
       const locations = list("location");
       const dayTimes = list("dayTime");
       const dayTimeOther = f("dayTimeOther");
@@ -177,6 +178,7 @@ export async function POST(req: Request) {
         `For: ${forWho || "—"}`,
         `Skill / rating: ${rating || "—"}`,
         `Lesson type: ${lessonType || "—"}`,
+        `Preferred coach: ${coachPreference || "No preference — match available"}`,
         `Locations: ${locations.length ? locations.join(", ") : "—"}`,
         `Day/time preferences: ${[...dayTimes, dayTimeOther].filter(Boolean).join(", ") || "—"}`,
         ``,
@@ -188,6 +190,7 @@ export async function POST(req: Request) {
         ["For", forWho || "—"],
         ["Skill / rating", rating || "—"],
         ["Lesson type", lessonType || "—"],
+        ["Preferred coach", coachPreference || "No preference — match available"],
         ["Locations", locations.length ? locations.join(", ") : "—"],
         ["Day/time", [...dayTimes, dayTimeOther].filter(Boolean).join(", ") || "—"],
         ["Notes", notes || "—"],
