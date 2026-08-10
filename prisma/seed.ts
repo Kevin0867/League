@@ -65,7 +65,9 @@ async function main() {
       program: "PURE_ACADEMY",
       startDate: d("2026-09-14"),
       endDate: d("2026-12-13"),
-      opensOn: d("2026-09-14"),
+      // Registration is open immediately; the season itself starts on startDate.
+      // (opensOn gates the public registration form, not the season start.)
+      opensOn: null,
       active: true,
     },
   });
