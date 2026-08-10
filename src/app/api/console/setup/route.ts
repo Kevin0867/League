@@ -56,6 +56,82 @@ export async function POST(req: Request) {
       return back("?ok=createSeason");
     }
 
+    case "editSeason": {
+      const id = String(formData.get("seasonId") ?? "");
+      const name = String(formData.get("name") ?? "").trim();
+      const program = String(formData.get("program") ?? "").trim() || undefined;
+      const startDate = toDate(formData.get("startDate"));
+      const endDate = toDate(formData.get("endDate"));
+      const opensOn = toDate(formData.get("opensOn"));
+      if (!id || !name) return back("?err=fields");
+      const season = await prisma.season.findUnique({ where: { id } });
+      if (!season) return back("?err=notfound");
+      await prisma.season.update({
+        where: { id },
+        data: {
+          name,
+          program,
+          startDate: startDate ?? undefined,
+          endDate: endDate ?? undefined,
+          opensOn: opensOn,
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: id, action: "season.update", summary: `Edited season ${name}` });
+      return back("?ok=editSeason");
+    }
+
+    case "deleteSeason": {
+      const id = String(formData.get("seasonId") ?? "");
+      const regs = await prisma.registration.count({ where: { seasonId: id } });
+      if (regs > 0) return back("?err=hasregistrations");
+      await prisma.division.deleteMany({ where: { seasonId: id } });
+      await prisma.season.delete({ where: { id } });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: id, action: "season.delete" });
+      return back("?ok=deleteSeason");
+    }
+
+    case "setSeasonFee": {
+      const dollars = parseFloat(String(formData.get("seasonFee") ?? "").trim());
+      if (isNaN(dollars) || dollars < 0) return back("?err=fields");
+      const latest = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      await prisma.rateConfig.create({
+        data: {
+          seasonFeeCents: Math.round(dollars * 100),
+          coachPerSessionCents: latest?.coachPerSessionCents ?? 10000,
+          assistantPct: latest?.assistantPct ?? 0.5,
+          proCoachPerSessionCents: latest?.proCoachPerSessionCents ?? null,
+          alaCoachSharePct: latest?.alaCoachSharePct ?? 0.5,
+          alaDirectorSharePct: latest?.alaDirectorSharePct ?? 0.1,
+          alaPurePct: latest?.alaPurePct ?? 0.4,
+          alaDirCoachSharePct: latest?.alaDirCoachSharePct ?? 0.6,
+          alaDirDirectorSharePct: latest?.alaDirDirectorSharePct ?? 0.1,
+          alaDirPurePct: latest?.alaDirPurePct ?? 0.3,
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "RateConfig", entityId: "seasonFee", action: "rate.setSeasonFee", summary: `Season fee → $${dollars.toFixed(0)}` });
+      return back("?ok=setFee");
+    }
+
+    case "editDivision": {
+      const id = String(formData.get("divisionId") ?? "");
+      const name = String(formData.get("name") ?? "").trim();
+      const divisionType = String(formData.get("divisionType") ?? "").trim() || undefined;
+      const minRaw = String(formData.get("minRating") ?? "").trim();
+      const maxRaw = String(formData.get("maxRating") ?? "").trim();
+      if (!id || !name) return back("?err=fields");
+      await prisma.division.update({
+        where: { id },
+        data: {
+          name,
+          divisionType,
+          minRating: minRaw ? parseFloat(minRaw) : null,
+          maxRating: maxRaw ? parseFloat(maxRaw) : null,
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Division", entityId: id, action: "division.update", summary: `Edited division ${name}` });
+      return back("?ok=editDivision");
+    }
+
     case "activateSeason": {
       const id = String(formData.get("seasonId") ?? "");
       const season = await prisma.season.findUnique({ where: { id } });
