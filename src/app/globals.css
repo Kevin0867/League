@@ -48,28 +48,29 @@ body {
 }
 
 @layer components {
+  /* Bold Sporty: pill-shaped, uppercase, confident weight, tactile press. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
-      text-sm font-semibold transition-all duration-150 focus:outline-none
-      focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-1
-      active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2
+      text-sm font-bold uppercase tracking-wide transition-all duration-150
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400
+      focus-visible:ring-offset-1 active:translate-y-px
+      disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-brand-800 text-white shadow-sm hover:bg-brand-900 hover:shadow;
+    @apply btn bg-brand-900 text-white shadow-sm hover:bg-brand-800 hover:shadow;
   }
-  /* High-energy CTA — bright lime pill with dark navy text, like the site. */
+  /* High-energy CTA — bright lime pill with dark navy text. */
   .btn-accent {
-    @apply btn bg-accent-500 font-bold text-brand-900 shadow-sm hover:bg-accent-400 hover:shadow;
+    @apply btn bg-accent-500 text-brand-900 shadow-sm hover:bg-accent-400 hover:shadow;
   }
   .btn-secondary {
-    @apply btn bg-white text-brand-800 ring-1 ring-brand-200 hover:bg-brand-50 hover:ring-brand-300;
+    @apply btn bg-white text-brand-900 ring-1 ring-brand-200 hover:bg-brand-50 hover:ring-brand-300;
   }
   .btn-ghost {
-    @apply btn text-brand-500 hover:bg-brand-100 hover:text-brand-700;
+    @apply btn text-brand-600 hover:bg-brand-100 hover:text-brand-900;
   }
-  /* Softer, more contemporary surface: roomier radius, light ring, subtle shadow. */
   .card {
-    @apply rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70;
+    @apply rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70;
   }
   .label {
     @apply block text-sm font-medium text-slate-700 mb-1;
@@ -80,6 +81,17 @@ body {
       focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/30;
   }
   .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
+  /* Section headings get a sporty, condensed-uppercase treatment. */
+  .h-sport {
+    @apply font-extrabold uppercase tracking-tight text-brand-900;
+  }
+  /* Dark navy stat tile with a lime accent — the signature sporty surface. */
+  .stat-tile {
+    @apply relative overflow-hidden rounded-xl bg-brand-900 p-4 text-white ring-1 ring-brand-900;
+  }
+  .stat-tile .stat-k { @apply text-[11px] font-semibold uppercase tracking-wider text-brand-200; }
+  .stat-tile .stat-v { @apply mt-0.5 text-2xl font-extrabold tabular-nums tracking-tight; }
+  .stat-tile .stat-s { @apply text-xs text-brand-200; }
 }

@@ -104,13 +104,14 @@ function Stat({
   label, value, hint, href, tone,
 }: { label: string; value: React.ReactNode; hint?: string; href?: string; tone?: "ok" | "warn" }) {
   const body = (
-    <div className="card h-full">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`mt-1 text-3xl font-extrabold ${tone === "warn" ? "text-amber-600" : "text-slate-900"}`}>{value}</div>
-      {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
+    <div className="stat-tile h-full transition-transform hover:-translate-y-0.5">
+      <span className="pointer-events-none absolute -right-4 -top-4 h-14 w-14 rounded-xl bg-accent-500/15" />
+      <div className="stat-k">{label}</div>
+      <div className={`stat-v ${tone === "warn" ? "text-accent-400" : "text-white"}`}>{value}</div>
+      {hint && <div className="stat-s">{hint}</div>}
     </div>
   );
-  return href ? <Link href={href}>{body}</Link> : body;
+  return href ? <Link href={href} className="block h-full">{body}</Link> : body;
 }
 
 function ComplianceRow({ label, value, warn }: { label: string; value: number; warn: boolean }) {

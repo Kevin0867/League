@@ -44,34 +44,35 @@ export function ConsoleShell({
   const [open, setOpen] = useState(false);
   const items = NAV.filter((n) => !n.roles || n.roles.includes(role));
 
+  const chip = "inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm";
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Top bar (mobile-first) */}
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+      {/* Top bar (mobile-first) — navy chrome with a lime underline */}
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b-2 border-accent-500 bg-brand-900 px-4 py-3 md:hidden">
         <div className="flex items-center gap-2">
-          <button onClick={() => setOpen((v) => !v)} className="btn-ghost" aria-label="Menu">
+          <button onClick={() => setOpen((v) => !v)} className="rounded-lg px-2 py-1 text-white hover:bg-white/10" aria-label="Menu">
             ☰
           </button>
-          <Logo href="/console" className="h-7" />
+          <span className={chip}><Logo href="/console" className="h-6" /></span>
         </div>
         <div className="flex items-center gap-3">
-          <PadelLogo className="h-7" />
-          <Link href="/logout" prefetch={false} className="text-sm text-slate-500">Sign out</Link>
+          <span className={chip}><PadelLogo className="h-6" /></span>
+          <Link href="/logout" prefetch={false} className="text-sm font-semibold text-white/80 hover:text-white">Sign out</Link>
         </div>
       </div>
 
       <div className="mx-auto flex max-w-7xl">
-        {/* Sidebar */}
+        {/* Sidebar — dark navy rail */}
         <aside
-          className={`${open ? "block" : "hidden"} w-full shrink-0 border-r border-slate-200 bg-white md:block md:w-64`}
+          className={`${open ? "block" : "hidden"} w-full shrink-0 bg-brand-900 md:block md:w-64`}
         >
           <div className="hidden items-center gap-2 px-5 py-4 md:flex">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent-500 text-sm font-extrabold text-brand-900">
               PA
             </span>
             <div className="leading-tight">
-              <div className="text-sm font-bold text-slate-900">Academy Console</div>
-              <div className="text-[11px] text-slate-400">{ROLE_LABELS[role]}</div>
+              <div className="text-sm font-extrabold uppercase tracking-wide text-white">Academy Console</div>
+              <div className="text-[11px] text-brand-200">{ROLE_LABELS[role]}</div>
             </div>
           </div>
           <nav className="space-y-1 px-3 pb-6 pt-2">
@@ -85,10 +86,10 @@ export function ConsoleShell({
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
                     active
-                      ? "bg-brand-600 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      ? "bg-accent-500 text-brand-900 shadow-sm"
+                      : "text-brand-200 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   <span className="w-5 text-center">{item.icon}</span>
@@ -101,17 +102,17 @@ export function ConsoleShell({
 
         {/* Main */}
         <main className="min-w-0 flex-1">
-          <div className="sticky top-0 z-30 hidden items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur md:flex">
-            <Logo href="/console" className="h-9" />
-            <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-base font-semibold tracking-tight text-brand-900 lg:block">
+          <div className="sticky top-0 z-30 hidden items-center justify-between border-b-2 border-accent-500 bg-brand-900 px-6 py-3 md:flex">
+            <span className={chip}><Logo href="/console" className="h-8" /></span>
+            <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-base font-extrabold uppercase tracking-wide text-white lg:block">
               Academy Console
             </div>
             <div className="flex items-center gap-4 whitespace-nowrap">
-              <span className="hidden text-sm text-slate-500 xl:inline">
-                Signed in as <span className="font-semibold text-slate-800">{name}</span>
+              <span className="hidden text-sm text-brand-200 xl:inline">
+                Signed in as <span className="font-semibold text-white">{name}</span>
               </span>
-              <Link href="/logout" prefetch={false} className="btn-ghost whitespace-nowrap text-sm">Sign out</Link>
-              <PadelLogo className="h-8" />
+              <Link href="/logout" prefetch={false} className="whitespace-nowrap text-sm font-semibold text-white/80 hover:text-white">Sign out</Link>
+              <span className={chip}><PadelLogo className="h-7" /></span>
             </div>
           </div>
           <div className="p-4 md:p-6">{children}</div>
