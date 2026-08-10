@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { VIABILITY_LABEL, type Pool } from "@/lib/domain/pools";
 
@@ -62,9 +63,9 @@ export function PoolCard({
         {pool.members.map((m) => {
           const on = selected.has(m.registrationId);
           return (
-            <label
+            <div
               key={m.registrationId}
-              className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-sm shadow-sm ${
+              className={`flex items-center gap-2 rounded-md border px-2 py-1 text-sm shadow-sm ${
                 on ? "border-brand-400 bg-brand-50" : "border-slate-200 bg-white hover:border-slate-300"
               }`}
             >
@@ -72,14 +73,20 @@ export function PoolCard({
                 type="checkbox"
                 name="reg"
                 value={m.registrationId}
-                className="h-3.5 w-3.5 shrink-0"
+                className="h-3.5 w-3.5 shrink-0 cursor-pointer"
                 checked={on}
                 onChange={() => toggle(m.registrationId)}
                 aria-label={`Select ${m.personName}`}
               />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate font-medium text-slate-800">{m.personName}</span>
+                  {/* Click the name to open the full record — edit + assign to a team/location. */}
+                  <Link
+                    href={`/console/registrations/${m.registrationId}`}
+                    className="truncate font-medium text-slate-800 hover:text-brand-700 hover:underline"
+                  >
+                    {m.personName}
+                  </Link>
                   {!m.waiverSigned && <span title="Waiver outstanding" className="shrink-0 text-xs text-amber-500">⚠</span>}
                   {m.overlapCount > 1 && (
                     <span className="shrink-0 text-[10px] text-brand-600" title="Assigning here removes them from other pools">
@@ -92,7 +99,7 @@ export function PoolCard({
                   {m.locationRank > 1 ? ` · #${m.locationRank} choice` : ""}
                 </span>
               </span>
-            </label>
+            </div>
           );
         })}
       </div>

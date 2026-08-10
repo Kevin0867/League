@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
-import { PoolCard } from "@/components/PoolCard";
+import { PoolsSearch } from "@/components/PoolsSearch";
 import { buildPools, type PoolRegistration } from "@/lib/domain/pools";
 import { TEAM_CAP } from "@/lib/enums";
 import { mintConsoleTicket } from "@/lib/auth";
@@ -86,14 +86,6 @@ export default async function PoolsPage({
   const totalUnassigned = registrations.length;
   const launchable = pools.filter((p) => p.viability === "launchable").length;
 
-  // Group pools by division for display.
-  const byDivision = new Map<string, typeof pools>();
-  for (const p of pools) {
-    const key = p.divisionName ?? "Unplaced";
-    if (!byDivision.has(key)) byDivision.set(key, []);
-    byDivision.get(key)!.push(p);
-  }
-
   return (
     <div className="space-y-6">
       {sp.ok && OKS[sp.ok] && (
@@ -105,7 +97,7 @@ export default async function PoolsPage({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PageHeader
           title="Assignment pools"
-          subtitle="Every viable division × location × time. Pools overlap — assigning a player removes them from the others. Assign at four; build from two; launch at six."
+          subtitle="Every viable division × location × time. Click a player's name to open their record — edit details and assign them to a team or location. Or select players and form/add them to a team. Pools overlap; assigning removes them from the others."
         />
         <div className="flex gap-3 text-sm">
           <Pill label="Unassigned" value={totalUnassigned} />
@@ -121,16 +113,7 @@ export default async function PoolsPage({
           </p>
         </div>
       ) : (
-        [...byDivision.entries()].map(([division, dpools]) => (
-          <section key={division}>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{division}</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {dpools.map((pool) => (
-                <PoolCard key={pool.key} pool={pool} seasonId={season.id} teams={teamOptions} ticket={ticket} />
-              ))}
-            </div>
-          </section>
-        ))
+        <PoolsSearch pools={pools} teams={teamOptions} seasonId={season.id} ticket={ticket} />
       )}
     </div>
   );
