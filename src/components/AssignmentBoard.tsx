@@ -39,6 +39,18 @@ export function AssignmentBoard({
   const [over, setOver] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+
+  // Filter tiles by division/level/location or any player's name. Empty pools
+  // stay visible when the box is clear.
+  const matches = (col: BoardColumn) => {
+    const s = q.trim().toLowerCase();
+    if (!s) return true;
+    return (
+      [col.title, col.level, col.location, col.subtitle].filter(Boolean).some((t) => t!.toLowerCase().includes(s)) ||
+      col.cards.some((c) => c.name.toLowerCase().includes(s))
+    );
+  };
 
   const isFull = (c: BoardColumn) => c.kind === "team" && c.cap != null && c.cards.length >= c.cap;
 
@@ -148,16 +160,37 @@ export function AssignmentBoard({
     </div>
   );
 
-  const teamCols = columns.filter((c) => c.kind === "team");
-  const poolCols = columns.filter((c) => c.kind === "pool");
+  const teamCols = columns.filter((c) => c.kind === "team" && matches(c));
+  const poolCols = columns.filter((c) => c.kind === "pool" && matches(c));
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3 text-sm text-slate-500">
-        <span>Drag a player onto a team to assign, onto a pool to unassign, or between pools to change division/location.</span>
-        {busy && <span className="text-brand-600">saving…</span>}
-        {flash && <span className="rounded bg-rose-50 px-2 py-0.5 text-rose-700">{flash}</span>}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Filter by division, level, location, or player…"
+            className="input w-80 py-1.5 pr-8 text-sm"
+          />
+          {q && (
+            <button
+              type="button"
+              onClick={() => setQ("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              aria-label="Clear filter"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <span className="text-sm text-slate-400">{poolCols.length + teamCols.length} tiles</span>
+        {busy && <span className="text-sm text-brand-600">saving…</span>}
+        {flash && <span className="rounded bg-rose-50 px-2 py-0.5 text-sm text-rose-700">{flash}</span>}
       </div>
+      <p className="text-sm text-slate-500">
+        Drag a player onto a team to assign, onto a pool to unassign, or between pools to change division/location.
+      </p>
 
       {teamCols.length > 0 && (
         <section>
