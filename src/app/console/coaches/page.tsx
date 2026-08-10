@@ -26,10 +26,20 @@ export default async function CoachesPage({
   // Auth enforced by the console layout; read the session only to gate the form.
   const session = await getSession();
   const ticket = await mintConsoleTicket();
-  const coaches = await prisma.coach.findMany({
-    include: { person: true, _count: { select: { teams: true, recruits: true } } },
+  // List everyone with a COACH login (so newly-added coaches show even before a
+  // Coach profile row exists), joined to their coach profile when present.
+  const coachUsers = await prisma.user.findMany({
+    where: { role: "COACH" },
+    include: {
+      person: {
+        include: { coach: { include: { _count: { select: { teams: true, recruits: true } } } } },
+      },
+    },
     orderBy: { person: { lastName: "asc" } },
   });
+  const coaches = coachUsers
+    .filter((u) => u.person)
+    .map((u) => ({ person: u.person!, coach: u.person!.coach }));
 
   return (
     <div className="space-y-6">
@@ -57,28 +67,28 @@ export default async function CoachesPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {coaches.map((c) => {
-              const gate = coachAssignmentGate(c);
+            {coaches.map(({ person, coach }) => {
+              const gate = coach ? coachAssignmentGate(coach) : { ok: false, reasons: ["no profile yet"] };
               return (
-                <tr key={c.id}>
+                <tr key={person.id}>
                   <td className="py-2 font-medium text-slate-800">
-                    {c.person.firstName} {c.person.lastName}
-                    {c.isProCoach && <span className="ml-2 badge bg-brand-100 text-brand-800">Pro</span>}
+                    {person.firstName} {person.lastName}
+                    {coach?.isProCoach && <span className="ml-2 badge bg-brand-100 text-brand-800">Pro</span>}
                   </td>
-                  <td className="text-slate-600">{c.rpoCertLevel ?? "—"}</td>
+                  <td className="text-slate-600">{coach?.rpoCertLevel ?? "—"}</td>
                   <td>
                     {gate.ok
                       ? <span className="badge bg-emerald-100 text-emerald-800">cleared</span>
                       : <span className="badge bg-amber-100 text-amber-800" title={gate.reasons.join(", ")}>{gate.reasons.length} issue{gate.reasons.length > 1 ? "s" : ""}</span>}
                   </td>
-                  <td className="text-slate-600">{c._count.teams}</td>
+                  <td className="text-slate-600">{coach?._count.teams ?? 0}</td>
                   <td className="text-slate-600">
-                    {c._count.recruits}
-                    <span className="ml-1 text-xs text-slate-400">credit{c._count.recruits === 1 ? "" : "s"}</span>
+                    {coach?._count.recruits ?? 0}
+                    <span className="ml-1 text-xs text-slate-400">credit{(coach?._count.recruits ?? 0) === 1 ? "" : "s"}</span>
                   </td>
-                  <td>{c.w9OnFile ? <span className="badge bg-emerald-100 text-emerald-800">on file</span> : <span className="badge bg-slate-100 text-slate-500">missing</span>}</td>
+                  <td>{coach?.w9OnFile ? <span className="badge bg-emerald-100 text-emerald-800">on file</span> : <span className="badge bg-slate-100 text-slate-500">missing</span>}</td>
                   <td className="text-right">
-                    <Link href={`/console/coaches/${c.id}`} className="text-xs font-medium text-brand-700 hover:underline">Edit</Link>
+                    <Link href={`/console/coaches/${person.id}`} className="text-xs font-medium text-brand-700 hover:underline">Edit</Link>
                   </td>
                 </tr>
               );

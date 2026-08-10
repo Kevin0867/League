@@ -49,6 +49,13 @@ export async function POST(req: Request) {
         data: { email, passwordHash: await hashPassword(password), role, personId: person.id },
       });
 
+      // A coach account needs a Coach profile row so they appear on the Coaches
+      // page and can fill out certification/availability.
+      if (role === "COACH") {
+        const existingCoach = await prisma.coach.findUnique({ where: { personId: person.id } });
+        if (!existingCoach) await prisma.coach.create({ data: { personId: person.id } });
+      }
+
       await audit({
         actorId: actor.userId,
         entityType: "User",

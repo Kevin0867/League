@@ -18,37 +18,40 @@ function parseMarkets(json: string | null): string[] {
   }
 }
 
+// `id` is the coach's personId, so coaches without a Coach profile row yet are
+// still editable (the save upserts one).
 export default async function EditCoachPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
   if (!session || !can(session.role, "manageCoaches")) redirect("/console");
   const ticket = await mintConsoleTicket();
 
-  const coach = await prisma.coach.findUnique({
+  const person = await prisma.person.findUnique({
     where: { id },
-    include: { person: true, availabilityBlocks: { orderBy: { dayOfWeek: "asc" } } },
+    include: { coach: { include: { availabilityBlocks: { orderBy: { dayOfWeek: "asc" } } } } },
   });
-  if (!coach) redirect("/console/coaches?err=notfound");
+  if (!person) redirect("/console/coaches?err=notfound");
+  const coach = person.coach;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Edit coach — ${coach.person.firstName} ${coach.person.lastName}`}
+        title={`Edit coach — ${person.firstName} ${person.lastName}`}
         subtitle="Update certification, availability, and contact on this coach's behalf."
       />
       <Link href="/console/coaches" className="text-sm text-slate-500 hover:underline">← Back to coaches</Link>
       <CoachProfileForm
         ticket={ticket}
-        email={coach.person.email ?? ""}
-        targetPersonId={coach.personId}
+        email={person.email ?? ""}
+        targetPersonId={person.id}
         initial={{
-          phone: coach.person.phone ?? "",
-          rpoCertLevel: coach.rpoCertLevel ?? "",
-          certifications: coach.certifications ?? "",
-          bio: coach.bio ?? "",
-          coachingLevels: coach.coachingLevels ?? "",
-          markets: parseMarkets(coach.marketsCovered),
-          availability: coach.availabilityBlocks.map((b) => ({
+          phone: person.phone ?? "",
+          rpoCertLevel: coach?.rpoCertLevel ?? "",
+          certifications: coach?.certifications ?? "",
+          bio: coach?.bio ?? "",
+          coachingLevels: coach?.coachingLevels ?? "",
+          markets: parseMarkets(coach?.marketsCovered ?? null),
+          availability: (coach?.availabilityBlocks ?? []).map((b) => ({
             dayOfWeek: b.dayOfWeek,
             startTime: b.startTime,
             endTime: b.endTime,

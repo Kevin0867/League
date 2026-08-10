@@ -155,7 +155,7 @@ export default async function RegistrationsPage({
             {registrations.map((r) => (
               <tr key={r.id}>
                 <td className="py-2">
-                  <Link href={`/console/people/${r.person.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">
+                  <Link href={`/console/registrations/${r.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">
                     {r.person.firstName} {r.person.lastName}
                   </Link>
                   <div className="text-xs text-slate-400">{r.person.email ?? r.person.phone ?? "—"}</div>

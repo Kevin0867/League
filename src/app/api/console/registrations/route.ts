@@ -153,6 +153,75 @@ export async function POST(req: Request) {
       return back("?ok=fee");
     }
 
+    // Edit the registration + the player's core details from the detail page.
+    case "editRegistration": {
+      if (!reg) return back("?err=fields");
+      const g = (k: string) => String(fd.get(k) ?? "").trim();
+      const nn = (k: string) => g(k) || null;
+      await prisma.person.update({
+        where: { id: personId },
+        data: {
+          firstName: g("firstName") || undefined,
+          lastName: g("lastName") || undefined,
+          email: nn("email"),
+          phone: nn("phone"),
+          dob: g("dob") ? new Date(g("dob")) : null,
+          gender: nn("gender"),
+          address: nn("address"),
+          howHeard: nn("howHeard"),
+          emergencyName: nn("emergencyName"),
+          emergencyPhone: nn("emergencyPhone"),
+          medicalNotes: nn("medical"),
+        },
+      });
+      await prisma.registration.update({
+        where: { id: reg.id },
+        data: {
+          divisionId: nn("divisionId"),
+          skillLevel: nn("skillLevel"),
+          programInterest: nn("programInterest"),
+          practiceTimePref: nn("practiceTimePref"),
+          schedule: nn("schedule"),
+          partnerRequests: nn("partnerRequests"),
+          daysThatDontWork: nn("daysThatDontWork"),
+          ...(g("status") ? { status: g("status") } : {}),
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "UPDATE", summary: "Edited registration" });
+      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=edit`, origin), 303);
+    }
+
+    // Resend the team-assignment email for a currently-assigned player.
+    case "resendAssignment": {
+      if (!reg) return back("?err=fields");
+      const ids = await seasonTeamIds(reg.seasonId);
+      const membership = ids.length
+        ? await prisma.teamMember.findFirst({ where: { personId, teamId: { in: ids } } })
+        : null;
+      if (!membership) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=notassigned`, origin), 303);
+      await notifyAssignment(membership.teamId, personId, reg.seasonId);
+      await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "RESEND", summary: "Resent assignment email" });
+      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=resent`, origin), 303);
+    }
+
+    // Resend the season-fee request email for an outstanding payment.
+    case "resendPayment": {
+      if (!reg) return back("?err=fields");
+      const person = await prisma.person.findUnique({ where: { id: personId } });
+      const pay = await prisma.payment.findFirst({
+        where: { partyId: personId, seasonId: reg.seasonId, category: "PLAYER_FEE", status: { in: ["REQUESTED", "PENDING"] } },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!person || !pay) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nopayment`, origin), 303);
+      const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
+        channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+      });
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "RESEND", summary: "Resent fee request" });
+      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=resent`, origin), 303);
+    }
+
     // Start a refund on this player's paid season fee.
     case "refund": {
       if (!reg) return back("?err=fields");
