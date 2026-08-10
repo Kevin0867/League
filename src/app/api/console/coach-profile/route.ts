@@ -1,30 +1,42 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
+import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 
-// Coach self-service profile save. A COACH login may not yet have a Coach row
+// Coach profile save. Coaches edit their own; admins (manageCoaches) may edit any
+// coach by passing a `personId`. A COACH login may not yet have a Coach row
 // (accounts are created as Person+User only), so we upsert by personId. Screening
 // fields (background check, onboarding) stay admin-only and are never touched here.
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
-  const back = (qs: string) => NextResponse.redirect(new URL(`/console/profile${qs}`, origin), 303);
 
   const fd = await req.formData();
   const actor = await actorFromForm(fd);
   if (!actor) return NextResponse.redirect(new URL("/login", origin), 303);
 
-  const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
-  if (!me?.personId) return back("?err=noperson");
-
+  // An admin may edit another coach by supplying their personId; otherwise the
+  // caller edits their own profile.
   const g = (k: string) => String(fd.get(k) ?? "").trim();
   const list = (k: string) => fd.getAll(k).map((v) => String(v).trim());
 
+  const targetPersonId = g("personId");
+  const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
+  const editingOther = !!targetPersonId && targetPersonId !== me?.personId;
+  if (editingOther && !can(actor.role, "manageCoaches")) {
+    return NextResponse.redirect(new URL("/console/coaches?err=auth", origin), 303);
+  }
+  const personId = editingOther ? targetPersonId : me?.personId ?? "";
+  const returnBase = editingOther ? "/console/coaches" : "/console/profile";
+  const back = (qs: string) => NextResponse.redirect(new URL(`${returnBase}${qs}`, origin), 303);
+
+  if (!personId) return back("?err=noperson");
+
   // Contact lives on the Person.
   await prisma.person.update({
-    where: { id: me.personId },
+    where: { id: personId },
     data: { phone: g("phone") || null },
   });
 
@@ -37,8 +49,8 @@ export async function POST(req: Request) {
     marketsCovered: markets.length ? JSON.stringify(markets) : null,
   };
   const coach = await prisma.coach.upsert({
-    where: { personId: me.personId },
-    create: { personId: me.personId, ...data },
+    where: { personId },
+    create: { personId, ...data },
     update: data,
   });
 
@@ -60,7 +72,7 @@ export async function POST(req: Request) {
     entityType: "Coach",
     entityId: coach.id,
     action: "coach.profile.update",
-    summary: "Coach updated their profile",
+    summary: editingOther ? "Admin updated coach profile" : "Coach updated their profile",
   });
-  return back("?ok=1");
+  return back(editingOther ? "?ok=profile" : "?ok=1");
 }

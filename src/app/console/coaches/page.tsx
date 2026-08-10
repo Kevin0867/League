@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { coachAssignmentGate } from "@/lib/domain/teams";
@@ -13,6 +14,7 @@ const ERRORS: Record<string, string> = {
   role: "Invalid role, or only the COO can create Director or CEO accounts.",
   exists: "A user with that email already exists.",
   op: "Unknown operation.",
+  notfound: "Coach not found.",
 };
 
 export default async function CoachesPage({
@@ -33,7 +35,9 @@ export default async function CoachesPage({
     <div className="space-y-6">
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
       {sp.ok && (
-        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Account created.</p>
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">
+          {sp.ok === "profile" ? "Coach profile updated." : "Account created."}
+        </p>
       )}
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
@@ -49,6 +53,7 @@ export default async function CoachesPage({
               <th>Teams</th>
               <th>Recruited</th>
               <th>W-9</th>
+              <th className="text-right">Profile</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -72,11 +77,14 @@ export default async function CoachesPage({
                     <span className="ml-1 text-xs text-slate-400">credit{c._count.recruits === 1 ? "" : "s"}</span>
                   </td>
                   <td>{c.w9OnFile ? <span className="badge bg-emerald-100 text-emerald-800">on file</span> : <span className="badge bg-slate-100 text-slate-500">missing</span>}</td>
+                  <td className="text-right">
+                    <Link href={`/console/coaches/${c.id}`} className="text-xs font-medium text-brand-700 hover:underline">Edit</Link>
+                  </td>
                 </tr>
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
           </tbody>
         </table>

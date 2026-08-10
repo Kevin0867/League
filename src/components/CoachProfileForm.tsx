@@ -10,10 +10,13 @@ type Block = { dayOfWeek: string; startTime: string; endTime: string };
 export function CoachProfileForm({
   ticket,
   email,
+  targetPersonId,
   initial,
 }: {
   ticket: string;
   email: string;
+  /** Set when an admin edits another coach; omitted for self-service. */
+  targetPersonId?: string;
   initial: {
     phone: string;
     rpoCertLevel: string;
@@ -31,6 +34,7 @@ export function CoachProfileForm({
   return (
     <form method="POST" action="/api/console/coach-profile" className="space-y-6">
       <input type="hidden" name="ticket" value={ticket} />
+      {targetPersonId && <input type="hidden" name="personId" value={targetPersonId} />}
 
       <section className="card space-y-4">
         <h2 className="font-semibold text-slate-900">Contact</h2>
