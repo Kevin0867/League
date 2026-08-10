@@ -71,9 +71,9 @@ export default async function UsersPage({
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Email</th>
+              <th className="hidden px-4 py-3 sm:table-cell">Email</th>
               <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="hidden px-4 py-3 sm:table-cell">Status</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -90,7 +90,7 @@ export default async function UsersPage({
                     {u.person ? `${u.person.firstName} ${u.person.lastName}` : "—"}
                     {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
                   </td>
-                  <td className="px-4 py-3 text-slate-500">{u.email}</td>
+                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell">{u.email}</td>
                   <td className="px-4 py-3">
                     {locked ? (
                       <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">{ROLE_LABELS[u.role as Role] ?? u.role}</span>
@@ -106,7 +106,7 @@ export default async function UsersPage({
                       </form>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="hidden px-4 py-3 sm:table-cell">
                     <span className={`rounded px-2 py-1 text-xs font-medium ${u.active ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
                       {u.active ? "Active" : "Disabled"}
                     </span>

@@ -83,10 +83,10 @@ export default async function SchedulePage({
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="py-2">Date</th>
-              <th>Wk</th>
-              <th>Type</th>
-              <th>Team(s)</th>
-              <th>Facility</th>
+              <th className="hidden lg:table-cell">Wk</th>
+              <th className="hidden md:table-cell">Type</th>
+              <th className="hidden sm:table-cell">Team(s)</th>
+              <th className="hidden md:table-cell">Facility</th>
               <th>Time</th>
               <th>Status</th>
               <th></th>
@@ -96,10 +96,10 @@ export default async function SchedulePage({
             {sessions.map((s) => (
               <tr key={s.id} className="hover:bg-slate-50">
                 <td className="py-2 text-slate-700">{s.date.toLocaleDateString()}</td>
-                <td className="text-slate-500">{s.weekNumber ?? "—"}</td>
-                <td className="text-slate-600">{TYPE_LABEL[s.type] ?? s.type}</td>
-                <td className="text-slate-600">{s.teams.map((t) => t.team.name).join(", ") || "—"}</td>
-                <td className="text-slate-600">{s.facility?.name ?? "—"}</td>
+                <td className="hidden text-slate-500 lg:table-cell">{s.weekNumber ?? "—"}</td>
+                <td className="hidden text-slate-600 md:table-cell">{TYPE_LABEL[s.type] ?? s.type}</td>
+                <td className="hidden text-slate-600 sm:table-cell">{s.teams.map((t) => t.team.name).join(", ") || "—"}</td>
+                <td className="hidden text-slate-600 md:table-cell">{s.facility?.name ?? "—"}</td>
                 <td className="text-slate-500">{s.startTime}–{s.endTime}</td>
                 <td><StatusBadge status={s.status} /></td>
                 <td className="text-right">

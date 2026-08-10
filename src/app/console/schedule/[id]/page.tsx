@@ -16,6 +16,7 @@ const OK_LABEL: Record<string, string> = {
   cancel: "Session cancelled.",
   relocate: "Session relocated.",
   attendance: "Attendance saved.",
+  edited: "Session updated.",
 };
 
 const ERR_LABEL: Record<string, string> = {
@@ -121,6 +122,33 @@ export default async function SessionDetail({
 
         {/* Session controls */}
         <div className="space-y-4">
+          {/* Reschedule — date, time, facility */}
+          <form method="POST" action="/api/console/schedule" className="card">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="editSession" />
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <input type="hidden" name="sessionId" value={s.id} />
+            <h2 className="mb-3 font-semibold text-slate-900">Reschedule</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="label">Date</label>
+                <input name="date" type="date" className="input" defaultValue={s.date.toISOString().slice(0, 10)} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className="label">Start</label><input name="startTime" type="time" className="input" defaultValue={s.startTime} /></div>
+                <div><label className="label">End</label><input name="endTime" type="time" className="input" defaultValue={s.endTime} /></div>
+              </div>
+              <div>
+                <label className="label">Facility</label>
+                <select name="facilityId" className="input" defaultValue={s.facilityId ?? ""}>
+                  <option value="">— none —</option>
+                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+              <button className="btn-primary w-full">Save changes</button>
+            </div>
+          </form>
+
           {active && (
             <form method="POST" action="/api/console/schedule" className="card">
               <input type="hidden" name="ticket" value={ticket} />

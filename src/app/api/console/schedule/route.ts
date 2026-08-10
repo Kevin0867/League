@@ -35,6 +35,29 @@ export async function POST(req: Request) {
   const actor = await actorFromForm(formData);
   const op = String(formData.get("op") ?? "");
 
+  // Reschedule a single session — date, time, and/or facility (§7).
+  if (op === "editSession") {
+    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    const sessionId = String(formData.get("sessionId") ?? "");
+    if (!sessionId) return back("?err=notfound");
+    const dateStr = String(formData.get("date") ?? "").trim();
+    const startTime = String(formData.get("startTime") ?? "").trim();
+    const endTime = String(formData.get("endTime") ?? "").trim();
+    const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
+    const parsedDate = dateStr ? new Date(dateStr) : null;
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        ...(parsedDate && !isNaN(parsedDate.getTime()) ? { date: parsedDate } : {}),
+        ...(startTime ? { startTime } : {}),
+        ...(endTime ? { endTime } : {}),
+        facilityId,
+      },
+    });
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.edit", summary: "Rescheduled session date/time/facility" });
+    return back("?ok=edited");
+  }
+
   // generateSchedule — manageScheduling (§7)
   if (op === "generate") {
     if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
