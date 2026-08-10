@@ -48,6 +48,7 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
       triggerType: input.triggerType ?? null,
       subject: input.subject ?? null,
       body: input.body,
+      html: input.html ?? null,
     },
   });
 

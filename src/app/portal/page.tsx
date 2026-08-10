@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
 import { NOTICE_DAYS } from "@/lib/domain/availability";
+import { MessageFrame } from "@/components/MessageFrame";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,7 @@ export default async function PortalHome() {
   const registrations = peopleIds.length
     ? await prisma.registration.findMany({
         where: { personId: { in: peopleIds } },
-        include: {
-          person: true,
-          division: true,
-        },
+        include: { person: true, division: true },
         orderBy: { submittedAt: "desc" },
       })
     : [];
@@ -55,6 +53,9 @@ export default async function PortalHome() {
   // Outstanding fees drive a top-of-page call to action; the rest is history.
   const outstandingPayments = payments.filter((p) => p.status === "REQUESTED" || p.status === "PENDING");
   const paymentHistory = payments.filter((p) => p.status !== "REQUESTED" && p.status !== "PENDING");
+  // Match a payment-request announcement to the person's outstanding fee so the
+  // announcement itself is clickable to pay.
+  const outstandingByPerson = new Map(outstandingPayments.filter((p) => p.partyId).map((p) => [p.partyId as string, p]));
 
   // Upcoming league fixtures for the household's teams (§14 — 7-day notice + 48h).
   const teamIds = memberships.map((m) => m.teamId);
@@ -108,6 +109,8 @@ export default async function PortalHome() {
         </div>
       )}
 
+      {/* ── Pinned to the top: Payments, Registrations, Teams ── */}
+
       {/* Outstanding season fees — top-of-page call to action */}
       {outstandingPayments.length > 0 && (
         <section>
@@ -148,67 +151,6 @@ export default async function PortalHome() {
         </section>
       )}
 
-      {/* Announcements / inbox */}
-      <section>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Announcements
-            {unread > 0 && <span className="badge bg-brand-100 text-brand-800">{unread} new</span>}
-          </h2>
-          {inbox.length > 0 && (
-            <div className="flex items-center gap-3">
-              {unread > 0 && (
-                <form method="POST" action="/api/portal">
-                  <input type="hidden" name="ticket" value={ticket} />
-                  <input type="hidden" name="op" value="markAllMessagesRead" />
-                  <button className="text-xs font-medium text-brand-700 hover:underline">Mark all read</button>
-                </form>
-              )}
-              {inbox.some((r) => r.readAt) && (
-                <form method="POST" action="/api/portal">
-                  <input type="hidden" name="ticket" value={ticket} />
-                  <input type="hidden" name="op" value="clearReadMessages" />
-                  <button className="text-xs font-medium text-slate-500 hover:underline">Clear read</button>
-                </form>
-              )}
-            </div>
-          )}
-        </div>
-        {inbox.length === 0 ? (
-          <div className="card text-sm text-slate-500">No messages yet.</div>
-        ) : (
-          <div className="space-y-2">
-            {inbox.map((r) => (
-              <div key={r.id} className={`card ${!r.readAt ? "border-l-4 border-brand-400" : ""}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-slate-800">{r.message.subject ?? "Message from PURE Academy"}</div>
-                    <p className="mt-1 text-sm text-slate-600">{r.message.body}</p>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {r.message.sentAt.toLocaleDateString()} · {r.message.channels.replace(/,/g, ", ")}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <form method="POST" action="/api/portal">
-                      <input type="hidden" name="ticket" value={ticket} />
-                      <input type="hidden" name="op" value={r.readAt ? "markMessageUnread" : "markMessageRead"} />
-                      <input type="hidden" name="recipientId" value={r.id} />
-                      <button className="btn-ghost text-xs whitespace-nowrap">{r.readAt ? "Mark unread" : "Mark read"}</button>
-                    </form>
-                    <form method="POST" action="/api/portal">
-                      <input type="hidden" name="ticket" value={ticket} />
-                      <input type="hidden" name="op" value="deleteMessage" />
-                      <input type="hidden" name="recipientId" value={r.id} />
-                      <button className="text-xs font-medium text-rose-600 hover:underline">Delete</button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* Placement / registration status */}
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Registrations</h2>
@@ -224,9 +166,7 @@ export default async function PortalHome() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold text-slate-800">{r.person.firstName} {r.person.lastName}</div>
-                  <div className="text-sm text-slate-500">
-                    {r.division?.name ?? "Awaiting placement"}
-                  </div>
+                  <div className="text-sm text-slate-500">{r.division?.name ?? "Awaiting placement"}</div>
                 </div>
                 <StatusBadge status={r.status} />
               </div>
@@ -265,6 +205,87 @@ export default async function PortalHome() {
           </div>
         </section>
       )}
+
+      {/* ── Announcements ── */}
+      <section>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Announcements
+            {unread > 0 && <span className="badge bg-brand-100 text-brand-800">{unread} new</span>}
+          </h2>
+          {inbox.length > 0 && (
+            <div className="flex items-center gap-3">
+              {unread > 0 && (
+                <form method="POST" action="/api/portal">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="markAllMessagesRead" />
+                  <button className="text-xs font-medium text-brand-700 hover:underline">Mark all read</button>
+                </form>
+              )}
+              {inbox.some((r) => r.readAt) && (
+                <form method="POST" action="/api/portal">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="clearReadMessages" />
+                  <button className="text-xs font-medium text-slate-500 hover:underline">Clear read</button>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+        {inbox.length === 0 ? (
+          <div className="card text-sm text-slate-500">No messages yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {inbox.map((r) => {
+              const pay = r.message.triggerType === "PAYMENT_REQUEST" && r.message.audienceRef
+                ? outstandingByPerson.get(r.message.audienceRef)
+                : null;
+              return (
+                <div key={r.id} className={`card ${!r.readAt ? "border-l-4 border-brand-400" : ""}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-800">{r.message.subject ?? "Message from PURE Academy"}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">
+                        {r.message.sentAt.toLocaleDateString()} · {r.message.channels.replace(/,/g, ", ")}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <form method="POST" action="/api/portal">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value={r.readAt ? "markMessageUnread" : "markMessageRead"} />
+                        <input type="hidden" name="recipientId" value={r.id} />
+                        <button className="btn-ghost text-xs whitespace-nowrap">{r.readAt ? "Mark unread" : "Mark read"}</button>
+                      </form>
+                      <form method="POST" action="/api/portal">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="deleteMessage" />
+                        <input type="hidden" name="recipientId" value={r.id} />
+                        <button className="text-xs font-medium text-rose-600 hover:underline">Delete</button>
+                      </form>
+                    </div>
+                  </div>
+
+                  {/* A payment-due announcement is clickable straight to checkout. */}
+                  {pay && (
+                    <Link href={`/pay/${pay.id}`} className="btn-primary mt-3 inline-flex text-sm">
+                      Pay {formatCents(pay.amountCents)} now →
+                    </Link>
+                  )}
+
+                  {/* Replicate the emailed notification in HTML when we have it. */}
+                  {r.message.html ? (
+                    <div className="mt-3">
+                      <MessageFrame html={r.message.html} />
+                    </div>
+                  ) : (
+                    <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{r.message.body}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Upcoming matches — availability confirmation (§14) */}
       {fixtures.length > 0 && (

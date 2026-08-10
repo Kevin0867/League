@@ -891,6 +891,9 @@ model Message {
   triggerType  String?
   subject      String?
   body         String
+  /// Optional branded HTML mirror of the message, so the in-app announcement can
+  /// replicate the emailed notification exactly (with its action buttons).
+  html         String?
 
   sentAt       DateTime @default(now())
   createdAt    DateTime @default(now())

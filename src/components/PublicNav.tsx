@@ -9,7 +9,8 @@ export async function PublicNav() {
   return (
     <header className="sticky top-0 z-30 border-b border-brand-100 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <Logo />
+        {/* Logo → academy homepage when signed out, or the user's dashboard when signed in. */}
+        <Logo href={home ?? "/"} />
         <nav className="hidden items-center gap-7 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-500 lg:flex">
           <Link href="/programs" className="hover:text-brand-900">Programs</Link>
           <Link href="/locations" className="hover:text-brand-900">Locations</Link>
