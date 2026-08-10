@@ -18,13 +18,21 @@ const OK_LABEL: Record<string, string> = {
   relocate: "Session relocated.",
   attendance: "Attendance saved.",
   edited: "Session updated.",
+  subAdded: "Coach added to this class.",
+  subRemoved: "Coach removed from this class.",
 };
 
 const ERR_LABEL: Record<string, string> = {
   auth: "You are not authorized to perform that action.",
   session: "Session not found.",
   facility: "Choose a facility to relocate to.",
+  coachgate: "That coach isn't cleared to be assigned (background check + onboarding required).",
+  subclash: "That coach already covers another class at this time. Use “add anyway” to override.",
   op: "Unknown action.",
+};
+
+const COACH_ROLE_LABEL: Record<string, string> = {
+  PRIMARY: "Primary", ASSISTANT: "Assistant", SUBSTITUTE: "Substitute", BACKUP: "Backup",
 };
 
 export default async function SessionDetail({
@@ -50,6 +58,9 @@ export default async function SessionDetail({
   if (!s) notFound();
 
   const facilities = await prisma.facility.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const allCoaches = await prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } });
+  const coachName = new Map(allCoaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`]));
+  const sessionCoachIds = new Set(s.coaches.map((c) => c.coachId));
   const attMap = new Map(s.attendance.map((a) => [a.personId, a.status]));
   const roster = s.teams.flatMap((t) => t.team.members.map((m) => ({ ...m, teamName: t.team.name })));
   const active = s.status === "SCHEDULED" || s.status === "DELIVERED";
@@ -123,6 +134,60 @@ export default async function SessionDetail({
 
         {/* Session controls */}
         <div className="space-y-4">
+          {/* Coaching — primary + add a substitute/backup for this one class */}
+          <div className="card">
+            <h2 className="mb-2 font-semibold text-slate-900">Coaching</h2>
+            {s.coaches.length === 0 ? (
+              <p className="mb-3 text-sm text-slate-400">No coach on this class yet.</p>
+            ) : (
+              <ul className="mb-3 space-y-2">
+                {s.coaches.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm ring-1 ring-slate-100">
+                    <span className="text-slate-700">{coachName.get(c.coachId) ?? "Unknown coach"}</span>
+                    <span className="flex items-center gap-2">
+                      <span className={`badge ${c.role === "PRIMARY" ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600"}`}>
+                        {COACH_ROLE_LABEL[c.role] ?? c.role}
+                      </span>
+                      {c.role !== "PRIMARY" && (
+                        <form method="POST" action="/api/console/schedule">
+                          <input type="hidden" name="ticket" value={ticket} />
+                          <input type="hidden" name="op" value="removeSessionCoach" />
+                          <input type="hidden" name="returnTo" value={returnTo} />
+                          <input type="hidden" name="sessionId" value={s.id} />
+                          <input type="hidden" name="coachId" value={c.coachId} />
+                          <button className="text-xs text-rose-600 hover:underline">Remove</button>
+                        </form>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form method="POST" action="/api/console/schedule" className="space-y-2">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="assignSubstitute" />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <input type="hidden" name="sessionId" value={s.id} />
+              <label className="label">Add a substitute / backup for this class</label>
+              <select name="coachId" className="input" required>
+                <option value="">— choose coach —</option>
+                {allCoaches
+                  .filter((c) => !sessionCoachIds.has(c.id))
+                  .map((c) => <option key={c.id} value={c.id}>{c.person.firstName} {c.person.lastName}</option>)}
+              </select>
+              <select name="role" className="input">
+                <option value="SUBSTITUTE">Substitute</option>
+                <option value="BACKUP">Backup</option>
+                <option value="ASSISTANT">Assistant</option>
+              </select>
+              <label className="flex items-center gap-2 text-xs text-slate-500">
+                <input type="checkbox" name="force" value="1" />
+                Add even if it overlaps another class they cover
+              </label>
+              <button className="btn-secondary w-full text-sm">Add coach to this class</button>
+            </form>
+          </div>
+
           {/* Reschedule — date, time, facility */}
           <form method="POST" action="/api/console/schedule" className="card">
             <input type="hidden" name="ticket" value={ticket} />

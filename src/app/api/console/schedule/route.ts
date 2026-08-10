@@ -5,6 +5,8 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { generatePracticeDates, cancellationOutcome } from "@/lib/domain/schedule";
+import { coachAssignmentGate } from "@/lib/domain/teams";
+import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
 
 // Schedule mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -211,6 +213,46 @@ export async function POST(req: Request) {
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "ATTENDANCE", summary: `Marked attendance for ${personIds.length} player(s)` });
 
     return back("?ok=attendance");
+  }
+
+  // Add a substitute/backup coach for this single class. A coach may sub as long
+  // as it doesn't overlap another session they cover that day.
+  if (op === "assignSubstitute") {
+    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    const sessionId = String(formData.get("sessionId") ?? "");
+    const coachId = String(formData.get("coachId") ?? "").trim();
+    const role = String(formData.get("role") ?? "SUBSTITUTE").trim() || "SUBSTITUTE";
+    const force = String(formData.get("force") ?? "") === "1";
+    if (!sessionId || !coachId) return back("?err=session");
+
+    const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { date: true, startTime: true, endTime: true } });
+    if (!session) return back("?err=session");
+    const coach = await prisma.coach.findUnique({ where: { id: coachId } });
+    if (!coach) return back("?err=coachgate");
+    const gate = coachAssignmentGate(coach);
+    if (!gate.ok) return back("?err=coachgate");
+
+    if (!force) {
+      const clashes = await coachSessionConflicts({ coachId, date: session.date, startTime: session.startTime, endTime: session.endTime, excludeSessionId: sessionId });
+      if (clashes.length) return back("?err=subclash");
+    }
+    await prisma.sessionCoach.upsert({
+      where: { sessionId_coachId: { sessionId, coachId } },
+      create: { sessionId, coachId, role },
+      update: { role },
+    });
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.addCoach", summary: `Added ${role.toLowerCase()} coach ${coachId}` });
+    return back("?ok=subAdded");
+  }
+
+  if (op === "removeSessionCoach") {
+    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    const sessionId = String(formData.get("sessionId") ?? "");
+    const coachId = String(formData.get("coachId") ?? "").trim();
+    if (!sessionId || !coachId) return back("?err=session");
+    await prisma.sessionCoach.deleteMany({ where: { sessionId, coachId } });
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.removeCoach", summary: `Removed coach ${coachId}` });
+    return back("?ok=subRemoved");
   }
 
   return back("?err=op");
