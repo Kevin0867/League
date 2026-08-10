@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
+import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
 
 // Team mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -64,12 +65,18 @@ export async function POST(req: Request) {
       };
 
       const coachId = g("coachId");
+      const force = String(formData.get("force") ?? "") === "1";
       // Coach screening hard gate (§5): no assignment without background check + onboarding.
       if (coachId) {
         const coach = await prisma.coach.findUnique({ where: { id: coachId } });
         if (!coach) return back("?err=coach");
         const gate = coachAssignmentGate(coach);
         if (!gate.ok) return back("?err=coach");
+        // Overlap guard against the coach's OTHER teams, using the new day/time.
+        if (!force) {
+          const clashes = await coachTeamConflicts({ coachId, dayOfWeek: g("dayOfWeek"), startTime: g("startTime"), excludeTeamId: teamId });
+          if (clashes.length) return back(`?err=coachclash&team=${encodeURIComponent(clashes[0].teamName)}`);
+        }
       }
 
       await prisma.team.update({
@@ -105,15 +112,61 @@ export async function POST(req: Request) {
     case "assignCoach": {
       if (!teamId) return back("?err=team");
       const coachId = String(formData.get("coachId") ?? "").trim() || null;
+      const force = String(formData.get("force") ?? "") === "1";
       if (coachId) {
         const coach = await prisma.coach.findUnique({ where: { id: coachId } });
         if (!coach) return back("?err=coach");
         const gate = coachAssignmentGate(coach);
         if (!gate.ok) return back("?err=coach");
+        // A coach can hold multiple teams at different times/locations, but not
+        // with overlapping day/time. Block unless the admin forces it.
+        const team = await prisma.team.findUnique({ where: { id: teamId }, select: { dayOfWeek: true, startTime: true } });
+        if (!force) {
+          const clashes = await coachTeamConflicts({ coachId, dayOfWeek: team?.dayOfWeek, startTime: team?.startTime, excludeTeamId: teamId });
+          if (clashes.length) {
+            return NextResponse.redirect(new URL(`/console/matching?err=coachclash&team=${encodeURIComponent(clashes[0].teamName)}`, origin), 303);
+          }
+        }
       }
       await prisma.team.update({ where: { id: teamId }, data: { coachId } });
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: coachId ? `Assigned coach ${coachId}` : "Cleared coach" });
       return NextResponse.redirect(new URL(`/console/matching?ok=${coachId ? "assignedCoach" : "clearedCoach"}`, origin), 303);
+    }
+
+    // Add an assistant / additional coach to a team (beyond the head coach).
+    case "addTeamCoach": {
+      if (!teamId) return back("?err=team");
+      const coachId = String(formData.get("coachId") ?? "").trim();
+      const role = String(formData.get("role") ?? "ASSISTANT").trim() || "ASSISTANT";
+      const force = String(formData.get("force") ?? "") === "1";
+      if (!coachId) return back("?err=coach");
+      const coach = await prisma.coach.findUnique({ where: { id: coachId } });
+      if (!coach) return back("?err=coach");
+      const gate = coachAssignmentGate(coach);
+      if (!gate.ok) return back("?err=coachgate");
+
+      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { coachId: true, dayOfWeek: true, startTime: true } });
+      if (team?.coachId === coachId) return back("?err=coachishead");
+      if (!force) {
+        const clashes = await coachTeamConflicts({ coachId, dayOfWeek: team?.dayOfWeek, startTime: team?.startTime, excludeTeamId: teamId });
+        if (clashes.length) return back(`?err=coachclash&team=${encodeURIComponent(clashes[0].teamName)}`);
+      }
+      await prisma.teamCoach.upsert({
+        where: { teamId_coachId: { teamId, coachId } },
+        create: { teamId, coachId, role },
+        update: { role },
+      });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ADD_COACH", summary: `Added ${role.toLowerCase()} coach ${coachId}` });
+      return back("?ok=addTeamCoach");
+    }
+
+    case "removeTeamCoach": {
+      if (!teamId) return back("?err=team");
+      const coachId = String(formData.get("coachId") ?? "").trim();
+      if (!coachId) return back("?err=coach");
+      await prisma.teamCoach.deleteMany({ where: { teamId, coachId } });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "REMOVE_COACH", summary: `Removed additional coach ${coachId}` });
+      return back("?ok=removeTeamCoach");
     }
 
     case "removePlayer": {

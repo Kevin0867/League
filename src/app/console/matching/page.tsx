@@ -14,6 +14,7 @@ const ERR: Record<string, string> = {
   auth: "Not authorized.",
   team: "Team not found.",
   coach: "That coach can't be assigned — not cleared (background check + onboarding required).",
+  coachclash: "That coach already coaches another team at this day/time — pick a non-overlapping slot.",
 };
 
 function parseMarkets(json: string | null): string[] {

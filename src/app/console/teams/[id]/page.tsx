@@ -16,12 +16,17 @@ const OK_MSG: Record<string, string> = {
   unpublishTeam: "Team unpublished.",
   requestSeasonFees: "Season fee requests sent.",
   resentAll: "Fee reminders resent to unpaid players.",
+  addTeamCoach: "Coach added to the team.",
+  removeTeamCoach: "Coach removed from the team.",
 };
 
 const ERR_MSG: Record<string, string> = {
   auth: "Not authorized to manage teams.",
   team: "Missing team.",
   coach: "Cannot assign this coach — not cleared (background check + onboarding required).",
+  coachgate: "Cannot add this coach — not cleared (background check + onboarding required).",
+  coachishead: "That coach is already the head coach of this team.",
+  coachclash: "That coach already coaches another team at this day/time. Pick a non-overlapping slot or use “add anyway.”",
   player: "Missing player.",
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",
@@ -44,6 +49,7 @@ export default async function TeamDetailPage({
       facility: true,
       division: true,
       coach: { include: { person: true } },
+      assistantCoaches: { include: { coach: { include: { person: true } } } },
       members: { include: { person: true }, orderBy: { joinedAt: "asc" } },
       season: { include: { divisions: { orderBy: { name: "asc" } } } },
     },
@@ -239,11 +245,86 @@ export default async function TeamDetailPage({
               <input type="checkbox" name="coachPlays" defaultChecked={team.coachPlays} />
               Coach plays on this team (fills a roster slot; no second coach assigned)
             </label>
+            <label className="flex items-center gap-2 text-sm text-slate-500">
+              <input type="checkbox" name="force" value="1" />
+              Allow this coach to overlap another team&apos;s day/time
+            </label>
 
             <div className="flex justify-end">
               <button className="btn-primary">Save team</button>
             </div>
           </form>
+
+          {/* Coaching staff — head coach + additional/assistant coaches. */}
+          <div className="card mt-4 space-y-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">Coaching staff</h2>
+              <p className="text-sm text-slate-500">
+                The head coach is set above. Add a 2nd/3rd or assistant coach here — a coach may hold multiple teams
+                as long as the day/times don&apos;t overlap.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-100">
+                <span className="text-slate-700">
+                  {team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "No head coach set"}
+                </span>
+                <span className="badge bg-brand-100 text-brand-800">Head</span>
+              </div>
+              {team.assistantCoaches.map((tc) => (
+                <div key={tc.id} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm ring-1 ring-slate-100">
+                  <span className="text-slate-700">{tc.coach.person.firstName} {tc.coach.person.lastName}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="badge bg-slate-100 text-slate-600 capitalize">{tc.role.toLowerCase()}</span>
+                    <form method="POST" action="/api/console/teams">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="removeTeamCoach" />
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <input type="hidden" name="coachId" value={tc.coachId} />
+                      <button className="text-xs text-rose-600 hover:underline">Remove</button>
+                    </form>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <form method="POST" action="/api/console/teams" className="grid gap-2 sm:grid-cols-6 sm:items-end">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="addTeamCoach" />
+              <input type="hidden" name="teamId" value={team.id} />
+              <div className="sm:col-span-3">
+                <label className="label">Add coach</label>
+                <select name="coachId" className="input" required>
+                  <option value="">—</option>
+                  {coaches
+                    .filter((c) => c.id !== team.coachId && !team.assistantCoaches.some((tc) => tc.coachId === c.id))
+                    .map((c) => {
+                      const gate = coachAssignmentGate(c);
+                      return (
+                        <option key={c.id} value={c.id} disabled={!gate.ok}>
+                          {c.person.firstName} {c.person.lastName}{!gate.ok ? " (not cleared)" : ""}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Role</label>
+                <select name="role" className="input">
+                  <option value="ASSISTANT">Assistant</option>
+                  <option value="ADDITIONAL">Additional coach</option>
+                </select>
+              </div>
+              <div className="sm:col-span-1">
+                <button className="btn-secondary w-full">Add</button>
+              </div>
+              <label className="sm:col-span-6 flex items-center gap-2 text-xs text-slate-500">
+                <input type="checkbox" name="force" value="1" />
+                Add even if it overlaps another team&apos;s day/time
+              </label>
+            </form>
+          </div>
 
           {/* Danger zone */}
           <div className="mt-4 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50/50 px-5 py-4">

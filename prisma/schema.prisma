@@ -272,8 +272,25 @@ model Team {
   awayFixtures  Fixture[] @relation("AwayTeam")
   pairings      Pairing[]
   sessions      SessionTeam[]
+  assistantCoaches TeamCoach[]
 
   @@index([seasonId, divisionId])
+  @@index([coachId])
+}
+
+/// Additional coaches on a team beyond the head coach (Team.coachId). A team may
+/// carry a 2nd/3rd coach or assistant; a single-class substitute is modeled at
+/// the session level (SessionCoach) instead. role: ASSISTANT | ADDITIONAL.
+model TeamCoach {
+  id        String @id @default(cuid())
+  teamId    String
+  team      Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  coachId   String
+  coach     Coach  @relation("TeamAssistantCoach", fields: [coachId], references: [id])
+  role      String @default("ASSISTANT")
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, coachId])
   @@index([coachId])
 }
 
@@ -339,6 +356,7 @@ model Coach {
   updatedAt           DateTime  @updatedAt
 
   teams               Team[]         @relation("TeamCoach")
+  assistantTeams      TeamCoach[]    @relation("TeamAssistantCoach")
   availabilityBlocks  AvailabilityBlock[]
   recruits            Person[]       @relation("CoachRecruits")
   recruitedRegs       Registration[]
