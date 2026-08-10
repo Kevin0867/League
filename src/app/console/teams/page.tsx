@@ -44,6 +44,16 @@ export default async function TeamBuildBoard({
 
   const ready = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const published = teams.filter((t) => t.published).length;
+  const anyRosterMin = teams.some((t) => rosterStatus(t._count.members, t.coachPlays).meetsMinimum);
+  const readyToPublish = teams.filter((t) => canPublishTeam(t, t.facility).ok && !t.published).length;
+
+  const steps = [
+    { done: teams.length > 0, label: "Create your first team", href: null, cta: "Create a team below" },
+    { done: teams.some((t) => teamMissingFields(t).length === 0), label: "Complete each team (division, coach, facility, day/time)", href: null, cta: "" },
+    { done: anyRosterMin, label: `Fill rosters to the minimum (${TEAM_MIN})`, href: "/console/board", cta: "Assignment board" },
+    { done: published > 0, label: "Publish ready teams to families", href: null, cta: "" },
+  ];
+  const nextStep = steps.find((s) => !s.done);
 
   return (
     <div className="space-y-6">
@@ -70,14 +80,39 @@ export default async function TeamBuildBoard({
         </p>
       )}
 
+      {/* Guided next steps */}
+      <div className="card border-l-4 border-brand-500">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-brand-900">Team build checklist</h2>
+            {nextStep ? (
+              <p className="mt-0.5 text-sm text-slate-600">Next: <span className="font-medium text-slate-800">{nextStep.label}</span></p>
+            ) : (
+              <p className="mt-0.5 text-sm text-emerald-700">Every team is complete and published. 🎉</p>
+            )}
+          </div>
+          {readyToPublish > 0 && (
+            <span className="badge bg-emerald-100 text-emerald-800">{readyToPublish} ready to publish</span>
+          )}
+        </div>
+        <ol className="mt-3 space-y-2 text-sm">
+          {steps.map((s, i) => (
+            <li key={i} className="flex items-center gap-2">
+              <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${s.done ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>{s.done ? "✓" : i + 1}</span>
+              <span className={s.done ? "text-slate-500 line-through" : "text-slate-700"}>{s.label}</span>
+              {!s.done && s.href && <Link href={s.href} className="text-xs text-accent-700 underline">{s.cta}</Link>}
+            </li>
+          ))}
+        </ol>
+      </div>
+
       <TeamCreateForm ticket={ticket} seasons={seasons} facilities={facilities} />
 
       {teams.length === 0 ? (
         <div className="card">
           <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-            No teams yet. Teams are formed by assigning registered players out of
-            division × location × time pools. (Pool view &amp; assignment engine
-            is the next slice.)
+            No teams yet. Create one above, then fill its roster by dragging players from the pools on the{" "}
+            <Link href="/console/board" className="text-accent-700 underline">Assignment board</Link>.
           </p>
         </div>
       ) : (
@@ -141,7 +176,17 @@ export default async function TeamBuildBoard({
                   )}
                 </div>
 
-                <div className="mt-3 border-t border-slate-100 pt-2 text-right">
+                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2">
+                  {publish.ok && !t.published ? (
+                    <form method="POST" action="/api/console/teams">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="publishTeam" />
+                      <input type="hidden" name="teamId" value={t.id} />
+                      <button className="btn-primary py-1 text-xs">Publish to families</button>
+                    </form>
+                  ) : (
+                    <span />
+                  )}
                   <Link href={`/console/teams/${t.id}`} className="text-xs font-medium text-brand-600 hover:underline">
                     Manage team →
                   </Link>
