@@ -66,15 +66,14 @@ export function ConsoleShell({
         <aside
           className={`${open ? "block" : "hidden"} w-full shrink-0 bg-brand-900 md:block md:w-64`}
         >
-          <div className="hidden items-center gap-3 px-5 py-4 md:flex">
-            <span className="inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm">
-              <Logo href="/console" className="h-7" />
-            </span>
+          <Link href="/console" className="hidden items-center gap-3 px-5 py-4 md:flex" aria-label="PURE Academy Console">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/pure-icon.png" alt="PURE" className="h-10 w-10" />
             <div className="leading-tight">
               <div className="text-sm font-extrabold uppercase tracking-wide text-white">Academy Console</div>
               <div className="text-[11px] text-brand-200">{ROLE_LABELS[role]}</div>
             </div>
-          </div>
+          </Link>
           <nav className="space-y-1 px-3 pb-6 pt-2">
             {items.map((item) => {
               const active =
