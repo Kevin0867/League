@@ -91,6 +91,17 @@ export default async function RegistrationDetail({
       {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>}
 
+      {/* Signup comments / placement requests — surfaced prominently. */}
+      {reg.partnerRequests && reg.partnerRequests.trim() && (
+        <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">💬 Signup comments / requests</p>
+            <Link href="/console/requests" className="text-xs text-amber-700 underline">Placement requests →</Link>
+          </div>
+          <p className="mt-1 text-sm text-slate-700">“{reg.partnerRequests.trim()}”</p>
+        </div>
+      )}
+
       {/* Team & fee actions */}
       <div className="card space-y-4">
         <h2 className="font-semibold text-slate-900">Placement &amp; payments</h2>

@@ -49,7 +49,7 @@ export default async function EditCoachPage({
       <Link href="/console/coaches" className="text-sm text-slate-500 hover:underline">← Back to coaches</Link>
       {ok === "account" && (
         <div className="rounded-lg bg-accent-50 px-4 py-3 text-sm text-accent-800">
-          Coach account created. Complete their profile below — certification, screening, markets, and day/time availability — then save.
+          Coach account created and an invite to set their password was emailed. Complete their profile below — certification, screening, markets, and day/time availability — then save.
         </div>
       )}
       {ok === "profile" && (

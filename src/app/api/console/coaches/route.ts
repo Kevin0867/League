@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm, hashPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
+import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
+import { appUrl } from "@/lib/stripe";
 import type { Role } from "@/lib/enums";
 
 // Staff/coach account creation as a native-form-POST route handler with ticket
@@ -63,6 +66,17 @@ export async function POST(req: Request) {
         action: "user.create",
         summary: `Created ${role} account for ${email}`,
       });
+
+      // Notify the new account holder: email a set-password / join link so a
+      // coach doesn't depend on the admin relaying the temporary password.
+      try {
+        const token = await createResetToken(user.id, INVITE_TTL_MS);
+        const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
+        await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
+        await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: `Invite emailed to ${email}` });
+      } catch (e) {
+        console.error("coach invite email failed", e);
+      }
 
       // For a coach, drop the admin straight onto the full profile form so they
       // can fill in certification, screening, markets, and availability now.

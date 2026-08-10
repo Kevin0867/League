@@ -10,6 +10,7 @@ type Card = {
   waiver: boolean;
   rating: number | null;
   divisionName: string | null;
+  comment?: string | null;
 };
 
 export type BoardColumn = {
@@ -147,9 +148,13 @@ export function AssignmentBoard({
                 >
                   {card.name}
                 </Link>
+                {card.comment && <span title={card.comment} className="shrink-0 text-xs">💬</span>}
                 {!card.waiver && <span title="Waiver outstanding" className="shrink-0 text-xs text-amber-500">⚠</span>}
               </div>
               {card.rating != null && <div className="text-[11px] text-slate-400">DUPR {card.rating}</div>}
+              {card.comment && (
+                <div className="mt-0.5 line-clamp-2 text-[11px] italic text-slate-500" title={card.comment}>“{card.comment}”</div>
+              )}
             </div>
           ))}
         </div>

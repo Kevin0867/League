@@ -27,6 +27,7 @@ const toCard = (r: {
   personId: string;
   person: { firstName: string; lastName: string; waiverSignedAt: Date | null; duprRating: number | null };
   division: { name: string } | null;
+  partnerRequests?: string | null;
 }) => ({
   registrationId: r.id,
   personId: r.personId,
@@ -34,6 +35,7 @@ const toCard = (r: {
   waiver: !!r.person.waiverSignedAt,
   rating: r.person.duprRating ?? null,
   divisionName: r.division?.name ?? null,
+  comment: r.partnerRequests ?? null,
 });
 
 export default async function BoardPage() {
