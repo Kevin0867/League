@@ -181,14 +181,6 @@ export function RegisterForm({
           </span>
         </label>
 
-        <label className="mt-3 flex items-start gap-2 text-sm">
-          <input type="checkbox" name="mediaOptOut" className="mt-0.5" />
-          <span>
-            I do <strong>not</strong> consent to the use of photos/videos of me or my
-            minor child(ren) (Photo/Video Release opt-out).
-          </span>
-        </label>
-
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="signatureName">Signature (type full legal name)</label>

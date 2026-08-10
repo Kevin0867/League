@@ -91,10 +91,6 @@ export default async function WaiverRenewPage({
             sign it freely and voluntarily.
           </span>
         </label>
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" name="mediaOptOut" className="mt-0.5" />
-          <span>I do <strong>not</strong> consent to the use of my photos/videos (Photo/Video Release opt-out).</span>
-        </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="signatureName">Signature (type full legal name)</label>
