@@ -70,7 +70,7 @@ export function ConsoleShell({
               PA
             </span>
             <div className="leading-tight">
-              <div className="text-sm font-bold text-slate-900">PURE Console</div>
+              <div className="text-sm font-bold text-slate-900">Academy Console</div>
               <div className="text-[11px] text-slate-400">{ROLE_LABELS[role]}</div>
             </div>
           </div>
@@ -101,14 +101,17 @@ export function ConsoleShell({
 
         {/* Main */}
         <main className="min-w-0 flex-1">
-          <div className="hidden items-center justify-between border-b border-slate-200 bg-white px-6 py-3 md:flex">
-            <div className="flex items-center gap-3">
-              <Logo href="/console" className="h-8" />
-              <span className="text-sm text-slate-500">
+          <div className="sticky top-0 z-30 hidden grid-cols-3 items-center border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur md:grid">
+            <div className="justify-self-start">
+              <Logo href="/console" className="h-9" />
+            </div>
+            <div className="justify-self-center text-base font-semibold tracking-tight text-brand-900">
+              Academy Console
+            </div>
+            <div className="flex items-center gap-4 justify-self-end">
+              <span className="hidden text-sm text-slate-500 lg:inline">
                 Signed in as <span className="font-semibold text-slate-800">{name}</span>
               </span>
-            </div>
-            <div className="flex items-center gap-4">
               <Link href="/logout" prefetch={false} className="btn-ghost text-sm">Sign out</Link>
               <PadelLogo className="h-8" />
             </div>
