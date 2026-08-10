@@ -134,6 +134,9 @@ model Person {
   pairingsAsA        Pairing[]        @relation("PairingPlayerA")
   pairingsAsB        Pairing[]        @relation("PairingPlayerB")
   messageReceipts    MessageRecipient[]
+  conversationsCreated Conversation[]            @relation("ConversationCreator")
+  conversationParts    ConversationParticipant[]
+  chatMessages         ChatMessage[]             @relation("ChatMessageSender")
   alaCarteBookings   AlaCarteBooking[] @relation("AlaCarteClient")
   recruitedByCoachId String?
   recruitedByCoach   Coach?           @relation("CoachRecruits", fields: [recruitedByCoachId], references: [id])
@@ -959,6 +962,56 @@ model MessageRecipient {
 
   @@unique([messageId, personId])
   @@index([personId])
+}
+
+// ===========================================================================
+// DIRECT MESSAGING — on-platform, retained. Peer-to-peer conversations between
+// staff, coaches, and parents. Everything is retained even after a user hides a
+// thread or deletes a message, so an Admin can review any exchange.
+// ===========================================================================
+
+model Conversation {
+  id            String   @id @default(cuid())
+  subject       String?
+  createdById   String?
+  createdBy     Person?  @relation("ConversationCreator", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+  /// Bumped on every new message so inboxes sort by recent activity.
+  lastMessageAt DateTime @default(now())
+
+  participants  ConversationParticipant[]
+  messages      ChatMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  personId       String
+  person         Person       @relation(fields: [personId], references: [id])
+  lastReadAt     DateTime?
+  /// User archived / "deleted" the thread. Hidden from THEM; retained for Admins.
+  hiddenAt       DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, personId])
+  @@index([personId])
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         Person       @relation("ChatMessageSender", fields: [senderId], references: [id])
+  body           String
+  /// Soft-delete: hidden from participants, retained for Admin moderation.
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
 }
 
 // ===========================================================================
