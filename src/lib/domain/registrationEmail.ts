@@ -1,7 +1,7 @@
 import "server-only";
 import { sendEmail } from "@/lib/notify";
 import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
-import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { SUPPORT_EMAIL, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 import { appUrl } from "@/lib/stripe";
 
 function esc(s: string): string {
@@ -60,7 +60,7 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
     `We'll email your team placement and a secure link to pay the season fee.`,
     ``,
     `Explore PURE Academy programs: ${appUrl()}/programs`,
-    `Any issues, contact us at ${SUPPORT_EMAIL}.`,
+    `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
   return sendEmail(

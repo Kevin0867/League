@@ -1,4 +1,4 @@
-import { ACADEMY_LOGO, PADEL_LOGO, SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { ACADEMY_LOGO, PADEL_LOGO, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export default async function PaySuccessPage({
           )}
           <p className="mt-6 text-xs text-slate-400">
             Questions? Contact us at{" "}
-            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-600 underline">{SUPPORT_EMAIL}</a>.
+            <a href={`mailto:${SUPPORT_ADDRESS}`} className="text-brand-600 underline">{SUPPORT_ADDRESS}</a>.
           </p>
         </div>
       </div>

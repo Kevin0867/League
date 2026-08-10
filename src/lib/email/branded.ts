@@ -1,6 +1,6 @@
 import "server-only";
 import { appUrl } from "@/lib/stripe";
-import { ACADEMY_LOGO, PADEL_LOGO, SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { ACADEMY_LOGO, PADEL_LOGO, SUPPORT_EMAIL, emailAddressOf } from "@/lib/payments/receipt";
 
 // Shared branded email shell: PURE Academy logo top-left, PURE Pickleball &
 // Padel top-right, and a "contact us at team@" footer — matching the payment
@@ -28,7 +28,7 @@ export function brandedEmailHtml(opts: {
   supportEmail?: string;
 }): string {
   const base = appUrl();
-  const support = opts.supportEmail ?? SUPPORT_EMAIL;
+  const support = emailAddressOf(opts.supportEmail ?? SUPPORT_EMAIL);
   return `<!doctype html><html><body style="margin:0;background:#f1f5f9;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
   <table style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0">
     <tr><td style="padding:16px 22px;background:#ffffff;border-bottom:1px solid #e2e8f0">

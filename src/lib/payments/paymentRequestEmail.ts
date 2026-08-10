@@ -2,7 +2,7 @@ import "server-only";
 import { appUrl } from "@/lib/stripe";
 import { formatCents } from "@/lib/money";
 import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
-import { INSTALLMENT_COUNT, splitInstallments, SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { INSTALLMENT_COUNT, splitInstallments, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 
 // Branded fee-request email with two CTAs — pay in full, or 3 equal payments —
 // each deep-linking to the PUBLIC /pay page with the plan preselected — payable
@@ -42,7 +42,7 @@ export function paymentRequestEmail(opts: {
     `Pay in 3 payments of ${per} (nothing today): ${payInstall}`,
     ``,
     `The fee reserves a place on a team, not a session count.`,
-    `Any issues, contact us at ${SUPPORT_EMAIL}.`,
+    `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
   return {

@@ -10,6 +10,17 @@ import { sendEmail } from "@/lib/notify";
 
 export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "team@purepickleball.com";
 export const SUPPORT_PHONE = process.env.SUPPORT_PHONE || "";
+
+// SUPPORT_EMAIL may be configured as a bare address or as a display-name form
+// like `PURE Academy <team@purepickleball.com>`. A display name inside a
+// `mailto:` makes mail clients show a reversed "Last First" recipient (e.g.
+// "Academy PURE"), and the `<addr>` also gets swallowed as an HTML tag in the
+// visible text. So always extract the bare address for both the href and label.
+export function emailAddressOf(raw: string): string {
+  const m = raw.match(/<([^>]+)>/);
+  return (m ? m[1] : raw).trim();
+}
+export const SUPPORT_ADDRESS = emailAddressOf(SUPPORT_EMAIL);
 export const ACADEMY_LOGO = "/brand/pure-academy-navy.png";
 export const PADEL_LOGO = "/brand/pure-pickleball-padel.png";
 
@@ -93,7 +104,7 @@ export async function loadReceipt(paymentId: string): Promise<Receipt | null> {
     plan,
     paidNow: plan === "UPFRONT",
     installments,
-    supportEmail: SUPPORT_EMAIL,
+    supportEmail: SUPPORT_ADDRESS,
     supportPhone: SUPPORT_PHONE,
   };
 }

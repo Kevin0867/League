@@ -1,7 +1,7 @@
 import "server-only";
 import { appUrl } from "@/lib/stripe";
 import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
-import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 
 // Branded team-assignment email: team, coach, location + address, practice
 // day/time, and a button to view the full team (coach info + teammates).
@@ -59,7 +59,7 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
     `View your team (coach info + teammates): ${teamUrl}`,
     `Your season fee request will follow shortly.`,
     ``,
-    `Any issues, contact us at ${SUPPORT_EMAIL}.`,
+    `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
   return {

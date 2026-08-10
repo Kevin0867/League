@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
-import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT, SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +40,7 @@ export default async function PublicPayPage({
             <h1 className="text-xl font-bold text-slate-900">Payment link not found</h1>
             <p className="mt-2 text-slate-500">
               This payment link isn&apos;t valid. Please check the most recent email, or contact us at{" "}
-              <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-600 underline">{SUPPORT_EMAIL}</a>.
+              <a href={`mailto:${SUPPORT_ADDRESS}`} className="text-brand-600 underline">{SUPPORT_ADDRESS}</a>.
             </p>
           </div>
         ) : payment!.status === "PAID" ? (
@@ -55,7 +55,7 @@ export default async function PublicPayPage({
 
         <p className="mt-6 text-center text-xs text-slate-400">
           Questions? Contact us at{" "}
-          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-600 underline">{SUPPORT_EMAIL}</a>.
+          <a href={`mailto:${SUPPORT_ADDRESS}`} className="text-brand-600 underline">{SUPPORT_ADDRESS}</a>.
         </p>
       </div>
     </div>

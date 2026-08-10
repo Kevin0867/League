@@ -1,7 +1,7 @@
 import "server-only";
 import { sendEmail } from "@/lib/notify";
 import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
-import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
+import { SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 
 const ROLE_WORD: Record<string, string> = {
   COO: "Chief Operating Officer",
@@ -34,7 +34,7 @@ export async function sendConsoleInvite(opts: {
     opts.link,
     ``,
     `This link expires in 7 days.`,
-    `Questions? Contact us at ${SUPPORT_EMAIL}.`,
+    `Questions? Contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
   return sendEmail(
