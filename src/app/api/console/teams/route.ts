@@ -229,6 +229,37 @@ export async function POST(req: Request) {
       return back("?ok=unpublishTeam");
     }
 
+    // Delete a team: return its players to the pool, drop its fixtures, remove it.
+    case "deleteTeam": {
+      const team = await prisma.team.findUnique({ where: { id: teamId }, include: { members: true } });
+      if (!team) return back("?err=notfound");
+
+      // Send rostered players back to the pool for the season.
+      const memberIds = team.members.map((m) => m.personId);
+      if (memberIds.length) {
+        await prisma.registration.updateMany({
+          where: { personId: { in: memberIds }, seasonId: team.seasonId, status: "ASSIGNED" },
+          data: { status: "SUBMITTED" },
+        });
+      }
+      await prisma.teamMember.deleteMany({ where: { teamId } });
+
+      // Remove fixtures that reference this team (and their confirmations).
+      const fx = await prisma.fixture.findMany({
+        where: { OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] },
+        select: { id: true },
+      });
+      const fxIds = fx.map((f) => f.id);
+      if (fxIds.length) {
+        await prisma.availabilityConfirmation.deleteMany({ where: { fixtureId: { in: fxIds } } });
+        await prisma.fixture.deleteMany({ where: { id: { in: fxIds } } });
+      }
+
+      await prisma.team.delete({ where: { id: teamId } });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "team.delete", summary: `Deleted team ${team.name}` });
+      return NextResponse.redirect(new URL("/console/teams?ok=deleteTeam", origin), 303);
+    }
+
     default:
       return back("?err=op");
   }

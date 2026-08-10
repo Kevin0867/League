@@ -12,7 +12,7 @@ import { TeamCreateForm } from "./TeamCreateForm";
 
 export const dynamic = "force-dynamic";
 
-const OK: Record<string, string> = { createTeam: "Team created." };
+const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool." };
 const ERRORS: Record<string, string> = {
   fields: "Team name and season are required.",
   auth: "You don't have permission to manage teams.",

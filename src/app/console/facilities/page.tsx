@@ -43,55 +43,70 @@ export default async function FacilitiesPage() {
         <FacilityForm ticket={ticket} />
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-            <tr>
-              <th className="py-2">Facility</th>
-              <th>Market</th>
-              <th>Courts</th>
-              <th>Fee basis</th>
-              <th>Rate (wd / we)</th>
-              <th>À la carte</th>
-              <th>Agreement</th>
-              <th>Next action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {facilities.map((f) => (
-              <tr key={f.id}>
-                <td className="py-2">
-                  <div className="font-medium text-slate-800">{f.name}</div>
-                  {f.isPrivate && (
-                    <div className="text-xs text-amber-600">private · shown publicly as “{f.generalArea ?? f.market}”</div>
-                  )}
-                  <div className="text-xs text-slate-400">{f.primaryContact ?? "no contact"}</div>
-                </td>
-                <td className="text-slate-600">{f.market ?? "—"}</td>
-                <td className="text-slate-600">{f.courtCount}</td>
-                <td className="text-slate-600">{FEE_LABEL[f.feeBasis] ?? f.feeBasis}</td>
-                <td className="text-slate-600">
-                  {f.feeBasis === "PERCENTAGE"
-                    ? `${((f.percentageRate ?? 0) * 100).toFixed(0)}%`
-                    : f.feeBasis === "NONE"
-                    ? "—"
-                    : `${formatCents(f.weekdayRateCents)} / ${formatCents(f.weekendRateCents)}`}
-                </td>
-                <td>
-                  {f.alaCarteAllowed
-                    ? <span className="badge bg-emerald-100 text-emerald-800">allowed</span>
-                    : <span className="badge bg-slate-100 text-slate-500">no</span>}
-                </td>
-                <td><StatusBadge status={f.agreementStatus} /></td>
-                <td className="text-slate-500">{NEXT_ACTION[f.agreementStatus]}</td>
-              </tr>
-            ))}
-            {facilities.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-slate-400">No facilities yet.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {facilities.length === 0 ? (
+        <div className="card py-12 text-center text-slate-400">No facilities yet.</div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {facilities.map((f) => {
+            const rate =
+              f.feeBasis === "PERCENTAGE"
+                ? `${((f.percentageRate ?? 0) * 100).toFixed(0)}% of on-site revenue`
+                : f.feeBasis === "NONE"
+                ? "No fee (in-kind)"
+                : `${formatCents(f.weekdayRateCents)} weekday / ${formatCents(f.weekendRateCents)} weekend`;
+            const nextAction = NEXT_ACTION[f.agreementStatus];
+            return (
+              <div key={f.id} className="card flex flex-col gap-4">
+                {/* Header: name + agreement status */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-slate-900">{f.name}</div>
+                    <div className="mt-0.5 text-sm text-slate-500">
+                      {f.market ?? "No market"} · {f.courtCount} court{f.courtCount === 1 ? "" : "s"}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-400">{f.primaryContact ?? "No contact on file"}</div>
+                    {f.isPrivate && (
+                      <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                        Private · shown publicly as “{f.generalArea ?? f.market}”
+                      </div>
+                    )}
+                  </div>
+                  <StatusBadge status={f.agreementStatus} />
+                </div>
+
+                {/* Details */}
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4 text-sm">
+                  <Detail label="Fee basis" value={FEE_LABEL[f.feeBasis] ?? f.feeBasis} />
+                  <Detail label="Rate" value={rate} />
+                  <Detail
+                    label="À la carte"
+                    value={
+                      f.alaCarteAllowed
+                        ? <span className="badge bg-emerald-100 text-emerald-800">Allowed</span>
+                        : <span className="badge bg-slate-100 text-slate-500">Not allowed</span>
+                    }
+                  />
+                  <Detail
+                    label="Next action"
+                    value={nextAction === "—"
+                      ? <span className="text-slate-400">Nothing pending</span>
+                      : <span className="font-medium text-slate-700">{nextAction}</span>}
+                  />
+                </dl>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
+      <dd className="mt-0.5 text-slate-700">{value}</dd>
     </div>
   );
 }

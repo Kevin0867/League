@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } from "@/lib/domain/teams";
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { mintConsoleTicket } from "@/lib/auth";
+import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 
 export const dynamic = "force-dynamic";
 
@@ -231,6 +232,15 @@ export default async function TeamDetailPage({
               <button className="btn-primary">Save team</button>
             </div>
           </form>
+
+          {/* Danger zone */}
+          <div className="mt-4 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50/50 px-5 py-4">
+            <div>
+              <div className="text-sm font-semibold text-slate-800">Delete this team</div>
+              <div className="text-xs text-slate-500">Players return to the pool; fixtures for this team are removed.</div>
+            </div>
+            <DeleteTeamButton teamId={team.id} ticket={ticket} teamName={team.name} />
+          </div>
         </div>
       </div>
     </div>
