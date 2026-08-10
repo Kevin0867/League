@@ -5,6 +5,9 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { computeSplit } from "@/lib/domain/splits";
 import { durationHours, isWeekend } from "@/lib/domain/finance";
+import { dispatchMessage } from "@/lib/messaging";
+import { lessonPaymentEmail } from "@/lib/payments/lessonPaymentEmail";
+import { formatClinicWhen } from "@/lib/domain/clinics";
 
 // À la carte management as native-form-POST route handlers with ticket auth.
 // Route handlers 303-redirect to a fresh GET (which carries the session cookie),
@@ -66,6 +69,74 @@ export async function POST(req: Request) {
       await prisma.alaCarteOffering.update({ where: { id: offeringId }, data: { active } });
       await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: offeringId, action: active ? "ACTIVATE" : "DEACTIVATE" });
       return back("?ok=createOffering");
+    }
+
+    // Admin sets up a private/semi/group lesson for named participants and sends
+    // each a payment-request email. The offering is created inactive so it never
+    // appears on the public Clinics page — these players are already invited.
+    case "setupLesson": {
+      if (!actor || !can(actor.role, "manageAlaCarte")) return back("?err=auth");
+
+      const facilityId = String(formData.get("facilityId") ?? "");
+      const facility = await prisma.facility.findUnique({ where: { id: facilityId } });
+      if (!facility) return back("?err=facility");
+      if (!facility.alaCarteAllowed) return back("?err=notallowed");
+
+      const title = String(formData.get("title") ?? "").trim() || "Lesson";
+      const type = String(formData.get("type") ?? "PRIVATE");
+      const coachId = String(formData.get("coachId") ?? "") || null;
+      const priceCents = Math.round(Number(formData.get("price") ?? 0) * 100);
+      const scheduledRaw = String(formData.get("scheduledAt") ?? "").trim();
+      const scheduled = scheduledRaw ? new Date(scheduledRaw) : null;
+      const scheduledAt = scheduled && !isNaN(scheduled.getTime()) ? scheduled : null;
+
+      const firsts = formData.getAll("pFirst").map((v) => String(v).trim());
+      const lasts = formData.getAll("pLast").map((v) => String(v).trim());
+      const emails = formData.getAll("pEmail").map((v) => String(v).toLowerCase().trim());
+      const phones = formData.getAll("pPhone").map((v) => String(v).trim());
+      const participants = firsts
+        .map((f, i) => ({ firstName: f, lastName: lasts[i] ?? "", email: emails[i] ?? "", phone: phones[i] ?? "" }))
+        .filter((p) => p.firstName && p.lastName && p.email);
+      if (participants.length === 0) return back("?err=noplayers");
+
+      const offering = await prisma.alaCarteOffering.create({
+        data: { type, title, facilityId, coachId, priceCents, scheduledAt, active: false },
+      });
+
+      const coach = coachId ? await prisma.coach.findUnique({ where: { id: coachId }, include: { person: true } }) : null;
+      const coachName = coach ? `${coach.person.firstName} ${coach.person.lastName}` : null;
+      const when = formatClinicWhen(scheduledAt);
+
+      let sent = 0;
+      for (const p of participants) {
+        const existing = await prisma.person.findFirst({ where: { email: p.email } });
+        const person = existing
+          ? await prisma.person.update({ where: { id: existing.id }, data: { phone: existing.phone || p.phone || null } })
+          : await prisma.person.create({ data: { firstName: p.firstName, lastName: p.lastName, email: p.email, phone: p.phone || null } });
+
+        await prisma.alaCarteBooking.create({
+          data: { offeringId: offering.id, clientId: person.id, coachId, status: "REQUESTED", grossCents: priceCents, scheduledAt },
+        });
+
+        const description = `${title} — ${facility.name}${scheduledAt ? `, ${when}` : ""}`;
+        const payment = await prisma.payment.create({
+          data: { direction: "IN", partyId: person.id, amountCents: priceCents, method: "STRIPE", status: "REQUESTED", category: "ALA_CARTE", description },
+        });
+
+        const email = lessonPaymentEmail({
+          name: person.firstName, amountCents: priceCents, paymentId: payment.id,
+          lessonTitle: title, coachName, facilityName: facility.name, when: scheduledAt ? when : null,
+        });
+        await dispatchMessage({
+          senderId: actor.userId, audienceType: "SINGLE_PERSON", audienceRef: person.id,
+          channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST",
+          subject: email.subject, body: email.text, html: email.html,
+        });
+        sent++;
+      }
+
+      await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: offering.id, action: "SETUP_LESSON", summary: `Set up ${title} for ${sent} participant(s)` });
+      return back(`?ok=lessonSent&n=${sent}`);
     }
 
     // Coach accepts or declines a booking request (§11).

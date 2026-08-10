@@ -5,6 +5,7 @@ import { formatCents } from "@/lib/money";
 import { COACH_TEACHES, DIRECTOR_TEACHES } from "@/lib/domain/splits";
 import { mintConsoleTicket } from "@/lib/auth";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { LessonSetupForm } from "@/components/LessonSetupForm";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ const ERRORS: Record<string, string> = {
   facility: "Facility not found.",
   notallowed: "That venue does not permit private lessons — negotiate it into the agreement first.",
   notfound: "Booking not found.",
+  noplayers: "Add at least one participant with a name and email.",
   op: "Unknown operation.",
 };
 
@@ -23,6 +25,7 @@ const OKS: Record<string, string> = {
   createOffering: "Offering added.",
   respondToBooking: "Booking updated.",
   deliverBooking: "Booking delivered and split recorded.",
+  lessonSent: "Lesson created — payment request sent.",
 };
 
 export default async function AlaCartePage({
@@ -121,6 +124,15 @@ export default async function AlaCartePage({
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
           No facilities permit private lessons yet. Enable it on a facility&apos;s agreement first.
         </p>
+      )}
+
+      {/* Admin-arranged lesson + payment request */}
+      {alaFacilities.length > 0 && (
+        <LessonSetupForm
+          ticket={ticket}
+          facilities={alaFacilities.map((f) => ({ id: f.id, name: f.name }))}
+          coaches={coaches.map((c) => ({ id: c.id, name: `${c.person.firstName} ${c.person.lastName}` }))}
+        />
       )}
 
       {/* Catalog */}
