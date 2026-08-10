@@ -8,7 +8,6 @@ import { encryptField } from "./crypto";
 export const ENCRYPTED_FIELDS: Record<string, string[]> = {
   person: ["emergencyName", "emergencyPhone", "emergencyRelation", "medicalNotes"],
   registration: ["medicalDisclosures"],
-  coach: ["w9Tin"],
 };
 
 const WRITE_OPS = new Set(["create", "update", "updateMany", "upsert", "createMany"]);
@@ -52,6 +51,5 @@ export const encryptionExtension = Prisma.defineExtension({
   query: {
     person: componentFor(ENCRYPTED_FIELDS.person),
     registration: componentFor(ENCRYPTED_FIELDS.registration),
-    coach: componentFor(ENCRYPTED_FIELDS.coach),
   },
 });

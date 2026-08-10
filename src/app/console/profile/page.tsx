@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
-import { formatDate } from "@/lib/time";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
 
 export const dynamic = "force-dynamic";
@@ -62,22 +61,6 @@ export default async function CoachProfilePage({
           backgroundCheck: !!coach?.backgroundCheckDate,
           backgroundCheckDate: coach?.backgroundCheckDate ? new Date(coach.backgroundCheckDate).toISOString().slice(0, 10) : "",
           backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
-          w9: {
-            onFile: coach?.w9OnFile ?? false,
-            receivedAt: coach?.w9ReceivedAt ? formatDate(coach.w9ReceivedAt) : "",
-            name: coach?.w9Name ?? "",
-            businessName: coach?.w9BusinessName ?? "",
-            taxClass: coach?.w9TaxClass ?? "",
-            llcClass: coach?.w9LlcClass ?? "",
-            otherClass: coach?.w9OtherClass ?? "",
-            address: coach?.w9Address ?? "",
-            city: coach?.w9City ?? "",
-            state: coach?.w9State ?? "",
-            zip: coach?.w9Zip ?? "",
-            tinType: coach?.w9TinType ?? "",
-            tinLast4: coach?.w9TinLast4 ?? "",
-            signedName: coach?.w9SignedName ?? "",
-          },
         }}
       />
     </div>

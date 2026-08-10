@@ -139,7 +139,6 @@ async function seedCoaches() {
         onboardingCompletedAt: cleared ? daysAgo(int(10, 200)) : null,
         marketsCovered: markets.length ? JSON.stringify(markets) : null,
         isProCoach: chance(0.3),
-        w9OnFile: chance(0.6),
       },
     });
     if (hasAvail) {

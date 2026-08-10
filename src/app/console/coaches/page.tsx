@@ -105,7 +105,6 @@ export default async function CoachesPage({
               <th>Availability</th>
               <th className="hidden md:table-cell">Teams</th>
               <th className="hidden lg:table-cell">Recruited</th>
-              <th className="hidden md:table-cell">W-9</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -136,12 +135,11 @@ export default async function CoachesPage({
                     {coach?._count.recruits ?? 0}
                     <span className="ml-1 text-xs text-slate-400">credit{(coach?._count.recruits ?? 0) === 1 ? "" : "s"}</span>
                   </td>
-                  <td className="hidden md:table-cell">{coach?.w9OnFile ? <span className="badge bg-emerald-100 text-emerald-800">on file</span> : <span className="badge bg-slate-100 text-slate-500">missing</span>}</td>
                 </tr>
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={6} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
           </tbody>
         </table>

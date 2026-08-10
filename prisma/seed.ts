@@ -148,7 +148,7 @@ async function main() {
     await prisma.user.create({ data: { email, passwordHash: await hash(DEMO_PASSWORD), role: "COACH", personId: person.id } });
     const coach = await prisma.coach.create({
       data: {
-        personId: person.id, rpoCertLevel: "RPO Level 2", isProCoach: opts.pro ?? false, w9OnFile: opts.cleared,
+        personId: person.id, rpoCertLevel: "RPO Level 2", isProCoach: opts.pro ?? false,
         backgroundCheckDate: opts.cleared ? d("2026-06-01") : null,
         backgroundCheckExpiry: opts.cleared ? d("2027-06-01") : null,
         onboardingCompletedAt: opts.cleared ? d("2026-07-15") : null,

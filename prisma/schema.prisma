@@ -336,29 +336,6 @@ model Coach {
   /// Pro Coach / Assistant differentiate payout rate (§9)
   isProCoach          Boolean   @default(false)
 
-  // Contractor tax (§9) — W-9 capture, 1099 totals at year end.
-  w9OnFile            Boolean   @default(false)
-  w9ReceivedAt        DateTime?
-  /// Digital W-9 fields. The TIN (SSN/EIN) is ENCRYPTED at rest via the field-
-  /// encryption extension; w9TinLast4 is kept in clear for a masked "ends in
-  /// 1234" display so the full number is never shown or decrypted routinely.
-  w9Name              String?
-  w9BusinessName      String?
-  /// INDIVIDUAL | C_CORP | S_CORP | PARTNERSHIP | TRUST_ESTATE | LLC | OTHER
-  w9TaxClass          String?
-  /// For LLC: C | S | P
-  w9LlcClass          String?
-  w9OtherClass        String?
-  w9Address           String?
-  w9City              String?
-  w9State             String?
-  w9Zip               String?
-  /// SSN | EIN
-  w9TinType           String?
-  w9Tin               String?   // encrypted at rest
-  w9TinLast4          String?
-  w9SignedName        String?
-
   /// Compensation (§9) — admin-only. A rate and/or a percentage per work type:
   /// regular-season coaching, private/semi-private lessons, and clinics. Rates
   /// stored in cents; percentages as whole numbers (e.g. 60 = 60%). payNotes

@@ -67,7 +67,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ dataset
       const coaches = await prisma.coach.findMany({ include: { person: true, payouts: true } });
       return csvResponse("coach-1099-totals.csv", toCsv(coaches.map((c) => ({
         coach: `${c.person.firstName} ${c.person.lastName}`,
-        w9OnFile: c.w9OnFile ? "yes" : "no",
         totalPaid: formatCents(c.payouts.reduce((s, l) => s + l.totalCents, 0)),
       }))));
     }
