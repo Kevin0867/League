@@ -25,11 +25,16 @@ export function CoachProfileForm({
     coachingLevels: string;
     markets: string[];
     availability: Block[];
+    safeSport: boolean;
+    backgroundCheck: boolean;
+    backgroundCheckDate: string;
+    backgroundCheckCompany: string;
   };
 }) {
   const [blocks, setBlocks] = useState<Block[]>(
     initial.availability.length ? initial.availability : [{ dayOfWeek: "MON", startTime: "", endTime: "" }]
   );
+  const [bgCheck, setBgCheck] = useState(initial.backgroundCheck);
 
   return (
     <form method="POST" action="/api/console/coach-profile" className="space-y-6">
@@ -72,6 +77,38 @@ export function CoachProfileForm({
             <input name="coachingLevels" className="input" defaultValue={initial.coachingLevels}
               placeholder="e.g. 2.5–4.0, Youth (Elementary–High School), Beginners" />
           </div>
+        </div>
+      </section>
+
+      <section className="card space-y-4">
+        <h2 className="font-semibold text-slate-900">Screening &amp; compliance</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label">Safe Sport certified</label>
+            <select name="safeSport" className="input" defaultValue={initial.safeSport ? "yes" : "no"}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Background check</label>
+            <select name="bgCheck" className="input" value={bgCheck ? "yes" : "no"} onChange={(e) => setBgCheck(e.target.value === "yes")}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+          {bgCheck && (
+            <>
+              <div>
+                <label className="label">Date checked</label>
+                <input name="bgDate" type="date" className="input" defaultValue={initial.backgroundCheckDate} />
+              </div>
+              <div>
+                <label className="label">Company that ran the check</label>
+                <input name="bgCompany" className="input" defaultValue={initial.backgroundCheckCompany} placeholder="e.g. Sterling, Checkr" />
+              </div>
+            </>
+          )}
         </div>
       </section>
 

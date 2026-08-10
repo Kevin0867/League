@@ -20,8 +20,15 @@ function parseMarkets(json: string | null): string[] {
 
 // `id` is the coach's personId, so coaches without a Coach profile row yet are
 // still editable (the save upserts one).
-export default async function EditCoachPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditCoachPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const { ok } = await searchParams;
   const session = await getSession();
   if (!session || !can(session.role, "manageCoaches")) redirect("/console");
   const ticket = await mintConsoleTicket();
@@ -40,6 +47,14 @@ export default async function EditCoachPage({ params }: { params: Promise<{ id: 
         subtitle="Update certification, availability, and contact on this coach's behalf."
       />
       <Link href="/console/coaches" className="text-sm text-slate-500 hover:underline">← Back to coaches</Link>
+      {ok === "account" && (
+        <div className="rounded-lg bg-accent-50 px-4 py-3 text-sm text-accent-800">
+          Coach account created. Complete their profile below — certification, screening, markets, and day/time availability — then save.
+        </div>
+      )}
+      {ok === "profile" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Coach profile saved.</div>
+      )}
       <CoachProfileForm
         ticket={ticket}
         email={person.email ?? ""}
@@ -56,6 +71,10 @@ export default async function EditCoachPage({ params }: { params: Promise<{ id: 
             startTime: b.startTime,
             endTime: b.endTime,
           })),
+          safeSport: coach?.safeSportCertified ?? false,
+          backgroundCheck: !!coach?.backgroundCheckDate,
+          backgroundCheckDate: coach?.backgroundCheckDate ? new Date(coach.backgroundCheckDate).toISOString().slice(0, 10) : "",
+          backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
         }}
       />
     </div>

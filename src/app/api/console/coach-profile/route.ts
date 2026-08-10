@@ -41,12 +41,17 @@ export async function POST(req: Request) {
   });
 
   const markets = list("market").filter(Boolean);
+  const bgChecked = g("bgCheck") === "yes";
+  const bgDate = g("bgDate");
   const data = {
     rpoCertLevel: g("rpoCertLevel") || null,
     certifications: g("certifications") || null,
     bio: g("bio") || null,
     coachingLevels: g("coachingLevels") || null,
     marketsCovered: markets.length ? JSON.stringify(markets) : null,
+    safeSportCertified: g("safeSport") === "yes",
+    backgroundCheckDate: bgChecked && bgDate ? new Date(bgDate) : bgChecked ? new Date() : null,
+    backgroundCheckCompany: bgChecked ? (g("bgCompany") || null) : null,
   };
   const coach = await prisma.coach.upsert({
     where: { personId },

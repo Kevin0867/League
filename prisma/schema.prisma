@@ -311,6 +311,9 @@ model Coach {
   backgroundCheckExpiry DateTime?
   /// …and curriculum onboarding
   onboardingCompletedAt DateTime?
+  /// Safe Sport certification + background-check provider (screening detail).
+  safeSportCertified  Boolean @default(false)
+  backgroundCheckCompany String?
 
   marketsCovered      String?   // JSON array
   /// Pro Coach / Assistant differentiate payout rate (§9)
@@ -823,11 +826,16 @@ model AlaCarteOffering {
   /// PRIVATE | SEMI_PRIVATE | CLINIC
   type        String
   title       String
+  description String?
   facilityId  String
   facility    Facility @relation(fields: [facilityId], references: [id])
   coachId     String?
   coach       Coach?   @relation(fields: [coachId], references: [id])
   priceCents  Int
+  /// Max participants (per-person price). null = uncapped.
+  capacity    Int?
+  /// When the class/clinic runs.
+  scheduledAt DateTime?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 

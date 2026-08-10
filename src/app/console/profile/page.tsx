@@ -57,6 +57,10 @@ export default async function CoachProfilePage({
             startTime: b.startTime,
             endTime: b.endTime,
           })),
+          safeSport: coach?.safeSportCertified ?? false,
+          backgroundCheck: !!coach?.backgroundCheckDate,
+          backgroundCheckDate: coach?.backgroundCheckDate ? new Date(coach.backgroundCheckDate).toISOString().slice(0, 10) : "",
+          backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
         }}
       />
     </div>

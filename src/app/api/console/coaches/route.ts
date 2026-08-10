@@ -64,6 +64,11 @@ export async function POST(req: Request) {
         summary: `Created ${role} account for ${email}`,
       });
 
+      // For a coach, drop the admin straight onto the full profile form so they
+      // can fill in certification, screening, markets, and availability now.
+      if (role === "COACH") {
+        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?ok=account`, origin), 303);
+      }
       return back("?ok=1");
     }
     default:
