@@ -100,12 +100,12 @@ export default async function CoachesPage({
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="py-2">Coach</th>
-              <th>Cert</th>
-              <th>Screening</th>
+              <th className="hidden lg:table-cell">Cert</th>
+              <th className="hidden sm:table-cell">Screening</th>
               <th>Availability</th>
-              <th>Teams</th>
-              <th>Recruited</th>
-              <th>W-9</th>
+              <th className="hidden md:table-cell">Teams</th>
+              <th className="hidden lg:table-cell">Recruited</th>
+              <th className="hidden md:table-cell">W-9</th>
               <th className="text-right">Profile</th>
             </tr>
           </thead>
@@ -119,8 +119,8 @@ export default async function CoachesPage({
                     {person.firstName} {person.lastName}
                     {coach?.isProCoach && <span className="ml-2 badge bg-brand-100 text-brand-800">Pro</span>}
                   </td>
-                  <td className="text-slate-600">{coach?.rpoCertLevel ?? "—"}</td>
-                  <td>
+                  <td className="hidden text-slate-600 lg:table-cell">{coach?.rpoCertLevel ?? "—"}</td>
+                  <td className="hidden sm:table-cell">
                     {gate.ok
                       ? <span className="badge bg-emerald-100 text-emerald-800">cleared</span>
                       : <span className="badge bg-amber-100 text-amber-800" title={gate.reasons.join(", ")}>{gate.reasons.length} issue{gate.reasons.length > 1 ? "s" : ""}</span>}
@@ -130,12 +130,12 @@ export default async function CoachesPage({
                       ? <span className="badge bg-emerald-100 text-emerald-800">complete</span>
                       : <span className="badge bg-amber-100 text-amber-800" title={`Missing: ${avail.missing.join(", ")}`}>needs {avail.missing.join(" + ")}</span>}
                   </td>
-                  <td className="text-slate-600">{coach?._count.teams ?? 0}</td>
-                  <td className="text-slate-600">
+                  <td className="hidden text-slate-600 md:table-cell">{coach?._count.teams ?? 0}</td>
+                  <td className="hidden text-slate-600 lg:table-cell">
                     {coach?._count.recruits ?? 0}
                     <span className="ml-1 text-xs text-slate-400">credit{(coach?._count.recruits ?? 0) === 1 ? "" : "s"}</span>
                   </td>
-                  <td>{coach?.w9OnFile ? <span className="badge bg-emerald-100 text-emerald-800">on file</span> : <span className="badge bg-slate-100 text-slate-500">missing</span>}</td>
+                  <td className="hidden md:table-cell">{coach?.w9OnFile ? <span className="badge bg-emerald-100 text-emerald-800">on file</span> : <span className="badge bg-slate-100 text-slate-500">missing</span>}</td>
                   <td className="text-right">
                     <Link href={`/console/coaches/${person.id}`} className="text-xs font-medium text-brand-700 hover:underline">Edit</Link>
                   </td>

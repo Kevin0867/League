@@ -21,7 +21,12 @@ const NEXT_ACTION: Record<string, string> = {
   EXECUTED: "—",
 };
 
-export default async function FacilitiesPage() {
+export default async function FacilitiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const facilities = await prisma.facility.findMany({
     include: { _count: { select: { teams: true, sessions: true } } },
@@ -32,6 +37,16 @@ export default async function FacilitiesPage() {
 
   return (
     <div className="space-y-6">
+      {(sp.ok === "edited" || sp.added) && (
+        <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800">
+          {sp.ok === "edited" ? "Facility updated." : "Facility added."}
+        </div>
+      )}
+      {sp.err && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">
+          {sp.err === "auth" ? "Not authorized to manage facilities." : "Please check the required fields."}
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Facility agreement tracker</h1>
@@ -93,6 +108,21 @@ export default async function FacilitiesPage() {
                       : <span className="font-medium text-slate-700">{nextAction}</span>}
                   />
                 </dl>
+
+                <div className="border-t border-slate-100 pt-3">
+                  <FacilityForm
+                    ticket={ticket}
+                    facility={{
+                      id: f.id, name: f.name, market: f.market, courtCount: f.courtCount,
+                      agreementStatus: f.agreementStatus, feeBasis: f.feeBasis,
+                      weekdayRateCents: f.weekdayRateCents, weekendRateCents: f.weekendRateCents,
+                      percentageRate: f.percentageRate, primaryContact: f.primaryContact,
+                      contactEmail: f.contactEmail, contactPhone: f.contactPhone, isPrivate: f.isPrivate,
+                      generalArea: f.generalArea, exactAddress: f.exactAddress,
+                      alaCarteAllowed: f.alaCarteAllowed, acpLeagueOption: f.acpLeagueOption,
+                    }}
+                  />
+                </div>
               </div>
             );
           })}
