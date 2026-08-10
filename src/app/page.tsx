@@ -162,9 +162,9 @@ export default async function HomePage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             {STATS.map((s) => (
-              <div key={s.label} className="card text-center">
-                <div className="text-3xl font-extrabold text-accent-600">{s.value}</div>
-                <div className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+              <div key={s.label} className="card flex min-h-[7.5rem] flex-col items-center justify-center text-center">
+                <div className="text-4xl font-extrabold leading-none text-accent-600 tabular-nums">{s.value}</div>
+                <div className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                   {s.label}
                 </div>
               </div>

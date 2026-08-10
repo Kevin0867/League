@@ -16,10 +16,12 @@ export function RegisterForm({
   seasonId,
   locations,
   preselectedDivision = null,
+  preselectedLocation = null,
 }: {
   seasonId: string;
   locations: string[];
   preselectedDivision?: string | null;
+  preselectedLocation?: string | null;
 }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, {});
   const [mode, setMode] = useState<Mode>("adult");
@@ -126,7 +128,12 @@ export function RegisterForm({
             <div className="mt-1 space-y-2">
               {locations.map((loc) => (
                 <label key={loc} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="location" value={loc} />
+                  <input
+                    type="checkbox"
+                    name="location"
+                    value={loc}
+                    defaultChecked={!!preselectedLocation && loc.toLowerCase() === preselectedLocation.toLowerCase()}
+                  />
                   {loc}
                 </label>
               ))}
