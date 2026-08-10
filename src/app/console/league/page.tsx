@@ -379,7 +379,7 @@ export default async function LeaguePage({
         </div>
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-            <tr><th className="py-2">Wk</th><th>Date</th><th>Home</th><th>Away</th><th>Hub</th><th>Status</th><th></th></tr>
+            <tr><th className="py-2">Wk</th><th className="hidden sm:table-cell">Date</th><th>Home</th><th>Away</th><th className="hidden md:table-cell">Hub</th><th>Status</th><th></th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {fixtures.map((f) => (

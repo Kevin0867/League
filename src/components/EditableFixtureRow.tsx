@@ -32,10 +32,10 @@ export function EditableFixtureRow({
     return (
       <tr className="hover:bg-slate-50">
         <td className="py-2 text-slate-500">{fixture.weekNumber}</td>
-        <td className="text-slate-700">{fixture.dateLabel}</td>
+        <td className="hidden text-slate-700 sm:table-cell">{fixture.dateLabel}</td>
         <td className="text-slate-700">{fixture.home}</td>
         <td className="text-slate-700">{fixture.away}</td>
-        <td className="text-slate-600">{fixture.facilityName}</td>
+        <td className="hidden text-slate-600 md:table-cell">{fixture.facilityName}</td>
         <td><StatusBadge status={fixture.status} /></td>
         <td className="whitespace-nowrap text-right">
           <button onClick={() => setEdit(true)} className="mr-3 text-xs font-medium text-brand-700 hover:underline">Edit</button>
