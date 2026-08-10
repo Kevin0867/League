@@ -1,0 +1,47 @@
+name: Seed test data
+
+# Manually-triggered clean-slate seeder for a testing environment. It WIPES the
+# operational data (registrations, teams, coaches, facilities, payments,
+# messages, sessions, fixtures) while preserving seasons, divisions, rate
+# config, and staff logins (COO/CEO/DIRECTOR), then loads 250 players, 20
+# coaches, 10 facilities, and 18 teams (building / ready / published).
+#
+# Requires repo secret DATABASE_URL (the Neon connection string).
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "WIPE-AND-SEED" to confirm this replaces operational data'
+        required: true
+        default: ""
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Guard — confirmation required
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "WIPE-AND-SEED" ]; then
+            echo "::error::Type WIPE-AND-SEED in the confirm box to run this."
+            exit 1
+          fi
+      - name: Verify DATABASE_URL is configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply pending migrations
+        run: npx prisma migrate deploy
+      - name: Seed test data
+        run: npx tsx --tsconfig tsconfig.scripts.json scripts/seed-testdata.ts
