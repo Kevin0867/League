@@ -2,27 +2,37 @@
 // enums), these are the authoritative allowed values, validated in app code.
 
 export const ROLES = {
-  COO: "COO",
-  CEO: "CEO",
-  DIRECTOR: "DIRECTOR",
+  ADMIN: "ADMIN",
   COACH: "COACH",
   PLAYER: "PLAYER",
   PARENT: "PARENT",
+  // Legacy executive roles, consolidated into ADMIN. Still recognized so any
+  // un-migrated account keeps full admin access, but never offered in the UI.
+  COO: "COO",
+  CEO: "CEO",
+  DIRECTOR: "DIRECTOR",
 } as const;
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 export const ROLE_LABELS: Record<Role, string> = {
-  COO: "Chief Operating Officer",
-  CEO: "Chief Executive Officer",
-  DIRECTOR: "Academy Director",
+  ADMIN: "Admin",
   COACH: "Coach",
   PLAYER: "Player",
   PARENT: "Parent / Guardian",
+  // Legacy roles display as Admin (they are consolidated into it).
+  COO: "Admin",
+  CEO: "Admin",
+  DIRECTOR: "Admin",
 };
 
+// The only roles a human assigns in the UI — the three legacy admin roles are
+// consolidated into a single ADMIN.
+export const ASSIGNABLE_ROLES: Role[] = ["ADMIN", "COACH", "PLAYER", "PARENT"];
+
 // Staff roles have console access; player/parent get the family portal.
-export const STAFF_ROLES: Role[] = ["COO", "CEO", "DIRECTOR", "COACH"];
-export const ADMIN_ROLES: Role[] = ["COO", "CEO", "DIRECTOR"];
+// Legacy admin roles remain in these sets so historical logins still resolve.
+export const STAFF_ROLES: Role[] = ["ADMIN", "COACH", "COO", "CEO", "DIRECTOR"];
+export const ADMIN_ROLES: Role[] = ["ADMIN", "COO", "CEO", "DIRECTOR"];
 
 /// Markets (cities) the academy serves — the location options players rank on
 /// the registration form. Facility-specific assignments happen later.

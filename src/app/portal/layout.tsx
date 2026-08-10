@@ -17,7 +17,7 @@ export default async function PortalLayout({
             <Link href="/portal/lessons" className="font-medium text-brand-700 hover:underline">Lessons</Link>
             <span className="hidden text-slate-500 sm:inline">{session.name}</span>
             <Link href="/logout" prefetch={false} className="btn-ghost">Sign out</Link>
-            <PadelLogo className="hidden h-8 sm:block" />
+            <PadelLogo className="hidden h-11 sm:block" />
           </div>
         </div>
       </header>

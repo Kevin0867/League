@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +7,13 @@ export default async function CompliancePage() {
   const [peopleNoWaiver, coaches, mediaOptOuts, unverifiedDupr] = await Promise.all([
     prisma.person.findMany({
       where: { waiverSignedAt: null, registrations: { some: {} } },
-      select: { id: true, firstName: true, lastName: true, email: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        registrations: { select: { id: true }, orderBy: { createdAt: "desc" }, take: 1 },
+      },
     }),
     prisma.coach.findMany({ include: { person: true } }),
     prisma.person.count({ where: { mediaOptOut: true } }),
@@ -43,12 +50,21 @@ export default async function CompliancePage() {
             <Ok text="All registered players have a waiver on file." />
           ) : (
             <ul className="divide-y divide-slate-100 text-sm">
-              {peopleNoWaiver.map((p) => (
-                <li key={p.id} className="flex justify-between py-2">
-                  <span className="text-slate-700">{p.firstName} {p.lastName}</span>
-                  <span className="text-xs text-slate-400">{p.email ?? "—"}</span>
-                </li>
-              ))}
+              {peopleNoWaiver.map((p) => {
+                const regId = p.registrations[0]?.id;
+                const href = regId ? `/console/registrations/${regId}` : `/console/people/${p.id}`;
+                return (
+                  <li key={p.id} className="flex items-center justify-between py-2">
+                    <Link href={href} className="font-medium text-slate-700 hover:text-brand-700 hover:underline">
+                      {p.firstName} {p.lastName}
+                    </Link>
+                    <span className="flex items-center gap-2 text-xs text-slate-400">
+                      {p.email ?? "—"}
+                      <span className="text-brand-600">Send waiver →</span>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Panel>
@@ -66,7 +82,9 @@ export default async function CompliancePage() {
                 if (!c.onboardingCompletedAt) issues.push("onboarding incomplete");
                 return (
                   <li key={c.id} className="flex items-center justify-between py-2">
-                    <span className="text-slate-700">{c.person.firstName} {c.person.lastName}</span>
+                    <Link href={`/console/coaches/${c.person.id}`} className="font-medium text-slate-700 hover:text-brand-700 hover:underline">
+                      {c.person.firstName} {c.person.lastName}
+                    </Link>
                     {issues.length === 0 ? (
                       <span className="badge bg-emerald-100 text-emerald-800">cleared</span>
                     ) : (

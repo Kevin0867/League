@@ -15,7 +15,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
-const STAFF_ROLES = ["COO", "CEO", "DIRECTOR"];
+const STAFF_ROLES = ["ADMIN", "COO", "CEO", "DIRECTOR"];
 const TAG = "TESTSEED";
 
 // Deterministic PRNG so re-runs are stable (no Math.random in this environment).

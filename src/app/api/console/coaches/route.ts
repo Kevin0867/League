@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm, hashPassword } from "@/lib/auth";
+import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
 import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
@@ -13,7 +14,7 @@ import type { Role } from "@/lib/enums";
 // cookieless POST and bounce through the console layout's auth.
 export const dynamic = "force-dynamic";
 
-const CREATABLE_ROLES: Role[] = ["DIRECTOR", "CEO", "COACH"];
+const CREATABLE_ROLES: Role[] = ["ADMIN", "COACH"];
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
 
   switch (op) {
     case "create": {
-      if (!actor || !["COO", "DIRECTOR"].includes(actor.role)) return back("?err=auth");
+      if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
 
       const firstName = String(formData.get("firstName") ?? "").trim();
       const lastName = String(formData.get("lastName") ?? "").trim();
@@ -37,8 +38,6 @@ export async function POST(req: Request) {
       if (!firstName || !lastName || !email || !password) return back("?err=fields");
       if (password.length < 8) return back("?err=short");
       if (!CREATABLE_ROLES.includes(role)) return back("?err=role");
-      // Only a COO may mint admin-level roles; a Director can create coaches.
-      if (role !== "COACH" && actor.role !== "COO") return back("?err=role");
 
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) return back("?err=exists");

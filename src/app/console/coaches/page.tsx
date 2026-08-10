@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
+import { can } from "@/lib/rbac";
 import { StaffForm } from "./StaffForm";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ const ERRORS: Record<string, string> = {
   auth: "Not authorized to create accounts.",
   fields: "All fields are required.",
   short: "Password must be at least 8 characters.",
-  role: "Invalid role, or only the COO can create Director or CEO accounts.",
+  role: "Invalid role.",
   exists: "A user with that email already exists.",
   op: "Unknown operation.",
   notfound: "Coach not found.",
@@ -79,7 +80,7 @@ export default async function CoachesPage({
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
       )}
-      {session && ["COO", "DIRECTOR"].includes(session.role) && <StaffForm role={session.role} ticket={ticket} />}
+      {session && can(session.role, "manageCoaches") && <StaffForm role={session.role} ticket={ticket} />}
 
       {incompleteCount > 0 && (
         <div className="card border-l-4 border-amber-400">

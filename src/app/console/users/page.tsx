@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
-import { ROLE_LABELS, ADMIN_ROLES, type Role } from "@/lib/enums";
+import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, type Role } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
 const ERRORS: Record<string, string> = {
   auth: "Not authorized to manage access.",
-  role: "Only the COO can grant or change admin roles (COO / CEO / Director).",
+  role: "That role can't be assigned.",
   self: "You can't change your own access.",
   notfound: "User not found.",
   fields: "Missing information.",
@@ -27,18 +27,18 @@ export default async function UsersPage({
   const sp = await searchParams;
   const session = await getSession();
   const ticket = await mintConsoleTicket();
-  const isCOO = session?.role === "COO";
+  const isAdmin = ADMIN_ROLES.includes((session?.role ?? "") as never);
 
   const users = await prisma.user.findMany({
     include: { person: true },
     orderBy: [{ role: "asc" }, { email: "asc" }],
   });
 
-  const allRoles = Object.keys(ROLE_LABELS) as Role[];
+  const assignableRoles = ASSIGNABLE_ROLES;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Access" subtitle="Invite people and assign roles. Admin roles (COO, CEO, Director) can only be granted by the COO." />
+      <PageHeader title="Access" subtitle="Invite people and assign roles. Admins can do anything; coaches are scoped to their own teams; players and parents use the family portal." />
       {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OKS[sp.ok] ?? "Done."}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
@@ -57,7 +57,7 @@ export default async function UsersPage({
           <div>
             <label className="label">Role</label>
             <select name="role" className="input" defaultValue="COACH">
-              {(isCOO ? allRoles : allRoles.filter((r) => !ADMIN_ROLES.includes(r as never))).map((r) => (
+              {assignableRoles.map((r) => (
                 <option key={r} value={r}>{ROLE_LABELS[r]}</option>
               ))}
             </select>
@@ -80,10 +80,9 @@ export default async function UsersPage({
           <tbody className="divide-y divide-slate-100">
             {users.map((u) => {
               const isSelf = u.id === session?.userId;
-              const targetIsAdmin = ADMIN_ROLES.includes(u.role as never);
-              // A DIRECTOR can't touch admin accounts and can only assign non-admin roles.
-              const locked = isSelf || (!isCOO && targetIsAdmin);
-              const assignable = isCOO ? allRoles : allRoles.filter((r) => !ADMIN_ROLES.includes(r as never));
+              // Admins can change anyone's role except their own (self-lockout guard).
+              const locked = isSelf || !isAdmin;
+              const assignable = assignableRoles;
               return (
                 <tr key={u.id}>
                   <td className="px-4 py-3 font-medium text-slate-800">
@@ -112,7 +111,7 @@ export default async function UsersPage({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {!isSelf && (!targetIsAdmin || isCOO) && (
+                    {!isSelf && isAdmin && (
                       <form method="POST" action="/api/console/users">
                         <input type="hidden" name="ticket" value={ticket} />
                         <input type="hidden" name="op" value="toggleActive" />

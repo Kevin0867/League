@@ -9,7 +9,7 @@ import { audit } from "@/lib/audit";
 // and bounce through the console layout's auth. See /api/console/facilities.
 export const dynamic = "force-dynamic";
 
-const SETUP_ROLES = ["COO", "DIRECTOR"];
+const SETUP_ROLES = ["ADMIN", "COO", "DIRECTOR"];
 
 function toDate(v: FormDataEntryValue | null): Date | null {
   const s = String(v ?? "").trim();

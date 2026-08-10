@@ -4,12 +4,14 @@ import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
 import { SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 
 const ROLE_WORD: Record<string, string> = {
-  COO: "Chief Operating Officer",
-  CEO: "Chief Executive Officer",
-  DIRECTOR: "Academy Director",
+  ADMIN: "Admin",
   COACH: "Coach",
   PLAYER: "Player",
   PARENT: "Parent",
+  // Legacy admin roles, consolidated into Admin.
+  COO: "Admin",
+  CEO: "Admin",
+  DIRECTOR: "Admin",
 };
 
 /** Emails a new console user a branded link to set their password and sign in. */

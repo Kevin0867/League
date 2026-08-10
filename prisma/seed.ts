@@ -135,9 +135,9 @@ async function main() {
     await prisma.user.create({ data: { email, passwordHash: await hash(DEMO_PASSWORD), role, personId: person.id } });
     return person;
   }
-  await makeStaff("Brett", "Warner", "coo@purepickleball.com", "COO");
-  await makeStaff("Alex", "Nguyen", "ceo@purepickleball.com", "CEO");
-  const director = await makeStaff("Jordan", "Blake", "director@purepickleball.com", "DIRECTOR");
+  await makeStaff("Brett", "Warner", "coo@purepickleball.com", "ADMIN");
+  await makeStaff("Alex", "Nguyen", "ceo@purepickleball.com", "ADMIN");
+  const director = await makeStaff("Jordan", "Blake", "director@purepickleball.com", "ADMIN");
 
   console.log("Seeding coaches…");
   async function makeCoach(
@@ -311,7 +311,7 @@ async function main() {
   await prisma.duprSubmission.create({ data: { fixtureId: fixture.id, status: "SUBMITTED", attempts: 1, submittedAt: d("2026-10-27") } });
 
   console.log("Seeding a broadcast message log…");
-  const cooUser = await prisma.user.findFirst({ where: { role: "COO" } });
+  const cooUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
   const msg = await prisma.message.create({
     data: {
       senderId: cooUser?.id, seasonId: season.id, audienceType: "TEAM", audienceRef: teamA.id,

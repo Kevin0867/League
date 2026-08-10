@@ -2,19 +2,19 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm, hashPassword } from "@/lib/auth";
 import { can } from "@/lib/rbac";
-import { ADMIN_ROLES, ROLE_LABELS } from "@/lib/enums";
+import { ASSIGNABLE_ROLES } from "@/lib/enums";
 import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
 import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
 import { appUrl } from "@/lib/stripe";
 import crypto from "crypto";
 
-// Assign access/roles to existing users (§17). COO/DIRECTOR may manage users;
-// only the COO may grant admin roles (COO/CEO/DIRECTOR). Granting COACH ensures
-// a Coach profile row exists so the new coach can fill it out.
+// Assign access/roles to existing users (§17). Admins manage users and may grant
+// any role (roles are consolidated to Admin/Coach/Player/Parent). Granting COACH
+// ensures a Coach profile row exists so the new coach can fill it out.
 export const dynamic = "force-dynamic";
 
-const ASSIGNABLE = Object.keys(ROLE_LABELS);
+const ASSIGNABLE: string[] = ASSIGNABLE_ROLES;
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
@@ -33,7 +33,6 @@ export async function POST(req: Request) {
     const lastName = String(fd.get("lastName") ?? "").trim();
     const role = String(fd.get("role") ?? "").trim();
     if (!email || !firstName || !lastName || !ASSIGNABLE.includes(role)) return back("?err=fields");
-    if (ADMIN_ROLES.includes(role as never) && actor.role !== "COO") return back("?err=role");
     if (await prisma.user.findUnique({ where: { email } })) return back("?err=exists");
 
     const person =
@@ -70,9 +69,6 @@ export async function POST(req: Request) {
     case "setRole": {
       const role = String(fd.get("role") ?? "");
       if (!ASSIGNABLE.includes(role)) return back("?err=role");
-      // Only the COO may grant or revoke admin roles.
-      const touchesAdmin = ADMIN_ROLES.includes(role as never) || ADMIN_ROLES.includes(target.role as never);
-      if (touchesAdmin && actor.role !== "COO") return back("?err=role");
 
       await prisma.user.update({ where: { id: userId }, data: { role } });
 

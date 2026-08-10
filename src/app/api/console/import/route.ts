@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const ticket = await verifyActionTicket(formData.get("ticket")?.toString(), "console.import");
   const session = ticket ?? (await getSession());
   if (!session) return back("err=auth");
-  if (!["COO", "DIRECTOR"].includes(session.role)) return back("err=role");
+  if (!["ADMIN", "COO", "DIRECTOR"].includes(session.role)) return back("err=role");
   const actorId = "userId" in session ? session.userId : "";
 
   const file = formData.get("file");

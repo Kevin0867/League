@@ -238,7 +238,7 @@ export async function POST(req: Request) {
       // Alert coach + Director + COO. Coaches receive via the team message; staff via
       // their roles. We message all admins here for simplicity.
       const admins = await prisma.user.findMany({
-        where: { role: { in: ["DIRECTOR", "COO"] }, personId: { not: null } },
+        where: { role: { in: ["ADMIN", "DIRECTOR", "COO"] }, personId: { not: null } },
         select: { personId: true },
       });
       const body = `48-hour alert: ${atRisk.join("; ")} short of the minimum confirmed players for the fixture on ${formatDate(fixture.scheduledAt)}. Courts may need to be released.`;
@@ -418,7 +418,7 @@ export async function POST(req: Request) {
           body: `The fixture on ${formatDate(fixture.scheduledAt)} was recorded as a forfeit (3–0). ${team.forfeitCount >= 2 ? "This is the team's second forfeit — Championship eligibility is now ended pending joint exception." : ""}`,
         });
       }
-      const admins = await prisma.user.findMany({ where: { role: { in: ["DIRECTOR", "COO"] }, personId: { not: null } }, select: { personId: true } });
+      const admins = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "DIRECTOR", "COO"] }, personId: { not: null } }, select: { personId: true } });
       for (const a of admins) {
         if (a.personId) await dispatchMessage({ senderId: actor.userId, seasonId: fixture.seasonId, audienceType: "SINGLE_PERSON", audienceRef: a.personId, channels: ["IN_APP", "EMAIL"], triggerType: "FORFEIT_RECORDED", subject: "Forfeit recorded", body: `${team.forfeitCount === 1 ? "First" : "Second"} forfeit recorded for a team in the fixture on ${formatDate(fixture.scheduledAt)}.` });
       }

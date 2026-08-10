@@ -3,7 +3,7 @@
 import type { Role } from "@/lib/enums";
 
 export function StaffForm({ role, ticket }: { role: Role; ticket: string }) {
-  const isCOO = role === "COO";
+  void role;
   return (
     <div className="card">
       <h2 className="font-semibold text-brand-900">Add a staff or coach login</h2>
@@ -30,8 +30,7 @@ export function StaffForm({ role, ticket }: { role: Role; ticket: string }) {
           <label className="label">Role</label>
           <select name="role" className="input" defaultValue="COACH">
             <option value="COACH">Coach</option>
-            {isCOO && <option value="DIRECTOR">Director</option>}
-            {isCOO && <option value="CEO">CEO</option>}
+            <option value="ADMIN">Admin</option>
           </select>
         </div>
         <div>

@@ -69,7 +69,7 @@ export default async function SetupPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const session = await getSession();
-  if (session && session.role !== "COO" && session.role !== "DIRECTOR") redirect("/console");
+  if (session && !["ADMIN", "COO", "DIRECTOR"].includes(session.role)) redirect("/console");
 
   const ticket = await mintConsoleTicket();
   const sp = await searchParams;

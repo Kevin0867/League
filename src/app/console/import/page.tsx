@@ -26,13 +26,14 @@ export default async function ImportPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const session = await getSession();
-  if (session && session.role !== "COO" && session.role !== "DIRECTOR") redirect("/console");
+  const canImport = !!session && ["ADMIN", "COO", "DIRECTOR"].includes(session.role);
+  if (session && !canImport) redirect("/console");
   const sp = await searchParams;
 
   // Mint a short-lived ticket so the POST can be authorized from the body even
   // though the session cookie isn't delivered on POSTs to route handlers here.
   const ticket =
-    session && (session.role === "COO" || session.role === "DIRECTOR")
+    canImport
       ? await signActionTicket(
           { userId: session.userId, role: session.role, scope: "console.import" },
           60 * 30

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword, signSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 
 // First-admin bootstrap via a route handler (reliable Set-Cookie). Creates the
-// COO when no users exist, then signs the session onto the redirect response.
+// Admin when no users exist, then signs the session onto the redirect response.
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   const token = await signSession({
     userId: user.id,
     email: user.email,
-    role: "COO",
+    role: "ADMIN",
     personId: person.id,
     name: `${firstName} ${lastName}`,
   });

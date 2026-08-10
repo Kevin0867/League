@@ -28,7 +28,7 @@ const NAV: NavItem[] = [
   { href: "/console/championship", label: "Championship", icon: "🥇", roles: ["COO", "DIRECTOR"] },
   { href: "/console/alacarte", label: "Private Lessons", icon: "🎾", roles: ["COO", "DIRECTOR"] },
   { href: "/console/payments", label: "Payments", icon: "💳", roles: ["COO", "CEO", "DIRECTOR"] },
-  { href: "/console/messages", label: "Messages", icon: "💬" },
+  { href: "/console/messages", label: "Broadcasts", icon: "💬" },
   { href: "/console/compliance", label: "Compliance", icon: "✅", roles: ["COO", "DIRECTOR"] },
   { href: "/console/reports", label: "Reports", icon: "📊", roles: ["COO", "CEO", "DIRECTOR"] },
 ];
@@ -44,7 +44,13 @@ export function ConsoleShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const items = NAV.filter((n) => !n.roles || n.roles.includes(role));
+  const items = NAV.filter((n) => {
+    if (!n.roles) return true;
+    if (n.roles.includes(role)) return true;
+    // ADMIN inherits every admin-scoped item (any legacy admin role present).
+    if (role === "ADMIN" && n.roles.some((r) => r === "COO" || r === "CEO" || r === "DIRECTOR")) return true;
+    return false;
+  });
 
   const chip = "inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm";
   return (
@@ -58,7 +64,7 @@ export function ConsoleShell({
           <span className={chip}><Logo href="/console" className="h-6" /></span>
         </div>
         <div className="flex items-center gap-3">
-          <span className={chip}><PadelLogo className="h-6" /></span>
+          <span className={chip}><PadelLogo className="h-9" /></span>
           <Link href="/logout" prefetch={false} className="text-sm font-semibold text-white/80 hover:text-white">Sign out</Link>
         </div>
       </div>
@@ -113,7 +119,7 @@ export function ConsoleShell({
                 Signed in as <span className="font-semibold text-white">{name}</span>
               </span>
               <Link href="/logout" prefetch={false} className="whitespace-nowrap text-sm font-semibold text-white/80 hover:text-white">Sign out</Link>
-              <span className={chip}><PadelLogo className="h-7" /></span>
+              <span className={chip}><PadelLogo className="h-11" /></span>
             </div>
           </div>
           <div className="p-4 md:p-6">{children}</div>
