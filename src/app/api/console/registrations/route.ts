@@ -169,9 +169,11 @@ export async function POST(req: Request) {
           gender: nn("gender"),
           address: nn("address"),
           howHeard: nn("howHeard"),
-          emergencyName: nn("emergencyName"),
-          emergencyPhone: nn("emergencyPhone"),
-          medicalNotes: nn("medical"),
+          // Encrypted fields: only write when a value is supplied, so a blank
+          // (e.g. undecryptable on this key) never clobbers existing ciphertext.
+          ...(g("emergencyName") ? { emergencyName: g("emergencyName") } : {}),
+          ...(g("emergencyPhone") ? { emergencyPhone: g("emergencyPhone") } : {}),
+          ...(g("medical") ? { medicalNotes: g("medical") } : {}),
         },
       });
       await prisma.registration.update({

@@ -4,6 +4,15 @@ import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
+import { decryptField } from "@/lib/crypto";
+
+// Sensitive fields are encrypted at rest and only decrypted for staff here.
+// A key mismatch yields a marker — show blank so we never re-save the marker.
+function dec(v: string | null): string {
+  if (!v) return "";
+  const d = decryptField(v);
+  return d === "[unable to decrypt]" ? "" : d;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -148,11 +157,11 @@ export default async function RegistrationDetail({
           <Select label="Gender" name="gender" defaultValue={p.gender ?? ""} options={GENDERS.map((g) => ({ value: g, label: g || "—" }))} />
           <Field label="Address" name="address" defaultValue={p.address ?? ""} />
           <Field label="How heard" name="howHeard" defaultValue={p.howHeard ?? ""} />
-          <Field label="Emergency contact" name="emergencyName" defaultValue={p.emergencyName ?? ""} />
-          <Field label="Emergency phone" name="emergencyPhone" type="tel" defaultValue={p.emergencyPhone ?? ""} />
+          <Field label="Emergency contact" name="emergencyName" defaultValue={dec(p.emergencyName)} />
+          <Field label="Emergency phone" name="emergencyPhone" type="tel" defaultValue={dec(p.emergencyPhone)} />
           <div className="sm:col-span-2">
             <label className="label">Medical disclosures</label>
-            <textarea name="medical" rows={2} className="input" defaultValue={p.medicalNotes ?? ""} />
+            <textarea name="medical" rows={2} className="input" defaultValue={dec(p.medicalNotes)} />
           </div>
         </div>
 
