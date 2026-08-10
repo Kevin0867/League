@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 const TYPE_LABEL: Record<string, string> = { PRIVATE: "Private", SEMI_PRIVATE: "Semi-private", CLINIC: "Clinic" };
 
 const ERRORS: Record<string, string> = {
-  auth: "Not authorized to manage à la carte.",
+  auth: "Not authorized to manage private lessons.",
   facility: "Facility not found.",
-  notallowed: "That venue does not permit à la carte use — negotiate it into the agreement first.",
+  notallowed: "That venue does not permit private lessons — negotiate it into the agreement first.",
   notfound: "Booking not found.",
   op: "Unknown operation.",
 };
@@ -42,7 +42,7 @@ export default async function AlaCartePage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="À la carte lessons & clinics" subtitle="PURE sets prices by venue. Court cost comes off the top, then the split — the applied rates are stamped onto each transaction." />
+      <PageHeader title="Private lessons & clinics" subtitle="PURE sets prices by venue. Court cost comes off the top, then the split — the applied rates are stamped onto each transaction." />
 
       {sp.ok && OKS[sp.ok] && (
         <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OKS[sp.ok]}</p>
@@ -94,7 +94,7 @@ export default async function AlaCartePage({
 
       {alaFacilities.length === 0 && (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No facilities permit à la carte use yet. Enable it on a facility&apos;s agreement first.
+          No facilities permit private lessons yet. Enable it on a facility&apos;s agreement first.
         </p>
       )}
 

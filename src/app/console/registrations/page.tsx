@@ -43,7 +43,21 @@ export default async function RegistrationsPage({
   });
   const seasons = seasonRows.map((s) => ({ id: s.id, name: s.name, divisions: s.divisions }));
 
+  const q = (sp.q ?? "").trim();
+  const searchWhere = q
+    ? {
+        person: {
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" as const } },
+            { lastName: { contains: q, mode: "insensitive" as const } },
+            { email: { contains: q, mode: "insensitive" as const } },
+            { phone: { contains: q, mode: "insensitive" as const } },
+          ],
+        },
+      }
+    : {};
   const registrations = await prisma.registration.findMany({
+    where: searchWhere,
     include: { person: true, division: true, locationPrefs: { orderBy: { rank: "asc" }, include: { facility: true } } },
     orderBy: { submittedAt: "desc" },
   });
@@ -89,12 +103,14 @@ export default async function RegistrationsPage({
   }));
   const dupGroups = findDuplicateGroups(people);
 
-  const counts = {
-    total: registrations.length,
-    assigned: registrations.filter((r) => r.status === "ASSIGNED").length,
-    waitlisted: registrations.filter((r) => r.status === "WAITLISTED").length,
-    noWaiver: registrations.filter((r) => !r.person.waiverSignedAt).length,
-  };
+  // Header counts are global, independent of any active search filter.
+  const [total, assigned, waitlisted, noWaiver] = await Promise.all([
+    prisma.registration.count(),
+    prisma.registration.count({ where: { status: "ASSIGNED" } }),
+    prisma.registration.count({ where: { status: "WAITLISTED" } }),
+    prisma.registration.count({ where: { person: { waiverSignedAt: null } } }),
+  ]);
+  const counts = { total, assigned, waitlisted, noWaiver };
 
   return (
     <div className="space-y-6">
@@ -108,6 +124,24 @@ export default async function RegistrationsPage({
         </div>
         <AddPlayerForm ticket={ticket} seasons={seasons} />
       </div>
+
+      {/* Search by name, email, or phone */}
+      <form method="GET" className="flex items-center gap-2">
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder="Search players by name, email, or phone…"
+          className="input max-w-md"
+          type="search"
+        />
+        <button className="btn-secondary">Search</button>
+        {q && <a href="/console/registrations" className="text-sm text-slate-500 hover:underline">Clear</a>}
+      </form>
+      {q && (
+        <p className="text-sm text-slate-500">
+          {registrations.length} result{registrations.length === 1 ? "" : "s"} for &ldquo;{q}&rdquo;
+        </p>
+      )}
 
       {sp.ok && OK[sp.ok] && (
         <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>
