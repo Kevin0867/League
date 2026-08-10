@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { ingestRegistration } from "@/lib/domain/intake";
 import { dispatchMessage } from "@/lib/messaging";
+import { sendEmail } from "@/lib/notify";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
@@ -75,6 +76,64 @@ export async function POST(req: Request) {
       return back("?err=failed");
     }
     return back("?ok=addPlayer");
+  }
+
+  // Bulk-resend outstanding fee requests — scoped to a team's roster (teamId set)
+  // or everyone with an unpaid request (no teamId). Does not create new charges.
+  if (op === "resendAllFees") {
+    if (!can(actor.role, "manageTeams")) return back("?err=auth");
+    const teamId = String(fd.get("teamId") ?? "").trim();
+    let partyIds: string[] | undefined;
+    let seasonScope: string | undefined;
+    if (teamId) {
+      const team = await prisma.team.findUnique({ where: { id: teamId }, include: { members: true } });
+      if (!team) return NextResponse.redirect(new URL(`/console/teams/${teamId}?err=notfound`, origin), 303);
+      partyIds = team.members.map((m) => m.personId);
+      seasonScope = team.seasonId;
+      if (partyIds.length === 0) return NextResponse.redirect(new URL(`/console/teams/${teamId}?ok=resentAll&n=0`, origin), 303);
+    }
+    const payments = await prisma.payment.findMany({
+      where: {
+        category: "PLAYER_FEE",
+        status: { in: ["REQUESTED", "PENDING"] },
+        ...(partyIds ? { partyId: { in: partyIds } } : {}),
+        ...(seasonScope ? { seasonId: seasonScope } : {}),
+      },
+    });
+    let sent = 0;
+    for (const pay of payments) {
+      if (!pay.partyId) continue;
+      const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
+      if (!person) continue;
+      const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: pay.seasonId ?? seasonScope ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
+        channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+      });
+      sent++;
+    }
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: teamId || "all", action: "RESEND_BULK", summary: `Resent ${sent} fee request(s)` });
+    const dest = teamId ? `/console/teams/${teamId}?ok=resentAll&n=${sent}` : `/console/payments?ok=resentAll&n=${sent}`;
+    return NextResponse.redirect(new URL(dest, origin), 303);
+  }
+
+  // Send a sample fee-request email to the signed-in admin, so staff can preview
+  // exactly what families receive (independent of the BCC setting).
+  if (op === "sendTestPayment") {
+    if (!can(actor.role, "manageTeams")) return back("?err=auth");
+    const me = await prisma.user.findUnique({ where: { id: actor.userId }, include: { person: true } });
+    if (!me?.email) return NextResponse.redirect(new URL(`/console/payments?err=noemail`, origin), 303);
+    const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+    const feeCents = rate?.seasonFeeCents ?? 49500;
+    const sample = paymentRequestEmail({
+      name: me.person?.firstName ?? "there",
+      amountCents: feeCents,
+      description: "Sample — season fee preview",
+      paymentId: "sample",
+    });
+    await sendEmail(me.email, `[Preview] ${sample.subject}`, sample.text, sample.html);
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "preview", action: "TEST_EMAIL", summary: `Sent preview fee request to ${me.email}` });
+    return NextResponse.redirect(new URL(`/console/payments?ok=testsent`, origin), 303);
   }
 
   // The roster quick-actions require team-management rights.
@@ -267,7 +326,10 @@ export async function POST(req: Request) {
         channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
       });
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "RESEND", summary: "Resent fee request" });
-      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=resent`, origin), 303);
+      const dest = String(fd.get("from") ?? "") === "list"
+        ? `/console/registrations?ok=resent`
+        : `/console/registrations/${reg.id}?ok=resent`;
+      return NextResponse.redirect(new URL(dest, origin), 303);
     }
 
     // Start a refund on this player's paid season fee.

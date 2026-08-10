@@ -28,8 +28,9 @@ export default async function PaymentsPage({
     }),
   ]);
 
+  const outstanding = inbound.filter((p) => p.status === "REQUESTED" || p.status === "PENDING");
   const collected = inbound.filter((p) => p.status === "PAID").reduce((s, p) => s + p.amountCents, 0);
-  const requested = inbound.filter((p) => p.status === "REQUESTED" || p.status === "PENDING").reduce((s, p) => s + p.amountCents, 0);
+  const requested = outstanding.reduce((s, p) => s + p.amountCents, 0);
   const paidOut = outbound.filter((p) => p.status === "PAID").reduce((s, p) => s + p.amountCents, 0);
 
   return (
@@ -45,11 +46,50 @@ export default async function PaymentsPage({
       {sp.err === "auth" && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Not authorized to run payouts.</div>
       )}
+      {sp.ok === "resentAll" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Resent {sp.n ?? 0} outstanding fee request{sp.n === "1" ? "" : "s"}.
+        </div>
+      )}
+      {sp.ok === "testsent" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Preview sent — check your inbox for the sample fee-request email.
+        </div>
+      )}
+      {sp.err === "noemail" && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">No email on your account to send the preview to.</div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Collected" value={formatCents(collected)} tone="emerald" />
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
         <Stat label="Paid out" value={formatCents(paidOut)} tone="slate" />
+      </div>
+
+      {/* Fee reminders — bulk resend + preview */}
+      <div className="card flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-slate-900">Fee reminders</h2>
+          <p className="text-sm text-slate-500">
+            {outstanding.length > 0
+              ? `${outstanding.length} player${outstanding.length === 1 ? "" : "s"} with an unpaid request (${formatCents(requested)}).`
+              : "No outstanding fee requests right now."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <form method="POST" action="/api/console/registrations">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="sendTestPayment" />
+            <button className="btn-ghost text-sm">Send me a preview</button>
+          </form>
+          <form method="POST" action="/api/console/registrations">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="resendAllFees" />
+            <button className="btn-secondary text-sm" disabled={outstanding.length === 0}>
+              Resend all ({outstanding.length})
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Coach payout register (§9) */}

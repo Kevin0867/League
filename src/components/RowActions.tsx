@@ -78,7 +78,11 @@ export function RowActions({
                   </button>
                 </form>
               ) : payStatus === "requested" ? (
-                <p className="text-center text-xs text-slate-400">Fee already requested</p>
+                <form method="POST" action="/api/console/registrations">
+                  <Hidden op="resendPayment" />
+                  <input type="hidden" name="from" value="list" />
+                  <button className="btn-secondary w-full py-1 text-xs">Resend fee request</button>
+                </form>
               ) : payStatus === "refunded" ? (
                 <p className="text-center text-xs text-slate-400">Fee refunded</p>
               ) : (

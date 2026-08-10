@@ -15,6 +15,7 @@ const OK_MSG: Record<string, string> = {
   publishTeam: "Team published to families.",
   unpublishTeam: "Team unpublished.",
   requestSeasonFees: "Season fee requests sent.",
+  resentAll: "Fee reminders resent to unpaid players.",
 };
 
 const ERR_MSG: Record<string, string> = {
@@ -166,19 +167,30 @@ export default async function TeamDetailPage({
             <h2 className="mb-2 font-semibold text-slate-900">Season fees</h2>
             {team.members.length === 0 ? (
               <p className="text-sm text-slate-400">No players to bill yet.</p>
-            ) : feesToRequest === 0 ? (
-              <p className="text-sm text-emerald-700">All rostered players have a fee request or payment.</p>
             ) : (
-              <form method="POST" action="/api/console/teams">
-                <input type="hidden" name="ticket" value={ticket} />
-                <input type="hidden" name="op" value="requestSeasonFees" />
-                <input type="hidden" name="teamId" value={team.id} />
-                <p className="mb-3 text-sm text-slate-600">
-                  {feesToRequest} player{feesToRequest > 1 ? "s" : ""} not yet billed. Requesting
-                  sends the season fee to their portal to pay.
-                </p>
-                <button className="btn-primary text-sm">Request season fee ({feesToRequest})</button>
-              </form>
+              <div className="space-y-3">
+                {feesToRequest === 0 ? (
+                  <p className="text-sm text-emerald-700">All rostered players have a fee request or payment.</p>
+                ) : (
+                  <form method="POST" action="/api/console/teams">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="requestSeasonFees" />
+                    <input type="hidden" name="teamId" value={team.id} />
+                    <p className="mb-3 text-sm text-slate-600">
+                      {feesToRequest} player{feesToRequest > 1 ? "s" : ""} not yet billed. Requesting
+                      sends the season fee to their portal to pay.
+                    </p>
+                    <button className="btn-primary text-sm">Request season fee ({feesToRequest})</button>
+                  </form>
+                )}
+                {/* Resend to anyone already requested-but-unpaid. */}
+                <form method="POST" action="/api/console/registrations">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="resendAllFees" />
+                  <input type="hidden" name="teamId" value={team.id} />
+                  <button className="text-xs font-semibold text-brand-700 hover:underline">Resend reminders to unpaid players</button>
+                </form>
+              </div>
             )}
           </div>
         </div>
