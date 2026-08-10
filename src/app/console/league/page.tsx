@@ -20,6 +20,8 @@ const OK: Record<string, string> = {
   clearFixtures: "Fixtures cleared — regenerate when ready.",
   sendMatchNotice: "7-day match notice sent.",
   sendEscalationAlert: "48-hour alert sent.",
+  createLeague: "New league created and set active.",
+  addMatch: "Match scheduled.",
 };
 
 const ERRORS: Record<string, string> = {
@@ -27,8 +29,38 @@ const ERRORS: Record<string, string> = {
   noseason: "No ACP season found.",
   nofixture: "Fixture not found.",
   norisk: "No teams are currently at risk — nothing to escalate.",
+  leaguefields: "Enter a league name and both dates.",
+  leaguedates: "Check the dates — the end must be on or after the start.",
+  matchteams: "Pick both teams for the match.",
+  matchsame: "A team can't play itself — pick two different teams.",
+  matchdate: "Pick a date for the match.",
   op: "Unknown operation.",
 };
+
+// Reusable "Create a new league" form.
+function CreateLeagueForm({ ticket }: { ticket: string }) {
+  return (
+    <form method="POST" action="/api/console/league" className="grid gap-3 sm:grid-cols-4 sm:items-end">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="createLeague" />
+      <div className="sm:col-span-2">
+        <label className="label">League name</label>
+        <input name="name" className="input" placeholder="ACP Fall 2026" required />
+      </div>
+      <div>
+        <label className="label">Start date</label>
+        <input name="startDate" type="date" className="input" required />
+      </div>
+      <div>
+        <label className="label">End date</label>
+        <input name="endDate" type="date" className="input" required />
+      </div>
+      <div className="sm:col-span-4">
+        <button className="btn-primary">Create new league</button>
+      </div>
+    </form>
+  );
+}
 
 export default async function LeaguePage({
   searchParams,
@@ -209,10 +241,15 @@ export default async function LeaguePage({
       </div>
 
       {!season && (
-        <div className="card text-sm text-slate-600">
-          No active ACP season yet. Create and activate an <span className="font-medium">Arizona Club Pickleball</span> season
-          in <Link href="/console/setup" className="text-accent-700 underline">Season Setup</Link>, then come back to run practices,
-          generate fixtures, and host the tournament.
+        <div className="card space-y-4">
+          <div>
+            <h2 className="font-semibold text-slate-900">Create a new league</h2>
+            <p className="mt-0.5 text-sm text-slate-600">
+              Start an <span className="font-medium">Arizona Club Pickleball</span> league. It becomes the active league, then
+              add teams in <Link href="/console/teams" className="text-accent-700 underline">Team Build</Link> and schedule matches here.
+            </p>
+          </div>
+          <CreateLeagueForm ticket={ticket} />
         </div>
       )}
 
@@ -364,6 +401,81 @@ export default async function LeaguePage({
               </Link>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Eligible teams + manually schedule a match */}
+      {season && (
+        <div className="card space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-slate-900">Eligible teams</h2>
+            <span className="text-xs text-slate-400">{acpTeams.length} team{acpTeams.length === 1 ? "" : "s"} in {season.name}</span>
+          </div>
+          {acpTeams.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No teams in this league yet. Build teams in <Link href="/console/teams" className="text-accent-700 underline">Team Build</Link>,
+              then schedule matches between them here.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {acpTeams.map((t) => (
+                <span key={t.id} className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">{t.name}</span>
+              ))}
+            </div>
+          )}
+
+          {acpTeams.length >= 2 && (
+            <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-100">
+              <h3 className="mb-2 text-sm font-semibold text-slate-800">Schedule a match</h3>
+              <form method="POST" action="/api/console/league" className="grid gap-3 sm:grid-cols-6 sm:items-end">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="addMatch" />
+                <input type="hidden" name="seasonId" value={season.id} />
+                <div className="sm:col-span-2">
+                  <label className="label">Home team</label>
+                  <select name="homeTeamId" className="input" required>
+                    <option value="">—</option>
+                    {acpTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="label">Away team</label>
+                  <select name="awayTeamId" className="input" required>
+                    <option value="">—</option>
+                    {acpTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Date</label>
+                  <input name="scheduledAt" type="date" className="input" required />
+                </div>
+                <div>
+                  <label className="label">Time</label>
+                  <input name="scheduledTime" type="time" className="input" defaultValue="18:00" />
+                </div>
+                <div className="sm:col-span-4">
+                  <label className="label">Location</label>
+                  <select name="facilityId" className="input">
+                    <option value="">Hub TBD</option>
+                    {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <button className="btn-primary w-full">Schedule match</button>
+                </div>
+              </form>
+              <p className="mt-2 text-xs text-slate-400">
+                Adds one match to the fixtures below. Enter scores on the match page once it&apos;s played — the leaderboard updates automatically.
+              </p>
+            </div>
+          )}
+
+          <details className="text-sm">
+            <summary className="cursor-pointer font-medium text-slate-600">Create another league</summary>
+            <div className="mt-3">
+              <CreateLeagueForm ticket={ticket} />
+            </div>
+          </details>
         </div>
       )}
 

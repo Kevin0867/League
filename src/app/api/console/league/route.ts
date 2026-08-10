@@ -59,6 +59,51 @@ export async function POST(req: Request) {
       return back("?ok=editFixture");
     }
 
+    // Create a new ACP league (season) and make it the active one. Other ACP
+    // seasons are deactivated so the League page shows this new league.
+    case "createLeague": {
+      const name = String(formData.get("name") ?? "").trim();
+      const startStr = String(formData.get("startDate") ?? "").trim();
+      const endStr = String(formData.get("endDate") ?? "").trim();
+      if (!name || !startStr || !endStr) return back("?err=leaguefields");
+      const startDate = new Date(startStr);
+      const endDate = new Date(endStr);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate < startDate) return back("?err=leaguedates");
+
+      await prisma.season.updateMany({ where: { program: "ACP", active: true }, data: { active: false } });
+      const season = await prisma.season.create({
+        data: { name, program: "ACP", startDate, endDate, active: true },
+      });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: season.id, action: "league.create", summary: `Created ACP league ${name}` });
+      return back("?ok=createLeague");
+    }
+
+    // Manually schedule a single match between two teams (location + time),
+    // outside the round-robin generator. Feeds the same fixtures/leaderboard.
+    case "addMatch": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      if (!seasonId) return back("?err=noseason");
+      const homeTeamId = String(formData.get("homeTeamId") ?? "").trim();
+      const awayTeamId = String(formData.get("awayTeamId") ?? "").trim();
+      if (!homeTeamId || !awayTeamId) return back("?err=matchteams");
+      if (homeTeamId === awayTeamId) return back("?err=matchsame");
+      const dateStr = String(formData.get("scheduledAt") ?? "").trim();
+      const timeStr = String(formData.get("scheduledTime") ?? "").trim() || "18:00";
+      if (!dateStr) return back("?err=matchdate");
+      const scheduledAt = new Date(`${dateStr}T${timeStr}`);
+      if (isNaN(scheduledAt.getTime())) return back("?err=matchdate");
+      const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
+
+      const agg = await prisma.fixture.aggregate({ where: { seasonId }, _max: { weekNumber: true } });
+      const weekNumber = (agg._max.weekNumber ?? 0) + 1;
+
+      const fixture = await prisma.fixture.create({
+        data: { seasonId, weekNumber, scheduledAt, facilityId, homeTeamId, awayTeamId, status: "SCHEDULED" },
+      });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixture.id, action: "fixture.add", summary: "Scheduled a match" });
+      return back("?ok=addMatch");
+    }
+
     // Clear all fixtures for a season so they can be regenerated.
     case "clearFixtures": {
       const seasonId = String(formData.get("seasonId") ?? "");
