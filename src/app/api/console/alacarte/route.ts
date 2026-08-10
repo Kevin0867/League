@@ -35,17 +35,36 @@ export async function POST(req: Request) {
       if (!facility.alaCarteAllowed) return back("?err=notallowed");
 
       const priceDollars = Number(formData.get("price") ?? 0);
+      const capacityRaw = String(formData.get("capacity") ?? "").trim();
+      const capacity = capacityRaw ? Math.max(1, Math.round(Number(capacityRaw))) : null;
+      const scheduledRaw = String(formData.get("scheduledAt") ?? "").trim();
+      const scheduledAt = scheduledRaw ? new Date(scheduledRaw) : null;
       await prisma.alaCarteOffering.create({
         data: {
           type: String(formData.get("type") ?? "PRIVATE"),
           title: String(formData.get("title") ?? "").trim() || "Lesson",
+          description: String(formData.get("description") ?? "").trim() || null,
           facilityId,
           coachId: String(formData.get("coachId") ?? "") || null,
           priceCents: Math.round(priceDollars * 100),
+          capacity,
+          scheduledAt: scheduledAt && !isNaN(scheduledAt.getTime()) ? scheduledAt : null,
           active: true,
         },
       });
       await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: facilityId, action: "CREATE", summary: "Created à la carte offering" });
+      return back("?ok=createOffering");
+    }
+
+    // Show/hide an offering (deactivating removes a clinic from the public page).
+    case "toggleOffering": {
+      if (!actor || !can(actor.role, "manageAlaCarte")) return back("?err=auth");
+      const offeringId = String(formData.get("offeringId") ?? "");
+      const active = String(formData.get("active") ?? "") === "1";
+      const offering = await prisma.alaCarteOffering.findUnique({ where: { id: offeringId } });
+      if (!offering) return back("?err=notfound");
+      await prisma.alaCarteOffering.update({ where: { id: offeringId }, data: { active } });
+      await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: offeringId, action: active ? "ACTIVATE" : "DEACTIVATE" });
       return back("?ok=createOffering");
     }
 

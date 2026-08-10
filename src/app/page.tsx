@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { prisma } from "@/lib/db";
+import { formatCents } from "@/lib/money";
+import { listPublicClinics, formatClinicWhen } from "@/lib/domain/clinics";
 
 export default async function HomePage() {
   const season = await prisma.season
     .findFirst({ where: { active: true, program: "PURE_ACADEMY" }, orderBy: { startDate: "desc" } })
     .catch(() => null);
+  const clinics = (await listPublicClinics().catch(() => [])).slice(0, 3);
 
   return (
     <div>
@@ -60,6 +63,44 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* Active clinics */}
+      {clinics.length > 0 && (
+        <section className="border-t border-slate-200 bg-white">
+          <div className="mx-auto max-w-6xl px-4 py-16">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="eyebrow">Drop in</p>
+                <h2 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">
+                  Upcoming <em className="text-accent-600">clinics</em>
+                </h2>
+                <p className="mt-2 text-slate-600">Reserve a spot with a PURE coach — pay online, no account needed.</p>
+              </div>
+              <Link href="/clinics" className="btn-secondary">See all clinics</Link>
+            </div>
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {clinics.map((c) => (
+                <div key={c.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-bold text-slate-900">{c.title}</h3>
+                    <span className="whitespace-nowrap rounded-full bg-brand-50 px-3 py-1 text-sm font-bold text-brand-700">{formatCents(c.priceCents)}</span>
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-slate-600">{formatClinicWhen(c.scheduledAt)}</p>
+                  <p className="text-sm text-slate-500">{c.facilityName}{c.coachName ? ` · Coach ${c.coachName}` : ""}</p>
+                  <div className="mt-4 flex items-center justify-between gap-3 pt-2">
+                    <span className={`text-sm font-medium ${c.isFull ? "text-rose-600" : "text-emerald-700"}`}>
+                      {c.isFull ? "Full" : `${c.spotsLeft} spots left`}
+                    </span>
+                    {c.isFull
+                      ? <span className="text-sm font-semibold text-slate-400">Sold out</span>
+                      : <Link href={`/clinics/${c.id}`} className="btn-accent px-4 py-2 text-sm">Sign up</Link>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ACP league strip */}
       <section className="border-y border-slate-200 bg-white">

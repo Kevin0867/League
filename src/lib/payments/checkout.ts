@@ -29,9 +29,11 @@ export async function createCheckoutRedirect(opts: {
   const base = appUrl();
   const success = `${base}/pay/success?session_id={CHECKOUT_SESSION_ID}`;
   const cancel = `${base}/pay/${payment.id}?canceled=1`;
-  const productName = payment.description ?? "PURE Academy season fee";
-  const productBlurb =
-    "Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.";
+  const isAlaCarte = payment.category === "ALA_CARTE";
+  const productName = payment.description ?? (isAlaCarte ? "PURE Academy clinic" : "PURE Academy season fee");
+  const productBlurb = isAlaCarte
+    ? "Reserves your spot for this session. Your place is confirmed once payment clears."
+    : "Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.";
 
   // Dev / unconfigured Stripe — simulate a successful charge, clearly flagged.
   if (!isStripeConfigured()) {

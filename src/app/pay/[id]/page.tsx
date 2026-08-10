@@ -49,6 +49,8 @@ export default async function PublicPayPage({
             <h1 className="mt-4 text-xl font-bold text-slate-900">You&apos;re all set</h1>
             <p className="mt-2 text-slate-500">This fee has already been paid. Thank you!</p>
           </div>
+        ) : payment!.category === "ALA_CARTE" ? (
+          <ClinicPayCard payment={payment!} canceled={canceled} err={err} />
         ) : (
           <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} />
         )}
@@ -58,6 +60,50 @@ export default async function PublicPayPage({
           <a href={`mailto:${SUPPORT_ADDRESS}`} className="text-brand-600 underline">{SUPPORT_ADDRESS}</a>.
         </p>
       </div>
+    </div>
+  );
+}
+
+// Clinics & private lessons: a single one-time charge, no installment option.
+function ClinicPayCard({
+  payment,
+  canceled,
+  err,
+}: {
+  payment: { id: string; amountCents: number; description: string | null; party: { firstName: string } | null };
+  canceled?: string;
+  err?: string;
+}) {
+  return (
+    <div className="card">
+      <h1 className="text-2xl font-bold text-slate-900">Confirm your spot</h1>
+      <p className="mt-1 text-sm text-slate-500">{payment.description ?? "PURE Academy clinic"}</p>
+
+      {canceled && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Checkout was canceled — no charge was made. Your spot isn&apos;t confirmed until payment clears; you can try again below.
+        </p>
+      )}
+      {err === "notfound" && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          We couldn&apos;t start checkout. Please try again.
+        </p>
+      )}
+
+      <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+        <span className="text-sm font-medium text-slate-600">Amount due</span>
+        <span className="text-2xl font-bold text-slate-900">{formatCents(payment.amountCents)}</span>
+      </div>
+
+      <p className="mt-4 text-xs text-slate-500">
+        Secure checkout is hosted by Stripe — we never see your card details. No account or login required.
+      </p>
+
+      <form method="POST" action="/api/pay" className="mt-5">
+        <input type="hidden" name="paymentId" value={payment.id} />
+        <input type="hidden" name="plan" value="full" />
+        <button className="btn-primary w-full py-3 text-base">Pay {formatCents(payment.amountCents)} now</button>
+      </form>
     </div>
   );
 }
