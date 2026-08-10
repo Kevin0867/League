@@ -37,21 +37,45 @@ export default async function RequestsPage({
   // Name index for matching mentions in the comment text.
   const norm = (s: string) => s.toLowerCase();
   const words = (s: string) => new Set(norm(s).split(/[^a-z]+/).filter((w) => w.length >= 3));
+  const SIBLING_RE = /\b(brothers?|sisters?|siblings?|twins?)\b/i;
   const requests = regs
     .filter((r) => (r.partnerRequests ?? "").trim().length > 0)
     .map((r) => {
       const text = r.partnerRequests!.trim();
       const w = words(text);
-      // Matched fellow players (by first name whole-word), excluding self.
-      const friends = regs
+      const self = r.person;
+      const mentionsSibling = SIBLING_RE.test(text);
+
+      // Named matches: a fellow player whose first name appears in the comment.
+      const named = regs
         .filter((o) => o.personId !== r.personId && w.has(norm(o.person.firstName)))
-        .map((o) => ({ person: o.person, team: teamByPerson.get(o.personId) ?? null }))
-        // de-dup by person id
+        .map((o) => ({ person: o.person, team: teamByPerson.get(o.personId) ?? null, reason: "named" as const }));
+
+      // Likely siblings: when the comment says brother/sister/sibling/twin but
+      // names no one, surface same-family players — same last name, or a shared
+      // guardian (or a direct parent/child link) — as candidates to review.
+      const siblingCandidates = mentionsSibling
+        ? regs
+            .filter((o) => o.personId !== r.personId)
+            .filter((o) => {
+              const p = o.person;
+              const sameLast = !!self.lastName && norm(p.lastName) === norm(self.lastName);
+              const sharedGuardian = !!self.guardianId && !!p.guardianId && self.guardianId === p.guardianId;
+              const parentChild = (!!self.guardianId && self.guardianId === p.id) || (!!p.guardianId && p.guardianId === self.id);
+              return sameLast || sharedGuardian || parentChild;
+            })
+            .map((o) => ({ person: o.person, team: teamByPerson.get(o.personId) ?? null, reason: "sibling" as const }))
+        : [];
+
+      // Named matches win; add sibling candidates not already named. De-dup by id.
+      const namedIds = new Set(named.map((n) => n.person.id));
+      const candidates = [...named, ...siblingCandidates.filter((s) => !namedIds.has(s.person.id))]
         .filter((v, i, a) => a.findIndex((x) => x.person.id === v.person.id) === i)
-        .slice(0, 6);
+        .slice(0, 8);
+
       // Matched coach mentions.
       const coach = coaches.find((c) => w.has(norm(c.person.firstName)) || w.has(norm(c.person.lastName)));
-      return { reg: r, text, friends, coach, myTeam: teamByPerson.get(r.personId) ?? null };
+      return { reg: r, text, candidates, mentionsSibling, coach, myTeam: teamByPerson.get(r.personId) ?? null };
     });
 
   return (
@@ -59,8 +83,8 @@ export default async function RequestsPage({
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Placement requests</h1>
         <p className="text-slate-500">
-          Comments left at signup — pairing and coach requests. Place a player with their friend in one click;
-          admins can override a full team.
+          Comments left at signup — pairing, sibling, and coach requests. Named friends match automatically; a
+          &ldquo;brother/sister&rdquo; mention surfaces same-family players. Place a player in one click; admins can override a full team.
         </p>
       </div>
 
@@ -72,7 +96,7 @@ export default async function RequestsPage({
         <div className="card text-sm text-slate-500">No placement comments on this season&apos;s registrations.</div>
       ) : (
         <div className="space-y-3">
-          {requests.map(({ reg, text, friends, coach, myTeam }) => (
+          {requests.map(({ reg, text, candidates, mentionsSibling, coach, myTeam }) => (
             <div key={reg.id} className="card space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -83,20 +107,24 @@ export default async function RequestsPage({
                     {reg.division?.name ?? "unplaced"} · {myTeam ? `on ${myTeam.name}` : "in pool"}
                   </div>
                 </div>
+                {mentionsSibling && <span className="badge bg-violet-100 text-violet-800">👧👦 sibling request</span>}
               </div>
 
               <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">“{text}”</p>
 
-              {/* Matched friends */}
-              {friends.length > 0 ? (
+              {/* Matched players + likely siblings */}
+              {candidates.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Matched player{friends.length > 1 ? "s" : ""}</div>
-                  {friends.map(({ person, team }) => {
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    {candidates.some((c) => c.reason === "sibling") ? "Matches & likely family" : `Matched player${candidates.length > 1 ? "s" : ""}`}
+                  </div>
+                  {candidates.map(({ person, team, reason }) => {
                     const full = team ? team._count.members + (team.coachPlays ? 1 : 0) + 1 > TEAM_CAP : false;
                     return (
                       <div key={person.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg ring-1 ring-slate-100 px-3 py-2 text-sm">
                         <span className="text-slate-700">
                           {person.firstName} {person.lastName}
+                          {reason === "sibling" && <span className="ml-2 badge bg-violet-50 text-violet-700">likely sibling</span>}
                           <span className="ml-2 text-xs text-slate-400">{team ? `on ${team.name}${full ? " · FULL" : ""}` : "in pool — assign both to a team"}</span>
                         </span>
                         {team && myTeam?.id !== team.id && (
@@ -117,9 +145,16 @@ export default async function RequestsPage({
                       </div>
                     );
                   })}
+                  {mentionsSibling && (
+                    <p className="text-xs text-slate-400">Family suggested from a sibling mention — confirm it&apos;s the right person before placing.</p>
+                  )}
                 </div>
               ) : (
-                <p className="text-xs text-slate-400">No registered player matched by name — review the comment and place manually.</p>
+                <p className="text-xs text-slate-400">
+                  {mentionsSibling
+                    ? "Mentions a sibling, but no same-family player is registered yet — check back once they enroll, or place manually."
+                    : "No registered player matched by name — review the comment and place manually."}
+                </p>
               )}
 
               {/* Matched coach + conflict flag */}
