@@ -124,7 +124,7 @@ export default async function PoolsPage({
         [...byDivision.entries()].map(([division, dpools]) => (
           <section key={division}>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{division}</h2>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {dpools.map((pool) => (
                 <PoolCard key={pool.key} pool={pool} seasonId={season.id} teams={teamOptions} ticket={ticket} />
               ))}

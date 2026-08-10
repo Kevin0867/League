@@ -15,7 +15,7 @@ const NAV: NavItem[] = [
   { href: "/console/registrations", label: "Registrations", icon: "📝", roles: ["COO", "DIRECTOR"] },
   { href: "/console/import", label: "Import", icon: "⬆️", roles: ["COO", "DIRECTOR"] },
   { href: "/console/pools", label: "Assignment", icon: "🧮", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/board", label: "Board", icon: "🔀", roles: ["COO", "DIRECTOR"] },
+  { href: "/console/board", label: "Boards", icon: "🔀", roles: ["COO", "DIRECTOR"] },
   { href: "/console/requests", label: "Requests", icon: "🙋", roles: ["COO", "DIRECTOR"] },
   { href: "/console/teams", label: "Team Build", icon: "🧩", roles: ["COO", "DIRECTOR", "COACH"] },
   { href: "/console/coaches", label: "Coaches", icon: "🎯", roles: ["COO", "DIRECTOR"] },
