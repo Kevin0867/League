@@ -299,6 +299,13 @@ model Coach {
   person              Person    @relation(fields: [personId], references: [id])
 
   rpoCertLevel        String?
+  /// Self-service coach profile (§5). certifications = credentials/cert text;
+  /// bio = coaching history/background; coachingLevels = which levels/ages they
+  /// can coach (e.g. "2.5–4.0, Youth, High School"). Location availability lives
+  /// in marketsCovered; day/time availability in AvailabilityBlock; contact on Person.
+  certifications      String?
+  bio                 String?
+  coachingLevels      String?
   /// Hard gate (§5): no team assignment without a completed background check…
   backgroundCheckDate DateTime?
   backgroundCheckExpiry DateTime?

@@ -17,6 +17,7 @@ export const CAN: Record<string, Role[]> = {
   manageAgreements: ["COO", "CEO"],
   manageTeams: ["COO", "DIRECTOR"],
   manageCoaches: ["COO", "DIRECTOR"],
+  manageUsers: ["COO", "DIRECTOR"], // assign roles/access; admin roles are COO-only (enforced in the route)
   managePlayers: ["COO", "DIRECTOR"],
   manageScheduling: ["COO", "DIRECTOR"],
   manageEvaluations: ["COO", "DIRECTOR"],
