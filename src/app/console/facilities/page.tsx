@@ -73,8 +73,8 @@ export default async function FacilitiesPage({
             return (
               <div key={f.id} className="card flex flex-col gap-4">
                 {/* Header: name + agreement status */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold text-slate-900">{f.name}</div>
                     <div className="mt-0.5 text-sm text-slate-500">
                       {f.market ?? "No market"} · {f.courtCount} court{f.courtCount === 1 ? "" : "s"}
@@ -90,7 +90,7 @@ export default async function FacilitiesPage({
                 </div>
 
                 {/* Details */}
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4 text-sm">
+                <dl className="grid grid-cols-1 gap-y-3 border-t border-slate-100 pt-4 text-sm sm:grid-cols-2 sm:gap-x-4">
                   <Detail label="Fee basis" value={FEE_LABEL[f.feeBasis] ?? f.feeBasis} />
                   <Detail label="Rate" value={rate} />
                   <Detail
