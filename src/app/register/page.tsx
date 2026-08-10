@@ -6,7 +6,12 @@ import { ACADEMY_MARKETS } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
-export default async function RegisterPage() {
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ division?: string }>;
+}) {
+  const { division: preselectedDivision } = await searchParams;
   const season = await prisma.season.findFirst({
     where: { active: true, program: "PURE_ACADEMY" },
     orderBy: { startDate: "desc" },
@@ -75,7 +80,14 @@ export default async function RegisterPage() {
             one waiver covers one adult and up to four kids.
           </p>
         </div>
-        <RegisterForm seasonId={season.id} locations={locations} />
+        {preselectedDivision && (
+          <div className="mb-6 rounded-xl border-l-4 border-brand-500 bg-brand-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Signing up for</p>
+            <p className="text-lg font-bold text-brand-900">{preselectedDivision}</p>
+            <p className="mt-0.5 text-sm text-slate-600">We&apos;ll place the player in this group. You can still adjust the track below.</p>
+          </div>
+        )}
+        <RegisterForm seasonId={season.id} locations={locations} preselectedDivision={preselectedDivision ?? null} />
       </div>
     </div>
   );

@@ -33,14 +33,21 @@ export default async function ProgramsPage() {
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {s.divisions.map((d) => (
-                  <div key={d.id} className="rounded-lg border border-slate-200 p-3">
-                    <div className="font-medium text-slate-800">{d.name}</div>
+                  <Link
+                    key={d.id}
+                    href={`/register?division=${encodeURIComponent(d.name)}`}
+                    className="group flex flex-col rounded-lg border border-slate-200 p-3 transition-colors hover:border-brand-400 hover:bg-brand-50/40"
+                  >
+                    <div className="font-medium text-slate-800 group-hover:text-brand-800">{d.name}</div>
                     <div className="text-xs text-slate-500">
                       {d.divisionType === "DUPR_BAND"
                         ? `DUPR ${d.minRating ?? "?"}–${d.maxRating ?? "?"}`
                         : "By school level"}
                     </div>
-                  </div>
+                    <span className="mt-2 text-xs font-semibold text-brand-600 opacity-0 transition-opacity group-hover:opacity-100">
+                      Sign up for this group →
+                    </span>
+                  </Link>
                 ))}
                 {s.divisions.length === 0 && <p className="text-sm text-slate-400">Divisions to be announced.</p>}
               </div>

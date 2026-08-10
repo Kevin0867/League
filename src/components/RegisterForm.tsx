@@ -15,9 +15,11 @@ type Mode = "adult" | "child" | "both";
 export function RegisterForm({
   seasonId,
   locations,
+  preselectedDivision = null,
 }: {
   seasonId: string;
   locations: string[];
+  preselectedDivision?: string | null;
 }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, {});
   const [mode, setMode] = useState<Mode>("adult");
@@ -32,6 +34,7 @@ export function RegisterForm({
     <form action={action} className="space-y-8">
       <input type="hidden" name="seasonId" value={seasonId} />
       <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
+      {preselectedDivision && <input type="hidden" name="preferredDivision" value={preselectedDivision} />}
 
       {/* 01 — Who's playing */}
       <Section n="01" title="Who's playing?">

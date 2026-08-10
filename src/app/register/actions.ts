@@ -88,6 +88,10 @@ async function enrollPlayer(opts: {
   guardianId?: string;
   email?: string;
   phone?: string;
+  // Grouping the family clicked on the Programs page (division name → id), used
+  // as a fallback when the player's own track doesn't resolve a division.
+  preferredDivisionId?: string | null;
+  preferredDivisionName?: string | null;
 }): Promise<void> {
   const { player } = opts;
   const dob = player.dob ? new Date(player.dob) : null;
@@ -139,9 +143,9 @@ async function enrollPlayer(opts: {
     data: {
       personId,
       seasonId: opts.seasonId,
-      divisionId: matchDivisionId(opts.divisions, player.team, player.skill),
+      divisionId: matchDivisionId(opts.divisions, player.team, player.skill) ?? opts.preferredDivisionId ?? null,
       skillLevel: player.skill || null,
-      programInterest: programLabel(player.team, player.skill) || null,
+      programInterest: programLabel(player.team, player.skill) || opts.preferredDivisionName || null,
       practiceTimePref: opts.practiceTimes.join(", ") || null,
       schedule: opts.practiceTimes.join(", ") || null,
       partnerRequests: opts.comments || null,
@@ -213,6 +217,12 @@ export async function registerAction(
   });
   const divisions = season?.divisions ?? [];
 
+  // Grouping preselected from the Programs page (division name via ?division=).
+  const preferredDivisionName = g("preferredDivision") || null;
+  const preferredDivisionId = preferredDivisionName
+    ? divisions.find((d) => d.name.toLowerCase() === preferredDivisionName.toLowerCase())?.id ?? null
+    : null;
+
   // Reuse an existing person by email so families don't create duplicates.
   const existing = await prisma.person.findFirst({ where: { email } });
   let primaryId: string;
@@ -253,8 +263,10 @@ export async function registerAction(
       existingPersonId: primaryId,
       email: email || undefined,
       phone: phone || undefined,
+      preferredDivisionId,
+      preferredDivisionName,
     });
-    enrolled.push({ name: `${firstName} ${lastName}`, program: programLabel(team, skill) });
+    enrolled.push({ name: `${firstName} ${lastName}`, program: programLabel(team, skill) || preferredDivisionName || "" });
   }
 
   // Children (up to 4), each guardian-signed on the same waiver.
@@ -291,8 +303,10 @@ export async function registerAction(
         practiceTimes,
         comments,
         guardianId: primaryId,
+        preferredDivisionId,
+        preferredDivisionName,
       });
-      enrolled.push({ name: `${kid.firstName} ${kid.lastName}`, program: programLabel(kid.team, kid.skill) });
+      enrolled.push({ name: `${kid.firstName} ${kid.lastName}`, program: programLabel(kid.team, kid.skill) || preferredDivisionName || "" });
     }
   }
 
