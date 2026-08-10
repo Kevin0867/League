@@ -8,15 +8,26 @@ export const dynamic = "force-dynamic";
 
 const UNASSIGNED = ["SUBMITTED", "WAITLISTED"];
 
-type RegLike = {
+function bandOf(d: { minRating: number | null; maxRating: number | null }): string {
+  if (d.minRating != null && d.maxRating != null) return `${d.minRating}–${d.maxRating}`;
+  if (d.minRating != null) return `${d.minRating}+`;
+  return "";
+}
+
+type PoolReg = {
   id: string;
   personId: string;
-  divisionId: string | null;
   person: { firstName: string; lastName: string; waiverSignedAt: Date | null; duprRating: number | null };
   division: { name: string } | null;
+  locationPrefs: { marketName: string | null; facility: { market: string | null } | null }[];
 };
 
-const toCard = (r: RegLike) => ({
+const toCard = (r: {
+  id: string;
+  personId: string;
+  person: { firstName: string; lastName: string; waiverSignedAt: Date | null; duprRating: number | null };
+  division: { name: string } | null;
+}) => ({
   registrationId: r.id,
   personId: r.personId,
   name: `${r.person.firstName} ${r.person.lastName}`,
@@ -45,17 +56,16 @@ export default async function BoardPage() {
   const [pool, teams] = await Promise.all([
     prisma.registration.findMany({
       where: { seasonId: season.id, status: { in: UNASSIGNED } },
-      include: { person: true, division: true },
+      include: { person: true, division: true, locationPrefs: { orderBy: { rank: "asc" }, include: { facility: true } } },
       orderBy: { submittedAt: "desc" },
     }),
     prisma.team.findMany({
       where: { seasonId: season.id },
-      include: { division: true, coach: { include: { person: true } }, members: { include: { person: true } } },
+      include: { division: true, facility: true, coach: { include: { person: true } }, members: { include: { person: true } } },
       orderBy: { name: "asc" },
     }),
   ]);
 
-  // Registrations for currently-rostered players, so team cards can be moved.
   const memberPersonIds = teams.flatMap((t) => t.members.map((m) => m.personId));
   const memberRegs = memberPersonIds.length
     ? await prisma.registration.findMany({
@@ -65,57 +75,52 @@ export default async function BoardPage() {
     : [];
   const regByPerson = new Map(memberRegs.map((r) => [r.personId, r]));
 
-  const poolByDivision = new Map<string, RegLike[]>();
-  for (const r of pool) {
-    const key = r.divisionId ?? "none";
-    (poolByDivision.get(key) ?? poolByDivision.set(key, []).get(key)!).push(r);
-  }
-  const teamsByDivision = new Map<string, typeof teams>();
-  for (const t of teams) {
-    const key = t.divisionId ?? "none";
-    (teamsByDivision.get(key) ?? teamsByDivision.set(key, []).get(key)!).push(t);
+  const divName = new Map(season.divisions.map((d) => [d.id, d.name]));
+  const divBand = new Map(season.divisions.map((d) => [d.id, bandOf(d)]));
+
+  // Group unassigned players into pools by division × their top location.
+  const topMarket = (r: PoolReg) => r.locationPrefs[0]?.marketName ?? r.locationPrefs[0]?.facility?.market ?? "";
+  const poolMap = new Map<string, { divisionId: string | null; market: string; cards: PoolReg[] }>();
+  for (const r of pool as PoolReg[]) {
+    const market = topMarket(r);
+    const divisionId = (r as unknown as { divisionId: string | null }).divisionId ?? null;
+    const key = `${divisionId ?? "none"}::${market}`;
+    if (!poolMap.has(key)) poolMap.set(key, { divisionId, market, cards: [] });
+    poolMap.get(key)!.cards.push(r);
   }
 
-  const teamColumn = (t: (typeof teams)[number]): BoardColumn => ({
+  const poolColumns: BoardColumn[] = [...poolMap.values()]
+    .sort((a, b) => (divName.get(a.divisionId ?? "") ?? "~").localeCompare(divName.get(b.divisionId ?? "") ?? "~"))
+    .map((p) => ({
+      id: `pool:${p.divisionId ?? "none"}::${p.market}`,
+      kind: "pool" as const,
+      divisionId: p.divisionId,
+      market: p.market || null,
+      title: p.divisionId ? divName.get(p.divisionId) ?? "Division" : "Unplaced",
+      level: p.divisionId ? divBand.get(p.divisionId) ?? "" : "",
+      location: p.market || "Any location",
+      cap: null,
+      cards: p.cards.map(toCard),
+    }));
+
+  const teamColumns: BoardColumn[] = teams.map((t) => ({
     id: t.id,
-    kind: "team",
+    kind: "team" as const,
     title: t.name,
-    subtitle: [t.division?.name, t.coach ? `${t.coach.person.firstName} ${t.coach.person.lastName}` : null].filter(Boolean).join(" · ") || undefined,
+    level: t.division?.name ?? t.levelBand ?? "",
+    location: t.facility?.name ?? t.market ?? "TBD",
+    subtitle: t.coach ? `${t.coach.person.firstName} ${t.coach.person.lastName}` : undefined,
     cap: TEAM_CAP - (t.coachPlays ? 1 : 0),
     cards: t.members.map((m) => regByPerson.get(m.personId)).filter((r): r is NonNullable<typeof r> => !!r).map(toCard),
-  });
-
-  // Interleave: each division's pool column, then that division's teams.
-  const columns: BoardColumn[] = [];
-  for (const d of season.divisions) {
-    columns.push({
-      id: `pool:${d.id}`,
-      kind: "pool",
-      divisionId: d.id,
-      title: `${d.name} — pool`,
-      cap: null,
-      cards: (poolByDivision.get(d.id) ?? []).map(toCard),
-    });
-    for (const t of teamsByDivision.get(d.id) ?? []) columns.push(teamColumn(t));
-  }
-  // Unplaced pool + any teams with no division.
-  columns.push({
-    id: "pool:none",
-    kind: "pool",
-    divisionId: null,
-    title: "Unplaced — pool",
-    cap: null,
-    cards: (poolByDivision.get("none") ?? []).map(toCard),
-  });
-  for (const t of teamsByDivision.get("none") ?? []) columns.push(teamColumn(t));
+  }));
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Assignment board"
-        subtitle="Drag players between division pools and teams. Moves save instantly; no placement email is sent until you send it from the player's page. Click a name to open and edit the full record."
+        subtitle="Each pool and team is a tile. Drag a player onto a team to assign, onto a pool to unassign, or between pools to change division/location. Click a name to open and edit the full record."
       />
-      <AssignmentBoard ticket={ticket} columns={columns} />
+      <AssignmentBoard ticket={ticket} pools={poolColumns} teams={teamColumns} />
     </div>
   );
 }

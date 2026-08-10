@@ -121,9 +121,15 @@ export async function POST(req: Request) {
     case "repool": {
       if (!reg) return back("?err=fields");
       const divisionId = String(fd.get("divisionId") ?? "") || null;
+      const market = String(fd.get("market") ?? "").trim();
       const ids = await seasonTeamIds(reg.seasonId);
       if (ids.length) await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: ids } } });
       await prisma.registration.update({ where: { id: reg.id }, data: { divisionId, status: "SUBMITTED" } });
+      // Moving into a location pool sets that market as their top preference.
+      if (market) {
+        await prisma.locationPreference.deleteMany({ where: { registrationId: reg.id } });
+        await prisma.locationPreference.create({ data: { registrationId: reg.id, marketName: market, rank: 1 } });
+      }
       await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "REPOOL", summary: "Moved to pool / division" });
       return back("?ok=repool");
     }
