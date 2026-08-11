@@ -276,6 +276,7 @@ model Team {
   pairings      Pairing[]
   sessions      SessionTeam[]
   assistantCoaches TeamCoach[]
+  leagueEntries LeagueTeam[]
 
   @@index([seasonId, divisionId])
   @@index([coachId])
@@ -692,6 +693,24 @@ model Season {
   payments      Payment[]
   fixtures      Fixture[]
   messages      Message[]
+  leagueTeams   LeagueTeam[]
+}
+
+/// Explicit league membership — which teams play in a season's league. Decouples
+/// the league roster from a team's own season/division so any published team can
+/// be added to the active ACP league, regardless of the season it was built in.
+/// The league leaderboard and round-robin are computed over these entries.
+model LeagueTeam {
+  id        String   @id @default(cuid())
+  seasonId  String
+  season    Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([seasonId, teamId])
+  @@index([seasonId])
+  @@index([teamId])
 }
 
 /// Divisions by school level (youth) or DUPR band (adults). Bands lock at

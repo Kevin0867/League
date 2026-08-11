@@ -119,6 +119,39 @@ export async function POST(req: Request) {
       return back("?ok=clearFixtures");
     }
 
+    // Add a published team to the active league's roster (LeagueTeam). Any
+    // published team can join, regardless of the season it was built in.
+    case "addLeagueTeam": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      const teamId = String(formData.get("teamId") ?? "").trim();
+      if (!seasonId) return back("?err=noseason");
+      if (!teamId) return back("?err=noteam");
+      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, published: true, name: true } });
+      if (!team) return back("?err=noteam");
+      if (!team.published) return back("?err=notpublished");
+      await prisma.leagueTeam.upsert({
+        where: { seasonId_teamId: { seasonId, teamId } },
+        create: { seasonId, teamId },
+        update: {},
+      });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "league.addTeam", summary: `Added ${team.name} to the league` });
+      revalidatePath("/console/league");
+      return back("?ok=addLeagueTeam");
+    }
+
+    // Remove a team from the league roster. Its fixtures stay for the record;
+    // clear & regenerate to rebuild the round-robin without it.
+    case "removeLeagueTeam": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      const teamId = String(formData.get("teamId") ?? "").trim();
+      if (!seasonId) return back("?err=noseason");
+      if (!teamId) return back("?err=noteam");
+      await prisma.leagueTeam.deleteMany({ where: { seasonId, teamId } });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "league.removeTeam", summary: `Removed a team from the league` });
+      revalidatePath("/console/league");
+      return back("?ok=removeLeagueTeam");
+    }
+
     case "generateFixtures": {
       const seasonId = String(formData.get("seasonId") ?? "");
       const season = seasonId
@@ -126,43 +159,43 @@ export async function POST(req: Request) {
         : await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
       if (!season) return back("?err=noseason");
 
+      // Don't regenerate over existing fixtures — clear first.
+      const existing = await prisma.fixture.count({ where: { seasonId: season.id } });
+      if (existing > 0) return back("?err=hasfixtures");
+
+      // The roster is the explicit league membership (LeagueTeam), not the
+      // season's teams — a flat round-robin over whichever published teams the
+      // admin added.
+      const entries = await prisma.leagueTeam.findMany({
+        where: { seasonId: season.id },
+        include: { team: { select: { id: true, facilityId: true } } },
+      });
+      if (entries.length < 2) return back("?err=fewteams");
+
       const blackouts = (await prisma.blackoutDate.findMany({ where: { facilityId: null } })).map((b) => b.date);
       const dates = leagueWeekDates(season.startDate, blackouts, LEAGUE_WEEKS);
       const hub = await prisma.facility.findFirst({ where: { acpLeagueOption: true } });
+      const facilityOf = new Map(entries.map((e) => [e.team.id, e.team.facilityId]));
 
-      const divisions = await prisma.division.findMany({
-        where: { seasonId: season.id },
-        include: { teams: { select: { id: true, dayOfWeek: true, startTime: true, facilityId: true } } },
-      });
-
+      const rounds = roundRobin(entries.map((e) => e.team.id)).slice(0, LEAGUE_WEEKS);
       let createdFixtures = 0;
-      for (const div of divisions) {
-        if (div.teams.length < 2) continue;
-        const existing = await prisma.fixture.count({
-          where: { seasonId: season.id, homeTeam: { divisionId: div.id } },
-        });
-        if (existing > 0) continue;
-
-        const rounds = roundRobin(div.teams.map((t) => t.id)).slice(0, LEAGUE_WEEKS);
-        for (let r = 0; r < rounds.length; r++) {
-          const when = dates[r] ?? dates[dates.length - 1];
-          for (const pair of rounds[r]) {
-            if (!pair.homeId || !pair.awayId) continue; // skip byes
-            const homeTeam = div.teams.find((t) => t.id === pair.homeId);
-            await prisma.fixture.create({
-              data: {
-                seasonId: season.id,
-                weekNumber: r + 1,
-                scheduledAt: when,
-                facilityId: hub?.id ?? homeTeam?.facilityId ?? null,
-                homeTeamId: pair.homeId,
-                awayTeamId: pair.awayId,
-                status: "SCHEDULED",
-                courtAllocation: "Courts 1–4",
-              },
-            });
-            createdFixtures++;
-          }
+      for (let r = 0; r < rounds.length; r++) {
+        const when = dates[r] ?? dates[dates.length - 1];
+        for (const pair of rounds[r]) {
+          if (!pair.homeId || !pair.awayId) continue; // skip byes
+          await prisma.fixture.create({
+            data: {
+              seasonId: season.id,
+              weekNumber: r + 1,
+              scheduledAt: when,
+              facilityId: hub?.id ?? facilityOf.get(pair.homeId) ?? null,
+              homeTeamId: pair.homeId,
+              awayTeamId: pair.awayId,
+              status: "SCHEDULED",
+              courtAllocation: "Courts 1–4",
+            },
+          });
+          createdFixtures++;
         }
       }
 
@@ -171,7 +204,7 @@ export async function POST(req: Request) {
         entityType: "Season",
         entityId: season.id,
         action: "GENERATE_FIXTURES",
-        summary: `Generated ${createdFixtures} fixtures across ${divisions.length} division(s)`,
+        summary: `Generated ${createdFixtures} fixtures across ${entries.length} team(s)`,
       });
 
       revalidatePath("/console/league");
