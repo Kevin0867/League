@@ -1,4 +1,5 @@
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
 
@@ -34,6 +35,7 @@ export default async function PublicChampionshipPage() {
           ))}
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

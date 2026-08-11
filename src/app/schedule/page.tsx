@@ -1,4 +1,5 @@
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate } from "@/lib/time";
@@ -50,6 +51,7 @@ export default async function PublicSchedulePage() {
           {byWeek.size === 0 && <p className="text-slate-500">No fixtures scheduled yet.</p>}
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { leagueStandingsFlat } from "@/lib/domain/leagueStandings";
 
@@ -64,6 +65,7 @@ export default async function StandingsPage() {
           )}
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

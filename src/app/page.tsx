@@ -1,3 +1,4 @@
+import { SiteFooter } from "@/components/SiteFooter";
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { prisma } from "@/lib/db";
@@ -173,16 +174,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <footer className="mx-auto max-w-6xl px-4 py-10 text-sm text-slate-500">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <span>© {new Date().getFullYear()} PURE Academy · Arizona Club Pickleball</span>
-          <div className="flex gap-5">
-            <Link href="/programs" className="hover:text-brand-700">Programs</Link>
-            <Link href="/locations" className="hover:text-brand-700">Locations</Link>
-            <Link href="/login" className="hover:text-brand-700">Member login</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

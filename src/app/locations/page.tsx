@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,7 @@ export default async function LocationsPage() {
           {byMarket.size === 0 && <p className="text-slate-500">Locations to be announced.</p>}
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

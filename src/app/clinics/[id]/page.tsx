@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { formatCents } from "@/lib/money";
 import { activeBookingCount, formatClinicWhen } from "@/lib/domain/clinics";
 import { SUPPORT_ADDRESS } from "@/lib/payments/receipt";
@@ -113,6 +114,7 @@ export default async function ClinicSignupPage({
           Questions? Contact us at <a href={`mailto:${SUPPORT_ADDRESS}`} className="text-brand-600 underline">{SUPPORT_ADDRESS}</a>.
         </p>
       </div>
+      <SiteFooter />
     </div>
   );
 }

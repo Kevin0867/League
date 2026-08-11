@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { RegisterForm } from "@/components/RegisterForm";
 import { prisma } from "@/lib/db";
 import { ACADEMY_MARKETS } from "@/lib/enums";
@@ -124,6 +125,7 @@ export default async function RegisterPage({
           preferredFacility={preferredFacility ? { id: preferredFacility.id, label: facilityLabel ?? "" } : null}
         />
       </div>
+      <SiteFooter />
     </div>
   );
 }

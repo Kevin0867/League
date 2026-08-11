@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { formatCents } from "@/lib/money";
 import { listPublicClinics, formatClinicWhen } from "@/lib/domain/clinics";
 
@@ -63,6 +64,7 @@ export default async function ClinicsPage() {
           </div>
         )}
       </section>
+      <SiteFooter />
     </div>
   );
 }

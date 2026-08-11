@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { formatDateRange } from "@/lib/time";
 
@@ -72,6 +73,7 @@ export default async function ProgramsPage() {
           <Link href="/register" className="btn-primary">Register for the season</Link>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

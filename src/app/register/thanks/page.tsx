@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export default function ThanksPage() {
   return (
@@ -20,6 +21,7 @@ export default function ThanksPage() {
           <Link href="/" className="btn-secondary">Back home</Link>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }
