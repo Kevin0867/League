@@ -39,7 +39,7 @@ export default async function CompliancePage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Waivers outstanding" value={peopleNoWaiver.length} warn={peopleNoWaiver.length > 0} />
-        <Metric label="Background checks expiring (30d)" value={bgExpiring.length} warn={bgExpiring.length > 0} />
+        <Metric label="Background checks expired / expiring (30d)" value={bgExpiring.length} warn={bgExpiring.length > 0} />
         <Metric label="Coaches without onboarding" value={onboardingMissing.length} warn={onboardingMissing.length > 0} />
         <Metric label="Unverified DUPR IDs" value={unverifiedDupr} warn={unverifiedDupr > 0} />
       </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { teamMissingFields, rosterStatus } from "@/lib/domain/teams";
+import { TEAM_MIN } from "@/lib/enums";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getSession } from "@/lib/auth";
 import { CoachDashboard } from "./CoachDashboard";
@@ -42,20 +43,22 @@ export default async function ConsoleDashboard() {
   const executed = facilities.filter((f) => f.agreementStatus === "EXECUTED").length;
   const soon = new Date();
   soon.setDate(soon.getDate() + 30);
-  const bgChecksExpiring = coaches.filter(
+  // Expired counts as urgent too — the label reflects both.
+  const bgChecksBad = coaches.filter(
     (c) => c.backgroundCheckExpiry && c.backgroundCheckExpiry < soon
   ).length;
-  // Teams that are fully configured but can't launch because the roster is short.
+  // Every team whose roster is under the minimum (of any completion state).
   const teamsBelowMin = teams.filter(
-    (t) => teamMissingFields(t).length === 0 && !rosterStatus(t._count.members, t.coachPlays).meetsMinimum
+    (t) => !rosterStatus(t._count.members, t.coachPlays).meetsMinimum
   ).length;
 
-  // "Needs attention today" — the prioritized cross-cutting to-do, most urgent first.
+  // "Needs attention today" — the prioritized cross-cutting to-do, most urgent
+  // first. Each label states exactly what the number counts.
   const attention = [
-    { n: failedPayments, label: `payment${failedPayments === 1 ? "" : "s"} failed — follow up to collect`, href: "/console/payments", tone: "rose" as const },
+    { n: failedPayments, label: `failed payment${failedPayments === 1 ? "" : "s"} to follow up on`, href: "/console/payments", tone: "rose" as const },
     { n: waiversOutstanding, label: `registered player${waiversOutstanding === 1 ? "" : "s"} without a signed waiver`, href: "/console/compliance", tone: "amber" as const },
-    { n: teamsBelowMin, label: `complete team${teamsBelowMin === 1 ? "" : "s"} below the roster minimum`, href: "/console/teams", tone: "amber" as const },
-    { n: bgChecksExpiring, label: `coach background check${bgChecksExpiring === 1 ? "" : "s"} expiring within 30 days`, href: "/console/coaches", tone: "amber" as const },
+    { n: teamsBelowMin, label: `team${teamsBelowMin === 1 ? "" : "s"} below the roster minimum of ${TEAM_MIN}`, href: "/console/board", tone: "amber" as const },
+    { n: bgChecksBad, label: `coach background check${bgChecksBad === 1 ? "" : "s"} expired or expiring within 30 days`, href: "/console/coaches", tone: "amber" as const },
   ].filter((a) => a.n > 0);
 
   // Whole-season getting-started sequence. Each step links to where it's done;
@@ -178,7 +181,7 @@ export default async function ConsoleDashboard() {
           <h2 className="mb-3 font-semibold text-slate-900">Compliance</h2>
           <ul className="space-y-3 text-sm">
             <ComplianceRow label="Waivers outstanding" value={waiversOutstanding} warn={waiversOutstanding > 0} />
-            <ComplianceRow label="Background checks expiring (30d)" value={bgChecksExpiring} warn={bgChecksExpiring > 0} />
+            <ComplianceRow label="Background checks expired / expiring (30d)" value={bgChecksBad} warn={bgChecksBad > 0} />
             <ComplianceRow label="Facility agreements pending" value={facilities.length - executed} warn={facilities.length - executed > 0} />
           </ul>
           <Link href="/console/compliance" className="mt-4 inline-block text-sm font-medium text-brand-700">

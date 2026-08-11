@@ -23,7 +23,10 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
     include: { availabilityBlocks: { select: { id: true } } },
   });
 
-  const [headTeams, upcoming, pendingAttendance, earnings] = coach
+  const pendingWhere = coach
+    ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfToday() } }
+    : undefined;
+  const [headTeams, upcoming, pendingAttendance, pendingCount, earnings] = coach
     ? await Promise.all([
         prisma.team.findMany({
           where: { OR: [{ coachId: coach.id }, { assistantCoaches: { some: { coachId: coach.id } } }] },
@@ -37,14 +40,15 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           take: 5,
         }),
         prisma.session.findMany({
-          where: { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfToday() } },
+          where: pendingWhere,
           include: { teams: { include: { team: { select: { name: true } } } } },
           orderBy: { date: "desc" },
           take: 8,
         }),
+        prisma.session.count({ where: pendingWhere }),
         prisma.coachPayoutLine.aggregate({ where: { coachId: coach.id }, _sum: { totalCents: true } }),
       ])
-    : [[], [], [], { _sum: { totalCents: 0 } }];
+    : [[], [], [], 0, { _sum: { totalCents: 0 } }];
 
   const hasLocations = parseMarkets(coach?.marketsCovered ?? null).length > 0;
   const hasDayTimes = (coach?.availabilityBlocks?.length ?? 0) > 0;
@@ -87,9 +91,9 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         </div>
       )}
 
-      {pendingAttendance.length > 0 && (
+      {pendingCount > 0 && (
         <div className="card border-l-4 border-amber-400">
-          <h2 className="font-semibold text-amber-800">Attendance to record ({pendingAttendance.length})</h2>
+          <h2 className="font-semibold text-amber-800">Attendance to record ({pendingCount})</h2>
           <ul className="mt-2 divide-y divide-slate-100 text-sm">
             {pendingAttendance.map((s) => (
               <li key={s.id} className="flex items-center justify-between py-2">
@@ -101,6 +105,9 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
               </li>
             ))}
           </ul>
+          {pendingCount > pendingAttendance.length && (
+            <p className="mt-2 text-xs text-slate-400">+ {pendingCount - pendingAttendance.length} more</p>
+          )}
         </div>
       )}
 

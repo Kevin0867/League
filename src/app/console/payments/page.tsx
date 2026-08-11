@@ -20,7 +20,10 @@ export default async function PaymentsPage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const now = new Date();
-  const [inbound, outbound, payoutRuns, statements, failed] = await Promise.all([
+  // The ledgers below show the 50 most recent rows, but every headline figure and
+  // the outstanding/failed lists are computed from ALL payments so the numbers are
+  // accurate no matter how many payments exist.
+  const [inbound, outbound, payoutRuns, statements, failed, outstanding, collectedAgg, paidOutAgg] = await Promise.all([
     prisma.payment.findMany({ where: { direction: "IN" }, include: { party: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.payment.findMany({ where: { direction: "OUT" }, include: { party: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.payoutRun.findMany({
@@ -31,12 +34,14 @@ export default async function PaymentsPage({
       orderBy: { createdAt: "desc" }, take: 12, include: { facility: true },
     }),
     prisma.payment.findMany({ where: { direction: "IN", status: "FAILED" }, include: { party: true }, orderBy: { updatedAt: "desc" } }),
+    prisma.payment.findMany({ where: { direction: "IN", status: { in: ["REQUESTED", "PENDING"] } }, include: { party: true }, orderBy: { createdAt: "desc" } }),
+    prisma.payment.aggregate({ where: { direction: "IN", status: "PAID" }, _sum: { amountCents: true } }),
+    prisma.payment.aggregate({ where: { direction: "OUT", status: "PAID" }, _sum: { amountCents: true } }),
   ]);
 
-  const outstanding = inbound.filter((p) => p.status === "REQUESTED" || p.status === "PENDING");
-  const collected = inbound.filter((p) => p.status === "PAID").reduce((s, p) => s + p.amountCents, 0);
+  const collected = collectedAgg._sum.amountCents ?? 0;
   const requested = outstanding.reduce((s, p) => s + p.amountCents, 0);
-  const paidOut = outbound.filter((p) => p.status === "PAID").reduce((s, p) => s + p.amountCents, 0);
+  const paidOut = paidOutAgg._sum.amountCents ?? 0;
 
   return (
     <div className="space-y-6">
