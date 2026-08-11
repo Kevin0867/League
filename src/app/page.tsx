@@ -130,9 +130,8 @@ export default async function HomePage() {
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {CAPS.map((c) => (
             <div key={c.title} className="card">
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-50 ring-1 ring-brand-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={c.image} alt="" className="h-7 w-7 object-contain" />
+              <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+                <CapIcon name={c.icon} />
               </div>
               <h3 className="mt-3 font-semibold text-slate-900">{c.title}</h3>
               <p className="mt-1 text-sm text-slate-600">{c.body}</p>
@@ -217,18 +216,69 @@ export default async function HomePage() {
   );
 }
 
-// `image` is a real photo from the PURE library where one exists, or the PURE
-// mark as the branded fallback (no emoji icons — build-list item 3). Drop a
-// photo into /public/season and point `image` at it to replace the mark.
-const PURE_MARK = "/brand/pure-icon.png";
+// Inline line icons (currentColor stroke) for the season-includes cards — a real
+// icon set, not emoji and not a repeated logo (build-list item 3).
+function CapIcon({ name }: { name: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    clipboard: (
+      <>
+        <rect x="8" y="4" width="8" height="4" rx="1" />
+        <path d="M8 6H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2" />
+        <path d="m9 14 2 2 4-4" />
+      </>
+    ),
+    people: (
+      <>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M15.5 6.5a2.5 2.5 0 0 1 0 5" />
+        <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
+        <path d="M15 20a5.5 5.5 0 0 1 5.5-5.5" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="3.5" y="5" width="17" height="15" rx="2" />
+        <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+        <path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2" />
+      </>
+    ),
+    trophy: (
+      <>
+        <path d="M7 4h10v4a5 5 0 0 1-10 0V4Z" />
+        <path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" />
+        <path d="M12 13v3M9 20h6M10 20v-1.5a2 2 0 0 1 4 0V20" />
+      </>
+    ),
+    card: (
+      <>
+        <rect x="3" y="6" width="18" height="12" rx="2" />
+        <path d="M3 10h18M7 15h3" />
+      </>
+    ),
+    bell: (
+      <>
+        <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" />
+        <path d="M10.5 19a1.5 1.5 0 0 0 3 0" />
+      </>
+    ),
+  };
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
+      {paths[name] ?? paths.clipboard}
+    </svg>
+  );
+}
+
+// Distinct line icons per card — intentional, not six copies of one mark and no
+// emoji (build-list item 3). Each `icon` maps to an inline SVG in <CapIcon>.
 const CAPS = [
-  { image: PURE_MARK, title: "Simple enrollment", body: "Enroll each player once — waiver, skill level, and emergency contacts, all in one place." },
-  { image: PURE_MARK, title: "Team placement", body: "Pick one division; the Director places you on the right team by age and skill after Week 1." },
-  { image: PURE_MARK, title: "A full season", body: "A twelve-session season: six practice weeks, five league weeks, and championship week." },
-  { image: PURE_MARK, title: "League & championship", body: "Line-by-line scoring, live standings, and a championship bracket — every game DUPR-recorded." },
-  { image: PURE_MARK, title: "Enroll today, flexible payments", body: "$495 per player. Secure checkout — pay in full, or in 3 payments (today, +30 and +60 days)." },
-  { image: PURE_MARK, title: "Stay in the loop", body: "Team, coach, and league updates in-app and by email, with texts for time-critical alerts." },
-];
+  { icon: "clipboard", title: "Simple enrollment", body: "Enroll each player once — waiver, skill level, and emergency contacts, all in one place." },
+  { icon: "people", title: "Team placement", body: "Pick one division; the Director places you on the right team by age and skill after Week 1." },
+  { icon: "calendar", title: "A full season", body: "A twelve-session season: six practice weeks, five league weeks, and championship week." },
+  { icon: "trophy", title: "League & championship", body: "Line-by-line scoring, live standings, and a championship bracket — every game DUPR-recorded." },
+  { icon: "card", title: "Enroll today, flexible payments", body: "$495 per player. Secure checkout — pay in full, or in 3 payments (today, +30 and +60 days)." },
+  { icon: "bell", title: "Stay in the loop", body: "Team, coach, and league updates in-app and by email, with texts for time-critical alerts." },
+] as const;
 
 const STATS = [
   { value: "12", label: "Session season" },
