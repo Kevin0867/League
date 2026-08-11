@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/teams";
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
 import { TeamCreateForm } from "./TeamCreateForm";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
@@ -183,12 +184,13 @@ export default async function TeamBuildBoard({
 
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2">
                   {publish.ok && !t.published ? (
-                    <form method="POST" action="/api/console/teams">
-                      <input type="hidden" name="ticket" value={ticket} />
-                      <input type="hidden" name="op" value="publishTeam" />
-                      <input type="hidden" name="teamId" value={t.id} />
-                      <button className="btn-primary py-1 text-xs">Publish to families</button>
-                    </form>
+                    <ConfirmSubmit
+                      action="/api/console/teams"
+                      fields={{ ticket, op: "publishTeam", teamId: t.id }}
+                      confirm={`Publish "${t.name}" to families? It becomes visible to players and parents.`}
+                      label="Publish to families"
+                      className="btn-primary py-1 text-xs"
+                    />
                   ) : (
                     <span />
                   )}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/time";
@@ -119,13 +120,14 @@ export default async function PaymentsPage({
             <input type="hidden" name="op" value="sendTestPayment" />
             <button className="btn-ghost text-sm">Send me a preview</button>
           </form>
-          <form method="POST" action="/api/console/registrations">
-            <input type="hidden" name="ticket" value={ticket} />
-            <input type="hidden" name="op" value="resendAllFees" />
-            <button className="btn-secondary text-sm" disabled={outstanding.length === 0}>
-              Resend all ({outstanding.length})
-            </button>
-          </form>
+          <ConfirmSubmit
+            action="/api/console/registrations"
+            fields={{ ticket, op: "resendAllFees" }}
+            confirm={`Email the fee request to ${outstanding.length} ${outstanding.length === 1 ? "person" : "people"} with an unpaid balance?`}
+            label={`Resend all (${outstanding.length})`}
+            className="btn-secondary text-sm"
+            disabled={outstanding.length === 0}
+          />
         </div>
       </div>
 

@@ -12,6 +12,8 @@ export default async function ConsoleDashboard() {
     facilities,
     waiversOutstanding,
     coaches,
+    activeSeason,
+    sessionCount,
   ] = await Promise.all([
     prisma.registration.count(),
     prisma.registration.count({ where: { status: "ASSIGNED" } }),
@@ -20,6 +22,8 @@ export default async function ConsoleDashboard() {
     prisma.facility.findMany(),
     prisma.person.count({ where: { waiverSignedAt: null, registrations: { some: {} } } }),
     prisma.coach.findMany(),
+    prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, include: { _count: { select: { divisions: true } } } }),
+    prisma.session.count(),
   ]);
 
   const completeTeams = teams.filter((t) => teamMissingFields(t).length === 0).length;
@@ -31,11 +35,57 @@ export default async function ConsoleDashboard() {
     (c) => c.backgroundCheckExpiry && c.backgroundCheckExpiry < soon
   ).length;
 
+  // Whole-season getting-started sequence. Each step links to where it's done;
+  // the first unfinished step is highlighted as "you are here".
+  const setup = [
+    { done: !!activeSeason, label: "Create & activate your season", href: "/console/setup", hint: "Season Setup" },
+    { done: (activeSeason?._count.divisions ?? 0) > 0, label: "Add divisions (skill bands / levels)", href: "/console/setup", hint: "Season Setup" },
+    { done: regCount > 0, label: "Bring in registrations — import or add players", href: "/console/registrations", hint: "Registrations" },
+    { done: coaches.length > 0, label: "Add your coaches", href: "/console/coaches", hint: "Coaches" },
+    { done: executed > 0, label: "Add facilities & execute agreements", href: "/console/facilities", hint: "Facilities" },
+    { done: assignedCount > 0, label: "Assign players into teams", href: "/console/board", hint: "Boards" },
+    { done: completeTeams > 0, label: "Complete each team's six fields", href: "/console/teams", hint: "Team Build" },
+    { done: sessionCount > 0, label: "Generate the practice schedule", href: "/console/schedule", hint: "Schedule" },
+    { done: publishedTeams > 0, label: "Publish teams to families", href: "/console/teams", hint: "Team Build" },
+  ];
+  const doneCount = setup.filter((s) => s.done).length;
+  const nextIdx = setup.findIndex((s) => !s.done);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Season dashboard</h1>
         <p className="text-slate-500">A live read on the build toward Week 1.</p>
+      </div>
+
+      {/* Getting started — the end-to-end sequence for running a season */}
+      <div className="card border-l-4 border-brand-500">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-brand-900">Getting started</h2>
+          <span className="text-sm text-slate-500">{doneCount}/{setup.length} done</span>
+        </div>
+        {nextIdx >= 0 ? (
+          <p className="mt-0.5 text-sm text-slate-600">
+            Next: <Link href={setup[nextIdx].href} className="font-medium text-brand-700 hover:underline">{setup[nextIdx].label}</Link>
+          </p>
+        ) : (
+          <p className="mt-0.5 text-sm text-emerald-700">Your season is fully set up and published. 🎉</p>
+        )}
+        <ol className="mt-3 grid gap-1.5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          {setup.map((s, i) => {
+            const current = i === nextIdx;
+            return (
+              <li key={i}>
+                <Link href={s.href} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50 ${current ? "bg-brand-50 ring-1 ring-brand-200" : ""}`}>
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${s.done ? "bg-emerald-100 text-emerald-700" : current ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-400"}`}>
+                    {s.done ? "✓" : i + 1}
+                  </span>
+                  <span className={s.done ? "text-slate-500 line-through" : current ? "font-medium text-slate-800" : "text-slate-600"}>{s.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

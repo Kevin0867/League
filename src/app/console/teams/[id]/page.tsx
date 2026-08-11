@@ -7,6 +7,7 @@ import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } 
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
@@ -127,13 +128,13 @@ export default async function TeamDetailPage({
                         {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
                       </div>
                     </div>
-                    <form method="POST" action="/api/console/teams">
-                      <input type="hidden" name="ticket" value={ticket} />
-                      <input type="hidden" name="op" value="removePlayer" />
-                      <input type="hidden" name="teamId" value={team.id} />
-                      <input type="hidden" name="personId" value={m.personId} />
-                      <button className="text-xs text-rose-600 hover:underline">remove</button>
-                    </form>
+                    <ConfirmSubmit
+                      action="/api/console/teams"
+                      fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
+                      confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
+                      label="remove"
+                      className="text-xs text-rose-600 hover:underline"
+                    />
                   </li>
                 ))}
               </ul>
@@ -157,13 +158,16 @@ export default async function TeamDetailPage({
                 </form>
               </>
             ) : publish.ok ? (
-              <form method="POST" action="/api/console/teams">
-                <input type="hidden" name="ticket" value={ticket} />
-                <input type="hidden" name="op" value="publishTeam" />
-                <input type="hidden" name="teamId" value={team.id} />
+              <div>
                 <p className="mb-3 text-sm text-slate-600">Ready to publish. Families will see the team, coach, location, day, and time.</p>
-                <button className="btn-primary text-sm">Publish to families</button>
-              </form>
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "publishTeam", teamId: team.id }}
+                  confirm={`Publish "${team.name}" to families? It becomes visible to players and parents.`}
+                  label="Publish to families"
+                  className="btn-primary text-sm"
+                />
+              </div>
             ) : (
               <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">🔒 {publish.reason}</p>
             )}
@@ -179,16 +183,19 @@ export default async function TeamDetailPage({
                 {feesToRequest === 0 ? (
                   <p className="text-sm text-emerald-700">All rostered players have a fee request or payment.</p>
                 ) : (
-                  <form method="POST" action="/api/console/teams">
-                    <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="requestSeasonFees" />
-                    <input type="hidden" name="teamId" value={team.id} />
+                  <div>
                     <p className="mb-3 text-sm text-slate-600">
                       {feesToRequest} player{feesToRequest > 1 ? "s" : ""} not yet billed. Requesting
                       sends the season fee to their portal to pay.
                     </p>
-                    <button className="btn-primary text-sm">Request season fee ({feesToRequest})</button>
-                  </form>
+                    <ConfirmSubmit
+                      action="/api/console/teams"
+                      fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
+                      confirm={`Email the season fee request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}?`}
+                      label={`Request season fee (${feesToRequest})`}
+                      className="btn-primary text-sm"
+                    />
+                  </div>
                 )}
                 {/* Resend to anyone already requested-but-unpaid. */}
                 <form method="POST" action="/api/console/registrations">

@@ -8,30 +8,59 @@ import type { Role } from "@/lib/enums";
 import { ROLE_LABELS } from "@/lib/enums";
 
 type NavItem = { href: string; label: string; icon: string; roles?: Role[] };
+type NavSection = { title: string; items: NavItem[] };
 
-const NAV: NavItem[] = [
-  { href: "/console", label: "Dashboard", icon: "▚" },
-  { href: "/console/setup", label: "Season Setup", icon: "⚙️", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/registrations", label: "Registrations", icon: "📝", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/import", label: "Import", icon: "⬆️", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/pools", label: "Assignment", icon: "🧮", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/board", label: "Boards", icon: "🔀", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/requests", label: "Requests", icon: "🙋", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/teams", label: "Team Build", icon: "🧩", roles: ["COO", "DIRECTOR", "COACH"] },
-  { href: "/console/coaches", label: "Coaches", icon: "🎯", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/matching", label: "Coach matching", icon: "🧭", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/users", label: "Access", icon: "🔑", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/profile", label: "My Profile", icon: "👤", roles: ["COACH"] },
-  { href: "/console/facilities", label: "Facilities", icon: "🏟️", roles: ["COO", "CEO", "DIRECTOR"] },
-  { href: "/console/schedule", label: "Schedule", icon: "📅", roles: ["COO", "DIRECTOR", "COACH"] },
-  { href: "/console/league", label: "League", icon: "🏆", roles: ["COO", "DIRECTOR", "COACH"] },
-  { href: "/console/championship", label: "Championship", icon: "🥇", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/alacarte", label: "Private Lessons", icon: "🎾", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/payments", label: "Payments", icon: "💳", roles: ["COO", "CEO", "DIRECTOR"] },
-  { href: "/console/inbox", label: "Inbox", icon: "✉️", roles: ["COO", "DIRECTOR", "COACH"] },
-  { href: "/console/messages", label: "Broadcasts", icon: "💬" },
-  { href: "/console/compliance", label: "Compliance", icon: "✅", roles: ["COO", "DIRECTOR"] },
-  { href: "/console/reports", label: "Reports", icon: "📊", roles: ["COO", "CEO", "DIRECTOR"] },
+const DASHBOARD: NavItem = { href: "/console", label: "Dashboard", icon: "▚" };
+
+// Grouped into logical clusters so a first-time admin can find where a task
+// lives instead of scanning one long flat list.
+const SECTIONS: NavSection[] = [
+  {
+    title: "Season structure",
+    items: [
+      { href: "/console/setup", label: "Season Setup", icon: "⚙️", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/registrations", label: "Registrations", icon: "📝", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/import", label: "Import", icon: "⬆️", roles: ["COO", "DIRECTOR"] },
+    ],
+  },
+  {
+    title: "Rostering",
+    items: [
+      { href: "/console/pools", label: "Assignment", icon: "🧮", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/board", label: "Boards", icon: "🔀", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/teams", label: "Team Build", icon: "🧩", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/requests", label: "Requests", icon: "🙋", roles: ["COO", "DIRECTOR"] },
+    ],
+  },
+  {
+    title: "People",
+    items: [
+      { href: "/console/coaches", label: "Coaches", icon: "🎯", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/matching", label: "Coach matching", icon: "🧭", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/users", label: "Access", icon: "🔑", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/profile", label: "My Profile", icon: "👤", roles: ["COACH"] },
+    ],
+  },
+  {
+    title: "Operations",
+    items: [
+      { href: "/console/facilities", label: "Facilities", icon: "🏟️", roles: ["COO", "CEO", "DIRECTOR"] },
+      { href: "/console/schedule", label: "Schedule", icon: "📅", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/league", label: "League", icon: "🏆", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/championship", label: "Championship", icon: "🥇", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/alacarte", label: "Private Lessons", icon: "🎾", roles: ["COO", "DIRECTOR"] },
+    ],
+  },
+  {
+    title: "Money & comms",
+    items: [
+      { href: "/console/payments", label: "Payments", icon: "💳", roles: ["COO", "CEO", "DIRECTOR"] },
+      { href: "/console/inbox", label: "Inbox", icon: "✉️", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/messages", label: "Broadcasts", icon: "💬" },
+      { href: "/console/compliance", label: "Compliance", icon: "✅", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/reports", label: "Reports", icon: "📊", roles: ["COO", "CEO", "DIRECTOR"] },
+    ],
+  },
 ];
 
 export function ConsoleShell({
@@ -45,13 +74,22 @@ export function ConsoleShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const items = NAV.filter((n) => {
+  const roleVisible = (n: NavItem) => {
     if (!n.roles) return true;
     if (n.roles.includes(role)) return true;
     // ADMIN inherits every admin-scoped item (any legacy admin role present).
     if (role === "ADMIN" && n.roles.some((r) => r === "COO" || r === "CEO" || r === "DIRECTOR")) return true;
     return false;
-  });
+  };
+  const sections = SECTIONS.map((s) => ({ title: s.title, items: s.items.filter(roleVisible) })).filter(
+    (s) => s.items.length > 0
+  );
+
+  const isActive = (href: string) => (href === "/console" ? pathname === "/console" : pathname.startsWith(href));
+  const linkClass = (active: boolean) =>
+    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+      active ? "bg-accent-500 text-brand-900 shadow-sm" : "text-brand-200 hover:bg-white/10 hover:text-white"
+    }`;
 
   const chip = "inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm";
   return (
@@ -83,28 +121,26 @@ export function ConsoleShell({
               <div className="text-[11px] text-brand-200">{ROLE_LABELS[role]}</div>
             </div>
           </Link>
-          <nav className="space-y-1 px-3 pb-6 pt-2">
-            {items.map((item) => {
-              const active =
-                item.href === "/console"
-                  ? pathname === "/console"
-                  : pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                    active
-                      ? "bg-accent-500 text-brand-900 shadow-sm"
-                      : "text-brand-200 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <span className="w-5 text-center">{item.icon}</span>
-                  {item.label}
-                </Link>
-              );
-            })}
+          <nav className="px-3 pb-6 pt-2">
+            <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
+              <span className="w-5 text-center">{DASHBOARD.icon}</span>
+              {DASHBOARD.label}
+            </Link>
+            {sections.map((section) => (
+              <div key={section.title} className="mt-4">
+                <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-brand-300/70">
+                  {section.title}
+                </div>
+                <div className="space-y-1">
+                  {section.items.map((item) => (
+                    <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={linkClass(isActive(item.href))}>
+                      <span className="w-5 text-center">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
           </nav>
         </aside>
 
