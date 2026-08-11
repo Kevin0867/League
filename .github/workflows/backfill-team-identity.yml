@@ -1,0 +1,35 @@
+name: Backfill team identity
+
+# Manually-triggered. Populates the team identity parts (club, market,
+# divisionCode, color), merges the "High School ELITE" division into "High
+# School", assigns team colors where a market fields 2+ teams in a division, and
+# recomputes each team's display name from the parts. Idempotent.
+#
+# Requires repo secret DATABASE_URL (the Neon connection string).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify DATABASE_URL is configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply pending migrations
+        run: npx prisma migrate deploy
+      - name: Backfill team identity
+        run: npx tsx --tsconfig tsconfig.scripts.json scripts/backfill-team-identity.ts

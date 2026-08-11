@@ -256,6 +256,19 @@ model Team {
   origin        String    @default("PURE_ACADEMY")
   clubName      String?   // for outside ACP clubs
 
+  /// Identity stored as separate parts; the display name is ALWAYS rendered from
+  /// these via teamDisplayName() — never a concatenated stored string — so a
+  /// change to any part propagates everywhere at once (build-list §6).
+  ///   club         — "PURE" for Academy teams; the club name for outside teams
+  ///   market       — Scottsdale · Mesa · Gilbert · Chandler · Tempe · Phoenix ·
+  ///                  Paradise Valley (nullable; optional for outside clubs)
+  ///   divisionCode — ELE | MID | HS | W2.5..W5.0+ | M2.5..M5.0+ (no "ELITE")
+  ///   color        — Blue|Green|Red|Yellow|Orange|Purple, only when a market
+  ///                  fields 2+ teams in a division; assigned in palette order
+  club          String    @default("PURE")
+  divisionCode  String?
+  color         String?
+
   /// Team cannot be published to families until the facility agreement is
   /// executed (§4 publication gate).
   published     Boolean   @default(false)
@@ -280,6 +293,7 @@ model Team {
 
   @@index([seasonId, divisionId])
   @@index([coachId])
+  @@index([club, market, divisionCode])
 }
 
 /// Additional coaches on a team beyond the head coach (Team.coachId). A team may
