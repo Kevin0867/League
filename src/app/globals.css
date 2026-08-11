@@ -95,3 +95,14 @@ body {
   .stat-tile .stat-v { @apply mt-0.5 text-2xl font-extrabold tabular-nums tracking-tight; }
   .stat-tile .stat-s { @apply text-xs text-brand-200; }
 }
+
+/* Print: drop the app chrome so rosters, schedules, and statements print clean. */
+@media print {
+  aside,
+  .no-print,
+  .sticky { display: none !important; }
+  body { background: #ffffff !important; }
+  main { padding: 0 !important; }
+  .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; break-inside: avoid; }
+  a { color: inherit !important; text-decoration: none !important; }
+}

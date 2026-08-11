@@ -8,6 +8,7 @@ import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { PrintButton } from "@/components/PrintButton";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,8 @@ export default async function TeamDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {team.published ? <StatusBadge status="PUBLISHED" /> : missing.length === 0 ? <span className="badge bg-emerald-100 text-emerald-800">ready</span> : <span className="badge bg-amber-100 text-amber-800">building</span>}
+          <PrintButton label="Print roster" />
+          {team.published ? <StatusBadge status="PUBLISHED" /> : missing.length === 0 ? <StatusBadge status="READY" /> : <StatusBadge status="BUILDING" />}
         </div>
       </div>
 

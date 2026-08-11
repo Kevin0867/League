@@ -86,7 +86,14 @@ function ClinicPayCard({
       )}
       {err === "notfound" && (
         <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          We couldn&apos;t start checkout. Please try again.
+          We couldn&apos;t start checkout — this payment link may be out of date. No charge was made. Please
+          use the most recent email, or contact us and we&apos;ll help.
+        </p>
+      )}
+      {err === "stripe" && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          Our payment provider didn&apos;t respond, so checkout couldn&apos;t start. <strong>No charge was made.</strong>{" "}
+          Please try again in a moment — if it keeps happening, contact us.
         </p>
       )}
 
@@ -135,7 +142,14 @@ function PayCard({
       )}
       {err === "notfound" && (
         <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          We couldn&apos;t start checkout. Please try again.
+          We couldn&apos;t start checkout — this payment link may be out of date. No charge was made. Please
+          use the most recent email, or contact us and we&apos;ll help.
+        </p>
+      )}
+      {err === "stripe" && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          Our payment provider didn&apos;t respond, so checkout couldn&apos;t start. <strong>No charge was made.</strong>{" "}
+          Please try again in a moment — if it keeps happening, contact us.
         </p>
       )}
 

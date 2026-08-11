@@ -1,9 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { teamMissingFields } from "@/lib/domain/teams";
+import { teamMissingFields, rosterStatus } from "@/lib/domain/teams";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getSession } from "@/lib/auth";
+import { CoachDashboard } from "./CoachDashboard";
 
 export default async function ConsoleDashboard() {
+  // Coaches get their own home (their teams / sessions / earnings), not the
+  // academy-wide admin dashboard.
+  const session = await getSession();
+  if (session?.role === "COACH" && session.personId) {
+    return <CoachDashboard personId={session.personId} firstName={session.name.split(" ")[0]} />;
+  }
+
   const [
     regCount,
     assignedCount,
@@ -26,6 +35,8 @@ export default async function ConsoleDashboard() {
     prisma.session.count(),
   ]);
 
+  const failedPayments = await prisma.payment.count({ where: { direction: "IN", status: "FAILED" } });
+
   const completeTeams = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const publishedTeams = teams.filter((t) => t.published).length;
   const executed = facilities.filter((f) => f.agreementStatus === "EXECUTED").length;
@@ -34,6 +45,18 @@ export default async function ConsoleDashboard() {
   const bgChecksExpiring = coaches.filter(
     (c) => c.backgroundCheckExpiry && c.backgroundCheckExpiry < soon
   ).length;
+  // Teams that are fully configured but can't launch because the roster is short.
+  const teamsBelowMin = teams.filter(
+    (t) => teamMissingFields(t).length === 0 && !rosterStatus(t._count.members, t.coachPlays).meetsMinimum
+  ).length;
+
+  // "Needs attention today" — the prioritized cross-cutting to-do, most urgent first.
+  const attention = [
+    { n: failedPayments, label: `payment${failedPayments === 1 ? "" : "s"} failed — follow up to collect`, href: "/console/payments", tone: "rose" as const },
+    { n: waiversOutstanding, label: `registered player${waiversOutstanding === 1 ? "" : "s"} without a signed waiver`, href: "/console/compliance", tone: "amber" as const },
+    { n: teamsBelowMin, label: `complete team${teamsBelowMin === 1 ? "" : "s"} below the roster minimum`, href: "/console/teams", tone: "amber" as const },
+    { n: bgChecksExpiring, label: `coach background check${bgChecksExpiring === 1 ? "" : "s"} expiring within 30 days`, href: "/console/coaches", tone: "amber" as const },
+  ].filter((a) => a.n > 0);
 
   // Whole-season getting-started sequence. Each step links to where it's done;
   // the first unfinished step is highlighted as "you are here".
@@ -57,6 +80,23 @@ export default async function ConsoleDashboard() {
         <h1 className="text-2xl font-bold text-slate-900">Season dashboard</h1>
         <p className="text-slate-500">A live read on the build toward Week 1.</p>
       </div>
+
+      {/* Needs attention today — the prioritized cross-cutting to-do list */}
+      {attention.length > 0 && (
+        <div className="card border-l-4 border-rose-400">
+          <h2 className="font-semibold text-slate-900">Needs attention</h2>
+          <ul className="mt-2 space-y-1.5 text-sm">
+            {attention.map((a, i) => (
+              <li key={i}>
+                <Link href={a.href} className="flex items-center gap-2 hover:underline">
+                  <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs font-bold ${a.tone === "rose" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{a.n}</span>
+                  <span className="text-slate-700">{a.label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Getting started — the end-to-end sequence for running a season */}
       <div className="card border-l-4 border-brand-500">

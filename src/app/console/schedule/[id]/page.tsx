@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
 import { formatTimeRange12, formatDate } from "@/lib/time";
+import { PendingSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
@@ -110,15 +111,21 @@ export default async function SessionDetail({
               {roster.map((m) => {
                 const cur = attMap.get(m.personId) ?? "PRESENT";
                 return (
-                  <li key={m.personId} className="flex items-center justify-between gap-3 py-3">
-                    <span className="text-sm font-medium text-slate-800">{m.person.firstName} {m.person.lastName}</span>
-                    <div className="flex gap-1">
-                      {["PRESENT", "ABSENT", "EXCUSED"].map((opt) => (
-                        <label key={opt} className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium ${cur === opt ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-                          <input type="radio" name={`att_${m.personId}`} value={opt} defaultChecked={cur === opt} className="sr-only" />
-                          {opt[0] + opt.slice(1).toLowerCase()}
-                        </label>
-                      ))}
+                  <li key={m.personId} className="py-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-sm font-medium text-slate-800">{m.person.firstName} {m.person.lastName}</span>
+                      {/* Big, full-width tap targets on a phone; compact on desktop. */}
+                      <div className="grid grid-cols-3 gap-1 sm:flex">
+                        {["PRESENT", "ABSENT", "EXCUSED"].map((opt) => (
+                          <label
+                            key={opt}
+                            className={`cursor-pointer rounded-lg px-3 py-2.5 text-center text-sm font-medium sm:py-1.5 sm:text-xs ${cur === opt ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                          >
+                            <input type="radio" name={`att_${m.personId}`} value={opt} defaultChecked={cur === opt} className="sr-only" />
+                            {opt[0] + opt.slice(1).toLowerCase()}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </li>
                 );
@@ -126,8 +133,8 @@ export default async function SessionDetail({
             </ul>
           )}
           {roster.length > 0 && (
-            <div className="mt-4 flex justify-end">
-              <button className="btn-primary">Save attendance</button>
+            <div className="mt-4 flex justify-stretch sm:justify-end">
+              <PendingSubmit label="Save attendance" pendingLabel="Saving…" className="btn-primary w-full sm:w-auto" />
             </div>
           )}
         </form>

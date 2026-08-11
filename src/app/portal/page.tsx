@@ -6,11 +6,25 @@ import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
 import { NOTICE_DAYS } from "@/lib/domain/availability";
 import { MessageFrame } from "@/components/MessageFrame";
-import { formatTime12, formatDate } from "@/lib/time";
+import { formatTime12, formatDate, formatStamp } from "@/lib/time";
+import { Notice } from "@/components/Notice";
+import { PayButtons } from "./PayButtons";
+import { installmentChargeDates } from "@/lib/payments/receipt";
+
+const PAY_ERRORS: Record<string, { title: string; detail: string }> = {
+  notfound: { title: "We couldn't find that invoice", detail: "The payment link may be out of date. Refresh the page and try again, or contact us if it persists." },
+  auth: { title: "That invoice isn't on your account", detail: "You can only pay invoices for your own household. Please contact us if you think this is a mistake." },
+  stripe: { title: "Checkout couldn't start", detail: "Our payment provider didn't respond. No charge was made. Please try again in a moment — if it keeps happening, contact us and we'll help." },
+};
 
 export const dynamic = "force-dynamic";
 
-export default async function PortalHome() {
+export default async function PortalHome({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
   const session = await requireUser();
   const ticket = await mintConsoleTicket();
 
@@ -53,7 +67,10 @@ export default async function PortalHome() {
     : [];
   // Outstanding fees drive a top-of-page call to action; the rest is history.
   const outstandingPayments = payments.filter((p) => p.status === "REQUESTED" || p.status === "PENDING");
-  const paymentHistory = payments.filter((p) => p.status !== "REQUESTED" && p.status !== "PENDING");
+  const failedPayments = payments.filter((p) => p.status === "FAILED");
+  const paymentHistory = payments.filter((p) => !["REQUESTED", "PENDING", "FAILED"].includes(p.status));
+  const totalOutstanding = outstandingPayments.reduce((s, p) => s + p.amountCents, 0);
+  const totalPaid = paymentHistory.filter((p) => p.status === "PAID").reduce((s, p) => s + p.amountCents, 0);
   // Match a payment-request announcement to the person's outstanding fee so the
   // announcement itself is clickable to pay.
   const outstandingByPerson = new Map(outstandingPayments.filter((p) => p.partyId).map((p) => [p.partyId as string, p]));
@@ -101,6 +118,29 @@ export default async function PortalHome() {
         <p className="text-slate-500">Your season at a glance.</p>
       </div>
 
+      {sp.payerr && PAY_ERRORS[sp.payerr] && (
+        <Notice kind="error" title={PAY_ERRORS[sp.payerr].title}>{PAY_ERRORS[sp.payerr].detail}</Notice>
+      )}
+      {sp.paid && <Notice kind="success" title="You're all set">This fee is already paid — thank you!</Notice>}
+      {failedPayments.length > 0 && (
+        <Notice kind="error" title="A payment didn't go through">
+          Your last payment attempt was unsuccessful (often an expired card or a bank decline). No place is lost — please try again below. If it keeps failing, contact us and we&apos;ll sort it out.
+        </Notice>
+      )}
+
+      {/* Balance summary — one clear figure for the household */}
+      {outstandingPayments.length > 0 && (
+        <div className="card border-l-4 border-brand-500">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Balance due</div>
+              <div className="text-3xl font-extrabold text-slate-900">{formatCents(totalOutstanding)}</div>
+              {totalPaid > 0 && <div className="mt-0.5 text-xs text-slate-400">{formatCents(totalPaid)} paid so far</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {waiverOutstanding && (
         <div className="card border-l-4 border-amber-400">
           <p className="text-sm font-medium text-amber-800">Waiver outstanding</p>
@@ -126,26 +166,28 @@ export default async function PortalHome() {
                     <div className="text-lg font-bold text-slate-900">{formatCents(p.amountCents)}</div>
                     <div className="text-xs text-slate-500">
                       {p.description ?? p.category.replace(/_/g, " ")}
-                      {p.installmentPlan ? " · monthly plan" : ""}
+                      {p.installmentPlan ? " · 3-payment plan" : ""}
                     </div>
                   </div>
-                  <form method="POST" action="/api/portal" className="flex flex-wrap items-center justify-end gap-2">
-                    <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="startCheckout" />
-                    <input type="hidden" name="paymentId" value={p.id} />
-                    <button name="plan" value="full" className="btn-primary">Pay in full</button>
-                    <button name="plan" value="installments" className="btn-secondary">
-                      3 payments of {formatCents(Math.round(p.amountCents / 3))}
-                    </button>
-                  </form>
+                  <PayButtons ticket={ticket} paymentId={p.id} amountCents={p.amountCents} />
                 </div>
-                <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                  The season fee reserves a place on a team, not a session count. Choose{" "}
-                  <span className="font-medium">pay in full</span>, or the{" "}
-                  <span className="font-medium">3-payment plan</span> — 3 equal charges, the first today and
-                  the next two automatically 30 and 60 days later. Secure
-                  checkout is hosted by Stripe — we never see your card details.
-                </p>
+                <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  <p>
+                    The season fee reserves a place on a team, not a session count. Choose{" "}
+                    <span className="font-medium">pay in full</span>, or the{" "}
+                    <span className="font-medium">3-payment plan</span>. Secure checkout is hosted by Stripe —
+                    we never see your card details.
+                  </p>
+                  <p className="mt-1.5">
+                    <span className="font-medium">3-payment plan:</span>{" "}
+                    {installmentChargeDates(new Date()).map((d, i) => (
+                      <span key={i}>
+                        {i > 0 ? " · " : ""}
+                        {formatCents(Math.round(p.amountCents / 3))} on {i === 0 ? "today" : formatStamp(d)}
+                      </span>
+                    ))}
+                  </p>
+                </div>
               </div>
             ))}
           </div>

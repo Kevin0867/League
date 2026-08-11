@@ -4,6 +4,8 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatTime12, formatTimeRange12, formatDate } from "@/lib/time";
+import { ScheduleCalendar } from "@/components/ScheduleCalendar";
+import { PrintButton } from "@/components/PrintButton";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +29,15 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { ok, err } = await searchParams;
+  const { ok, err, view, month } = await searchParams;
   const ticket = await mintConsoleTicket();
+  const isCalendar = view === "calendar";
+  const now = new Date();
+  const [calYear, calMonth] = (() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(month ?? "");
+    if (m) return [Number(m[1]), Number(m[2]) - 1];
+    return [now.getUTCFullYear(), now.getUTCMonth()];
+  })();
   const [sessions, teams] = await Promise.all([
     prisma.session.findMany({
       include: { facility: true, teams: { include: { team: true } } },
@@ -48,13 +57,22 @@ export default async function SchedulePage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Schedule" subtitle="The twelve-session season: six practice weeks, five league weeks, championship week." />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader title="Schedule" subtitle="The twelve-session season: six practice weeks, five league weeks, championship week." />
+        <div className="flex items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm">
+            <Link href="/console/schedule" className={`px-3 py-1.5 ${!isCalendar ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>List</Link>
+            <Link href="/console/schedule?view=calendar" className={`px-3 py-1.5 ${isCalendar ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>Calendar</Link>
+          </div>
+          <PrintButton label="Print" />
+        </div>
+      </div>
 
       {ok === "generate" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Practice schedule generated.</div>
       )}
       {err && (
-        <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{ERR_LABEL[err] ?? "Something went wrong."}</div>
+        <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{ERR_LABEL[err] ?? "Something went wrong — please try again, and contact us if it persists."}</div>
       )}
 
       {ungenerated.length > 0 && (
@@ -79,7 +97,21 @@ export default async function SchedulePage({
         </div>
       )}
 
-      <div className="card overflow-x-auto">
+      {isCalendar ? (
+        <ScheduleCalendar
+          year={calYear}
+          month={calMonth}
+          sessions={sessions.map((s) => ({
+            id: s.id,
+            date: s.date,
+            startTime: s.startTime,
+            type: s.type,
+            teamNames: s.teams.map((t) => t.team.name).join(", "),
+            facilityName: s.facility?.name ?? "",
+          }))}
+        />
+      ) : (
+      <div className="card overflow-x-auto print-area">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
@@ -116,6 +148,7 @@ export default async function SchedulePage({
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

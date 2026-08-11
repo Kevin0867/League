@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { FeeReminderList } from "./FeeReminderList";
+import { PrintButton } from "@/components/PrintButton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/time";
@@ -39,7 +40,10 @@ export default async function PaymentsPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Payments" subtitle="Fees in, coaches and facilities out. Card data never touches our servers — Stripe hosted checkout." />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <PageHeader title="Payments" subtitle="Fees in, coaches and facilities out. Card data never touches our servers — Stripe hosted checkout." />
+        <PrintButton label="Print" />
+      </div>
 
       {sp.ok === "statements" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Facility statements generated.</div>

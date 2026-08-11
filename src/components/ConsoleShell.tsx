@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Logo, PadelLogo } from "@/components/Brand";
+import { CommandPalette, CommandPaletteButton } from "@/components/CommandPalette";
 import type { Role } from "@/lib/enums";
 import { ROLE_LABELS } from "@/lib/enums";
 
@@ -94,6 +95,7 @@ export function ConsoleShell({
   const chip = "inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm";
   return (
     <div className="min-h-screen bg-slate-50">
+      <CommandPalette />
       {/* Top bar (mobile-first) — navy chrome with a lime underline */}
       <div className="sticky top-0 z-40 flex items-center justify-between border-b-2 border-accent-500 bg-brand-900 px-4 py-3 md:hidden">
         <div className="flex items-center gap-2">
@@ -103,6 +105,7 @@ export function ConsoleShell({
           <span className={chip}><Logo href="/console" className="h-6" /></span>
         </div>
         <div className="flex items-center gap-3">
+          <CommandPaletteButton />
           <span className={chip}><PadelLogo className="h-9" /></span>
           <Link href="/logout" prefetch={false} className="text-sm font-semibold text-white/80 hover:text-white">Sign out</Link>
         </div>
@@ -152,6 +155,7 @@ export function ConsoleShell({
               Academy Console
             </div>
             <div className="flex items-center gap-4 whitespace-nowrap">
+              <CommandPaletteButton />
               <span className="hidden text-sm text-brand-200 xl:inline">
                 Signed in as <span className="font-semibold text-white">{name}</span>
               </span>

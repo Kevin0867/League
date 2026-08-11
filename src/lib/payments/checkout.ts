@@ -11,9 +11,10 @@ import { audit } from "@/lib/audit";
 // Success/cancel land on the PUBLIC /pay/* pages so a logged-out payer is never
 // bounced to a login wall after paying.
 
+export type CheckoutError = "notfound" | "paid" | "stripe";
 export type CheckoutResult =
   | { ok: true; redirectUrl: string }
-  | { ok: false; error: "notfound" | "paid" };
+  | { ok: false; error: CheckoutError; detail?: string };
 
 export async function createCheckoutRedirect(opts: {
   paymentId: string;
@@ -55,26 +56,52 @@ export async function createCheckoutRedirect(opts: {
     return { ok: true, redirectUrl: `${base}/pay/success?sim=1&payment=${payment.id}` };
   }
 
-  if (installments) {
-    // 3-payment plan anchored at registration: the FIRST charge is taken now at
-    // checkout, then two more every 30 days (≈ +30 and +60 days). The webhook
-    // counts each cleared invoice and cancels the subscription after the 3rd.
-    const perCharge = Math.round(payment.amountCents / INSTALLMENT_COUNT);
+  try {
+    if (installments) {
+      // 3-payment plan anchored at registration: the FIRST charge is taken now at
+      // checkout, then two more every 30 days (≈ +30 and +60 days). The webhook
+      // counts each cleared invoice and cancels the subscription after the 3rd.
+      const perCharge = Math.round(payment.amountCents / INSTALLMENT_COUNT);
 
+      const checkout = await stripe().checkout.sessions.create({
+        mode: "subscription",
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "usd",
+              unit_amount: perCharge,
+              recurring: { interval: "day", interval_count: INSTALLMENT_INTERVAL_DAYS },
+              product_data: { name: `${productName} — 3-payment plan` },
+            },
+          },
+        ],
+        subscription_data: { metadata: { paymentId: payment.id }, description: productBlurb },
+        metadata: { paymentId: payment.id },
+        success_url: success,
+        cancel_url: cancel,
+      });
+
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: "PENDING", installmentPlan: true, installmentsTotal: INSTALLMENT_COUNT, stripeCheckoutId: checkout.id },
+      });
+      return { ok: true, redirectUrl: checkout.url! };
+    }
+
+    // Pay in full — one hosted-checkout charge now.
     const checkout = await stripe().checkout.sessions.create({
-      mode: "subscription",
+      mode: "payment",
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: perCharge,
-            recurring: { interval: "day", interval_count: INSTALLMENT_INTERVAL_DAYS },
-            product_data: { name: `${productName} — 3-payment plan` },
+            unit_amount: payment.amountCents,
+            product_data: { name: productName, description: productBlurb },
           },
         },
       ],
-      subscription_data: { metadata: { paymentId: payment.id }, description: productBlurb },
       metadata: { paymentId: payment.id },
       success_url: success,
       cancel_url: cancel,
@@ -82,32 +109,12 @@ export async function createCheckoutRedirect(opts: {
 
     await prisma.payment.update({
       where: { id: payment.id },
-      data: { status: "PENDING", installmentPlan: true, installmentsTotal: INSTALLMENT_COUNT, stripeCheckoutId: checkout.id },
+      data: { status: "PENDING", installmentPlan: false, stripeCheckoutId: checkout.id },
     });
     return { ok: true, redirectUrl: checkout.url! };
+  } catch (e) {
+    // A Stripe failure must never become a blank 500 — surface a clear reason.
+    console.error("Stripe checkout create failed", e);
+    return { ok: false, error: "stripe", detail: e instanceof Error ? e.message : "Payment provider error" };
   }
-
-  // Pay in full — one hosted-checkout charge now.
-  const checkout = await stripe().checkout.sessions.create({
-    mode: "payment",
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: payment.amountCents,
-          product_data: { name: productName, description: productBlurb },
-        },
-      },
-    ],
-    metadata: { paymentId: payment.id },
-    success_url: success,
-    cancel_url: cancel,
-  });
-
-  await prisma.payment.update({
-    where: { id: payment.id },
-    data: { status: "PENDING", installmentPlan: false, stripeCheckoutId: checkout.id },
-  });
-  return { ok: true, redirectUrl: checkout.url! };
 }

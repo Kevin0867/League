@@ -18,7 +18,8 @@ export async function POST(req: Request) {
   const result = await createCheckoutRedirect({ paymentId, plan });
   if (!result.ok) {
     if (result.error === "paid") return NextResponse.redirect(new URL(`/pay/${paymentId}`, origin), 303);
-    return NextResponse.redirect(new URL(`/pay/${paymentId}?err=notfound`, origin), 303);
+    const code = result.error === "stripe" ? "stripe" : "notfound";
+    return NextResponse.redirect(new URL(`/pay/${paymentId}?err=${code}`, origin), 303);
   }
   return NextResponse.redirect(result.redirectUrl, 303);
 }

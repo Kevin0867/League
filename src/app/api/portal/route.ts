@@ -132,24 +132,23 @@ export async function POST(req: Request) {
      * screen and reaffirmed here in the line-item description (§8).
      */
     case "startCheckout": {
+      // Never let a payment failure become a blank error page. Any problem
+      // redirects back to the portal with a specific, human reason.
+      const payerr = (code: string) => NextResponse.redirect(new URL(`/portal?payerr=${code}`, origin), 303);
       const paymentId = String(formData.get("paymentId") ?? "");
       const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
-      if (!payment || payment.direction !== "IN") throw new Error("Payment not found.");
+      if (!payment || payment.direction !== "IN") return payerr("notfound");
 
       // Authorization: the payment's party must be in the caller's household.
       const household = await householdPersonIds(personId);
-      if (!payment.partyId || !household.includes(payment.partyId)) {
-        throw new Error("Not authorized to pay this invoice.");
-      }
-      if (payment.status === "PAID") return NextResponse.redirect(new URL("/portal", origin), 303);
+      if (!payment.partyId || !household.includes(payment.partyId)) return payerr("auth");
+      if (payment.status === "PAID") return NextResponse.redirect(new URL("/portal?paid=1", origin), 303);
 
-      // Shared checkout (identical logic to the public /pay flow, kept in one
-      // place). Household authorization was already enforced above.
       const plan = String(formData.get("plan") ?? "full") === "installments" ? "installments" : "full";
       const result = await createCheckoutRedirect({ paymentId: payment.id, plan, actorId: actor.userId });
       if (!result.ok) {
-        if (result.error === "paid") return NextResponse.redirect(new URL("/portal", origin), 303);
-        throw new Error("Payment not found.");
+        if (result.error === "paid") return NextResponse.redirect(new URL("/portal?paid=1", origin), 303);
+        return payerr(result.error === "stripe" ? "stripe" : "notfound");
       }
       return NextResponse.redirect(result.redirectUrl, 303);
     }
