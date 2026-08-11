@@ -152,10 +152,12 @@ export function ConsoleShell({
 
         {/* Main */}
         <main className="min-w-0 flex-1">
-          <div className="sticky top-0 z-30 hidden items-center justify-between border-b-2 border-accent-500 bg-brand-900 px-6 py-3 md:flex">
-            <span className={chip}><Logo href="/console" className="h-8" /></span>
-            <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-base font-extrabold uppercase tracking-wide text-white lg:block">
-              Academy Console
+          <div className="sticky top-0 z-30 hidden items-center justify-between gap-4 border-b-2 border-accent-500 bg-brand-900 px-6 py-3 md:flex">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className={chip}><Logo href="/console" className="h-8" /></span>
+              <span className="hidden whitespace-nowrap text-base font-extrabold uppercase tracking-wide text-white lg:inline">
+                Academy Console
+              </span>
             </div>
             <div className="flex items-center gap-4 whitespace-nowrap">
               <CommandPaletteButton />
