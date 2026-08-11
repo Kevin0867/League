@@ -50,15 +50,19 @@ export async function POST(req: Request) {
       const token = await createResetToken(user.id, INVITE_TTL_MS);
       const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
       let sent = false;
+      let sendErr = "";
       try {
         const res = await sendConsoleInvite({ toEmail: user.email, name: user.person?.firstName ?? user.email, role: user.role, link });
         sent = res.ok && !res.simulated;
+        if (!res.ok && res.error) sendErr = res.error;
       } catch (e) {
+        sendErr = e instanceof Error ? e.message : "send failed";
         console.error("coach invite email failed", e);
       }
-      await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: sent ? `Invite emailed to ${user.email}` : `Invite link generated for ${user.email} (email not delivered)` });
+      await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: sent ? `Invite emailed to ${user.email}` : `Invite link generated for ${user.email}${sendErr ? ` (send failed: ${sendErr})` : " (email not delivered)"}` });
       const qs = new URLSearchParams({ invitetoken: token });
       if (sent) qs.set("invitesent", "1");
+      if (sendErr) qs.set("inviteerr", sendErr.slice(0, 180));
       return back(`?${qs.toString()}`);
     }
 
@@ -137,13 +141,16 @@ export async function POST(req: Request) {
       // can copy the link if email delivery isn't configured.
       let inviteToken: string | null = null;
       let inviteSent = false;
+      let inviteErr = "";
       try {
         inviteToken = await createResetToken(user.id, INVITE_TTL_MS);
         const link = `${appUrl()}/reset?token=${encodeURIComponent(inviteToken)}&invite=1`;
         const res = await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
         inviteSent = res.ok && !res.simulated;
-        await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: inviteSent ? `Invite emailed to ${email}` : `Invite link generated for ${email} (email not delivered)` });
+        if (!res.ok && res.error) inviteErr = res.error;
+        await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: inviteSent ? `Invite emailed to ${email}` : `Invite link generated for ${email}${inviteErr ? ` (send failed: ${inviteErr})` : " (email not delivered)"}` });
       } catch (e) {
+        inviteErr = e instanceof Error ? e.message : "send failed";
         console.error("coach invite email failed", e);
       }
 
@@ -153,6 +160,7 @@ export async function POST(req: Request) {
         const qs = new URLSearchParams({ ok: "account" });
         if (inviteToken) qs.set("invitetoken", inviteToken);
         if (inviteSent) qs.set("invitesent", "1");
+        if (inviteErr) qs.set("inviteerr", inviteErr.slice(0, 180));
         return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${qs.toString()}`, origin), 303);
       }
       return back("?ok=1");

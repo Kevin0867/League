@@ -33,7 +33,7 @@ export default async function EditCoachPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err, team: clashTeam, imgok, imgerr, invitetoken, invitesent } = await searchParams;
+  const { ok, err, team: clashTeam, imgok, imgerr, invitetoken, invitesent, inviteerr } = await searchParams;
   const session = await getSession();
   if (!session || !can(session.role, "manageCoaches")) redirect("/console");
   const ticket = await mintConsoleTicket();
@@ -135,8 +135,15 @@ export default async function EditCoachPage({
               <p>
                 {invitesent
                   ? "We emailed them a link to set their password. In case it doesn't arrive, you can also copy it:"
+                  : inviteerr
+                  ? "The email failed to send (details below), so copy this set-password link and share it directly:"
                   : "Email delivery isn't configured, so the invite was not sent. Copy this set-password link and share it with them directly:"}
               </p>
+              {inviteerr && (
+                <p className="rounded bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                  Email error: {inviteerr}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <code className="max-w-full overflow-x-auto rounded bg-white px-2 py-1 text-xs text-slate-700 ring-1 ring-slate-200">/reset?token=…&amp;invite=1</code>
                 <CopyLinkButton path={`/reset?token=${invitetoken}&invite=1`} label="Copy invite link" />
