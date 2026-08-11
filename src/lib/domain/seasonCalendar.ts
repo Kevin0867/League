@@ -41,6 +41,25 @@ export const SEASON_WEEKS: WeekPlan[] = [
   { week: 12, startISO: "2026-12-07", endISO: "2026-12-13", focus: "ACP Championships — division events Mon Dec 7 to Fri Dec 11; Sat Dec 12 and Sun Dec 13 held in reserve", milestone: "Championship • Final evaluation • Winter invitations", kind: "championship" },
 ];
 
+/// The weeks to show for a season: its stored, edited calendar if it has one,
+/// otherwise the standard template. Accepts the raw Season.calendar JSON value.
+export function getSeasonWeeks(calendar: unknown): WeekPlan[] {
+  if (!Array.isArray(calendar)) return SEASON_WEEKS;
+  const kinds: WeekKind[] = ["practice", "league", "break", "championship"];
+  const rows = calendar
+    .filter((w): w is Record<string, unknown> => !!w && typeof w === "object")
+    .filter((w) => typeof w.startISO === "string" && typeof w.endISO === "string")
+    .map((w) => ({
+      week: typeof w.week === "number" ? w.week : null,
+      startISO: String(w.startISO),
+      endISO: String(w.endISO),
+      focus: String(w.focus ?? ""),
+      milestone: w.milestone ? String(w.milestone) : undefined,
+      kind: kinds.includes(w.kind as WeekKind) ? (w.kind as WeekKind) : "practice",
+    }));
+  return rows.length ? rows : SEASON_WEEKS;
+}
+
 /// Dark days when nothing may be scheduled: the whole Thanksgiving week and the
 /// Dec 5–6 weekend. Compared on the stored (UTC) calendar date.
 export function isSeasonDark(d: Date): boolean {

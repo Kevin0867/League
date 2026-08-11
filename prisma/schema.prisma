@@ -340,6 +340,11 @@ model Coach {
   /// Pro Coach / Assistant differentiate payout rate (§9)
   isProCoach          Boolean   @default(false)
 
+  /// Secret token for the coach's personal calendar subscription feed
+  /// (/api/calendar/<token>) — a URL they add to their phone's calendar so
+  /// their practices, matches, and lessons stay in sync automatically.
+  calendarToken       String?   @unique
+
   /// Compensation (§9) — admin-only. A rate and/or a percentage per work type:
   /// regular-season coaching, private/semi-private lessons, and clinics. Rates
   /// stored in cents; percentages as whole numbers (e.g. 60 = 60%). payNotes
@@ -685,6 +690,11 @@ model Season {
   championshipStartsAt DateTime?
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
+
+  /// Editable season arc. Auto-filled from the standard 12-week template the
+  /// first time it's initialized, then editable per week (dates, focus,
+  /// milestone). Null = show the standard template read-only.
+  calendar   Json?
 
   divisions     Division[]
   teams         Team[]

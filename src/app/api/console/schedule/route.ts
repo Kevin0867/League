@@ -6,6 +6,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { generatePracticeDates, cancellationOutcome } from "@/lib/domain/schedule";
+import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
 
@@ -124,6 +125,22 @@ export async function POST(req: Request) {
       });
       created++;
       void s;
+    }
+
+    // Tell the head coach their practices are set, with the calendar link so it
+    // syncs to their phone.
+    if (team.coachId) {
+      const c = await prisma.coach.findUnique({ where: { id: team.coachId }, select: { id: true, personId: true } });
+      if (c?.personId) {
+        const feed = `${origin}/api/calendar/${await ensureCoachCalendarToken(c.id)}`;
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: team.seasonId,
+          audienceType: "SINGLE_PERSON", audienceRef: c.personId,
+          channels: ["IN_APP", "EMAIL"], triggerType: "COACH_SCHEDULE_SET",
+          subject: `Your ${team.name} practices are scheduled`,
+          body: `${created} practices are set for ${team.name}. Add your calendar to your phone so it stays in sync: ${feed}`,
+        });
+      }
     }
 
     await audit({
@@ -320,6 +337,23 @@ export async function POST(req: Request) {
       create: { sessionId, coachId, role },
       update: { role },
     });
+
+    // Notify the assigned coach, with their calendar link so this class lands on
+    // their phone.
+    const assigned = await prisma.coach.findUnique({ where: { id: coachId }, select: { id: true, personId: true } });
+    const sessDetail = await prisma.session.findUnique({ where: { id: sessionId }, include: { facility: true, teams: { include: { team: { select: { name: true } } } } } });
+    if (assigned?.personId && sessDetail) {
+      const feed = `${origin}/api/calendar/${await ensureCoachCalendarToken(assigned.id)}`;
+      const teams = sessDetail.teams.map((t) => t.team.name).join(", ");
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: sessDetail.seasonId,
+        audienceType: "SINGLE_PERSON", audienceRef: assigned.personId,
+        channels: ["IN_APP", "EMAIL"], triggerType: "COACH_ASSIGNED_SESSION",
+        subject: "You've been added to a class",
+        body: `You're set as ${role.toLowerCase()} for ${teams || "a session"} on ${formatDate(sessDetail.date)} at ${formatTime12(sessDetail.startTime)}${sessDetail.facility ? ` · ${sessDetail.facility.name}` : ""}. Keep your calendar in sync on your phone: ${feed}`,
+      });
+    }
+
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.addCoach", summary: `Added ${role.toLowerCase()} coach ${coachId}` });
     return back("?ok=subAdded");
   }

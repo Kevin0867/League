@@ -3,20 +3,24 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
-import { SEASON_WEEKS, weekStatus, DIVISION_MIN_TEAMS, type WeekKind } from "@/lib/domain/seasonCalendar";
+import { getSeasonWeeks, weekStatus, DIVISION_MIN_TEAMS, type WeekKind, type WeekPlan } from "@/lib/domain/seasonCalendar";
 import { ConsolidateDivisions } from "./ConsolidateDivisions";
 
 export const dynamic = "force-dynamic";
 
 const OK_MSG: Record<string, string> = {
   consolidateDivisions: "Divisions consolidated.",
+  initSeasonCalendar: "Calendar is now editable — tweak any week below.",
+  resetSeasonCalendar: "Calendar reset to the standard template.",
+  editSeasonWeek: "Week updated.",
 };
 const ERR_MSG: Record<string, string> = {
-  auth: "You are not authorized to consolidate divisions.",
+  auth: "You are not authorized to make that change.",
   consolidatefields: "Pick both a source and a target division.",
   consolidatesame: "Pick two different divisions.",
   consolidateseason: "Divisions must be in the same season.",
-  notfound: "Division not found.",
+  season: "A season is required.",
+  notfound: "Not found.",
 };
 
 const KIND_META: Record<WeekKind, { label: string; dot: string; ring: string }> = {
@@ -62,9 +66,12 @@ export default async function SeasonCalendarPage({
   const youth = divisions.filter((d) => d.divisionType === "SCHOOL_LEVEL");
   const adult = divisions.filter((d) => d.divisionType !== "SCHOOL_LEVEL");
 
-  const current = SEASON_WEEKS.find((w) => weekStatus(w, now) === "current");
-  const firstWeek = SEASON_WEEKS[0];
-  const seasonNotStarted = weekStatus(firstWeek, now) === "upcoming";
+  // The arc: the season's edited calendar if it has one, else the template.
+  const arcWeeks = getSeasonWeeks(season?.calendar);
+  const calendarEditable = Array.isArray(season?.calendar);
+  const current = arcWeeks.find((w) => weekStatus(w, now) === "current");
+  const firstWeek = arcWeeks[0];
+  const seasonNotStarted = firstWeek ? weekStatus(firstWeek, now) === "upcoming" : false;
 
   return (
     <div className="space-y-6">
@@ -109,7 +116,7 @@ export default async function SeasonCalendarPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {SEASON_WEEKS.map((w) => {
+            {arcWeeks.map((w) => {
               const status = weekStatus(w, now);
               const meta = KIND_META[w.kind];
               return (
@@ -142,11 +149,40 @@ export default async function SeasonCalendarPage({
             })}
           </tbody>
         </table>
-        <div className="mt-3 flex flex-wrap gap-3 text-xs">
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
           <Link href="/console/schedule" className="text-brand-600 hover:underline">Practice schedule →</Link>
           <Link href="/console/league" className="text-brand-600 hover:underline">League matches →</Link>
           <Link href="/console/championship" className="text-brand-600 hover:underline">Championship →</Link>
+          {admin && season && !calendarEditable && (
+            <form method="POST" action="/api/console/setup" className="ml-auto">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="initSeasonCalendar" />
+              <input type="hidden" name="seasonId" value={season.id} />
+              <input type="hidden" name="returnTo" value="/console/calendar" />
+              <button className="font-semibold text-brand-700 hover:underline">Edit this calendar ✎</button>
+            </form>
+          )}
         </div>
+
+        {/* Editable weeks (admins) */}
+        {admin && season && calendarEditable && (
+          <details className="mt-4 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-100">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-800">Edit weeks</summary>
+            <p className="mt-1 text-xs text-slate-500">Adjust any week&apos;s dates, focus, or milestone. Leave a date blank to keep it.</p>
+            <div className="mt-3 space-y-2">
+              {arcWeeks.map((w, i) => (
+                <EditWeekForm key={i} ticket={ticket} seasonId={season.id} index={i} week={w} />
+              ))}
+            </div>
+            <form method="POST" action="/api/console/setup" className="mt-3">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="resetSeasonCalendar" />
+              <input type="hidden" name="seasonId" value={season.id} />
+              <input type="hidden" name="returnTo" value="/console/calendar" />
+              <button className="text-xs text-rose-600 hover:underline">Reset to the standard template</button>
+            </form>
+          </details>
+        )}
       </div>
 
       {/* Division readiness — the four-team minimum */}
@@ -175,6 +211,51 @@ export default async function SeasonCalendarPage({
         )}
       </div>
     </div>
+  );
+}
+
+function EditWeekForm({
+  ticket,
+  seasonId,
+  index,
+  week,
+}: {
+  ticket: string;
+  seasonId: string;
+  index: number;
+  week: WeekPlan;
+}) {
+  return (
+    <form method="POST" action="/api/console/setup" className="grid gap-2 rounded-lg bg-white p-2 ring-1 ring-slate-100 sm:grid-cols-12 sm:items-end">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="editSeasonWeek" />
+      <input type="hidden" name="seasonId" value={seasonId} />
+      <input type="hidden" name="index" value={index} />
+      <input type="hidden" name="returnTo" value="/console/calendar" />
+      <div className="sm:col-span-1">
+        <label className="label">Wk</label>
+        <div className="pt-1.5 text-sm font-semibold text-slate-600">{week.week ?? "—"}</div>
+      </div>
+      <div className="sm:col-span-2">
+        <label className="label">Start</label>
+        <input name="startDate" type="date" defaultValue={week.startISO} className="input text-sm" />
+      </div>
+      <div className="sm:col-span-2">
+        <label className="label">End</label>
+        <input name="endDate" type="date" defaultValue={week.endISO} className="input text-sm" />
+      </div>
+      <div className="sm:col-span-4">
+        <label className="label">Focus</label>
+        <input name="focus" type="text" defaultValue={week.focus} className="input text-sm" />
+      </div>
+      <div className="sm:col-span-2">
+        <label className="label">Milestone</label>
+        <input name="milestone" type="text" defaultValue={week.milestone ?? ""} className="input text-sm" placeholder="—" />
+      </div>
+      <div className="sm:col-span-1">
+        <button className="btn-secondary w-full text-xs">Save</button>
+      </div>
+    </form>
   );
 }
 

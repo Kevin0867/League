@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { formatTime12 } from "@/lib/time";
 import { formatCents } from "@/lib/money";
 import { coachAssignmentGate } from "@/lib/domain/teams";
+import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
+import { CopyLink } from "@/components/CopyLink";
 
 function parseMarkets(json: string | null): string[] {
   if (!json) return [];
@@ -22,6 +25,20 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
     where: { personId },
     include: { availabilityBlocks: { select: { id: true } } },
   });
+
+  // Personal calendar-subscription feed — an always-in-sync URL for their phone.
+  let feedUrl: string | null = null;
+  let webcalUrl: string | null = null;
+  if (coach) {
+    const token = await ensureCoachCalendarToken(coach.id);
+    const h = await headers();
+    const host = h.get("host");
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    if (host) {
+      feedUrl = `${proto}://${host}/api/calendar/${token}`;
+      webcalUrl = `webcal://${host}/api/calendar/${token}`;
+    }
+  }
 
   // Sessions still needing attendance: anything scheduled through the end of
   // today (past sessions and today's), so a coach can check players in the day
@@ -111,6 +128,31 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           {pendingCount > pendingAttendance.length && (
             <p className="mt-2 text-xs text-slate-400">+ {pendingCount - pendingAttendance.length} more</p>
           )}
+        </div>
+      )}
+
+      {/* Calendar subscription — keeps their phone in sync automatically */}
+      {feedUrl && (
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-semibold text-slate-900">Your calendar</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Subscribe once and your practices, matches, and lessons stay in sync on your phone — new sessions and
+                changes show up automatically.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {webcalUrl && <a href={webcalUrl} className="btn-primary text-sm">Add to phone</a>}
+              <a href={feedUrl} className="btn-secondary text-sm">Download .ics</a>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            On Apple or Google Calendar you can also add it by URL (Add calendar → From URL):
+          </p>
+          <div className="mt-1">
+            <CopyLink value={feedUrl} />
+          </div>
         </div>
       )}
 

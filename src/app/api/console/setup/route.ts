@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { SEASON_WEEKS, getSeasonWeeks } from "@/lib/domain/seasonCalendar";
 
 // Season setup mutations as native-form-POST route handlers with ticket auth.
 // Route handlers 303-redirect to a fresh GET (which carries the session cookie),
@@ -197,6 +199,51 @@ export async function POST(req: Request) {
         action: "division.delete",
       });
       return back("?ok=deleteDivision");
+    }
+
+    // Initialize the editable season calendar from the standard template so the
+    // admin can then tweak each week's dates, focus, and milestone.
+    case "initSeasonCalendar": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      if (!seasonId) return back("?err=season");
+      await prisma.season.update({
+        where: { id: seasonId },
+        data: { calendar: SEASON_WEEKS as unknown as Prisma.InputJsonValue },
+      });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "season.calendar.init", summary: "Initialized editable season calendar" });
+      return back("?ok=initSeasonCalendar");
+    }
+
+    // Revert the calendar back to the read-only standard template.
+    case "resetSeasonCalendar": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      if (!seasonId) return back("?err=season");
+      await prisma.season.update({ where: { id: seasonId }, data: { calendar: Prisma.JsonNull } });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "season.calendar.reset", summary: "Reset season calendar to template" });
+      return back("?ok=resetSeasonCalendar");
+    }
+
+    // Edit one week of the calendar (dates, focus, milestone).
+    case "editSeasonWeek": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      const index = Number(formData.get("index"));
+      const season = seasonId ? await prisma.season.findUnique({ where: { id: seasonId } }) : null;
+      if (!season) return back("?err=notfound");
+      const weeks = getSeasonWeeks(season.calendar);
+      if (!Number.isInteger(index) || index < 0 || index >= weeks.length) return back("?err=notfound");
+
+      const startISO = String(formData.get("startDate") ?? "").trim() || weeks[index].startISO;
+      const endISO = String(formData.get("endDate") ?? "").trim() || weeks[index].endISO;
+      const focus = String(formData.get("focus") ?? weeks[index].focus).trim();
+      const milestoneRaw = String(formData.get("milestone") ?? "").trim();
+      weeks[index] = { ...weeks[index], startISO, endISO, focus, milestone: milestoneRaw || undefined };
+
+      await prisma.season.update({
+        where: { id: seasonId },
+        data: { calendar: weeks as unknown as Prisma.InputJsonValue },
+      });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "season.calendar.editWeek", summary: `Edited calendar week ${weeks[index].week ?? "(break)"}` });
+      return back("?ok=editSeasonWeek");
     }
 
     // Consolidate one division into another (adjacent bands / school levels).
