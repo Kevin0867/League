@@ -763,6 +763,50 @@ model MessagingConsent {
   @@index([phone])
 }
 
+/// Phase-B ACP entry from an outside club (build-list item 1). One team entered
+/// into one division, with its roster and the $195-per-player fee. The team
+/// contact (a captain/organizer, not a coach) holds the entry.
+model AcpEntry {
+  id            String   @id @default(cuid())
+  /// Scalar season link (no FK) — the active ACP season at entry time.
+  seasonId      String?
+  clubName      String
+  market        String?
+  /// What the club typed for their division, plus the code we derived from it.
+  divisionName  String
+  divisionCode  String?
+  contactName   String
+  contactEmail  String
+  contactPhone  String?
+  playerCount   Int
+  amountDueCents Int
+  /// SUBMITTED | CONFIRMED | PAID | WITHDRAWN
+  status        String   @default("SUBMITTED")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  players       AcpEntryPlayer[]
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+/// A rostered player on an ACP entry. DUPR is required for adult divisions and
+/// validated against the band ceiling at submission (see domain/acpEntry.ts).
+model AcpEntryPlayer {
+  id         String   @id @default(cuid())
+  entryId    String
+  entry      AcpEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  name       String
+  email      String?
+  duprId     String?
+  duprRating Float?
+  createdAt  DateTime @default(now())
+
+  @@index([entryId])
+}
+
 /// Phase-A interest from an outside club before ACP entries open (Sep 14). Just
 /// enough to email them when entries open and to gauge how many teams a thin
 /// division might get (build-list item 1).

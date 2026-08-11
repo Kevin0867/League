@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
+import { acpEntryWindow } from "@/lib/domain/acpEntry";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function AcpPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
+  const window = acpEntryWindow();
 
   return (
     <div>
@@ -45,7 +47,35 @@ export default async function AcpPage({
           ))}
         </ul>
 
-        {/* Phase A: interest only — entries open Sep 14 */}
+        {/* Phase B: entries are open — go straight to the entry form. */}
+        {window === "open" && (
+          <div className="mt-10 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-xl font-bold text-emerald-900">Entries are open</h2>
+              <span className="text-sm font-medium text-emerald-700">$195 per player</span>
+            </div>
+            <p className="mt-1 text-sm text-emerald-800">
+              Enter your club team now — name a team contact, list 6–8 players, and pay by the secure link we email
+              you. Entries close <strong>October 12</strong>; the league begins the week of <strong>October 26</strong>.
+            </p>
+            <Link href="/acp/enter" className="btn-primary mt-4 inline-block">Enter your team →</Link>
+          </div>
+        )}
+
+        {/* After the window: entries closed. */}
+        {window === "closed" && (
+          <div className="mt-10 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+            <h2 className="text-xl font-bold text-slate-900">Entries are closed</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Entries closed October 12 and the league is underway. Want in next season?{" "}
+              <a href="mailto:stephanie@purepickleball.com" className="font-medium text-brand-700 hover:underline">Email us</a>{" "}
+              and we&apos;ll add you to the list.
+            </p>
+          </div>
+        )}
+
+        {/* Phase A: before entries open — interest capture. */}
+        {window === "before" && (
         <div className="mt-10 rounded-2xl border border-brand-200 bg-brand-50/50 p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-xl font-bold text-brand-900">Entries open September 14</h2>
@@ -103,6 +133,7 @@ export default async function AcpPage({
             </form>
           )}
         </div>
+        )}
 
         <p className="mt-6 text-xs text-slate-400">
           PURE Academy runs its own team season first (September 14 start). ACP outside-club entries open once the
