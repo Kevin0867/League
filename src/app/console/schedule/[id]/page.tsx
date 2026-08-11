@@ -228,6 +228,10 @@ export default async function SessionDetail({
                   {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
               </div>
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" name="notify" value="1" defaultChecked />
+                Notify the team of the change
+              </label>
               <button className="btn-primary w-full">Save changes</button>
             </div>
           </form>
@@ -261,6 +265,10 @@ export default async function SessionDetail({
               <option value="">— choose facility —</option>
               {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
+            <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" name="notify" value="1" defaultChecked />
+              Notify the team of the new location
+            </label>
             <button className="btn-ghost mt-3 w-full">Relocate session</button>
           </form>
         </div>

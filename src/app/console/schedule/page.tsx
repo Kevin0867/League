@@ -16,11 +16,17 @@ const TYPE_LABEL: Record<string, string> = {
   ALA_CARTE: "À la carte",
 };
 
+const OK_LABEL: Record<string, string> = {
+  generate: "Practice schedule generated.",
+  added: "Practice added — the team has been notified.",
+};
+
 const ERR_LABEL: Record<string, string> = {
   auth: "Not authorized to manage scheduling.",
   team: "Team not found.",
   config: "Set the team's day, time, and facility before generating a schedule.",
   exists: "This team already has a practice schedule.",
+  adddate: "Pick a valid date for the practice.",
   op: "Unknown action.",
 };
 
@@ -39,7 +45,7 @@ export default async function SchedulePage({
     if (m) return [Number(m[1]), Number(m[2]) - 1];
     return [now.getUTCFullYear(), now.getUTCMonth()];
   })();
-  const [sessions, teams] = await Promise.all([
+  const [sessions, teams, facilities] = await Promise.all([
     prisma.session.findMany({
       include: { facility: true, teams: { include: { team: true } } },
       orderBy: { date: "asc" },
@@ -48,7 +54,9 @@ export default async function SchedulePage({
     prisma.team.findMany({
       where: { origin: "PURE_ACADEMY" },
       include: { _count: { select: { sessions: true } } },
+      orderBy: { name: "asc" },
     }),
+    prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
   // Teams ready to generate: have day/time/facility but no sessions yet.
@@ -86,8 +94,8 @@ export default async function SchedulePage({
         </div>
       </div>
 
-      {ok === "generate" && (
-        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Practice schedule generated.</div>
+      {ok && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OK_LABEL[ok] ?? "Done."}</div>
       )}
       {err && (
         <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{ERR_LABEL[err] ?? "Something went wrong — please try again, and contact us if it persists."}</div>
@@ -113,6 +121,55 @@ export default async function SchedulePage({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Add a single practice (make-up or extra) — notifies the team */}
+      {teams.length > 0 && (
+        <details className="card">
+          <summary className="cursor-pointer font-semibold text-slate-900">Add a practice</summary>
+          <p className="mt-1 text-sm text-slate-500">
+            A one-off practice — a make-up or an extra session. Time and location default to the team&apos;s, and the
+            team is notified unless you turn that off.
+          </p>
+          <form method="POST" action="/api/console/schedule" className="mt-3 grid gap-3 sm:grid-cols-6 sm:items-end">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="addSession" />
+            <input type="hidden" name="returnTo" value="/console/schedule" />
+            <div className="sm:col-span-2">
+              <label className="label">Team</label>
+              <select name="teamId" className="input" required>
+                <option value="">— choose team —</option>
+                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Date</label>
+              <input name="date" type="date" className="input" required />
+            </div>
+            <div>
+              <label className="label">Start</label>
+              <input name="startTime" type="time" className="input" />
+            </div>
+            <div>
+              <label className="label">End</label>
+              <input name="endTime" type="time" className="input" />
+            </div>
+            <div className="sm:col-span-3">
+              <label className="label">Facility</label>
+              <select name="facilityId" className="input">
+                <option value="">Team&apos;s facility</option>
+                {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
+              <input type="checkbox" name="notify" value="1" defaultChecked />
+              Notify the team
+            </label>
+            <div className="sm:col-span-1">
+              <button className="btn-primary w-full">Add practice</button>
+            </div>
+          </form>
+        </details>
       )}
 
       {/* Team filter — view one team's schedule, or all */}

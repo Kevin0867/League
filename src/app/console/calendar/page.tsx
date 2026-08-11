@@ -1,9 +1,23 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { SEASON_WEEKS, weekStatus, DIVISION_MIN_TEAMS, type WeekKind } from "@/lib/domain/seasonCalendar";
+import { ConsolidateDivisions } from "./ConsolidateDivisions";
 
 export const dynamic = "force-dynamic";
+
+const OK_MSG: Record<string, string> = {
+  consolidateDivisions: "Divisions consolidated.",
+};
+const ERR_MSG: Record<string, string> = {
+  auth: "You are not authorized to consolidate divisions.",
+  consolidatefields: "Pick both a source and a target division.",
+  consolidatesame: "Pick two different divisions.",
+  consolidateseason: "Divisions must be in the same season.",
+  notfound: "Division not found.",
+};
 
 const KIND_META: Record<WeekKind, { label: string; dot: string; ring: string }> = {
   practice: { label: "Practice", dot: "bg-brand-500", ring: "ring-brand-200" },
@@ -21,8 +35,16 @@ function fmtRange(aISO: string, bISO: string) {
     : `${mo(a)} ${a.getUTCDate()} – ${mo(b)} ${b.getUTCDate()}`;
 }
 
-export default async function SeasonCalendarPage() {
+export default async function SeasonCalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
   const now = new Date();
+  const session = await getSession();
+  const admin = session ? isAdmin(session.role) : false;
+  const ticket = await mintConsoleTicket();
 
   // Division readiness works off the active ACP league season if there is one,
   // otherwise the active PURE Academy season.
@@ -47,6 +69,9 @@ export default async function SeasonCalendarPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Season calendar" subtitle="The twelve-week arc: six practice weeks, five ACP league weeks, and championship week — with the two dark weeks built in." />
+
+      {sp.ok && <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800 ring-1 ring-accent-200">{OK_MSG[sp.ok] ?? "Done."}</div>}
+      {sp.err && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800 ring-1 ring-rose-200">{ERR_MSG[sp.err] ?? "Something went wrong."}</div>}
 
       {/* Where we are */}
       <div className="card border-l-4 border-brand-500">
@@ -144,8 +169,8 @@ export default async function SeasonCalendarPage() {
           </p>
         ) : (
           <div className="mt-4 grid gap-6 md:grid-cols-2">
-            <DivisionSystem title="Youth — by school level" divisions={youth} />
-            <DivisionSystem title="Adult — by DUPR band" divisions={adult} />
+            <DivisionSystem title="Youth — by school level" divisions={youth} admin={admin} ticket={ticket} />
+            <DivisionSystem title="Adult — by DUPR band" divisions={adult} admin={admin} ticket={ticket} />
           </div>
         )}
       </div>
@@ -156,10 +181,15 @@ export default async function SeasonCalendarPage() {
 function DivisionSystem({
   title,
   divisions,
+  admin,
+  ticket,
 }: {
   title: string;
   divisions: { id: string; name: string; _count: { teams: number } }[];
+  admin: boolean;
+  ticket: string;
 }) {
+  const shortCount = divisions.filter((d) => d._count.teams < DIVISION_MIN_TEAMS).length;
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h3>
@@ -187,6 +217,19 @@ function DivisionSystem({
             );
           })}
         </ul>
+      )}
+      {admin && divisions.length >= 2 && (
+        <>
+          {shortCount > 0 && (
+            <p className="mt-3 text-xs text-amber-700">
+              {shortCount} division{shortCount === 1 ? "" : "s"} below {DIVISION_MIN_TEAMS} teams — consolidate a short band into an adjacent one.
+            </p>
+          )}
+          <ConsolidateDivisions
+            ticket={ticket}
+            divisions={divisions.map((d) => ({ id: d.id, name: d.name, teams: d._count.teams }))}
+          />
+        </>
       )}
     </div>
   );

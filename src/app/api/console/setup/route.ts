@@ -20,10 +20,14 @@ function toDate(v: FormDataEntryValue | null): Date | null {
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
-  const back = (qs: string) =>
-    NextResponse.redirect(new URL(`/console/setup${qs}`, origin), 303);
-
   const formData = await req.formData();
+  // Most setup forms live on /console/setup; a few (division consolidation) are
+  // triggered from /console/calendar and pass their own returnTo.
+  const rawReturn = String(formData.get("returnTo") ?? "");
+  const returnBase = rawReturn.startsWith("/console/") ? rawReturn : "/console/setup";
+  const back = (qs: string) =>
+    NextResponse.redirect(new URL(`${returnBase}${qs}`, origin), 303);
+
   const actor = await actorFromForm(formData);
   if (!actor || !SETUP_ROLES.includes(actor.role)) return back("?err=auth");
 
@@ -193,6 +197,37 @@ export async function POST(req: Request) {
         action: "division.delete",
       });
       return back("?ok=deleteDivision");
+    }
+
+    // Consolidate one division into another (adjacent bands / school levels).
+    // Moves every team and registration from source → target, then deletes the
+    // now-empty source. Chosen explicitly by an admin from the readiness view.
+    case "consolidateDivisions": {
+      const sourceId = String(formData.get("sourceId") ?? "");
+      const targetId = String(formData.get("targetId") ?? "");
+      if (!sourceId || !targetId) return back("?err=consolidatefields");
+      if (sourceId === targetId) return back("?err=consolidatesame");
+
+      const [source, target] = await Promise.all([
+        prisma.division.findUnique({ where: { id: sourceId } }),
+        prisma.division.findUnique({ where: { id: targetId } }),
+      ]);
+      if (!source || !target) return back("?err=notfound");
+      if (source.seasonId !== target.seasonId) return back("?err=consolidateseason");
+
+      // Re-home teams and registrations, then remove the empty source division.
+      await prisma.team.updateMany({ where: { divisionId: sourceId }, data: { divisionId: targetId } });
+      await prisma.registration.updateMany({ where: { divisionId: sourceId }, data: { divisionId: targetId } });
+      await prisma.division.delete({ where: { id: sourceId } });
+
+      await audit({
+        actorId: actor.userId,
+        entityType: "Division",
+        entityId: targetId,
+        action: "division.consolidate",
+        summary: `Consolidated "${source.name}" into "${target.name}"`,
+      });
+      return back("?ok=consolidateDivisions");
     }
 
     case "addStandardDivisions": {

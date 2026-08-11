@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { formatDate } from "@/lib/time";
+import { formatDate, formatTime12 } from "@/lib/time";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
@@ -38,7 +38,8 @@ export async function POST(req: Request) {
   const actor = await actorFromForm(formData);
   const op = String(formData.get("op") ?? "");
 
-  // Reschedule a single session — date, time, and/or facility (§7).
+  // Reschedule a single session — date, time, and/or facility (§7). Notifies the
+  // team(s) by default so families see the change (opt out with the checkbox).
   if (op === "editSession") {
     if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
     const sessionId = String(formData.get("sessionId") ?? "");
@@ -47,8 +48,9 @@ export async function POST(req: Request) {
     const startTime = String(formData.get("startTime") ?? "").trim();
     const endTime = String(formData.get("endTime") ?? "").trim();
     const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
+    const notify = String(formData.get("notify") ?? "") === "1";
     const parsedDate = dateStr ? new Date(dateStr) : null;
-    await prisma.session.update({
+    const updated = await prisma.session.update({
       where: { id: sessionId },
       data: {
         ...(parsedDate && !isNaN(parsedDate.getTime()) ? { date: parsedDate } : {}),
@@ -56,8 +58,23 @@ export async function POST(req: Request) {
         ...(endTime ? { endTime } : {}),
         facilityId,
       },
+      include: { teams: true, facility: true },
     });
-    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.edit", summary: "Rescheduled session date/time/facility" });
+
+    if (notify) {
+      const kind = updated.type === "PRACTICE" ? "practice" : updated.type === "LEAGUE_MATCH" ? "league match" : "session";
+      const body = `Your ${kind} has been rescheduled to ${formatDate(updated.date)} at ${formatTime12(updated.startTime)}${updated.facility ? ` · ${updated.facility.name}` : ""}. Check your portal for details.`;
+      for (const st of updated.teams) {
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: updated.seasonId,
+          audienceType: "TEAM", audienceRef: st.teamId,
+          channels: ["IN_APP", "EMAIL"], triggerType: "SESSION_RESCHEDULED",
+          subject: `${kind[0].toUpperCase()}${kind.slice(1)} rescheduled`, body,
+        });
+      }
+    }
+
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.edit", summary: `Rescheduled session${notify ? " + notified team" : ""}` });
     return back("?ok=edited");
   }
 
@@ -168,21 +185,82 @@ export async function POST(req: Request) {
     return back("?ok=cancel");
   }
 
-  // relocateSession — manageScheduling (§7)
+  // relocateSession — manageScheduling (§7). Notifies the team(s) of the new venue.
   if (op === "relocate") {
     if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
 
     const sessionId = String(formData.get("sessionId") ?? "");
     const facilityId = String(formData.get("facilityId") ?? "");
+    const notify = String(formData.get("notify") ?? "") === "1";
     if (!facilityId) return back("?err=facility");
 
-    await prisma.session.update({
+    const updated = await prisma.session.update({
       where: { id: sessionId },
       data: { relocatedFacilityId: facilityId, status: "SCHEDULED", cancelReason: null },
+      include: { teams: true },
     });
-    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "RELOCATE", summary: `Relocated to facility ${facilityId}` });
+    const fac = await prisma.facility.findUnique({ where: { id: facilityId }, select: { name: true } });
 
+    if (notify) {
+      const body = `Your session on ${formatDate(updated.date)} at ${formatTime12(updated.startTime)} has been moved to ${fac?.name ?? "a new location"}. Check your portal for details.`;
+      for (const st of updated.teams) {
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: updated.seasonId,
+          audienceType: "TEAM", audienceRef: st.teamId,
+          channels: ["IN_APP", "EMAIL"], triggerType: "SESSION_RELOCATED",
+          subject: "Session moved to a new location", body,
+        });
+      }
+    }
+
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "RELOCATE", summary: `Relocated to ${fac?.name ?? facilityId}${notify ? " + notified team" : ""}` });
     return back("?ok=relocate");
+  }
+
+  // Add a single one-off practice for a team and (by default) notify the team.
+  // Complements bulk "generate" — for a make-up session or an extra practice.
+  if (op === "addSession") {
+    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    const teamId = String(formData.get("teamId") ?? "");
+    const team = await prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) return back("?err=team");
+
+    const dateStr = String(formData.get("date") ?? "").trim();
+    const parsed = dateStr ? new Date(dateStr) : null;
+    if (!parsed || isNaN(parsed.getTime())) return back("?err=adddate");
+    const startTime = String(formData.get("startTime") ?? "").trim() || team.startTime || "17:00";
+    const endTime = String(formData.get("endTime") ?? "").trim() || addMinutes(startTime, DEFAULT_DURATION_MIN);
+    const facilityId = String(formData.get("facilityId") ?? "").trim() || team.facilityId || null;
+    const notify = String(formData.get("notify") ?? "") === "1";
+
+    const created = await prisma.session.create({
+      data: {
+        seasonId: team.seasonId,
+        type: "PRACTICE",
+        facilityId,
+        date: parsed,
+        startTime,
+        endTime,
+        courtCount: DEFAULT_COURTS,
+        status: "SCHEDULED",
+        teams: { create: { teamId } },
+        ...(team.coachId ? { coaches: { create: { coachId: team.coachId, role: "PRIMARY" } } } : {}),
+      },
+    });
+
+    if (notify) {
+      const fac = facilityId ? await prisma.facility.findUnique({ where: { id: facilityId }, select: { name: true } }) : null;
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: team.seasonId,
+        audienceType: "TEAM", audienceRef: teamId,
+        channels: ["IN_APP", "EMAIL"], triggerType: "SESSION_ADDED",
+        subject: "New practice added",
+        body: `A new practice has been added for ${team.name}: ${formatDate(parsed)} at ${formatTime12(startTime)}${fac ? ` · ${fac.name}` : ""}. Check your portal for details.`,
+      });
+    }
+
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: created.id, action: "session.add", summary: `Added a practice for ${team.name}${notify ? " + notified team" : ""}` });
+    return back("?ok=added");
   }
 
   // markAttendance — markAttendance, allowed for COACH too (§7)
