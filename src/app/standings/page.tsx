@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { leagueStandingsFlat } from "@/lib/domain/leagueStandings";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "League Standings — Arizona Club Pickleball" },
+  description: "Live standings by division for Arizona Club Pickleball, a DUPR-recorded league.",
+  alternates: { canonical: "/standings" },
+};
 
 export default async function StandingsPage() {
   // The public leaderboard is the active ACP league's flat roster — the same

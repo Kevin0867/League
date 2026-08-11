@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -7,6 +8,12 @@ import { ACADEMY_MARKETS } from "@/lib/enums";
 import { formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "Enroll — PURE Academy Fall 2026" },
+  description: "Enroll today, pay later. $495 per player for a twelve-session season on a PURE Academy ELITE TEAM.",
+  alternates: { canonical: "/register" },
+};
 
 export default async function RegisterPage({
   searchParams,

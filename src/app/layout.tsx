@@ -2,12 +2,19 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://academy.purepickleball.com"),
   title: {
     default: "PURE Academy — Arizona's Premier Player Development Academy",
     template: "%s · PURE Academy",
   },
   description:
-    "PURE Academy is Arizona's premier player development academy. We believe team training accelerates player development — players train, compete, and improve together. Fall 2026 season now enrolling, all ages and skill levels.",
+    "Team-based pickleball training for all ages and levels. Fall 2026 season now enrolling — twelve sessions, September 14 to December 13.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    siteName: "PURE Academy",
+    type: "website",
+    images: ["/brand/pure-academy-elite.png"],
+  },
 };
 
 export const viewport: Viewport = {

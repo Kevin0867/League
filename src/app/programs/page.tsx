@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -14,6 +15,12 @@ function schoolBand(name: string): string {
   if (n.includes("high school")) return "High school · grades 9–12";
   return "By school level";
 }
+
+export const metadata: Metadata = {
+  title: { absolute: "Programs & Divisions — PURE Academy" },
+  description: "Youth and adult ELITE TEAMS by age and DUPR band, 2.5 through 5.0+. Six practice weeks, five league weeks, and the ACP Championship.",
+  alternates: { canonical: "/programs" },
+};
 
 export default async function ProgramsPage() {
   const seasons = await prisma.season.findMany({

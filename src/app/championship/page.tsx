@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "ACP Championship — Arizona Club Pickleball" },
+  description: "Championship week, December 7–13, 2026. Division events Monday to Friday.",
+  alternates: { canonical: "/championship" },
+};
 
 export default async function PublicChampionshipPage() {
   const matches = await prisma.championshipMatch.findMany({ orderBy: [{ divisionId: "asc" }, { round: "asc" }, { slot: "asc" }] });

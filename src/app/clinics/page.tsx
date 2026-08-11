@@ -6,7 +6,11 @@ import { listPublicClinics, formatClinicWhen } from "@/lib/domain/clinics";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Clinics — PURE Academy" };
+export const metadata = {
+  title: { absolute: "Clinics & Private Coaching — PURE Academy" },
+  description: "Private lessons, semi-private sessions, and skill clinics with PURE Academy coaches across the Valley.",
+  alternates: { canonical: "/clinics" },
+};
 
 export default async function ClinicsPage() {
   const clinics = await listPublicClinics();

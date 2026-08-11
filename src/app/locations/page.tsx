@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "Locations — PURE Academy" },
+  description: "Where PURE Academy plays across the Valley: Scottsdale, Chandler, Gilbert, Mesa, Paradise Valley, Phoenix, and Tempe.",
+  alternates: { canonical: "/locations" },
+};
 
 export default async function LocationsPage() {
   const facilities = await prisma.facility.findMany({ where: { archived: false }, orderBy: [{ market: "asc" }, { name: "asc" }] });

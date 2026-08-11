@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
@@ -5,6 +6,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "Schedule — Arizona Club Pickleball" },
+  description: "Fixtures, results, and remaining schedule by division and team.",
+  alternates: { canonical: "/schedule" },
+};
 
 export default async function PublicSchedulePage() {
   const fixtures = await prisma.fixture.findMany({
