@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
@@ -26,6 +27,9 @@ export default async function StandingsPage() {
         <p className="mt-2 text-slate-600">
           {season ? `${season.name} — ` : ""}Arizona Club Pickleball. The top three lines decide each
           match; forfeits are recorded 3–0 and never submitted to DUPR.
+        </p>
+        <p className="mt-2 text-sm text-slate-500">
+          Run a club? <Link href="/acp" className="font-medium text-brand-700 hover:underline">Bring a team into ACP →</Link>
         </p>
 
         <div className="mt-8">

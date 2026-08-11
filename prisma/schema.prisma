@@ -729,6 +729,23 @@ model Season {
   leagueTeams   LeagueTeam[]
 }
 
+/// Phase-A interest from an outside club before ACP entries open (Sep 14). Just
+/// enough to email them when entries open and to gauge how many teams a thin
+/// division might get (build-list item 1).
+model AcpInterest {
+  id              String   @id @default(cuid())
+  clubName        String
+  contactName     String
+  email           String
+  phone           String?
+  market          String?
+  likelyTeams     Int?
+  likelyDivisions String?
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 /// Explicit league membership — which teams play in a season's league. Decouples
 /// the league roster from a team's own season/division so any published team can
 /// be added to the active ACP league, regardless of the season it was built in.
