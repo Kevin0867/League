@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo, PadelLogo } from "@/components/Brand";
+import { PasswordField } from "@/components/PasswordField";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,7 @@ export default async function LoginPage({
               <label className="label" htmlFor="email">Email</label>
               <input id="email" name="email" type="email" autoComplete="email" required className="input" />
             </div>
-            <div>
-              <label className="label" htmlFor="password">Password</label>
-              <input id="password" name="password" type="password" autoComplete="current-password" required className="input" />
-            </div>
+            <PasswordField name="password" label="Password" required minLength={0} autoComplete="current-password" />
             {message && (
               <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{message}</p>
             )}

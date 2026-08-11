@@ -209,6 +209,7 @@ export async function registerAction(
   const phone = g("primaryPhone");
   const comments = g("comments");
   const password = g("password");
+  const passwordConfirm = g("passwordConfirm");
 
   const waiverSigned = formData.get("waiver") === "on";
   const signatureName = g("signatureName");
@@ -223,6 +224,10 @@ export async function registerAction(
   if (!phone) return { error: "A phone number is required." };
   if (!waiverSigned || !signatureName)
     return { error: "The liability waiver must be read, agreed to, and signed." };
+  if (password && password.length < 8)
+    return { error: "Password must be at least 8 characters." };
+  if (password && password !== passwordConfirm)
+    return { error: "Passwords don't match." };
 
   // Shared preferences.
   const locations = getAll("location").filter(Boolean);

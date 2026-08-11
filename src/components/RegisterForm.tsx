@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { registerAction, type RegisterState } from "@/app/register/actions";
 import { WaiverText, WAIVER_VERSION } from "@/components/WaiverText";
 import { EMAIL_CONSENT_TEXT, SMS_CONSENT_TEXT } from "@/lib/consent";
+import { PasswordField } from "@/components/PasswordField";
 
 const YOUTH_LEVELS = ["High School", "Middle", "Elementary"];
 const ADULT_TEAMS = ["Men's", "Women's"];
@@ -226,7 +227,7 @@ export function RegisterForm({
       </Section>
 
       <Section title="Portal access (optional)" subtitle="Create a password to track placement and pay later. Payment is requested only after you're assigned a team.">
-        <Field label="Choose a password" name="password" type="password" />
+        <PasswordField name="password" label="Choose a password" confirm required={false} hint="Optional — at least 8 characters if you set one." />
       </Section>
 
       {state?.error && (

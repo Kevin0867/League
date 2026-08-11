@@ -50,6 +50,7 @@ export async function POST(req: Request) {
 
       if (!firstName || !lastName || !email || !password) return back("?err=fields");
       if (password.length < 8) return back("?err=short");
+      if (password !== String(formData.get("passwordConfirm") ?? "")) return back("?err=mismatch");
       if (!CREATABLE_ROLES.includes(role)) return back("?err=role");
 
       const existingUser = await prisma.user.findUnique({ where: { email } });

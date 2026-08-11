@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { Logo } from "@/components/Brand";
+import { PasswordField } from "@/components/PasswordField";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export default async function SetupPage({
       ? "All fields are required."
       : error === "short"
       ? "Password must be at least 8 characters."
+      : error === "mismatch"
+      ? "Passwords don't match."
       : error === "token"
       ? "Invalid setup token."
       : null;
@@ -64,10 +67,7 @@ export default async function SetupPage({
                   <label className="label" htmlFor="email">Email</label>
                   <input id="email" name="email" type="email" required className="input" />
                 </div>
-                <div>
-                  <label className="label" htmlFor="password">Password</label>
-                  <input id="password" name="password" type="password" required minLength={8} className="input" />
-                </div>
+                <PasswordField name="password" label="Password" confirm hint="At least 8 characters." />
                 {needsToken && (
                   <div>
                     <label className="label" htmlFor="token">Setup token</label>

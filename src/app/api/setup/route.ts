@@ -22,6 +22,7 @@ export async function POST(req: Request) {
   const password = String(form.get("password") ?? "");
   if (!firstName || !lastName || !email || !password) return back("fields");
   if (password.length < 8) return back("short");
+  if (password !== String(form.get("passwordConfirm") ?? "")) return back("mismatch");
 
   const person = await prisma.person.create({ data: { firstName, lastName, email } });
   const user = await prisma.user.create({

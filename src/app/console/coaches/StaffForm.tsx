@@ -1,6 +1,7 @@
 "use client";
 
 import type { Role } from "@/lib/enums";
+import { PasswordField } from "@/components/PasswordField";
 
 export function StaffForm({ role, ticket }: { role: Role; ticket: string }) {
   void role;
@@ -33,12 +34,11 @@ export function StaffForm({ role, ticket }: { role: Role; ticket: string }) {
             <option value="ADMIN">Admin</option>
           </select>
         </div>
-        <div>
-          <label className="label">Initial password</label>
-          <input name="password" type="password" minLength={8} className="input" required />
+        <div className="sm:col-span-2">
+          <PasswordField name="password" label="Initial password" confirm confirmLabel="Confirm initial password" hint="At least 8 characters. Share it securely." />
         </div>
-        <div className="flex items-end">
-          <button type="submit" className="btn-primary w-full">
+        <div className="sm:col-span-2">
+          <button type="submit" className="btn-primary w-full sm:w-auto">
             Create account
           </button>
         </div>

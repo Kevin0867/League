@@ -14,13 +14,13 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const token = String(form.get("token") ?? "");
   const password = String(form.get("password") ?? "");
+  const passwordConfirm = String(form.get("passwordConfirm") ?? "");
 
-  if (password.length < 8) {
-    return NextResponse.redirect(
-      new URL(`/reset?token=${encodeURIComponent(token)}&error=short`, origin),
-      303
-    );
-  }
+  const bail = (error: string) =>
+    NextResponse.redirect(new URL(`/reset?token=${encodeURIComponent(token)}&error=${error}`, origin), 303);
+
+  if (password.length < 8) return bail("short");
+  if (password !== passwordConfirm) return bail("mismatch");
 
   const userId = await consumeResetToken(token);
   if (!userId) return NextResponse.redirect(new URL("/reset?error=invalid", origin), 303);

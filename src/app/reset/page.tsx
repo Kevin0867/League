@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo, PadelLogo } from "@/components/Brand";
+import { PasswordField } from "@/components/PasswordField";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,8 @@ export default async function ResetPage({
 }) {
   const { token, error, invite } = await searchParams;
   const invalid = error === "invalid" || !token;
-  const message = error === "short" ? "Password must be at least 8 characters." : null;
+  const message =
+    error === "short" ? "Password must be at least 8 characters." : error === "mismatch" ? "Passwords don't match." : null;
   const isInvite = invite === "1";
 
   return (
@@ -35,11 +37,7 @@ export default async function ResetPage({
           ) : (
             <form method="POST" action="/api/auth/reset" className="mt-5 space-y-4">
               <input type="hidden" name="token" value={token} />
-              <div>
-                <label className="label" htmlFor="password">New password</label>
-                <input id="password" name="password" type="password" minLength={8} autoComplete="new-password" required className="input" />
-                <p className="mt-1 text-xs text-slate-400">At least 8 characters.</p>
-              </div>
+              <PasswordField name="password" label="New password" confirm hint="At least 8 characters." />
               {message && (
                 <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{message}</p>
               )}

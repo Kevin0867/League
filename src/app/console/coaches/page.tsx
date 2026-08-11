@@ -5,6 +5,7 @@ import { coachAssignmentGate } from "@/lib/domain/teams";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { StaffForm } from "./StaffForm";
+import { TableFilter } from "@/components/TableFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ const ERRORS: Record<string, string> = {
   auth: "Not authorized to create accounts.",
   fields: "All fields are required.",
   short: "Password must be at least 8 characters.",
+  mismatch: "Passwords don't match.",
   role: "Invalid role.",
   exists: "A user with that email already exists.",
   op: "Unknown operation.",
@@ -37,27 +39,36 @@ export default async function CoachesPage({
   // Auth enforced by the console layout; read the session only to gate the form.
   const session = await getSession();
   const ticket = await mintConsoleTicket();
-  // List everyone with a COACH login (so newly-added coaches show even before a
-  // Coach profile row exists), joined to their coach profile when present.
-  const coachUsers = await prisma.user.findMany({
-    where: { role: "COACH" },
-    include: {
-      person: {
-        include: {
-          coach: {
-            include: {
-              _count: { select: { teams: true, recruits: true } },
-              availabilityBlocks: { select: { id: true } },
-            },
-          },
-        },
-      },
-    },
-    orderBy: { person: { lastName: "asc" } },
-  });
-  const coaches = coachUsers
-    .filter((u) => u.person)
-    .map((u) => ({ person: u.person!, coach: u.person!.coach }));
+  // The list is the UNION of (a) everyone with a COACH login — so a newly-added
+  // coach shows even before a Coach profile exists — and (b) everyone who has a
+  // Coach profile, regardless of their login role. That second set is why the
+  // Director (a published Coach who may not hold a COACH login) appears here so
+  // their photo and record can be managed.
+  const coachInclude = {
+    _count: { select: { teams: true, recruits: true } },
+    availabilityBlocks: { select: { id: true } },
+  } as const;
+  const [coachUsers, coachProfiles] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: "COACH" },
+      include: { person: { include: { coach: { include: coachInclude } } } },
+      orderBy: { person: { lastName: "asc" } },
+    }),
+    prisma.coach.findMany({
+      include: { person: true, ...coachInclude },
+      orderBy: { person: { lastName: "asc" } },
+    }),
+  ]);
+
+  // Coach relation shape shared by both sources (the profile source carries an
+  // extra `person`, which is structurally assignable to this smaller type).
+  type CoachRel = NonNullable<(typeof coachUsers)[number]["person"]>["coach"];
+  const byPerson = new Map<string, { person: { id: string; firstName: string; lastName: string }; coach: CoachRel }>();
+  for (const u of coachUsers) if (u.person) byPerson.set(u.person.id, { person: u.person, coach: u.person.coach });
+  for (const c of coachProfiles) if (!byPerson.has(c.personId)) byPerson.set(c.personId, { person: c.person, coach: c });
+  const coaches = [...byPerson.values()].sort((a, b) =>
+    `${a.person.lastName} ${a.person.firstName}`.localeCompare(`${b.person.lastName} ${b.person.firstName}`)
+  );
 
   // Availability completeness — a coach only shows up as a location/day match in
   // Coach matching once they've set both locations and day/time blocks.
@@ -96,8 +107,12 @@ export default async function CoachesPage({
         </div>
       )}
 
+      <div className="max-w-md">
+        <TableFilter targetId="coaches-table" placeholder="Search coaches by name…" />
+      </div>
+
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
+        <table id="coaches-table" className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="py-2">Coach</th>
@@ -113,7 +128,7 @@ export default async function CoachesPage({
               const gate = coach ? coachAssignmentGate(coach) : { ok: false, reasons: ["no profile yet"] };
               const avail = coach ? availabilityOf(coach) : { complete: false, missing: ["no profile yet"] };
               return (
-                <tr key={person.id}>
+                <tr key={person.id} data-filter-row data-filter-text={`${person.firstName} ${person.lastName}`}>
                   <td className="py-2 font-medium">
                     <Link href={`/console/coaches/${person.id}`} className="text-slate-800 hover:text-brand-700 hover:underline">
                       {person.firstName} {person.lastName}
@@ -142,6 +157,7 @@ export default async function CoachesPage({
             {coaches.length === 0 && (
               <tr><td colSpan={6} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
+            <tr data-filter-empty hidden><td colSpan={6} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
           </tbody>
         </table>
       </div>
