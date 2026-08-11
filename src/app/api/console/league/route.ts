@@ -17,7 +17,7 @@ import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
 export const dynamic = "force-dynamic";
 
 // [id] ops redirect back to the fixture page; top-level ops to the league index.
-const FIXTURE_OPS = new Set(["submitLineup", "enterScores", "recordForfeit", "submitToDupr"]);
+const FIXTURE_OPS = new Set(["submitLineup", "submitLineups", "enterScores", "recordForfeit", "submitToDupr"]);
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
@@ -356,6 +356,58 @@ export async function POST(req: Request) {
       }
 
       await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "LINEUP", summary: `Line-up submitted for ${team.name} (${pairs.length} lines)` });
+      revalidatePath(`/console/league/${fixtureId}`);
+      return back("?ok=submitLineup");
+    }
+
+    // Submit BOTH teams' line-ups from one combined form. Each team is validated
+    // and rebuilt independently, and a team with no line inputs is left exactly
+    // as it was — so saving one team's line-up never disturbs the other's.
+    case "submitLineups": {
+      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId } });
+      if (!fixture) return back("?err=nofixture");
+      const teamIds = formData.getAll("teamId").map(String).filter(Boolean);
+
+      const prepared: { teamId: string; pairs: LineupPair[] }[] = [];
+      for (const teamId of teamIds) {
+        const team = await prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) continue;
+
+        const pairs: LineupPair[] = [];
+        let partial = false;
+        for (let line = 1; line <= 4; line++) {
+          const a = String(formData.get(`lu_${teamId}_${line}_a`) ?? "");
+          const b = String(formData.get(`lu_${teamId}_${line}_b`) ?? "");
+          if (!a && !b) continue;
+          if (!a || !b) { partial = true; continue; }
+          if (a === b) return back("?err=selfpair");
+          const [pa, pb] = await Promise.all([
+            prisma.person.findUnique({ where: { id: a }, select: { duprRating: true } }),
+            prisma.person.findUnique({ where: { id: b }, select: { duprRating: true } }),
+          ]);
+          pairs.push({ lineNumber: line, playerAId: a, playerBId: b, combinedDupr: (pa?.duprRating ?? 0) + (pb?.duprRating ?? 0) });
+        }
+
+        // No input for this team at all → leave its existing line-up untouched.
+        if (pairs.length === 0 && !partial) continue;
+        if (pairs.length < 3) return back("?err=minlines");
+        const used = pairs.flatMap((p) => [p.playerAId, p.playerBId]);
+        if (new Set(used).size !== used.length) return back("?err=dupplayer");
+        const check = validateLineup(pairs, team.origin);
+        if (!check.ok) return back(`?err=lineup&msg=${encodeURIComponent(check.error ?? "")}`);
+        prepared.push({ teamId, pairs });
+      }
+
+      // Apply only the teams that were actually submitted.
+      for (const { teamId, pairs } of prepared) {
+        await prisma.pairing.deleteMany({ where: { teamId, weekNumber: fixture.weekNumber } });
+        for (const p of pairs) {
+          await prisma.pairing.create({
+            data: { teamId, weekNumber: fixture.weekNumber, rank: p.lineNumber, playerAId: p.playerAId, playerBId: p.playerBId, combinedDupr: p.combinedDupr },
+          });
+        }
+      }
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "LINEUP", summary: `Line-ups saved for ${prepared.length} team(s)` });
       revalidatePath(`/console/league/${fixtureId}`);
       return back("?ok=submitLineup");
     }

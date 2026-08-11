@@ -36,6 +36,14 @@ const COACH_ROLE_LABEL: Record<string, string> = {
   PRIMARY: "Primary", ASSISTANT: "Assistant", SUBSTITUTE: "Substitute", BACKUP: "Backup",
 };
 
+// Attendance choices. `on` holds the peer-checked classes so the tapped option
+// highlights live (green/red/amber) with no JavaScript.
+const ATT_OPTS = [
+  { value: "PRESENT", label: "Present", on: "peer-checked:bg-emerald-600 peer-checked:text-white" },
+  { value: "ABSENT", label: "Absent", on: "peer-checked:bg-rose-600 peer-checked:text-white" },
+  { value: "EXCUSED", label: "Excused", on: "peer-checked:bg-amber-500 peer-checked:text-white" },
+];
+
 export default async function SessionDetail({
   params,
   searchParams,
@@ -114,15 +122,17 @@ export default async function SessionDetail({
                   <li key={m.personId} className="py-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <span className="text-sm font-medium text-slate-800">{m.person.firstName} {m.person.lastName}</span>
-                      {/* Big, full-width tap targets on a phone; compact on desktop. */}
+                      {/* Big, full-width tap targets on a phone; compact on desktop.
+                          The radio is the CSS `peer` and the styled span is its
+                          sibling, so the selection highlights live on tap — no
+                          JS, and it still submits with the form. */}
                       <div className="grid grid-cols-3 gap-1 sm:flex">
-                        {["PRESENT", "ABSENT", "EXCUSED"].map((opt) => (
-                          <label
-                            key={opt}
-                            className={`cursor-pointer rounded-lg px-3 py-2.5 text-center text-sm font-medium sm:py-1.5 sm:text-xs ${cur === opt ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-                          >
-                            <input type="radio" name={`att_${m.personId}`} value={opt} defaultChecked={cur === opt} className="sr-only" />
-                            {opt[0] + opt.slice(1).toLowerCase()}
+                        {ATT_OPTS.map((opt) => (
+                          <label key={opt.value} className="block cursor-pointer">
+                            <input type="radio" name={`att_${m.personId}`} value={opt.value} defaultChecked={cur === opt.value} className="peer sr-only" />
+                            <span className={`block rounded-lg px-3 py-2.5 text-center text-sm font-medium ring-1 ring-inset ring-transparent bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200 sm:py-1.5 sm:text-xs ${opt.on}`}>
+                              {opt.label}
+                            </span>
                           </label>
                         ))}
                       </div>

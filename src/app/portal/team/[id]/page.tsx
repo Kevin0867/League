@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
-import { formatTime12 } from "@/lib/time";
+import { formatTime12, formatDate } from "@/lib/time";
+
+function AttBadge({ status }: { status: string }) {
+  const tone =
+    status === "PRESENT" ? "bg-emerald-100 text-emerald-800"
+    : status === "ABSENT" ? "bg-rose-100 text-rose-800"
+    : "bg-amber-100 text-amber-800";
+  return <span className={`badge ${tone}`}>{status[0] + status.slice(1).toLowerCase()}</span>;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +46,24 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       </div>
     );
   }
+
+  // The player's own attendance record for this team — populated by the coach's
+  // check-in on each session.
+  const myMemberIds = team.members.filter((m) => household.includes(m.personId)).map((m) => m.personId);
+  const attendance = myMemberIds.length
+    ? await prisma.attendance.findMany({
+        where: { personId: { in: myMemberIds }, session: { teams: { some: { teamId: team.id } } } },
+        include: { session: { select: { date: true, weekNumber: true } } },
+        orderBy: { session: { date: "desc" } },
+      })
+    : [];
+  const attByPerson = new Map<string, typeof attendance>();
+  for (const a of attendance) {
+    const arr = attByPerson.get(a.personId) ?? [];
+    arr.push(a);
+    attByPerson.set(a.personId, arr);
+  }
+  const memberName = new Map(team.members.map((m) => [m.personId, `${m.person.firstName} ${m.person.lastName}`]));
 
   const coach = team.coach?.person;
   const coachContact = [coach?.email, coach?.phone].filter(Boolean).join(" · ");
@@ -105,6 +131,47 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <p className="text-sm text-slate-500">Your coach will be introduced soon.</p>
         )}
       </section>
+
+      {/* Attendance — the player's record, set by the coach's session check-in */}
+      {myMemberIds.length > 0 && (
+        <section className="card">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Attendance</h2>
+          {myMemberIds.map((pid) => {
+            const rows = attByPerson.get(pid) ?? [];
+            const present = rows.filter((r) => r.status === "PRESENT").length;
+            const absent = rows.filter((r) => r.status === "ABSENT").length;
+            const excused = rows.filter((r) => r.status === "EXCUSED").length;
+            return (
+              <div key={pid} className="mb-5 last:mb-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-slate-800">{memberName.get(pid)}</span>
+                  {rows.length > 0 && (
+                    <span className="text-xs text-slate-500">
+                      {present} present · {absent} absent · {excused} excused
+                    </span>
+                  )}
+                </div>
+                {rows.length === 0 ? (
+                  <p className="mt-1 text-sm text-slate-400">No sessions recorded yet — your coach will check you in each session.</p>
+                ) : (
+                  <ul className="mt-2 divide-y divide-slate-100">
+                    {rows.slice(0, 12).map((r) => (
+                      <li key={r.id} className="flex items-center justify-between py-1.5 text-sm">
+                        <span className="text-slate-600">
+                          {formatDate(r.session.date)}
+                          {r.session.weekNumber ? ` · week ${r.session.weekNumber}` : ""}
+                        </span>
+                        <AttBadge status={r.status} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {rows.length > 12 && <p className="mt-1 text-xs text-slate-400">Showing the 12 most recent.</p>}
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* Teammates */}
       <section className="card">

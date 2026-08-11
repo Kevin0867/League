@@ -65,6 +65,17 @@ export default async function FixtureDetail({
   const played = fixture.status === "COMPLETED";
   const forfeited = fixture.status === "FORFEITED";
 
+  const homeId = fixture.homeTeamId;
+  const awayId = fixture.awayTeamId;
+  const homeName = fixture.homeTeam?.name ?? "Home";
+  const awayName = fixture.awayTeam?.name ?? "Away";
+  // The pair (by first names) a team fielded on a given line, from its line-up.
+  const pairFor = (teamId: string | null, line: number) => {
+    if (!teamId) return null;
+    const p = pairings.find((x) => x.teamId === teamId && x.rank === line);
+    return p ? `${p.playerA.firstName} & ${p.playerB.firstName}` : null;
+  };
+
   return (
     <div className="space-y-6">
       {sp.ok && (
@@ -88,23 +99,31 @@ export default async function FixtureDetail({
         </p>
       </div>
 
-      {/* Line-ups */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {teams.map((team) => (
-          <LineupForm
-            key={team.id}
-            ticket={ticket}
-            fixtureId={fixture.id}
-            teamId={team.id}
-            teamName={team.name}
-            origin={team.origin}
-            roster={team.members}
-            existing={pairings.filter((p) => p.teamId === team.id)}
-          />
-        ))}
-      </div>
+      {/* Line-ups — one form for both teams. Each team is saved independently, so
+          submitting leaves the other team's line-up exactly as it was. */}
+      <form method="POST" action="/api/console/league" className="space-y-4">
+        <input type="hidden" name="ticket" value={ticket} />
+        <input type="hidden" name="op" value="submitLineups" />
+        <input type="hidden" name="fixtureId" value={fixture.id} />
+        <div className="grid gap-6 lg:grid-cols-2">
+          {teams.map((team) => (
+            <LineupFields
+              key={team.id}
+              teamId={team.id}
+              teamName={team.name}
+              origin={team.origin}
+              roster={team.members}
+              existing={pairings.filter((p) => p.teamId === team.id)}
+              isHome={team.id === homeId}
+            />
+          ))}
+        </div>
+        <div className="flex justify-end">
+          <button className="btn-primary">Save line-ups</button>
+        </div>
+      </form>
 
-      {/* Score entry */}
+      {/* Score entry — each line shows who played, home pair first */}
       {!forfeited && (
         <form method="POST" action="/api/console/league" className="card">
           <input type="hidden" name="ticket" value={ticket} />
@@ -112,17 +131,26 @@ export default async function FixtureDetail({
           <input type="hidden" name="fixtureId" value={fixture.id} />
           <h2 className="mb-1 font-semibold text-slate-900">Line-by-line scores</h2>
           <p className="mb-4 text-sm text-slate-500">
-            Best of three to 11, win by 2. Lines 1–3 count; line 4 is the exhibition line
-            (recorded, non-counting). Leave a game blank if unplayed.
+            <span className="font-medium text-slate-700">{homeName}</span> <span className="text-slate-400">(home)</span> vs{" "}
+            <span className="font-medium text-slate-700">{awayName}</span>. Each game to 11, win by 2 — the home team&apos;s
+            score is entered first (left). Lines 1–3 count; line 4 is the exhibition line (recorded, non-counting). Leave a
+            game blank if unplayed.
           </p>
           <div className="space-y-3">
             {[1, 2, 3, 4].map((line) => {
               const existing = fixture.lines.find((l) => l.lineNumber === line);
+              const homePair = pairFor(homeId, line);
+              const awayPair = pairFor(awayId, line);
+              const winnerLabel = existing?.lineWinner === "HOME" ? (homePair ?? homeName) : existing?.lineWinner === "AWAY" ? (awayPair ?? awayName) : null;
               return (
                 <div key={line} className="rounded-lg border border-slate-200 p-3">
-                  <div className="mb-2 text-sm font-medium text-slate-700">
-                    Line {line} {line === 4 && <span className="text-xs text-slate-400">(exhibition — non-counting)</span>}
-                    {existing?.lineWinner && <span className="ml-2 badge bg-slate-100 text-slate-600">{existing.lineWinner} won</span>}
+                  <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                    <span className="font-medium text-slate-700">{line === 4 ? "Exhibition" : `Line ${line}`}</span>
+                    <span className="text-slate-600">
+                      {homePair ?? homeName} <span className="text-slate-400">vs</span> {awayPair ?? awayName}
+                    </span>
+                    {line === 4 && <span className="text-xs text-slate-400">(non-counting)</span>}
+                    {winnerLabel && <span className="badge bg-emerald-100 text-emerald-800">{winnerLabel} won</span>}
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {[1, 2, 3].map((g) => {
@@ -130,9 +158,9 @@ export default async function FixtureDetail({
                       return (
                         <div key={g} className="flex items-center gap-1">
                           <span className="w-8 text-xs text-slate-400">G{g}</span>
-                          <input name={`l${line}_g${g}_h`} type="number" min={0} defaultValue={game?.homeScore ?? ""} className="input px-2 py-1 text-center" placeholder="H" />
+                          <input name={`l${line}_g${g}_h`} type="number" min={0} defaultValue={game?.homeScore ?? ""} className="input px-2 py-1 text-center" placeholder="H" aria-label={`${homeName} game ${g}`} />
                           <span className="text-slate-300">–</span>
-                          <input name={`l${line}_g${g}_a`} type="number" min={0} defaultValue={game?.awayScore ?? ""} className="input px-2 py-1 text-center" placeholder="A" />
+                          <input name={`l${line}_g${g}_a`} type="number" min={0} defaultValue={game?.awayScore ?? ""} className="input px-2 py-1 text-center" placeholder="A" aria-label={`${awayName} game ${g}`} />
                         </div>
                       );
                     })}
@@ -141,7 +169,8 @@ export default async function FixtureDetail({
               );
             })}
           </div>
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex items-center justify-between">
+            <span className="text-xs text-slate-400">Left = {homeName} · Right = {awayName}</span>
             <button className="btn-primary">{played ? "Update scores" : "Save scores & complete"}</button>
           </div>
         </form>
@@ -204,16 +233,15 @@ export default async function FixtureDetail({
   );
 }
 
-function LineupForm({
-  ticket, fixtureId, teamId, teamName, origin, roster, existing,
+function LineupFields({
+  teamId, teamName, origin, roster, existing, isHome,
 }: {
-  ticket: string;
-  fixtureId: string;
   teamId: string;
   teamName: string;
   origin: string;
   roster: RosterMember[];
   existing: { rank: number; playerAId: string; playerBId: string; combinedDupr: number | null }[];
+  isHome: boolean;
 }) {
   const byRank = new Map(existing.map((p) => [p.rank, p]));
   const options = roster.map((m) => ({
@@ -222,13 +250,15 @@ function LineupForm({
   }));
 
   return (
-    <form method="POST" action="/api/console/league" className="card">
-      <input type="hidden" name="ticket" value={ticket} />
-      <input type="hidden" name="op" value="submitLineup" />
-      <input type="hidden" name="fixtureId" value={fixtureId} />
+    <div className="card">
+      {/* Repeated per team — the handler reads getAll("teamId") and each team's
+          own lu_<teamId>_* fields, so teams are saved independently. */}
       <input type="hidden" name="teamId" value={teamId} />
-      <div className="mb-1 flex items-center justify-between">
-        <h2 className="font-semibold text-slate-900">{teamName} line-up</h2>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h2 className="font-semibold text-slate-900">
+          {teamName} line-up
+          <span className="ml-2 badge bg-slate-100 text-slate-600">{isHome ? "Home" : "Away"}</span>
+        </h2>
         <span className={`badge ${origin === "PURE_ACADEMY" ? "bg-brand-100 text-brand-800" : "bg-amber-100 text-amber-800"}`}>
           {origin === "PURE_ACADEMY" ? "by team rank" : "by combined DUPR"}
         </span>
@@ -246,11 +276,11 @@ function LineupForm({
               <span className="w-12 text-xs font-medium text-slate-500">
                 {line === 4 ? "Exh." : `Line ${line}`}
               </span>
-              <select name={`line${line}_a`} defaultValue={ex?.playerAId ?? ""} className="input py-1 text-sm">
+              <select name={`lu_${teamId}_${line}_a`} defaultValue={ex?.playerAId ?? ""} className="input py-1 text-sm">
                 <option value="">—</option>
                 {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
-              <select name={`line${line}_b`} defaultValue={ex?.playerBId ?? ""} className="input py-1 text-sm">
+              <select name={`lu_${teamId}_${line}_b`} defaultValue={ex?.playerBId ?? ""} className="input py-1 text-sm">
                 <option value="">—</option>
                 {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
@@ -258,9 +288,6 @@ function LineupForm({
           );
         })}
       </div>
-      <div className="mt-3 flex justify-end">
-        <button className="btn-secondary text-sm">Submit line-up</button>
-      </div>
-    </form>
+    </div>
   );
 }
