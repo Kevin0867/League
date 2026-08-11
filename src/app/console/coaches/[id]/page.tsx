@@ -68,6 +68,28 @@ export default async function EditCoachPage({
         title={`Edit coach — ${person.firstName} ${person.lastName}`}
         subtitle="Update certification, availability, and contact on this coach's behalf."
       />
+
+      {coach && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Public coaches page</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {coach.publishedOnSite
+                ? "Shown on the public /coaches page."
+                : "Hidden from the public /coaches page. Publish only coaches confirmed for the season."}
+            </p>
+          </div>
+          <form method="POST" action="/api/console/coaches">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="togglePublish" />
+            <input type="hidden" name="personId" value={person.id} />
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <button className={coach.publishedOnSite ? "btn-secondary text-sm" : "btn-primary text-sm"}>
+              {coach.publishedOnSite ? "Hide from site" : "Publish to site"}
+            </button>
+          </form>
+        </div>
+      )}
       <Link href="/console/coaches" className="text-sm text-slate-500 hover:underline">← Back to coaches</Link>
       {ok === "account" && (
         <div className="rounded-lg bg-accent-50 px-4 py-3 text-sm text-accent-800">

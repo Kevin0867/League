@@ -18,14 +18,27 @@ const CREATABLE_ROLES: Role[] = ["ADMIN", "COACH"];
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
-  const back = (qs: string) =>
-    NextResponse.redirect(new URL(`/console/coaches${qs}`, origin), 303);
-
   const formData = await req.formData();
+  const rawReturn = String(formData.get("returnTo") ?? "");
+  const returnBase = rawReturn.startsWith("/console/coaches") ? rawReturn : "/console/coaches";
+  const back = (qs: string) =>
+    NextResponse.redirect(new URL(`${returnBase}${qs}`, origin), 303);
+
   const actor = await actorFromForm(formData);
   const op = String(formData.get("op") ?? "");
 
   switch (op) {
+    // Show/hide a coach on the public /coaches page.
+    case "togglePublish": {
+      if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      const coach = await prisma.coach.findUnique({ where: { personId } });
+      if (!coach) return back("?err=notfound");
+      await prisma.coach.update({ where: { id: coach.id }, data: { publishedOnSite: !coach.publishedOnSite } });
+      await audit({ actorId: actor.userId, entityType: "Coach", entityId: coach.id, action: "coach.publishToggle", summary: coach.publishedOnSite ? "Unpublished from /coaches" : "Published to /coaches" });
+      return back("?ok=publish");
+    }
+
     case "create": {
       if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
 

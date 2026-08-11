@@ -85,6 +85,37 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Coaching — the differentiator, above the season details */}
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-16">
+          <div className="grid items-center gap-8 lg:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-800 to-brand-950 shadow-lg ring-1 ring-black/5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/coaches/stephanie-newton-mlp.jpg"
+                alt="Stephanie Newton — Phoenix Firebirds, Major League Pickleball"
+                className="aspect-[4/3] w-full object-cover"
+              />
+            </div>
+            <div>
+              <p className="eyebrow">Coaching</p>
+              <h2 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">
+                Directed by a <em className="text-accent-600">professional</em>
+              </h2>
+              <p className="mt-4 text-slate-600">
+                PURE Academy is led by <span className="font-semibold text-slate-800">Stephanie Newton</span> —
+                a Phoenix Firebirds professional in Major League Pickleball&apos;s Champions Series, RPO Level 1 and
+                Level 2 certified, competing at the top of the sport during the same season she is coaching it.
+              </p>
+              <p className="mt-3 text-sm text-slate-500">
+                Every coach completes a background check and PURE curriculum training before Week 1 — without exception.
+              </p>
+              <Link href="/coaches" className="btn-secondary mt-6 inline-block">Meet the coaches</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* What the season includes */}
       <section className="mx-auto max-w-6xl px-4 py-16">
         <p className="eyebrow">The season</p>

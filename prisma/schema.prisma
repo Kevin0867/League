@@ -354,6 +354,11 @@ model Coach {
   /// Pro Coach / Assistant differentiate payout rate (§9)
   isProCoach          Boolean   @default(false)
 
+  /// Show this coach on the public /coaches page. Off by default — publish only
+  /// coaches confirmed for the season, not the full prospective roster (§ build
+  /// list item 2).
+  publishedOnSite     Boolean   @default(false)
+
   /// Secret token for the coach's personal calendar subscription feed
   /// (/api/calendar/<token>) — a URL they add to their phone's calendar so
   /// their practices, matches, and lessons stay in sync automatically.
