@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export type SeasonOpt = { id: string; name: string; divisions: { id: string; name: string }[] };
+export type SeasonOpt = { id: string; name: string; program?: string; divisions: { id: string; name: string }[] };
 type FacilityOpt = { id: string; name: string };
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];

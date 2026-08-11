@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
-import { FacilityForm } from "./FacilityForm";
+import { FacilityForm, DeleteFacilityButton } from "./FacilityForm";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +37,20 @@ export default async function FacilitiesPage({
 
   return (
     <div className="space-y-6">
-      {(sp.ok === "edited" || sp.added) && (
+      {(sp.ok === "edited" || sp.ok === "deleted" || sp.added) && (
         <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800">
-          {sp.ok === "edited" ? "Facility updated." : "Facility added."}
+          {sp.ok === "edited" ? "Facility updated." : sp.ok === "deleted" ? "Facility removed." : "Facility added."}
         </div>
       )}
       {sp.err && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">
-          {sp.err === "auth" ? "Not authorized to manage facilities." : "Please check the required fields."}
+          {sp.err === "auth"
+            ? "Not authorized to manage facilities."
+            : sp.err === "inuse"
+            ? "That facility is used by teams or sessions and can't be removed."
+            : sp.err === "notfound"
+            ? "Facility not found."
+            : "Please check the required fields."}
         </div>
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -109,7 +115,7 @@ export default async function FacilitiesPage({
                   />
                 </dl>
 
-                <div className="border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                   <FacilityForm
                     ticket={ticket}
                     facility={{
@@ -121,6 +127,11 @@ export default async function FacilitiesPage({
                       generalArea: f.generalArea, exactAddress: f.exactAddress,
                       alaCarteAllowed: f.alaCarteAllowed, acpLeagueOption: f.acpLeagueOption,
                     }}
+                  />
+                  <DeleteFacilityButton
+                    facilityId={f.id}
+                    ticket={ticket}
+                    inUse={f._count.teams > 0 || f._count.sessions > 0}
                   />
                 </div>
               </div>

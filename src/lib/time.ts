@@ -32,18 +32,36 @@ export function formatDayTime12(day: string | null | undefined, time: string | n
   return day || t || "";
 }
 
+// The academy operates in Arizona (no DST). True timestamps (createdAt,
+// publishedAt, scheduled times, message times) display in this zone so a
+// late-evening action doesn't read as the next calendar day the way UTC would.
+export const BUSINESS_TZ = process.env.BUSINESS_TZ || "America/Phoenix";
+
 // US date formatting for all user-facing DISPLAYS (MM/DD/YYYY). Note: <input
 // type="date"> values must stay ISO "YYYY-MM-DD" — the control requires it —
 // so keep .toISOString().slice(0,10) for defaultValue, and use these only for
 // text people read.
+//
+// formatDate is for calendar DATES (season start/end, DOB, registration dates)
+// which are stored at midnight UTC — render in UTC so the stored day never
+// shifts by a timezone. For a true timestamp shown as a bare date (e.g.
+// "published on …") use formatStamp instead.
 export function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "";
   const dt = typeof d === "string" ? new Date(d) : d;
   if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
-  return dt.toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return dt.toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "UTC" });
 }
 
-/** MM/DD/YYYY, h:MM AM/PM (e.g. "09/14/2026, 6:00 PM"). */
+/** MM/DD/YYYY for a true instant, in the academy's local timezone. */
+export function formatStamp(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  return dt.toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: BUSINESS_TZ });
+}
+
+/** MM/DD/YYYY, h:MM AM/PM (e.g. "09/14/2026, 6:00 PM") — in the academy's timezone. */
 export function formatDateTime12(d: Date | string | null | undefined): string {
   if (!d) return "";
   const dt = typeof d === "string" ? new Date(d) : d;
@@ -51,6 +69,7 @@ export function formatDateTime12(d: Date | string | null | undefined): string {
   return dt.toLocaleString("en-US", {
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "numeric", minute: "2-digit", hour12: true,
+    timeZone: BUSINESS_TZ,
   });
 }
 

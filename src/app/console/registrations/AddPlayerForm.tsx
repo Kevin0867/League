@@ -3,9 +3,9 @@
 import { useState } from "react";
 import type { SeasonOpt } from "@/app/console/teams/TeamCreateForm";
 
-export function AddPlayerForm({ ticket, seasons }: { ticket: string; seasons: SeasonOpt[] }) {
+export function AddPlayerForm({ ticket, seasons, defaultSeasonId }: { ticket: string; seasons: SeasonOpt[]; defaultSeasonId?: string }) {
   const [open, setOpen] = useState(false);
-  const [seasonId, setSeasonId] = useState(seasons[0]?.id ?? "");
+  const [seasonId, setSeasonId] = useState(defaultSeasonId || seasons[0]?.id || "");
 
   if (!open) {
     return <button onClick={() => setOpen(true)} className="btn-primary">+ Add player</button>;
@@ -47,7 +47,9 @@ export function AddPlayerForm({ ticket, seasons }: { ticket: string; seasons: Se
           <label className="label">Season</label>
           <select name="seasonId" value={seasonId} onChange={(e) => setSeasonId(e.target.value)} className="input" required>
             {seasons.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+              <option key={s.id} value={s.id}>
+                {s.name}{s.program === "ACP" ? " · ACP league" : s.program === "PURE_ACADEMY" ? " · PURE Academy" : ""}
+              </option>
             ))}
           </select>
         </div>

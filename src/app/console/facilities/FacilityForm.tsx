@@ -158,3 +158,33 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
     </form>
   );
 }
+
+export function DeleteFacilityButton({
+  facilityId,
+  ticket,
+  inUse,
+}: {
+  facilityId: string;
+  ticket: string;
+  inUse: boolean;
+}) {
+  if (inUse) {
+    return (
+      <span className="text-xs text-slate-400" title="Facilities used by teams or sessions can't be deleted.">
+        In use — can&apos;t remove
+      </span>
+    );
+  }
+  return (
+    <form
+      method="POST"
+      action="/api/console/facilities"
+      onSubmit={(e) => { if (!confirm("Remove this facility? This can't be undone.")) e.preventDefault(); }}
+    >
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="delete" />
+      <input type="hidden" name="facilityId" value={facilityId} />
+      <button className="text-xs text-rose-600 hover:underline">Remove</button>
+    </form>
+  );
+}

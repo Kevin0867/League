@@ -25,6 +25,29 @@ export async function POST(req: Request) {
   if (!actor || !can(actor.role, "manageFacilities")) return back("?err=auth");
 
   const op = String(formData.get("op") ?? "create");
+
+  // Delete — only when nothing references the facility (teams, sessions, court
+  // blocks, blackouts, statements). The name field isn't submitted for a delete,
+  // so this is handled before the create/edit name requirement.
+  if (op === "delete") {
+    const facilityId = String(formData.get("facilityId") ?? "");
+    if (!facilityId) return back("?err=notfound");
+    const f = await prisma.facility.findUnique({
+      where: { id: facilityId },
+      select: { name: true, _count: { select: { teams: true, sessions: true } } },
+    });
+    if (!f) return back("?err=notfound");
+    if (f._count.teams > 0 || f._count.sessions > 0) return back("?err=inuse");
+    try {
+      await prisma.facility.delete({ where: { id: facilityId } });
+    } catch {
+      // Any remaining FK reference (court blocks, blackouts, statements) blocks it.
+      return back("?err=inuse");
+    }
+    await audit({ actorId: actor.userId, entityType: "Facility", entityId: facilityId, action: "facility.delete", summary: `Deleted facility ${f.name}` });
+    return back("?ok=deleted");
+  }
+
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return back("?err=name");
 

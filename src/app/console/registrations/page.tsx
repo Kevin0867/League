@@ -41,7 +41,15 @@ export default async function RegistrationsPage({
     orderBy: [{ active: "desc" }, { startDate: "desc" }],
     include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
   });
-  const seasons = seasonRows.map((s) => ({ id: s.id, name: s.name, divisions: s.divisions }));
+  const seasons = seasonRows.map((s) => ({ id: s.id, name: s.name, program: s.program, divisions: s.divisions }));
+  // Default the Add-a-player form to the active PURE Academy registration season
+  // — never an ACP league or another season that merely sorts first.
+  const defaultSeasonId =
+    seasonRows.find((s) => s.active && s.program === "PURE_ACADEMY")?.id ??
+    seasonRows.find((s) => s.program === "PURE_ACADEMY")?.id ??
+    seasonRows.find((s) => s.active)?.id ??
+    seasonRows[0]?.id ??
+    "";
 
   const q = (sp.q ?? "").trim();
   const searchWhere = q
@@ -122,7 +130,7 @@ export default async function RegistrationsPage({
             <span className={counts.noWaiver ? "text-amber-600 font-medium" : ""}>{counts.noWaiver} without waiver</span>
           </p>
         </div>
-        <AddPlayerForm ticket={ticket} seasons={seasons} />
+        <AddPlayerForm ticket={ticket} seasons={seasons} defaultSeasonId={defaultSeasonId} />
       </div>
 
       {/* Search by name, email, or phone */}

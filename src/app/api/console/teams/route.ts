@@ -198,11 +198,11 @@ export async function POST(req: Request) {
     case "publishTeam": {
       const team = await prisma.team.findUnique({
         where: { id: teamId },
-        include: { facility: true },
+        include: { facility: true, _count: { select: { members: true } } },
       });
       if (!team) return back("?err=notfound");
 
-      // Publication gate (§4): complete team + executed facility agreement.
+      // Publication gate (§4): complete team + roster minimum + executed facility agreement.
       const gate = canPublishTeam(team, team.facility);
       if (!gate.ok) return back("?err=publish");
 

@@ -54,15 +54,25 @@ export function rosterStatus(playerCount: number, coachPlays: boolean) {
 }
 
 /**
- * Team publication gate (§4): a team cannot be published to families until its
- * facility agreement is executed.
+ * Team publication gate (§4): a team cannot be published to families until it is
+ * complete, its roster meets the minimum (§2), and its facility agreement is
+ * executed. `playerCount` is the roster size (excluding a playing coach, which
+ * rosterStatus adds back).
  */
 export function canPublishTeam(
   team: TeamLike,
-  facility: FacilityAgreement
+  facility: FacilityAgreement,
+  playerCount = team._count?.members ?? 0
 ): { ok: boolean; reason?: string } {
   if (!isTeamComplete(team)) {
     return { ok: false, reason: `Missing: ${teamMissingFields(team).join(", ")}` };
+  }
+  const roster = rosterStatus(playerCount, team.coachPlays);
+  if (!roster.meetsMinimum) {
+    return {
+      ok: false,
+      reason: `Roster below the minimum of ${TEAM_MIN} — add ${roster.needed} more player${roster.needed === 1 ? "" : "s"} before publishing.`,
+    };
   }
   if (!facility || facility.agreementStatus !== "EXECUTED") {
     return {

@@ -206,7 +206,11 @@ export function StandardDivisionsButton({ seasonId, ticket }: { seasonId: string
 
 export function DeleteDivisionButton({ divisionId, ticket }: { divisionId: string; ticket: string }) {
   return (
-    <form method="POST" action="/api/console/setup">
+    <form
+      method="POST"
+      action="/api/console/setup"
+      onSubmit={(e) => { if (!confirm("Remove this division? This can't be undone.")) e.preventDefault(); }}
+    >
       <input type="hidden" name="ticket" value={ticket} />
       <input type="hidden" name="op" value="deleteDivision" />
       <input type="hidden" name="divisionId" value={divisionId} />

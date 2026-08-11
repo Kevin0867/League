@@ -45,14 +45,18 @@ export default async function TeamBuildBoard({
 
   const ready = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const published = teams.filter((t) => t.published).length;
-  const anyRosterMin = teams.some((t) => rosterStatus(t._count.members, t.coachPlays).meetsMinimum);
+  const buildingCount = teams.filter((t) => teamMissingFields(t).length > 0).length;
+  const belowMin = teams.filter((t) => !rosterStatus(t._count.members, t.coachPlays).meetsMinimum).length;
   const readyToPublish = teams.filter((t) => canPublishTeam(t, t.facility).ok && !t.published).length;
+  const allPublished = teams.length > 0 && teams.every((t) => t.published);
 
+  // Steps use "every" semantics so the checklist reflects the true state of ALL
+  // teams — not just whether at least one team reached each milestone.
   const steps = [
     { done: teams.length > 0, label: "Create your first team", href: null, cta: "Create a team below" },
-    { done: teams.some((t) => teamMissingFields(t).length === 0), label: "Complete each team (division, coach, facility, day/time)", href: null, cta: "" },
-    { done: anyRosterMin, label: `Fill rosters to the minimum (${TEAM_MIN})`, href: "/console/board", cta: "Assignment board" },
-    { done: published > 0, label: "Publish ready teams to families", href: null, cta: "" },
+    { done: teams.length > 0 && buildingCount === 0, label: "Complete each team (division, coach, facility, day/time)", href: null, cta: "" },
+    { done: teams.length > 0 && belowMin === 0, label: `Fill every roster to the minimum (${TEAM_MIN})`, href: "/console/board", cta: "Assignment board" },
+    { done: allPublished, label: "Publish ready teams to families", href: null, cta: "" },
   ];
   const nextStep = steps.find((s) => !s.done);
 
