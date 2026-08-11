@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
+import { accrueFamilySeasonFee } from "@/lib/payments/familyFee";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
 
 // Team mutations as native-form-POST route handlers with ticket auth. Route
@@ -227,8 +228,11 @@ export async function POST(req: Request) {
 
       const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
       const feeCents = rate?.seasonFeeCents ?? 49500;
+      const seasonName = team.season?.name ?? "Season";
 
-      let created = 0;
+      // Roll every newly-billed player up to their household invoice, then email
+      // each affected paying adult ONCE with the family total (not per player).
+      const affected = new Map<string, string>(); // payerId → paymentId (latest)
       for (const m of team.members) {
         // Skip coach-players and anyone with a fee-waived registration this season.
         const reg = await prisma.registration.findFirst({
@@ -236,44 +240,27 @@ export async function POST(req: Request) {
         });
         if (reg?.feeWaived || m.roleOnTeam === "COACH_PLAYER") continue;
 
-        const existing = await prisma.payment.findFirst({
-          where: {
-            partyId: m.personId,
-            seasonId: team.seasonId,
-            category: "PLAYER_FEE",
-            status: { in: ["REQUESTED", "PENDING", "PAID"] },
-          },
-        });
-        if (existing) continue;
+        const res = await accrueFamilySeasonFee({ playerId: m.personId, seasonId: team.seasonId, feeCents, seasonName });
+        if (res) affected.set(res.payerId, res.paymentId);
+      }
 
-        const description = `${team.season?.name ?? "Season"} fee — ${team.name}`;
-        const payment = await prisma.payment.create({
-          data: {
-            direction: "IN",
-            partyId: m.personId,
-            amountCents: feeCents,
-            method: "STRIPE",
-            status: "REQUESTED",
-            category: "PLAYER_FEE",
-            seasonId: team.seasonId,
-            description,
-          },
-        });
-        created++;
-
-        // Triggered "payment request" message (§13) — player + parents, after
-        // assignment. Branded HTML with pay-in-full / 3-payment CTAs (§8).
+      for (const [payerId, paymentId] of affected) {
+        const [payer, payment] = await Promise.all([
+          prisma.person.findUnique({ where: { id: payerId } }),
+          prisma.payment.findUnique({ where: { id: paymentId } }),
+        ]);
+        if (!payer || !payment) continue;
         const email = paymentRequestEmail({
-          name: m.person.firstName,
-          amountCents: feeCents,
-          description,
+          name: payer.firstName,
+          amountCents: payment.amountCents,
+          description: payment.description ?? `${seasonName} season fee`,
           paymentId: payment.id,
         });
         await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
-          audienceRef: m.personId,
+          audienceRef: payerId,
           channels: ["IN_APP", "EMAIL"],
           triggerType: "PAYMENT_REQUEST",
           subject: email.subject,
@@ -287,7 +274,7 @@ export async function POST(req: Request) {
         entityType: "Team",
         entityId: teamId,
         action: "REQUEST_PAYMENT",
-        summary: `Requested season fee from ${created} player(s)`,
+        summary: `Requested season fee for ${affected.size} household(s)`,
       });
 
       return back("?ok=requestSeasonFees");

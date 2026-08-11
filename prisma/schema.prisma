@@ -574,6 +574,11 @@ model Payment {
   installmentsPaid Int    @default(0)
   installmentsTotal Int?
 
+  /// For a consolidated family season-fee invoice: the player personIds this one
+  /// payment covers (partyId is the paying adult). Null on legacy single-player
+  /// payments, which implicitly cover just their partyId.
+  coveredPersonIds Json?
+
   description   String?
   paidAt        DateTime?
   createdAt     DateTime @default(now())

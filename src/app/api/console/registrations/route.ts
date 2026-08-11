@@ -13,6 +13,7 @@ import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
+import { accrueFamilySeasonFee } from "@/lib/payments/familyFee";
 
 // Console registration actions: add a walk-in player, and per-registrant roster
 // quick-actions (assign/move to a team, send back to the pool, request the
@@ -218,28 +219,32 @@ export async function POST(req: Request) {
     }
 
     // Request the season fee from this one player (single-person version of §8).
+    // Rolls up to the household invoice so a family sees one consolidated total.
     case "requestFee": {
       if (!reg) return back("?err=fields");
       const person = await prisma.person.findUnique({ where: { id: personId } });
       if (!person) return back("?err=fields");
-      const existing = await prisma.payment.findFirst({
-        where: { partyId: personId, seasonId: reg.seasonId, category: "PLAYER_FEE", status: { in: ["REQUESTED", "PENDING", "PAID"] } },
-      });
-      if (existing) return back("?ok=feeexists");
 
       const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
       const feeCents = rate?.seasonFeeCents ?? 49500;
       const season = await prisma.season.findUnique({ where: { id: reg.seasonId } });
-      const description = `${season?.name ?? "Season"} fee`;
-      const payment = await prisma.payment.create({
-        data: { direction: "IN", partyId: personId, amountCents: feeCents, method: "STRIPE", status: "REQUESTED", category: "PLAYER_FEE", seasonId: reg.seasonId, description },
-      });
-      const email = paymentRequestEmail({ name: person.firstName, amountCents: feeCents, description, paymentId: payment.id });
-      await dispatchMessage({
-        senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
-        channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
-      });
-      await audit({ actorId: actor.userId, entityType: "Payment", entityId: payment.id, action: "REQUESTED", summary: "Fee requested" });
+      const seasonName = season?.name ?? "Season";
+
+      const res = await accrueFamilySeasonFee({ playerId: personId, seasonId: reg.seasonId, feeCents, seasonName });
+      if (!res) return back("?ok=feeexists");
+
+      const [payer, payment] = await Promise.all([
+        prisma.person.findUnique({ where: { id: res.payerId } }),
+        prisma.payment.findUnique({ where: { id: res.paymentId } }),
+      ]);
+      if (payer && payment) {
+        const email = paymentRequestEmail({ name: payer.firstName, amountCents: payment.amountCents, description: payment.description ?? `${seasonName} season fee`, paymentId: payment.id });
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: res.payerId,
+          channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        });
+      }
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: res.paymentId, action: "REQUESTED", summary: "Fee requested (household invoice)" });
       return back("?ok=fee");
     }
 

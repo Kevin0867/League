@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/stripe";
 import { formatCents } from "@/lib/money";
 import { sendEmail } from "@/lib/notify";
+import { coveredIds } from "@/lib/payments/familyFee";
 
 // Shared payment-confirmation content for the thank-you page and the emailed
 // receipt, so the two never drift. Support contact and the second logo are
@@ -73,19 +74,23 @@ export async function loadReceipt(paymentId: string): Promise<Receipt | null> {
   });
   if (!payment) return null;
 
-  const registrations = payment.partyId
+  // A consolidated family invoice covers several players; list every enrollment
+  // it pays for. Legacy single-player payments cover just their partyId.
+  const covered = coveredIds(payment);
+  const registrations = covered.length
     ? await prisma.registration.findMany({
         where: {
-          personId: payment.partyId,
+          personId: { in: covered },
           ...(payment.seasonId ? { seasonId: payment.seasonId } : {}),
         },
-        include: { division: true, season: true },
+        include: { division: true, season: true, person: true },
         orderBy: { createdAt: "asc" },
       })
     : [];
 
+  const multi = new Set(registrations.map((r) => r.personId)).size > 1;
   const items: ReceiptItem[] = registrations.map((r) => ({
-    division: r.division?.name ?? "Academy",
+    division: multi ? `${r.person.firstName} — ${r.division?.name ?? "Academy"}` : (r.division?.name ?? "Academy"),
     program: r.season?.program === "ACP" ? "Arizona Club Pickleball" : "PURE Academy",
   }));
 
