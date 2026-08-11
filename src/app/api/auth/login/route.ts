@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyPassword, signSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
-import type { Role } from "@/lib/enums";
+import { effectiveRoles, primaryRole } from "@/lib/enums";
 
 // Session login via a route handler so the Set-Cookie is reliably emitted
 // (server actions can drop it on the deployed runtime). Includes brute-force
@@ -45,14 +45,16 @@ export async function POST(req: Request) {
   });
 
   const name = user.person ? `${user.person.firstName} ${user.person.lastName}` : user.email;
+  const roles = effectiveRoles(user);
   const token = await signSession({
     userId: user.id,
     email: user.email,
-    role: user.role as Role,
+    role: primaryRole(roles),
+    roles,
     personId: user.personId ?? null,
     name,
   });
-  const res = to(isStaff(user.role as Role) ? "/console" : "/portal");
+  const res = to(isStaff(roles) ? "/console" : "/portal");
   res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
   return res;
 }

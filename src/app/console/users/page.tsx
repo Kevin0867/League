@@ -2,7 +2,13 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { TableFilter } from "@/components/TableFilter";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
-import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, type Role } from "@/lib/enums";
+import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, effectiveRoles, type Role } from "@/lib/enums";
+
+// De-duplicated, human labels for a role set (legacy COO/CEO/DIRECTOR all show
+// as "Admin", so collapse duplicates).
+function roleLabels(roles: Role[]): string[] {
+  return [...new Set(roles.map((r) => ROLE_LABELS[r] ?? r))];
+}
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +34,7 @@ export default async function UsersPage({
   const sp = await searchParams;
   const session = await getSession();
   const ticket = await mintConsoleTicket();
-  const isAdmin = ADMIN_ROLES.includes((session?.role ?? "") as never);
+  const isAdmin = (session?.roles ?? [session?.role]).some((r) => ADMIN_ROLES.includes((r ?? "") as never));
 
   const users = await prisma.user.findMany({
     include: { person: true },
@@ -97,15 +103,27 @@ export default async function UsersPage({
                   <td className="hidden px-4 py-3 text-slate-500 sm:table-cell">{u.email}</td>
                   <td className="px-4 py-3">
                     {locked ? (
-                      <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">{ROLE_LABELS[u.role as Role] ?? u.role}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {roleLabels(effectiveRoles(u)).map((label) => (
+                          <span key={label} className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">{label}</span>
+                        ))}
+                      </div>
                     ) : (
-                      <form method="POST" action="/api/console/users" className="flex items-center gap-2">
+                      <form method="POST" action="/api/console/users" className="flex flex-wrap items-center gap-2">
                         <input type="hidden" name="ticket" value={ticket} />
-                        <input type="hidden" name="op" value="setRole" />
+                        <input type="hidden" name="op" value="setRoles" />
                         <input type="hidden" name="userId" value={u.id} />
-                        <select name="role" defaultValue={u.role} className="input py-1 text-sm">
-                          {assignable.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-                        </select>
+                        <div className="flex flex-wrap gap-2">
+                          {assignable.map((r) => {
+                            const checked = effectiveRoles(u).includes(r);
+                            return (
+                              <label key={r} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                                <input type="checkbox" name="roles" value={r} defaultChecked={checked} className="h-3.5 w-3.5" />
+                                {ROLE_LABELS[r]}
+                              </label>
+                            );
+                          })}
+                        </div>
                         <button className="btn-secondary text-xs">Save</button>
                       </form>
                     )}

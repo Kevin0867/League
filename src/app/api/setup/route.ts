@@ -33,6 +33,7 @@ export async function POST(req: Request) {
     userId: user.id,
     email: user.email,
     role: "ADMIN",
+    roles: ["ADMIN"],
     personId: person.id,
     name: `${firstName} ${lastName}`,
   });

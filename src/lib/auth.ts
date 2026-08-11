@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
-import type { Role } from "./enums";
+import { effectiveRoles, primaryRole, type Role } from "./enums";
 
 const COOKIE = "pa_session";
 export const SESSION_COOKIE = COOKIE;
@@ -32,7 +32,10 @@ export async function signSession(payload: SessionPayload): Promise<string> {
 export type SessionPayload = {
   userId: string;
   email: string;
+  /** Primary (highest-priority) role — kept for display and legacy checks. */
   role: Role;
+  /** The user's full effective role set (union of primary + extra roles). */
+  roles: Role[];
   personId: string | null;
   name: string;
 };
@@ -50,6 +53,8 @@ export type SessionPayload = {
 export type ActionTicket = {
   userId: string;
   role: Role;
+  /** Full effective role set — so multi-role admins keep their union on POSTs. */
+  roles?: Role[];
   scope: string;
 };
 
@@ -75,6 +80,7 @@ export async function verifyActionTicket(
     return {
       userId: String(payload.userId),
       role: payload.role as Role,
+      roles: Array.isArray(payload.roles) ? (payload.roles as Role[]) : undefined,
       scope: String(payload.scope),
     };
   } catch {
@@ -95,17 +101,17 @@ const CONSOLE_SCOPE = "console";
 export async function mintConsoleTicket(): Promise<string> {
   const s = await getSession();
   return s
-    ? signActionTicket({ userId: s.userId, role: s.role, scope: CONSOLE_SCOPE })
+    ? signActionTicket({ userId: s.userId, role: s.role, roles: s.roles, scope: CONSOLE_SCOPE })
     : "";
 }
 
 export async function actorFromForm(
   formData: FormData
-): Promise<{ userId: string; role: Role } | null> {
+): Promise<{ userId: string; role: Role; roles: Role[] } | null> {
   const t = await verifyActionTicket(formData.get("ticket")?.toString(), CONSOLE_SCOPE);
-  if (t) return { userId: t.userId, role: t.role };
+  if (t) return { userId: t.userId, role: t.role, roles: t.roles ?? [t.role] };
   const s = await getSession();
-  return s ? { userId: s.userId, role: s.role } : null;
+  return s ? { userId: s.userId, role: s.role, roles: s.roles ?? [s.role] } : null;
 }
 
 export async function hashPassword(pw: string) {
@@ -144,7 +150,10 @@ export async function getSession(): Promise<SessionPayload | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret);
-    return payload as unknown as SessionPayload;
+    const s = payload as unknown as SessionPayload;
+    // Backfill roles for tokens minted before multi-role support.
+    if (!Array.isArray(s.roles) || s.roles.length === 0) s.roles = [s.role];
+    return s;
   } catch {
     return null;
   }
@@ -172,10 +181,12 @@ export async function authenticate(
     ? `${user.person.firstName} ${user.person.lastName}`
     : user.email;
 
+  const roles = effectiveRoles(user);
   return {
     userId: user.id,
     email: user.email,
-    role: user.role as Role,
+    role: primaryRole(roles),
+    roles,
     personId: user.personId ?? null,
     name,
   };

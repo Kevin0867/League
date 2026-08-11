@@ -37,8 +37,12 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
-  /// Role: COO | CEO | DIRECTOR | COACH | PLAYER | PARENT  (see enums.ts)
+  /// Primary role: COO | CEO | DIRECTOR | COACH | PLAYER | PARENT  (see enums.ts)
   role         String   @default("PLAYER")
+  /// Additional roles held alongside the primary one (e.g. an admin who also
+  /// coaches, a parent who also coaches). Effective access is the union; the
+  /// primary `role` is the highest-priority of the set. See enums.effectiveRoles.
+  extraRoles   String[] @default([])
   personId     String?  @unique
   person       Person?  @relation(fields: [personId], references: [id])
   active       Boolean  @default(true)

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm, hashPassword } from "@/lib/auth";
 import { can } from "@/lib/rbac";
-import { ASSIGNABLE_ROLES } from "@/lib/enums";
+import { ASSIGNABLE_ROLES, splitRoles, type Role } from "@/lib/enums";
 import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
 import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
       const role = String(fd.get("role") ?? "");
       if (!ASSIGNABLE.includes(role)) return back("?err=role");
 
-      await prisma.user.update({ where: { id: userId }, data: { role } });
+      await prisma.user.update({ where: { id: userId }, data: { role, extraRoles: [] } });
 
       // Granting COACH: make sure a Coach profile exists to fill out.
       if (role === "COACH" && target.personId) {
@@ -78,6 +78,25 @@ export async function POST(req: Request) {
         if (!existing) await prisma.coach.create({ data: { personId: target.personId } });
       }
       await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.setRole", summary: `Role → ${role}` });
+      return back("?ok=role");
+    }
+
+    // Multi-role: assign a set of roles at once (an admin who also coaches, a
+    // parent who also coaches, …). Access is the union; the highest-priority
+    // role becomes the primary.
+    case "setRoles": {
+      const chosen = fd.getAll("roles").map(String).filter((r) => ASSIGNABLE.includes(r)) as Role[];
+      if (chosen.length === 0) return back("?err=role");
+      const { role, extraRoles } = splitRoles(chosen);
+
+      await prisma.user.update({ where: { id: userId }, data: { role, extraRoles } });
+
+      // Any set that includes COACH needs a Coach profile to fill out.
+      if (chosen.includes("COACH") && target.personId) {
+        const existing = await prisma.coach.findUnique({ where: { personId: target.personId } });
+        if (!existing) await prisma.coach.create({ data: { personId: target.personId } });
+      }
+      await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.setRoles", summary: `Roles → ${chosen.join(", ")}` });
       return back("?ok=role");
     }
 

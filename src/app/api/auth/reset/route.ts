@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword, signSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { consumeResetToken } from "@/lib/passwordReset";
 import { isStaff } from "@/lib/rbac";
-import type { Role } from "@/lib/enums";
+import { effectiveRoles, primaryRole } from "@/lib/enums";
 
 // Complete a password reset: validate + consume the token, set the new password,
 // clear any lockout, and sign the user in.
@@ -32,14 +32,16 @@ export async function POST(req: Request) {
   });
 
   const name = user.person ? `${user.person.firstName} ${user.person.lastName}` : user.email;
+  const roles = effectiveRoles(user);
   const jwt = await signSession({
     userId: user.id,
     email: user.email,
-    role: user.role as Role,
+    role: primaryRole(roles),
+    roles,
     personId: user.personId ?? null,
     name,
   });
-  const res = NextResponse.redirect(new URL(isStaff(user.role as Role) ? "/console" : "/portal", origin), 303);
+  const res = NextResponse.redirect(new URL(isStaff(roles) ? "/console" : "/portal", origin), 303);
   res.cookies.set(SESSION_COOKIE, jwt, sessionCookieOptions);
   return res;
 }

@@ -34,6 +34,31 @@ export const ASSIGNABLE_ROLES: Role[] = ["ADMIN", "COACH", "PLAYER", "PARENT"];
 export const STAFF_ROLES: Role[] = ["ADMIN", "COACH", "COO", "CEO", "DIRECTOR"];
 export const ADMIN_ROLES: Role[] = ["ADMIN", "COO", "CEO", "DIRECTOR"];
 
+// A person can hold several roles at once (e.g. an admin who also coaches, a
+// parent who also coaches). We store one primary `role` plus `extraRoles[]`;
+// the effective set is their union. When a single role must stand in for the
+// set (legacy checks, display), we pick the highest-priority one.
+export const ROLE_PRIORITY: Role[] = ["ADMIN", "COO", "CEO", "DIRECTOR", "COACH", "PARENT", "PLAYER"];
+
+/** The union of a user's primary role and any extra roles, de-duped. */
+export function effectiveRoles(user: { role: string; extraRoles?: string[] | null }): Role[] {
+  const set = new Set<string>([user.role, ...(user.extraRoles ?? [])].filter(Boolean));
+  return [...set] as Role[];
+}
+
+/** The highest-priority role in a set — the primary/display role. */
+export function primaryRole(roles: Role[]): Role {
+  for (const r of ROLE_PRIORITY) if (roles.includes(r)) return r;
+  return roles[0] ?? "PLAYER";
+}
+
+/** Normalize a chosen set of assignable roles into { role, extraRoles }. */
+export function splitRoles(roles: Role[]): { role: Role; extraRoles: Role[] } {
+  const uniq = [...new Set(roles)] as Role[];
+  const role = primaryRole(uniq);
+  return { role, extraRoles: uniq.filter((r) => r !== role) };
+}
+
 /// Markets (cities) the academy serves — the location options players rank on
 /// the registration form. Facility-specific assignments happen later.
 export const ACADEMY_MARKETS = ["Scottsdale", "Phoenix", "Gilbert", "Mesa"] as const;

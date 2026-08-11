@@ -30,15 +30,22 @@ export const CAN: Record<string, Role[]> = {
   viewOwnEarnings: [...ADMIN, "COACH"],
 };
 
-export function can(role: Role, action: keyof typeof CAN): boolean {
-  return CAN[action]?.includes(role) ?? false;
+// All role checks accept either a single role or a set (multi-role users).
+// With a set, access is granted if ANY held role satisfies the check.
+function asList(role: Role | Role[]): Role[] {
+  return Array.isArray(role) ? role : [role];
 }
 
-export function isStaff(role: Role) {
-  return STAFF_ROLES.includes(role);
+export function can(role: Role | Role[], action: keyof typeof CAN): boolean {
+  const allowed = CAN[action] ?? [];
+  return asList(role).some((r) => allowed.includes(r));
 }
-export function isAdmin(role: Role) {
-  return ADMIN_ROLES.includes(role);
+
+export function isStaff(role: Role | Role[]) {
+  return asList(role).some((r) => STAFF_ROLES.includes(r));
+}
+export function isAdmin(role: Role | Role[]) {
+  return asList(role).some((r) => ADMIN_ROLES.includes(r));
 }
 
 /** Require any authenticated session; redirect to /login otherwise. */
@@ -51,12 +58,12 @@ export async function requireUser(): Promise<SessionPayload> {
 /** Require a staff/admin console user. */
 export async function requireStaff(): Promise<SessionPayload> {
   const session = await requireUser();
-  if (!isStaff(session.role)) redirect("/portal");
+  if (!isStaff(session.roles ?? [session.role])) redirect("/portal");
   return session;
 }
 
 export async function requireAdmin(): Promise<SessionPayload> {
   const session = await requireUser();
-  if (!isAdmin(session.role)) redirect("/console");
+  if (!isAdmin(session.roles ?? [session.role])) redirect("/console");
   return session;
 }
