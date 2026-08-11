@@ -36,6 +36,7 @@ export function SiteFooter() {
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">League</div>
           <ul className="mt-2 space-y-1 text-sm text-slate-600">
+            <li><Link href="/teams" className="hover:text-brand-700 hover:underline">Our Teams</Link></li>
             <li><Link href="/standings" className="hover:text-brand-700 hover:underline">Standings</Link></li>
             <li><Link href="/schedule" className="hover:text-brand-700 hover:underline">Schedule</Link></li>
             <li><Link href="/acp" className="hover:text-brand-700 hover:underline">Play in ACP</Link></li>

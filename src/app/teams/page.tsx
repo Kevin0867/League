@@ -1,0 +1,110 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { PublicNav } from "@/components/PublicNav";
+import { SiteFooter } from "@/components/SiteFooter";
+import { prisma } from "@/lib/db";
+import { teamDisplayName, teamShortName, PURE_MARKETS } from "@/lib/domain/teamName";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: { absolute: "Our Teams — PURE Academy" },
+  description: "Every PURE Academy team across the Valley, by market and division.",
+  alternates: { canonical: "/teams" },
+};
+
+const COLOR_DOT: Record<string, string> = {
+  Blue: "bg-blue-500", Green: "bg-emerald-500", Red: "bg-rose-500",
+  Yellow: "bg-yellow-400", Orange: "bg-orange-500", Purple: "bg-purple-500",
+};
+
+export default async function TeamsPage() {
+  const teams = await prisma.team.findMany({
+    where: { club: "PURE", published: true },
+    include: { _count: { select: { members: true } } },
+    orderBy: [{ market: "asc" }, { divisionCode: "asc" }, { color: "asc" }],
+  });
+
+  // Club-wide record — numbers that only exist because the club is bigger than
+  // one team.
+  const markets = new Set(teams.map((t) => t.market).filter(Boolean));
+  const players = teams.reduce((n, t) => n + t._count.members, 0);
+  const [gamesPlayed, ratedPlayers] = await Promise.all([
+    prisma.fixture.count({ where: { status: "COMPLETED" } }),
+    prisma.person.count({ where: { duprVerified: true } }),
+  ]);
+
+  // Group by market, in the canonical market order.
+  const byMarket = new Map<string, typeof teams>();
+  for (const t of teams) {
+    const key = t.market ?? "Other";
+    (byMarket.get(key) ?? byMarket.set(key, []).get(key)!).push(t);
+  }
+  const orderedMarkets = [...PURE_MARKETS, "Other"].filter((m) => byMarket.has(m));
+
+  return (
+    <div>
+      <PublicNav />
+      <div className="mx-auto max-w-6xl px-4 py-12">
+        <p className="eyebrow">The club</p>
+        <h1 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">
+          One club, <em className="text-accent-600">every court</em>
+        </h1>
+        <p className="mt-2 max-w-2xl text-slate-600">
+          Every PURE Academy team across the Valley. A 2.5 beginner in Gilbert and a 5.0 competitor in Mesa play
+          for the same club.
+        </p>
+
+        {/* Club-wide record */}
+        <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Stat value={teams.length} label="Teams fielded" />
+          <Stat value={markets.size} label="Markets" />
+          <Stat value={players} label="Players" />
+          <Stat value={gamesPlayed > 0 ? gamesPlayed : ratedPlayers} label={gamesPlayed > 0 ? "Games played" : "DUPR-rated players"} />
+        </div>
+
+        {teams.length === 0 ? (
+          <p className="mt-10 rounded-lg border border-dashed border-slate-300 p-8 text-center text-slate-500">
+            Teams are published to families in Week 2. Check back soon.
+          </p>
+        ) : (
+          <div className="mt-10 space-y-8">
+            {orderedMarkets.map((market) => (
+              <section key={market}>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                  {market === "Other" ? "Other" : `PURE ${market}`}
+                </h2>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {byMarket.get(market)!.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                      <div>
+                        <div className="font-semibold text-slate-900">{teamDisplayName(t)}</div>
+                        <div className="text-xs text-slate-500">{teamShortName(t)} · {t._count.members} players</div>
+                      </div>
+                      {t.color && <span className={`h-4 w-4 shrink-0 rounded-full ${COLOR_DOT[t.color] ?? "bg-slate-300"}`} title={t.color} />}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+
+        <p className="mt-10 text-sm text-slate-500">
+          Following the league? See <Link href="/standings" className="text-brand-700 hover:underline">standings</Link> and{" "}
+          <Link href="/schedule" className="text-brand-700 hover:underline">schedule</Link>.
+        </p>
+      </div>
+      <SiteFooter />
+    </div>
+  );
+}
+
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+      <div className="text-3xl font-extrabold text-brand-900 tabular-nums">{value}</div>
+      <div className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
+    </div>
+  );
+}

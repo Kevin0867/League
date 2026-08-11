@@ -14,6 +14,7 @@ export async function PublicNav() {
         <nav className="hidden items-center gap-7 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-500 lg:flex">
           <Link href="/programs" className="hover:text-brand-900">Programs</Link>
           <Link href="/coaches" className="hover:text-brand-900">Coaches</Link>
+          <Link href="/teams" className="hover:text-brand-900">Teams</Link>
           <Link href="/clinics" className="hover:text-brand-900">Clinics</Link>
           <Link href="/locations" className="hover:text-brand-900">Locations</Link>
           <Link href="/standings" className="hover:text-brand-900">Standings</Link>
