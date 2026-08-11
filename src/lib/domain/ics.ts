@@ -67,18 +67,29 @@ function fold(line: string): string {
   return parts.join("\r\n");
 }
 
-export function buildIcs(calendarName: string, events: IcsEvent[], now = new Date()): string {
+export type IcsOptions = {
+  now?: Date;
+  /// PUBLISH (feed, default) or REQUEST (an emailed invite that asks to be added).
+  method?: "PUBLISH" | "REQUEST";
+  organizerEmail?: string;
+  attendeeEmail?: string;
+};
+
+export function buildIcs(calendarName: string, events: IcsEvent[], opts: IcsOptions = {}): string {
+  const method = opts.method ?? "PUBLISH";
+  const now = opts.now ?? new Date();
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//PURE Academy//Coach Calendar//EN",
     "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
+    `METHOD:${method}`,
     fold(`X-WR-CALNAME:${esc(calendarName)}`),
     fold(`NAME:${esc(calendarName)}`),
-    "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
-    "X-PUBLISHED-TTL:PT1H",
   ];
+  if (method === "PUBLISH") {
+    lines.push("REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H");
+  }
   const dtstamp = icsStamp(now);
   for (const e of events) {
     lines.push("BEGIN:VEVENT");
@@ -89,9 +100,32 @@ export function buildIcs(calendarName: string, events: IcsEvent[], now = new Dat
     lines.push(fold(`SUMMARY:${esc(e.summary)}`));
     if (e.location) lines.push(fold(`LOCATION:${esc(e.location)}`));
     if (e.description) lines.push(fold(`DESCRIPTION:${esc(e.description)}`));
+    if (opts.organizerEmail) lines.push(fold(`ORGANIZER;CN=PURE Academy:mailto:${opts.organizerEmail}`));
+    if (opts.attendeeEmail) {
+      lines.push(fold(`ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${opts.attendeeEmail}`));
+    }
+    if (method === "REQUEST") lines.push("SEQUENCE:0");
     lines.push(`STATUS:${e.cancelled ? "CANCELLED" : "CONFIRMED"}`);
     lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
   return lines.join("\r\n") + "\r\n";
+}
+
+/**
+ * A calendar-invite email attachment (METHOD:REQUEST) — mail clients render it
+ * as an event with Add/Accept, so it lands in the recipient's calendar.
+ */
+export function icsInvite(
+  calendarName: string,
+  events: IcsEvent[],
+  attendeeEmail: string,
+  organizerEmail = "team@purepickleball.com",
+): { filename: string; content: string; contentType: string } {
+  const ics = buildIcs(calendarName, events, { method: "REQUEST", organizerEmail, attendeeEmail });
+  return {
+    filename: "invite.ics",
+    content: Buffer.from(ics, "utf8").toString("base64"),
+    contentType: "text/calendar; method=REQUEST",
+  };
 }

@@ -42,16 +42,20 @@ export async function sendSms(to: string | null | undefined, body: string): Prom
   }
 }
 
+/** A file attached to an email (content is base64-encoded). */
+export type EmailAttachment = { filename: string; content: string; contentType?: string };
+
 /** Send an email via Resend's REST API (no SDK needed). */
 export async function sendEmail(
   to: string | null | undefined,
   subject: string,
   body: string,
-  html?: string
+  html?: string,
+  attachments?: EmailAttachment[]
 ): Promise<SendResult> {
   if (!to) return { ok: false, simulated: false, error: "no email on record" };
   if (!emailConfigured()) {
-    console.log(`[Email simulated] → ${to}: ${subject}`);
+    console.log(`[Email simulated] → ${to}: ${subject}${attachments?.length ? ` (+${attachments.length} attachment)` : ""}`);
     return { ok: true, simulated: true };
   }
   try {
@@ -71,6 +75,9 @@ export async function sendEmail(
         subject,
         text: body,
         ...(html ? { html } : {}),
+        ...(attachments?.length
+          ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, ...(a.contentType ? { content_type: a.contentType } : {}) })) }
+          : {}),
       }),
     });
     if (!res.ok) {

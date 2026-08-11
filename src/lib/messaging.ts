@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { sendSms, sendEmail } from "./notify";
+import { sendSms, sendEmail, type EmailAttachment } from "./notify";
 import { resolveAudience, type AudienceType } from "./domain/audience";
 
 // Central dispatcher (§13). Creates the Message, resolves the audience, writes a
@@ -21,6 +21,8 @@ export type DispatchInput = {
   body: string;
   /** Optional branded HTML for the EMAIL channel; `body` remains the text fallback. */
   html?: string;
+  /** Optional email attachments (e.g. an .ics calendar invite). */
+  attachments?: EmailAttachment[];
   triggerType?: string | null;
 };
 
@@ -64,7 +66,7 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     const failureReasons: string[] = [];
 
     if (channels.includes("EMAIL")) {
-      const res = await sendEmail(r.email, subject, input.body, input.html);
+      const res = await sendEmail(r.email, subject, input.body, input.html, input.attachments);
       emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`email: ${res.error}`);
     }

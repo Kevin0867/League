@@ -8,6 +8,9 @@ import { durationHours, isWeekend } from "@/lib/domain/finance";
 import { dispatchMessage } from "@/lib/messaging";
 import { lessonPaymentEmail } from "@/lib/payments/lessonPaymentEmail";
 import { formatClinicWhen } from "@/lib/domain/clinics";
+import { formatDate } from "@/lib/time";
+import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
+import { icsInvite, type IcsEvent } from "@/lib/domain/ics";
 
 // À la carte management as native-form-POST route handlers with ticket auth.
 // Route handlers 303-redirect to a fresh GET (which carries the session cookie),
@@ -133,6 +136,30 @@ export async function POST(req: Request) {
           subject: email.subject, body: email.text, html: email.html,
         });
         sent++;
+      }
+
+      // Invite the assigned coach — an emailed .ics so the lesson lands on their
+      // calendar, plus their subscription link.
+      if (coach?.personId && scheduledAt) {
+        const origin = new URL(req.url).origin;
+        const feed = `${origin}/api/calendar/${await ensureCoachCalendarToken(coach.id)}`;
+        const event: IcsEvent = {
+          uid: `offering-${offering.id}@pureacademy`,
+          start: scheduledAt,
+          end: new Date(scheduledAt.getTime() + 90 * 60000),
+          summary: `${type === "CLINIC" ? "Clinic" : type === "SEMI_PRIVATE" ? "Semi-private" : "Private lesson"} · ${title}`,
+          location: facility.name,
+          description: "PURE Academy lesson",
+        };
+        const attachments = coach.person.email ? [icsInvite(title, [event], coach.person.email)] : undefined;
+        await dispatchMessage({
+          senderId: actor.userId,
+          audienceType: "SINGLE_PERSON", audienceRef: coach.personId,
+          channels: ["IN_APP", "EMAIL"], triggerType: "COACH_LESSON_ASSIGNED",
+          subject: `You're teaching ${title}`,
+          body: `You're set to teach ${title} on ${formatDate(scheduledAt)} at ${facility.name}. The attached invite adds it to your calendar; subscribe to keep it in sync: ${feed}`,
+          attachments,
+        });
       }
 
       await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: offering.id, action: "SETUP_LESSON", summary: `Set up ${title} for ${sent} participant(s)` });

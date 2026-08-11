@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { generatePracticeDates, cancellationOutcome } from "@/lib/domain/schedule";
 import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
+import { icsInvite, phoenixWallTimeToUtc, type IcsEvent } from "@/lib/domain/ics";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
 
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
     const dates = generatePracticeDates(team.season.startDate, team.dayOfWeek, PRACTICE_WEEKS, blackouts);
     const endTime = addMinutes(team.startTime, DEFAULT_DURATION_MIN);
 
-    let created = 0;
+    const created: { id: string; date: Date }[] = [];
     for (let i = 0; i < dates.length; i++) {
       const s = await prisma.session.create({
         data: {
@@ -123,22 +124,31 @@ export async function POST(req: Request) {
           ...(team.coachId ? { coaches: { create: { coachId: team.coachId, role: "PRIMARY" } } } : {}),
         },
       });
-      created++;
-      void s;
+      created.push({ id: s.id, date: dates[i] });
     }
 
-    // Tell the head coach their practices are set, with the calendar link so it
-    // syncs to their phone.
+    // Tell the head coach their practices are set: the calendar-sync link plus an
+    // emailed .ics invite for all the practices so they land in their calendar.
     if (team.coachId) {
-      const c = await prisma.coach.findUnique({ where: { id: team.coachId }, select: { id: true, personId: true } });
+      const c = await prisma.coach.findUnique({ where: { id: team.coachId }, select: { id: true, personId: true, person: { select: { email: true } } } });
       if (c?.personId) {
         const feed = `${origin}/api/calendar/${await ensureCoachCalendarToken(c.id)}`;
+        const events: IcsEvent[] = created.map((s) => ({
+          uid: `session-${s.id}@pureacademy`,
+          start: phoenixWallTimeToUtc(s.date, team.startTime!),
+          end: phoenixWallTimeToUtc(s.date, endTime),
+          summary: `Practice · ${team.name}`,
+          location: team.facility?.name ?? null,
+          description: "PURE Academy practice",
+        }));
+        const attachments = c.person?.email && events.length ? [icsInvite(`${team.name} practices`, events, c.person.email)] : undefined;
         await dispatchMessage({
           senderId: actor.userId, seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON", audienceRef: c.personId,
           channels: ["IN_APP", "EMAIL"], triggerType: "COACH_SCHEDULE_SET",
           subject: `Your ${team.name} practices are scheduled`,
-          body: `${created} practices are set for ${team.name}. Add your calendar to your phone so it stays in sync: ${feed}`,
+          body: `${created.length} practices are set for ${team.name}. The invite attached adds them to your calendar, or subscribe so it always stays in sync: ${feed}`,
+          attachments,
         });
       }
     }
@@ -148,7 +158,7 @@ export async function POST(req: Request) {
       entityType: "Team",
       entityId: teamId,
       action: "GENERATE_SCHEDULE",
-      summary: `Generated ${created} practice sessions`,
+      summary: `Generated ${created.length} practice sessions`,
     });
 
     return back("?ok=generate");
@@ -338,19 +348,29 @@ export async function POST(req: Request) {
       update: { role },
     });
 
-    // Notify the assigned coach, with their calendar link so this class lands on
-    // their phone.
-    const assigned = await prisma.coach.findUnique({ where: { id: coachId }, select: { id: true, personId: true } });
+    // Notify the assigned coach, with an emailed .ics invite for this class plus
+    // their calendar-sync link.
+    const assigned = await prisma.coach.findUnique({ where: { id: coachId }, select: { id: true, personId: true, person: { select: { email: true } } } });
     const sessDetail = await prisma.session.findUnique({ where: { id: sessionId }, include: { facility: true, teams: { include: { team: { select: { name: true } } } } } });
     if (assigned?.personId && sessDetail) {
       const feed = `${origin}/api/calendar/${await ensureCoachCalendarToken(assigned.id)}`;
       const teams = sessDetail.teams.map((t) => t.team.name).join(", ");
+      const event: IcsEvent = {
+        uid: `session-${sessDetail.id}@pureacademy`,
+        start: phoenixWallTimeToUtc(sessDetail.date, sessDetail.startTime),
+        end: phoenixWallTimeToUtc(sessDetail.date, sessDetail.endTime),
+        summary: `${teams || "Session"} (${role.toLowerCase()})`,
+        location: sessDetail.facility?.name ?? null,
+        description: "PURE Academy",
+      };
+      const attachments = assigned.person?.email ? [icsInvite(teams || "PURE Academy session", [event], assigned.person.email)] : undefined;
       await dispatchMessage({
         senderId: actor.userId, seasonId: sessDetail.seasonId,
         audienceType: "SINGLE_PERSON", audienceRef: assigned.personId,
         channels: ["IN_APP", "EMAIL"], triggerType: "COACH_ASSIGNED_SESSION",
         subject: "You've been added to a class",
-        body: `You're set as ${role.toLowerCase()} for ${teams || "a session"} on ${formatDate(sessDetail.date)} at ${formatTime12(sessDetail.startTime)}${sessDetail.facility ? ` · ${sessDetail.facility.name}` : ""}. Keep your calendar in sync on your phone: ${feed}`,
+        body: `You're set as ${role.toLowerCase()} for ${teams || "a session"} on ${formatDate(sessDetail.date)} at ${formatTime12(sessDetail.startTime)}${sessDetail.facility ? ` · ${sessDetail.facility.name}` : ""}. The attached invite adds it to your calendar; subscribe to keep it in sync: ${feed}`,
+        attachments,
       });
     }
 
