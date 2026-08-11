@@ -9,6 +9,7 @@ import { formatTime12 } from "@/lib/time";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function EditCoachPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err, team: clashTeam, imgok, imgerr } = await searchParams;
+  const { ok, err, team: clashTeam, imgok, imgerr, invitetoken, invitesent } = await searchParams;
   const session = await getSession();
   if (!session || !can(session.role, "manageCoaches")) redirect("/console");
   const ticket = await mintConsoleTicket();
@@ -43,6 +44,8 @@ export default async function EditCoachPage({
   });
   if (!person) redirect("/console/coaches?err=notfound");
   const coach = person.coach;
+  // Whether this person has a console login (to offer a "Send invite" link).
+  const account = await prisma.user.findFirst({ where: { personId: id }, select: { id: true } });
 
   // Team-assignment shortcut: the coach's current teams + teams still needing a
   // head coach, so hiring and deploying happen from one page.
@@ -100,10 +103,49 @@ export default async function EditCoachPage({
           </form>
         </div>
       )}
+
+      {account && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Console access</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Email them a link to set their password and sign in. If email delivery isn&apos;t configured, you&apos;ll get a
+              link to copy and share instead.
+            </p>
+          </div>
+          <form method="POST" action="/api/console/coaches">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="invite" />
+            <input type="hidden" name="personId" value={person.id} />
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <button className="btn-secondary text-sm">Send invite</button>
+          </form>
+        </div>
+      )}
       <Link href="/console/coaches" className="text-sm text-slate-500 hover:underline">← Back to coaches</Link>
-      {ok === "account" && (
-        <div className="rounded-lg bg-accent-50 px-4 py-3 text-sm text-accent-800">
-          Coach account created and an invite to set their password was emailed. Complete their profile below — certification, screening, markets, and day/time availability — then save.
+
+      {/* Invite / set-password link. Shown after create or a "Send invite" — and
+          because email delivery may not be configured, we always surface the
+          link so the admin can copy and share it directly. */}
+      {(ok === "account" || invitetoken) && (
+        <div className="rounded-lg border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-accent-900">
+          {ok === "account" && <p className="font-medium">Coach account ready. Complete their profile below, then save.</p>}
+          {invitetoken ? (
+            <div className="mt-1 space-y-2">
+              <p>
+                {invitesent
+                  ? "We emailed them a link to set their password. In case it doesn't arrive, you can also copy it:"
+                  : "Email delivery isn't configured, so the invite was not sent. Copy this set-password link and share it with them directly:"}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="max-w-full overflow-x-auto rounded bg-white px-2 py-1 text-xs text-slate-700 ring-1 ring-slate-200">/reset?token=…&amp;invite=1</code>
+                <CopyLinkButton path={`/reset?token=${invitetoken}&invite=1`} label="Copy invite link" />
+              </div>
+              <p className="text-xs text-accent-700">This link expires in 7 days and can only be used once.</p>
+            </div>
+          ) : (
+            <p className="mt-1">Use “Send invite” below to email them a set-password link (or to copy one to share).</p>
+          )}
         </div>
       )}
       {ok === "profile" && (

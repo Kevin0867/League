@@ -39,6 +39,29 @@ export async function POST(req: Request) {
       return back("?ok=publish");
     }
 
+    // (Re)send a console invite — mints a fresh set-password link, tries to
+    // email it, and ALWAYS returns the link so the admin can copy/share it even
+    // when email delivery isn't configured (Resend key unset → simulated send).
+    case "invite": {
+      if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      const user = await prisma.user.findFirst({ where: { personId }, include: { person: true } });
+      if (!user) return back("?err=nouser");
+      const token = await createResetToken(user.id, INVITE_TTL_MS);
+      const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
+      let sent = false;
+      try {
+        const res = await sendConsoleInvite({ toEmail: user.email, name: user.person?.firstName ?? user.email, role: user.role, link });
+        sent = res.ok && !res.simulated;
+      } catch (e) {
+        console.error("coach invite email failed", e);
+      }
+      await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: sent ? `Invite emailed to ${user.email}` : `Invite link generated for ${user.email} (email not delivered)` });
+      const qs = new URLSearchParams({ invitetoken: token });
+      if (sent) qs.set("invitesent", "1");
+      return back(`?${qs.toString()}`);
+    }
+
     case "create": {
       if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
 
@@ -109,12 +132,17 @@ export async function POST(req: Request) {
       });
 
       // Notify the new account holder: email a set-password / join link so a
-      // coach doesn't depend on the admin relaying the temporary password.
+      // coach doesn't depend on the admin relaying the temporary password. We
+      // capture the token and whether the email actually went out, so the admin
+      // can copy the link if email delivery isn't configured.
+      let inviteToken: string | null = null;
+      let inviteSent = false;
       try {
-        const token = await createResetToken(user.id, INVITE_TTL_MS);
-        const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
-        await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
-        await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: `Invite emailed to ${email}` });
+        inviteToken = await createResetToken(user.id, INVITE_TTL_MS);
+        const link = `${appUrl()}/reset?token=${encodeURIComponent(inviteToken)}&invite=1`;
+        const res = await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
+        inviteSent = res.ok && !res.simulated;
+        await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: inviteSent ? `Invite emailed to ${email}` : `Invite link generated for ${email} (email not delivered)` });
       } catch (e) {
         console.error("coach invite email failed", e);
       }
@@ -122,7 +150,10 @@ export async function POST(req: Request) {
       // For a coach, drop the admin straight onto the full profile form so they
       // can fill in certification, screening, markets, and availability now.
       if (role === "COACH") {
-        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?ok=account`, origin), 303);
+        const qs = new URLSearchParams({ ok: "account" });
+        if (inviteToken) qs.set("invitetoken", inviteToken);
+        if (inviteSent) qs.set("invitesent", "1");
+        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${qs.toString()}`, origin), 303);
       }
       return back("?ok=1");
     }

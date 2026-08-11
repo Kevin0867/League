@@ -21,7 +21,17 @@ function parseMarkets(json: string | null): string[] {
   }
 }
 
+// Fallback hero copy for the Director, used until her coach record carries its
+// own bio. Her actual profile fields override these when present.
+const DIRECTOR_FALLBACK_BIO =
+  "Professional player — Phoenix Firebirds, Major League Pickleball Champions Series, 40+ Prime Division. " +
+  "Competing through the Fall 2026 season. RPO Level 1 and Level 2 certified. 2025 APPL State and National Champion. " +
+  "20+ years coaching Arizona athletes. Director, Arizona High School Pickleball. Director, Arizona Club Pickleball.";
+const DIRECTOR_FALLBACK_MARKETS = "Mesa · Youth and adults, beginner through professional.";
+
 export default async function CoachesPage() {
+  // Only PUBLISHED coach records appear — the "Publish to site" toggle governs
+  // visibility for everyone, including the Director.
   const coaches = await prisma.coach.findMany({
     where: { publishedOnSite: true },
     include: { person: true },
@@ -29,10 +39,12 @@ export default async function CoachesPage() {
   });
   // The Director leads the page as a hero, so keep her out of the card grid.
   const isDirector = (c: (typeof coaches)[number]) => `${c.person.firstName} ${c.person.lastName}`.toLowerCase() === "stephanie newton";
+  const director = coaches.find(isDirector);
   const grid = coaches.filter((c) => !isDirector(c));
   // The Director hero is a fixed, committed asset (managed by replacing the file
   // in the repo), so it's never overridden by an uploaded profile image.
   const heroImg = "/coaches/stephanie-hero.jpg";
+  const directorMarkets = director ? parseMarkets(director.marketsCovered) : [];
 
   return (
     <div>
@@ -47,35 +59,42 @@ export default async function CoachesPage() {
           Every PURE coach completes a background check and PURE curriculum training before Week 1 — without exception.
         </p>
 
-        {/* Director — hero treatment */}
-        <section className="mt-8 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 text-white shadow-xl ring-1 ring-white/10">
-          <div className="grid gap-0 lg:grid-cols-2">
-            <div className="min-h-[360px] bg-gradient-to-br from-brand-800 to-brand-950">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={heroImg}
-                alt="Stephanie Newton — Phoenix Firebirds, Major League Pickleball"
-                className="h-full w-full object-cover"
-              />
+        {/* Director — hero treatment (only when her coach record is published) */}
+        {director && (
+          <section className="mt-8 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 text-white shadow-xl ring-1 ring-white/10">
+            <div className="grid gap-0 lg:grid-cols-2">
+              <div className="min-h-[360px] bg-gradient-to-br from-brand-800 to-brand-950">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={heroImg}
+                  alt={`${director.person.firstName} ${director.person.lastName} — Director & Head Coach`}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="p-8 sm:p-10">
+                <p className="eyebrow eyebrow-light">Director &amp; Head Coach</p>
+                <h2 className="display mt-2 text-3xl text-white">{director.person.firstName} {director.person.lastName}</h2>
+                <p className="mt-4 whitespace-pre-line text-brand-100">{director.bio || DIRECTOR_FALLBACK_BIO}</p>
+                {(director.rpoCertLevel || director.certifications) && (
+                  <p className="mt-3 text-sm text-brand-200">{[director.rpoCertLevel, director.certifications].filter(Boolean).join(" · ")}</p>
+                )}
+                <p className="mt-3 text-sm text-brand-200">
+                  {directorMarkets.length > 0 ? directorMarkets.join(" · ") : DIRECTOR_FALLBACK_MARKETS}
+                </p>
+                <p className="mt-5 border-l-2 border-accent-400 pl-4 text-lg italic text-white">
+                  The Academy is directed by someone competing at the top of the sport during the same season she is
+                  coaching it.
+                </p>
+              </div>
             </div>
-            <div className="p-8 sm:p-10">
-              <p className="eyebrow eyebrow-light">Director &amp; Head Coach</p>
-              <h2 className="display mt-2 text-3xl text-white">Stephanie Newton</h2>
-              <p className="mt-4 text-brand-100">
-                <strong className="text-white">Professional player — Phoenix Firebirds</strong>, Major League
-                Pickleball Champions Series, 40+ Prime Division. Competing through the Fall 2026 season.
-                <strong className="text-white"> RPO Level 1 and Level 2 certified.</strong> 2025 APPL State and
-                National Champion. 20+ years coaching Arizona athletes. Director, Arizona High School Pickleball.
-                Director, Arizona Club Pickleball.
-              </p>
-              <p className="mt-3 text-sm text-brand-200">Mesa · Youth and adults, beginner through professional.</p>
-              <p className="mt-5 border-l-2 border-accent-400 pl-4 text-lg italic text-white">
-                The Academy is directed by someone competing at the top of the sport during the same season she is
-                coaching it.
-              </p>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
+
+        {!director && grid.length === 0 && (
+          <p className="mt-8 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+            Our coaches are being published for the season — check back soon.
+          </p>
+        )}
 
         {/* Coach grid */}
         {grid.length > 0 && (
