@@ -28,7 +28,10 @@ export default async function CoachesPage() {
     orderBy: { person: { lastName: "asc" } },
   });
   // The Director leads the page as a hero, so keep her out of the card grid.
-  const grid = coaches.filter((c) => `${c.person.firstName} ${c.person.lastName}`.toLowerCase() !== "stephanie newton");
+  const isDirector = (c: (typeof coaches)[number]) => `${c.person.firstName} ${c.person.lastName}`.toLowerCase() === "stephanie newton";
+  const director = coaches.find(isDirector);
+  const grid = coaches.filter((c) => !isDirector(c));
+  const heroImg = director?.person.imageUrl ?? "/coaches/stephanie-newton-mlp.jpg";
 
   return (
     <div>
@@ -49,7 +52,7 @@ export default async function CoachesPage() {
             <div className="min-h-[360px] bg-gradient-to-br from-brand-800 to-brand-950">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/coaches/stephanie-newton-mlp.jpg"
+                src={heroImg}
                 alt="Stephanie Newton — Phoenix Firebirds, Major League Pickleball"
                 className="h-full w-full object-cover"
               />
@@ -85,7 +88,7 @@ export default async function CoachesPage() {
                   <div key={c.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="aspect-[4/3] bg-gradient-to-br from-brand-100 to-slate-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/coaches/${c.person.id}.jpg`} alt={name} className="h-full w-full object-cover" />
+                      <img src={c.person.imageUrl ?? `/coaches/${c.person.id}.jpg`} alt={name} className="h-full w-full object-cover" />
                     </div>
                     <div className="p-5">
                       <div className="flex items-center justify-between gap-2">

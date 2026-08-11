@@ -10,6 +10,10 @@ export default async function HomePage() {
     .findFirst({ where: { active: true, program: "PURE_ACADEMY" }, orderBy: { startDate: "desc" } })
     .catch(() => null);
   const clinics = (await listPublicClinics().catch(() => [])).slice(0, 3);
+  const director = await prisma.person
+    .findFirst({ where: { firstName: "Stephanie", lastName: "Newton" }, select: { imageUrl: true } })
+    .catch(() => null);
+  const directorImg = director?.imageUrl ?? "/coaches/stephanie-newton-mlp.jpg";
 
   return (
     <div>
@@ -92,7 +96,7 @@ export default async function HomePage() {
             <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-800 to-brand-950 shadow-lg ring-1 ring-black/5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/coaches/stephanie-newton-mlp.jpg"
+                src={directorImg}
                 alt="Stephanie Newton — Phoenix Firebirds, Major League Pickleball"
                 className="aspect-[4/3] w-full object-cover"
               />

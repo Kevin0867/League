@@ -83,6 +83,10 @@ model Person {
   email              String?
   phone              String?
 
+  /// Public profile image (used on /coaches). Stored in object storage; this is
+  /// the served URL. Coaches upload their own; admins can upload on their behalf.
+  imageUrl           String?
+
   // Contact / demographics (captured from enrollment intake)
   address            String?
   gender             String?

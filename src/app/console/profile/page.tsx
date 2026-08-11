@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
+import { ImageUploadForm } from "@/components/ImageUploadForm";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,18 @@ export default async function CoachProfilePage({
     <div className="space-y-6">
       <PageHeader title="My coach profile" subtitle="Keep your certification, availability, and contact details current." />
       {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile saved.</p>}
+      {sp.imgok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile photo updated.</p>}
+      {sp.imgerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{sp.imgerr}</p>}
       {sp.err === "noperson" && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Your login isn&apos;t linked to a person record — contact an administrator.</p>
+      )}
+
+      {person && (
+        <div className="card">
+          <h2 className="mb-1 font-semibold text-slate-900">Profile photo</h2>
+          <p className="mb-3 text-sm text-slate-500">Shown on the public coaches page. JPG, PNG, or WebP up to 8 MB.</p>
+          <ImageUploadForm ticket={ticket} returnTo="/console/profile" currentUrl={person.imageUrl} name={`${person.firstName} ${person.lastName}`} />
+        </div>
       )}
       <CoachProfileForm
         ticket={ticket}

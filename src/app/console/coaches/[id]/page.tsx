@@ -8,6 +8,7 @@ import { coachAssignmentGate } from "@/lib/domain/teams";
 import { formatTime12 } from "@/lib/time";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { ImageUploadForm } from "@/components/ImageUploadForm";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function EditCoachPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err, team: clashTeam } = await searchParams;
+  const { ok, err, team: clashTeam, imgok, imgerr } = await searchParams;
   const session = await getSession();
   if (!session || !can(session.role, "manageCoaches")) redirect("/console");
   const ticket = await mintConsoleTicket();
@@ -68,6 +69,15 @@ export default async function EditCoachPage({
         title={`Edit coach — ${person.firstName} ${person.lastName}`}
         subtitle="Update certification, availability, and contact on this coach's behalf."
       />
+
+      {imgok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile photo updated.</p>}
+      {imgerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{imgerr}</p>}
+
+      <div className="card">
+        <h2 className="mb-1 font-semibold text-slate-900">Profile photo</h2>
+        <p className="mb-3 text-sm text-slate-500">Shown on the public /coaches page. JPG, PNG, or WebP up to 8 MB.</p>
+        <ImageUploadForm ticket={ticket} personId={person.id} returnTo={returnTo} currentUrl={person.imageUrl} name={`${person.firstName} ${person.lastName}`} />
+      </div>
 
       {coach && (
         <div className="card flex flex-wrap items-center justify-between gap-3">
