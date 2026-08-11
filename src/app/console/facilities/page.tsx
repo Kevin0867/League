@@ -28,18 +28,20 @@ export default async function FacilitiesPage({
 }) {
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
-  const facilities = await prisma.facility.findMany({
+  const allFacilities = await prisma.facility.findMany({
     include: { _count: { select: { teams: true, sessions: true } } },
     orderBy: [{ agreementStatus: "asc" }, { name: "asc" }],
   });
+  const facilities = allFacilities.filter((f) => !f.archived);
+  const archivedFacilities = allFacilities.filter((f) => f.archived);
 
   const executed = facilities.filter((f) => f.agreementStatus === "EXECUTED").length;
 
   return (
     <div className="space-y-6">
-      {(sp.ok === "edited" || sp.ok === "deleted" || sp.added) && (
+      {(sp.ok === "edited" || sp.ok === "deleted" || sp.ok === "archived" || sp.ok === "unarchived" || sp.added) && (
         <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800">
-          {sp.ok === "edited" ? "Facility updated." : sp.ok === "deleted" ? "Facility removed." : "Facility added."}
+          {sp.ok === "edited" ? "Facility updated." : sp.ok === "deleted" ? "Facility removed." : sp.ok === "archived" ? "Facility archived — hidden from scheduling." : sp.ok === "unarchived" ? "Facility restored." : "Facility added."}
         </div>
       )}
       {sp.err && (
@@ -128,16 +130,48 @@ export default async function FacilitiesPage({
                       alaCarteAllowed: f.alaCarteAllowed, acpLeagueOption: f.acpLeagueOption,
                     }}
                   />
-                  <DeleteFacilityButton
-                    facilityId={f.id}
-                    ticket={ticket}
-                    inUse={f._count.teams > 0 || f._count.sessions > 0}
-                  />
+                  <div className="flex items-center gap-3">
+                    <form method="POST" action="/api/console/facilities">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="archive" />
+                      <input type="hidden" name="facilityId" value={f.id} />
+                      <button className="text-xs text-slate-500 hover:underline">Archive</button>
+                    </form>
+                    <DeleteFacilityButton
+                      facilityId={f.id}
+                      ticket={ticket}
+                      inUse={f._count.teams > 0 || f._count.sessions > 0}
+                    />
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {archivedFacilities.length > 0 && (
+        <details className="card">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+            Archived facilities ({archivedFacilities.length})
+          </summary>
+          <ul className="mt-3 divide-y divide-slate-100 text-sm">
+            {archivedFacilities.map((f) => (
+              <li key={f.id} className="flex items-center justify-between py-2">
+                <span className="text-slate-500">
+                  {f.name}
+                  <span className="ml-2 text-xs text-slate-400">{f.market ?? "no market"}</span>
+                </span>
+                <form method="POST" action="/api/console/facilities">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="unarchive" />
+                  <input type="hidden" name="facilityId" value={f.id} />
+                  <button className="text-xs font-medium text-brand-600 hover:underline">Restore</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

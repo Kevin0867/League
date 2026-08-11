@@ -48,6 +48,17 @@ export async function POST(req: Request) {
     return back("?ok=deleted");
   }
 
+  // Archive / unarchive — retire a referenced facility from selection, or bring
+  // it back. History is preserved either way.
+  if (op === "archive" || op === "unarchive") {
+    const facilityId = String(formData.get("facilityId") ?? "");
+    if (!facilityId) return back("?err=notfound");
+    const archived = op === "archive";
+    await prisma.facility.update({ where: { id: facilityId }, data: { archived } });
+    await audit({ actorId: actor.userId, entityType: "Facility", entityId: facilityId, action: archived ? "facility.archive" : "facility.unarchive", summary: archived ? "Archived facility" : "Unarchived facility" });
+    return back(archived ? "?ok=archived" : "?ok=unarchived");
+  }
+
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return back("?err=name");
 

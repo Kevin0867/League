@@ -19,7 +19,7 @@ export default async function ConsoleDashboard() {
     prisma.registration.count({ where: { status: "ASSIGNED" } }),
     prisma.registration.count({ where: { status: "WAITLISTED" } }),
     prisma.team.findMany({ include: { _count: { select: { members: true } }, facility: true } }),
-    prisma.facility.findMany(),
+    prisma.facility.findMany({ where: { archived: false } }),
     prisma.person.count({ where: { waiverSignedAt: null, registrations: { some: {} } } }),
     prisma.coach.findMany(),
     prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, include: { _count: { select: { divisions: true } } } }),

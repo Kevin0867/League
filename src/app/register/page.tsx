@@ -36,6 +36,7 @@ export default async function RegisterPage({
   });
 
   const facilities = await prisma.facility.findMany({
+    where: { archived: false },
     orderBy: { name: "asc" },
     select: { id: true, name: true, isPrivate: true, generalArea: true, market: true },
   });

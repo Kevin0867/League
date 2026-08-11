@@ -224,6 +224,7 @@ export default async function RegistrationsPage({
                     currentTeamId={teamByPersonSeason.get(`${r.person.id}:${r.seasonId}`) ?? null}
                     teams={teamsBySeason.get(r.seasonId) ?? []}
                     payStatus={payStatusOf(r.person.id, r.seasonId)}
+                    waiverSigned={!!r.person.waiverSignedAt}
                   />
                 </td>
               </tr>

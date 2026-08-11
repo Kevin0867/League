@@ -415,6 +415,11 @@ model Facility {
   acpConfirmBy     DateTime?
   championshipHostInterest Boolean @default(false)
 
+  /// Retired from selection. Archived facilities keep all history but no longer
+  /// appear in scheduling / team-build dropdowns. Used instead of deletion when
+  /// a facility is referenced by past teams or sessions.
+  archived         Boolean   @default(false)
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

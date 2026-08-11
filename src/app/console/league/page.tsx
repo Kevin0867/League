@@ -6,6 +6,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { teamConfirmation, shouldEscalate, MIN_CONFIRMED_PLAYERS } from "@/lib/domain/availability";
 import { EditableFixtureRow } from "@/components/EditableFixtureRow";
 import { seasonStandingsByDivision } from "@/lib/domain/leagueStandings";
+import { CreateLeagueForm } from "./CreateLeagueForm";
 
 export const dynamic = "force-dynamic";
 
@@ -38,30 +39,6 @@ const ERRORS: Record<string, string> = {
   op: "Unknown operation.",
 };
 
-// Reusable "Create a new league" form.
-function CreateLeagueForm({ ticket }: { ticket: string }) {
-  return (
-    <form method="POST" action="/api/console/league" className="grid gap-3 sm:grid-cols-4 sm:items-end">
-      <input type="hidden" name="ticket" value={ticket} />
-      <input type="hidden" name="op" value="createLeague" />
-      <div className="sm:col-span-2">
-        <label className="label">League name</label>
-        <input name="name" className="input" placeholder="ACP Fall 2026" required />
-      </div>
-      <div>
-        <label className="label">Start date</label>
-        <input name="startDate" type="date" className="input" required />
-      </div>
-      <div>
-        <label className="label">End date</label>
-        <input name="endDate" type="date" className="input" required />
-      </div>
-      <div className="sm:col-span-4">
-        <button className="btn-primary">Create new league</button>
-      </div>
-    </form>
-  );
-}
 
 export default async function LeaguePage({
   searchParams,
@@ -71,7 +48,7 @@ export default async function LeaguePage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
-  const facilities = await prisma.facility.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const facilities = await prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } });
   const acpTeams = season
     ? await prisma.team.findMany({ where: { seasonId: season.id }, select: { id: true, name: true }, orderBy: { name: "asc" } })
     : [];
@@ -179,6 +156,15 @@ export default async function LeaguePage({
   return (
     <div className="space-y-6">
       <PageHeader title="ACP League" subtitle="One season, start to finish: six practices, a five-week round-robin, a live leaderboard, and a year-end tournament seeded from the standings." />
+
+      <details className="card text-sm text-slate-600">
+        <summary className="cursor-pointer font-medium text-slate-800">How season, league, and championship fit together</summary>
+        <ul className="mt-2 space-y-1.5">
+          <li><span className="font-semibold text-slate-800">Season</span> — the container for a program run: it holds divisions, registrations, and the base fee. PURE Academy and Arizona Club Pickleball (ACP) each run their own seasons.</li>
+          <li><span className="font-semibold text-slate-800">League</span> — the ACP competition inside a season: a round-robin of matches between teams that produces a live leaderboard. Creating one makes it the active ACP league.</li>
+          <li><span className="font-semibold text-slate-800">Championship</span> — the year-end playoff bracket, seeded from the league standings once the round-robin is done.</li>
+        </ul>
+      </details>
 
       {sp.ok && (
         <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>

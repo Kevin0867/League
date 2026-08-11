@@ -114,24 +114,29 @@ export async function POST(req: Request) {
       if (!teamId) return back("?err=team");
       const coachId = String(formData.get("coachId") ?? "").trim() || null;
       const force = String(formData.get("force") ?? "") === "1";
+      // Can be driven from Coach matching or a coach's own profile — bounce back
+      // to wherever it was invoked.
+      const rawReturn = String(formData.get("returnTo") ?? "");
+      const dest = rawReturn.startsWith("/console/coaches/") ? rawReturn : "/console/matching";
+      const go = (qs: string) => NextResponse.redirect(new URL(`${dest}${qs}`, origin), 303);
       if (coachId) {
         const coach = await prisma.coach.findUnique({ where: { id: coachId } });
-        if (!coach) return back("?err=coach");
+        if (!coach) return go("?err=coach");
         const gate = coachAssignmentGate(coach);
-        if (!gate.ok) return back("?err=coach");
+        if (!gate.ok) return go("?err=coach");
         // A coach can hold multiple teams at different times/locations, but not
         // with overlapping day/time. Block unless the admin forces it.
         const team = await prisma.team.findUnique({ where: { id: teamId }, select: { dayOfWeek: true, startTime: true } });
         if (!force) {
           const clashes = await coachTeamConflicts({ coachId, dayOfWeek: team?.dayOfWeek, startTime: team?.startTime, excludeTeamId: teamId });
           if (clashes.length) {
-            return NextResponse.redirect(new URL(`/console/matching?err=coachclash&team=${encodeURIComponent(clashes[0].teamName)}`, origin), 303);
+            return go(`?err=coachclash&team=${encodeURIComponent(clashes[0].teamName)}`);
           }
         }
       }
       await prisma.team.update({ where: { id: teamId }, data: { coachId } });
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: coachId ? `Assigned coach ${coachId}` : "Cleared coach" });
-      return NextResponse.redirect(new URL(`/console/matching?ok=${coachId ? "assignedCoach" : "clearedCoach"}`, origin), 303);
+      return go(`?ok=${coachId ? "assignedCoach" : "clearedCoach"}`);
     }
 
     // Add an assistant / additional coach to a team (beyond the head coach).

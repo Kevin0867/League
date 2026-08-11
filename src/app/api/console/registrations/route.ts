@@ -123,6 +123,31 @@ export async function POST(req: Request) {
     return NextResponse.redirect(new URL(dest, origin), 303);
   }
 
+  // Resend fee reminders to a hand-picked set of recipients (from the Payments
+  // consolidated reminder view). Email-only, like resendAllFees.
+  if (op === "resendSelectedFees") {
+    if (!can(actor.role, "manageTeams")) return back("?err=auth");
+    const ids = fd.getAll("paymentId").map((v) => String(v)).filter(Boolean);
+    if (ids.length === 0) return NextResponse.redirect(new URL("/console/payments?ok=resentAll&n=0", origin), 303);
+    const payments = await prisma.payment.findMany({
+      where: { id: { in: ids }, category: "PLAYER_FEE", status: { in: ["REQUESTED", "PENDING"] } },
+    });
+    let sent = 0;
+    for (const pay of payments) {
+      if (!pay.partyId) continue;
+      const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
+      if (!person) continue;
+      const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: pay.seasonId ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
+        channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+      });
+      sent++;
+    }
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "selected", action: "RESEND_BULK", summary: `Resent ${sent} selected fee request(s)` });
+    return NextResponse.redirect(new URL(`/console/payments?ok=resentAll&n=${sent}`, origin), 303);
+  }
+
   // Send a sample fee-request email to the signed-in admin, so staff can preview
   // exactly what families receive (independent of the BCC setting).
   if (op === "sendTestPayment") {

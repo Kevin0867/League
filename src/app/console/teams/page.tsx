@@ -42,7 +42,7 @@ export default async function TeamBuildBoard({
     include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
   });
   const seasons = seasonRows.map((s) => ({ id: s.id, name: s.name, divisions: s.divisions }));
-  const facilities = (await prisma.facility.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }));
+  const facilities = (await prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }));
 
   const ready = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const published = teams.filter((t) => t.published).length;

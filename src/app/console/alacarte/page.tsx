@@ -42,7 +42,7 @@ export default async function AlaCartePage({
       include: { offering: { include: { facility: true } }, client: true, coach: { include: { person: true } } },
       orderBy: { createdAt: "desc" }, take: 40,
     }),
-    prisma.facility.findMany({ where: { alaCarteAllowed: true }, orderBy: { name: "asc" } }),
+    prisma.facility.findMany({ where: { alaCarteAllowed: true, archived: false }, orderBy: { name: "asc" } }),
     prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } }),
     // Spots taken per offering — anything not cancelled/declined counts.
     prisma.alaCarteBooking.groupBy({

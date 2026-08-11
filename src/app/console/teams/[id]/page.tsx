@@ -60,7 +60,7 @@ export default async function TeamDetailPage({
 
   const [coaches, facilities] = await Promise.all([
     prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } }),
-    prisma.facility.findMany({ orderBy: { name: "asc" } }),
+    prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" } }),
   ]);
 
   const roster = rosterStatus(team.members.length, team.coachPlays);

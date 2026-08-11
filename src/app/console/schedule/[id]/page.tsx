@@ -57,7 +57,7 @@ export default async function SessionDetail({
   });
   if (!s) notFound();
 
-  const facilities = await prisma.facility.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const facilities = await prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } });
   const allCoaches = await prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } });
   const coachName = new Map(allCoaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`]));
   const sessionCoachIds = new Set(s.coaches.map((c) => c.coachId));

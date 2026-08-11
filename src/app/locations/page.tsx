@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function LocationsPage() {
-  const facilities = await prisma.facility.findMany({ orderBy: [{ market: "asc" }, { name: "asc" }] });
+  const facilities = await prisma.facility.findMany({ where: { archived: false }, orderBy: [{ market: "asc" }, { name: "asc" }] });
 
   // Group by market. Private courts are generalized to market + general area only —
   // never owner name, never street address (§15, a contractual privacy obligation).

@@ -12,6 +12,7 @@ export function RowActions({
   currentTeamId,
   teams,
   payStatus,
+  waiverSigned,
 }: {
   ticket: string;
   personId: string;
@@ -20,6 +21,7 @@ export function RowActions({
   currentTeamId: string | null;
   teams: Team[];
   payStatus: "none" | "requested" | "paid" | "refunded";
+  waiverSigned: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -32,69 +34,89 @@ export function RowActions({
     </>
   );
 
+  const confirmSend = (msg: string) => (e: React.FormEvent) => {
+    if (!window.confirm(msg)) e.preventDefault();
+  };
+
   return (
-    <div className="relative inline-block text-left">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-      >
-        Actions ▾
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-64 space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
-            {/* Assign / move */}
-            <form method="POST" action="/api/console/registrations" className="space-y-2">
-              <Hidden op="assignToTeam" />
-              <label className="block text-xs font-medium text-slate-500">
-                {assigned ? "Move to team" : "Assign to team"}
-              </label>
-              <select name="teamId" defaultValue={currentTeamId ?? ""} className="input py-1 text-sm">
-                <option value="">— Select a team —</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <button className="btn-primary w-full py-1 text-xs">{assigned ? "Move" : "Assign"}</button>
-            </form>
+    <div className="flex items-center justify-end gap-1.5">
+      {/* Fee — the most common next action, one click */}
+      {payStatus === "paid" ? (
+        <span className="badge bg-emerald-100 text-emerald-800">paid</span>
+      ) : payStatus === "refunded" ? (
+        <span className="badge bg-slate-100 text-slate-500">refunded</span>
+      ) : (
+        <form
+          method="POST"
+          action="/api/console/registrations"
+          onSubmit={confirmSend(payStatus === "requested" ? "Resend the fee request email to this family?" : "Email the season fee request to this family?")}
+        >
+          <Hidden op={payStatus === "requested" ? "resendPayment" : "requestFee"} />
+          {payStatus === "requested" && <input type="hidden" name="from" value="list" />}
+          <button className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
+            {payStatus === "requested" ? "Resend fee" : "Request fee"}
+          </button>
+        </form>
+      )}
 
-            {assigned && (
-              <form method="POST" action="/api/console/registrations">
-                <Hidden op="unassign" />
-                <button className="w-full rounded-md border border-slate-200 py-1 text-xs text-slate-600 hover:bg-slate-50">
-                  Send back to pool
-                </button>
+      {/* Waiver — direct when outstanding */}
+      {!waiverSigned && (
+        <form method="POST" action="/api/console/registrations" onSubmit={confirmSend("Email the waiver link to this family?")}>
+          <Hidden op="sendWaiver" />
+          <button className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100">
+            Send waiver
+          </button>
+        </form>
+      )}
+
+      {/* Assign / move (needs a team choice) + refund live in a compact popover */}
+      <div className="relative inline-block text-left">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+        >
+          {assigned ? "Move ▾" : "Assign ▾"}
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <div className="absolute right-0 z-20 mt-1 w-64 space-y-3 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+              <form method="POST" action="/api/console/registrations" className="space-y-2">
+                <Hidden op="assignToTeam" />
+                <label className="block text-xs font-medium text-slate-500">{assigned ? "Move to team" : "Assign to team"}</label>
+                <select name="teamId" defaultValue={currentTeamId ?? ""} className="input py-1 text-sm">
+                  <option value="">— Select a team —</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                <button className="btn-primary w-full py-1 text-xs">{assigned ? "Move" : "Assign"}</button>
               </form>
-            )}
 
-            <div className="border-t border-slate-100 pt-2">
-              {payStatus === "paid" ? (
+              {assigned && (
                 <form method="POST" action="/api/console/registrations">
-                  <Hidden op="refund" />
-                  <button className="w-full rounded-md border border-rose-200 py-1 text-xs text-rose-600 hover:bg-rose-50">
-                    Start refund
+                  <Hidden op="unassign" />
+                  <button className="w-full rounded-md border border-slate-200 py-1 text-xs text-slate-600 hover:bg-slate-50">
+                    Send back to pool
                   </button>
                 </form>
-              ) : payStatus === "requested" ? (
-                <form method="POST" action="/api/console/registrations">
-                  <Hidden op="resendPayment" />
-                  <input type="hidden" name="from" value="list" />
-                  <button className="btn-secondary w-full py-1 text-xs">Resend fee request</button>
-                </form>
-              ) : payStatus === "refunded" ? (
-                <p className="text-center text-xs text-slate-400">Fee refunded</p>
-              ) : (
-                <form method="POST" action="/api/console/registrations">
-                  <Hidden op="requestFee" />
-                  <button className="btn-secondary w-full py-1 text-xs">Request season fee</button>
-                </form>
+              )}
+
+              {payStatus === "paid" && (
+                <div className="border-t border-slate-100 pt-2">
+                  <form method="POST" action="/api/console/registrations" onSubmit={confirmSend("Start a refund for this family's paid fee?")}>
+                    <Hidden op="refund" />
+                    <button className="w-full rounded-md border border-rose-200 py-1 text-xs text-rose-600 hover:bg-rose-50">
+                      Start refund
+                    </button>
+                  </form>
+                </div>
               )}
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

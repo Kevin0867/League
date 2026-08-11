@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
-import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { FeeReminderList } from "./FeeReminderList";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/time";
@@ -104,31 +104,34 @@ export default async function PaymentsPage({
         </div>
       )}
 
-      {/* Fee reminders — bulk resend + preview */}
-      <div className="card flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-semibold text-slate-900">Fee reminders</h2>
-          <p className="text-sm text-slate-500">
-            {outstanding.length > 0
-              ? `${outstanding.length} player${outstanding.length === 1 ? "" : "s"} with an unpaid request (${formatCents(requested)}).`
-              : "No outstanding fee requests right now."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      {/* Fee reminders — pick exactly who gets a reminder before sending */}
+      <div className="card space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Fee reminders</h2>
+            <p className="text-sm text-slate-500">
+              {outstanding.length > 0
+                ? `${outstanding.length} unpaid request${outstanding.length === 1 ? "" : "s"} (${formatCents(requested)}). Choose who to remind — these are real emails.`
+                : "No outstanding fee requests right now."}
+            </p>
+          </div>
           <form method="POST" action="/api/console/registrations">
             <input type="hidden" name="ticket" value={ticket} />
             <input type="hidden" name="op" value="sendTestPayment" />
             <button className="btn-ghost text-sm">Send me a preview</button>
           </form>
-          <ConfirmSubmit
-            action="/api/console/registrations"
-            fields={{ ticket, op: "resendAllFees" }}
-            confirm={`Email the fee request to ${outstanding.length} ${outstanding.length === 1 ? "person" : "people"} with an unpaid balance?`}
-            label={`Resend all (${outstanding.length})`}
-            className="btn-secondary text-sm"
-            disabled={outstanding.length === 0}
-          />
         </div>
+        {outstanding.length > 0 && (
+          <FeeReminderList
+            ticket={ticket}
+            recipients={outstanding.map((p) => ({
+              id: p.id,
+              name: p.party ? `${p.party.firstName} ${p.party.lastName}` : "Unknown payer",
+              amount: formatCents(p.amountCents),
+              description: (p.description ?? p.category.replace(/_/g, " ")) + (p.status === "PENDING" ? " · in checkout" : ""),
+            }))}
+          />
+        )}
       </div>
 
       {/* Coach payout register (§9) */}
