@@ -48,7 +48,7 @@ export default async function AcpEnterPage({
             <h2 className="text-lg font-bold text-slate-900">Entries are closed</h2>
             <p className="mt-1 text-sm text-slate-600">
               Entries closed October 12. Questions about a late entry?{" "}
-              <a href="mailto:stephanie@purepickleball.com" className="font-medium text-brand-700 hover:underline">
+              <a href="mailto:team@purepickleball.com" className="font-medium text-brand-700 hover:underline">
                 Email us
               </a>
               .

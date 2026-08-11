@@ -11,6 +11,7 @@ import {
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
 import { TeamCreateForm } from "./TeamCreateForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { TableFilter } from "@/components/TableFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -122,13 +123,17 @@ export default async function TeamBuildBoard({
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <>
+        <div className="max-w-md">
+          <TableFilter targetId="teams-grid" placeholder="Search teams by name, market, or division…" />
+        </div>
+        <div id="teams-grid" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {teams.map((t) => {
             const missing = teamMissingFields(t);
             const roster = rosterStatus(t._count.members, t.coachPlays);
             const publish = canPublishTeam(t, t.facility);
             return (
-              <div key={t.id} className="card transition-shadow hover:shadow-md">
+              <div key={t.id} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""}`} className="card transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div>
                     <Link href={`/console/teams/${t.id}`} className="font-semibold text-slate-900 hover:text-brand-700">{t.name}</Link>
@@ -201,7 +206,9 @@ export default async function TeamBuildBoard({
               </div>
             );
           })}
+          <div data-filter-empty hidden className="card py-8 text-center text-sm text-slate-400 md:col-span-2 xl:col-span-3">No teams match your search.</div>
         </div>
+        </>
       )}
     </div>
   );

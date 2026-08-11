@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
+import { TableFilter } from "@/components/TableFilter";
 import { FacilityForm, DeleteFacilityButton } from "./FacilityForm";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,11 @@ export default async function FacilitiesPage({
       {facilities.length === 0 ? (
         <div className="card py-12 text-center text-slate-400">No facilities yet.</div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <>
+        <div className="max-w-md">
+          <TableFilter targetId="facilities-grid" placeholder="Search facilities by name or market…" />
+        </div>
+        <div id="facilities-grid" className="grid gap-4 md:grid-cols-2">
           {facilities.map((f) => {
             const rate =
               f.feeBasis === "PERCENTAGE"
@@ -79,7 +84,7 @@ export default async function FacilitiesPage({
                 : `${formatCents(f.weekdayRateCents)} weekday / ${formatCents(f.weekendRateCents)} weekend`;
             const nextAction = NEXT_ACTION[f.agreementStatus];
             return (
-              <div key={f.id} className="card flex flex-col gap-4">
+              <div key={f.id} data-filter-row data-filter-text={`${f.name} ${f.market ?? ""}`} className="card flex flex-col gap-4">
                 {/* Header: name + agreement status */}
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
@@ -147,7 +152,9 @@ export default async function FacilitiesPage({
               </div>
             );
           })}
+          <div data-filter-empty hidden className="card py-8 text-center text-sm text-slate-400 md:col-span-2">No facilities match your search.</div>
         </div>
+        </>
       )}
 
       {archivedFacilities.length > 0 && (

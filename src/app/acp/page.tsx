@@ -68,7 +68,7 @@ export default async function AcpPage({
             <h2 className="text-xl font-bold text-slate-900">Entries are closed</h2>
             <p className="mt-1 text-sm text-slate-600">
               Entries closed October 12 and the league is underway. Want in next season?{" "}
-              <a href="mailto:stephanie@purepickleball.com" className="font-medium text-brand-700 hover:underline">Email us</a>{" "}
+              <a href="mailto:team@purepickleball.com" className="font-medium text-brand-700 hover:underline">Email us</a>{" "}
               and we&apos;ll add you to the list.
             </p>
           </div>

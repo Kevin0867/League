@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
+import { TableFilter } from "@/components/TableFilter";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, type Role } from "@/lib/enums";
 
@@ -66,8 +67,12 @@ export default async function UsersPage({
         <button type="submit" className="btn-primary">Send invite</button>
       </form>
 
+      <div className="max-w-md">
+        <TableFilter targetId="users-table" placeholder="Search by name or email…" />
+      </div>
+
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-sm">
+        <table id="users-table" className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3">Name</th>
@@ -84,7 +89,7 @@ export default async function UsersPage({
               const locked = isSelf || !isAdmin;
               const assignable = assignableRoles;
               return (
-                <tr key={u.id}>
+                <tr key={u.id} data-filter-row data-filter-text={`${u.person ? `${u.person.firstName} ${u.person.lastName}` : ""} ${u.email}`}>
                   <td className="px-4 py-3 font-medium text-slate-800">
                     {u.person ? `${u.person.firstName} ${u.person.lastName}` : "—"}
                     {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
@@ -124,6 +129,7 @@ export default async function UsersPage({
                 </tr>
               );
             })}
+            <tr data-filter-empty hidden><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No users match your search.</td></tr>
           </tbody>
         </table>
       </div>
