@@ -31,7 +31,7 @@ export default async function CoachesPage() {
   const isDirector = (c: (typeof coaches)[number]) => `${c.person.firstName} ${c.person.lastName}`.toLowerCase() === "stephanie newton";
   const director = coaches.find(isDirector);
   const grid = coaches.filter((c) => !isDirector(c));
-  const heroImg = director?.person.imageUrl ?? "/coaches/stephanie-newton-mlp.jpg";
+  const heroImg = director?.person.imageUrl ?? "/coaches/stephanie-hero.jpg";
 
   return (
     <div>

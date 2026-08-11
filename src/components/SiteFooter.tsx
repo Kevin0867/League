@@ -17,7 +17,10 @@ export function SiteFooter() {
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Contact</div>
           <ul className="mt-2 space-y-1 text-sm text-slate-600">
             <li><a href="mailto:team@purepickleball.com" className="hover:text-brand-700 hover:underline">team@purepickleball.com</a></li>
-            <li><a href="tel:+12085695500" className="hover:text-brand-700 hover:underline">208.569.5500</a></li>
+            <li>
+              <div className="text-slate-700">Stephanie Newton — Director &amp; Head Coach</div>
+              <a href="tel:+12085695500" className="hover:text-brand-700 hover:underline">208.569.5500</a>
+            </li>
             <li><a href="https://purepickleball.com" className="hover:text-brand-700 hover:underline">purepickleball.com</a></li>
             <li><a href="https://instagram.com/purepickleballusa" className="hover:text-brand-700 hover:underline">@purepickleballusa</a></li>
           </ul>

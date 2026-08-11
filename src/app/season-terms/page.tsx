@@ -47,7 +47,7 @@ export default function SeasonTermsPage() {
         </div>
 
         <p className="mt-8 text-sm text-slate-500">
-          Questions? <a href="mailto:stephanie@purepickleball.com" className="text-brand-700 hover:underline">stephanie@purepickleball.com</a> · 208.569.5500
+          Questions? <a href="mailto:team@purepickleball.com" className="text-brand-700 hover:underline">team@purepickleball.com</a> · Stephanie Newton, Director &amp; Head Coach · <a href="tel:+12085695500" className="text-brand-700 hover:underline">208.569.5500</a>
         </p>
       </div>
       <SiteFooter />
