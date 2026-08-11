@@ -29,9 +29,10 @@ export default async function CoachesPage() {
   });
   // The Director leads the page as a hero, so keep her out of the card grid.
   const isDirector = (c: (typeof coaches)[number]) => `${c.person.firstName} ${c.person.lastName}`.toLowerCase() === "stephanie newton";
-  const director = coaches.find(isDirector);
   const grid = coaches.filter((c) => !isDirector(c));
-  const heroImg = director?.person.imageUrl ?? "/coaches/stephanie-hero.jpg";
+  // The Director hero is a fixed, committed asset (managed by replacing the file
+  // in the repo), so it's never overridden by an uploaded profile image.
+  const heroImg = "/coaches/stephanie-hero.jpg";
 
   return (
     <div>
