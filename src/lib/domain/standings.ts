@@ -23,10 +23,16 @@ export type TeamStanding = {
   linesLost: number;
   gamesWon: number;
   gamesLost: number;
+  /// Points scored / conceded across COUNTING lines only (the top three). Line 4
+  /// is an exhibition — played and scored, but excluded from every tally here.
+  pointsFor: number;
+  pointsAgainst: number;
   forfeits: number;
   points: number; // matches won (default method) — tiebreakers layered on
 };
 
+/// Winner of a line = whoever won more games in it. Works for a single game to
+/// 11 (1–0) and for a best-of-three (2–1 / 2–0) alike.
 function winnerOfLine(line: LineResult): "HOME" | "AWAY" | null {
   let h = 0;
   let a = 0;
@@ -34,16 +40,22 @@ function winnerOfLine(line: LineResult): "HOME" | "AWAY" | null {
     if (g.homeScore > g.awayScore) h++;
     else if (g.awayScore > g.homeScore) a++;
   }
-  if (h >= 2) return "HOME";
-  if (a >= 2) return "AWAY";
+  if (h > a) return "HOME";
+  if (a > h) return "AWAY";
   return null;
 }
 
 function blank(teamId: string): TeamStanding {
   return {
     teamId, played: 0, matchesWon: 0, matchesLost: 0, linesWon: 0, linesLost: 0,
-    gamesWon: 0, gamesLost: 0, forfeits: 0, points: 0,
+    gamesWon: 0, gamesLost: 0, pointsFor: 0, pointsAgainst: 0, forfeits: 0, points: 0,
   };
+}
+
+/// Point differential across counting lines (positive = scored more than
+/// conceded). The primary strength-of-result tiebreaker below matches won.
+export function pointDiff(s: TeamStanding): number {
+  return s.pointsFor - s.pointsAgainst;
 }
 
 export function computeStandings(fixtures: FixtureResult[]): TeamStanding[] {
@@ -76,13 +88,15 @@ export function computeStandings(fixtures: FixtureResult[]): TeamStanding[] {
     let homeLines = 0;
     let awayLines = 0;
     for (const line of fx.lines) {
-      // Count games for both counting and exhibition lines in game tallies,
-      // but only counting lines decide the match.
+      // Line 4 is an exhibition — played and scored, but it counts toward
+      // NOTHING: not the match result, not games, not point differential.
+      if (!line.isCounting) continue;
       for (const g of line.games) {
+        home.pointsFor += g.homeScore; home.pointsAgainst += g.awayScore;
+        away.pointsFor += g.awayScore; away.pointsAgainst += g.homeScore;
         if (g.homeScore > g.awayScore) { home.gamesWon++; away.gamesLost++; }
         else if (g.awayScore > g.homeScore) { away.gamesWon++; home.gamesLost++; }
       }
-      if (!line.isCounting) continue;
       const w = winnerOfLine(line);
       if (w === "HOME") { home.linesWon++; away.linesLost++; homeLines++; }
       else if (w === "AWAY") { away.linesWon++; home.linesLost++; awayLines++; }
@@ -94,8 +108,8 @@ export function computeStandings(fixtures: FixtureResult[]): TeamStanding[] {
   return [...table.values()].sort(
     (a, b) =>
       b.points - a.points ||
-      b.linesWon - a.linesWon ||
-      b.gamesWon - a.gamesWon ||
-      (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost)
+      (b.linesWon - b.linesLost) - (a.linesWon - a.linesLost) ||
+      pointDiff(b) - pointDiff(a) ||
+      b.linesWon - a.linesWon
   );
 }

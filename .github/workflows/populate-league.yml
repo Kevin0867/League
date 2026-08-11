@@ -1,0 +1,39 @@
+name: Populate league test data
+
+# Manually-triggered. Enrolls existing published teams into the active ACP
+# league and generates a full round-robin of COMPLETED test matches (each line a
+# single game to 11, win by 2; line 4 is a scored exhibition excluded from the
+# standings), so the leaderboard is exercised end to end.
+#
+# Scope: it only clears the active ACP season's fixtures + league membership and
+# rebuilds them. It does NOT touch registrations, players, coaches, facilities,
+# payments, or any other season. Idempotent — re-running gives a clean set.
+#
+# Requires repo secret DATABASE_URL (the Neon connection string).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  populate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify DATABASE_URL is configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply pending migrations
+        run: npx prisma migrate deploy
+      - name: Populate league
+        run: npx tsx --tsconfig tsconfig.scripts.json scripts/populate-league.ts

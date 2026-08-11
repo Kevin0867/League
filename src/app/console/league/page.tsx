@@ -408,7 +408,7 @@ export default async function LeaguePage({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold text-slate-900"><span className="text-slate-400">Step 3 ·</span> Leaderboard</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Live standings from entered scores. Ranked by match points, then lines, then games.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Live standings from entered scores. Ranked by match points, then line differential, then point differential. The top three lines decide each match — line 4 is an exhibition and counts toward nothing.</p>
           </div>
           <span className="text-xs text-slate-400">{completedFixtures}/{fixtures.length || 0} matches played</span>
         </div>
@@ -426,12 +426,14 @@ export default async function LeaguePage({
                 <th className="text-center">W</th>
                 <th className="text-center">L</th>
                 <th className="text-center">Lines</th>
-                <th className="text-center">Games</th>
+                <th className="text-center" title="Point differential across counting lines">Diff</th>
                 <th className="text-center">Pts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {standings.map((r, i) => (
+              {standings.map((r, i) => {
+                const diff = r.pointsFor - r.pointsAgainst;
+                return (
                 <tr key={r.teamId} className={i < 2 ? "bg-accent-50/40" : ""}>
                   <td className="py-2 pr-2 font-semibold text-slate-500">{i + 1}</td>
                   <td className="font-medium text-slate-800">
@@ -443,10 +445,11 @@ export default async function LeaguePage({
                   <td className="text-center text-slate-600 tabular-nums">{r.matchesWon}</td>
                   <td className="text-center text-slate-600 tabular-nums">{r.matchesLost}</td>
                   <td className="text-center text-slate-500 tabular-nums">{r.linesWon}–{r.linesLost}</td>
-                  <td className="text-center text-slate-500 tabular-nums">{r.gamesWon}–{r.gamesLost}</td>
+                  <td className={`text-center tabular-nums ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-500"}`}>{diff > 0 ? `+${diff}` : diff}</td>
                   <td className="text-center font-bold text-slate-900 tabular-nums">{r.points}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
