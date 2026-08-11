@@ -58,7 +58,13 @@ export default async function StandingsPage() {
                       return (
                         <tr key={s.teamId} className={i < 2 ? "bg-accent-50/40" : ""}>
                           <td className="py-1.5 pr-2 font-semibold text-slate-500">{i + 1}</td>
-                          <td className="font-medium text-slate-800">{s.teamName}</td>
+                          <td className="font-medium text-slate-800">
+                            {s.teamSlug ? (
+                              <Link href={`/teams/${s.teamSlug}`} className="hover:text-brand-700 hover:underline">{s.teamName}</Link>
+                            ) : (
+                              s.teamName
+                            )}
+                          </td>
                           <td className="text-center tabular-nums">{s.played}</td>
                           <td className="text-center tabular-nums">{s.matchesWon}</td>
                           <td className="text-center tabular-nums">{s.matchesLost}</td>

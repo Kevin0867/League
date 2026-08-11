@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
-import { teamDisplayName, teamShortName, PURE_MARKETS } from "@/lib/domain/teamName";
+import { teamDisplayName, teamShortName, teamSlug, PURE_MARKETS } from "@/lib/domain/teamName";
 
 export const dynamic = "force-dynamic";
 
@@ -76,13 +76,17 @@ export default async function TeamsPage() {
                 </h2>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {byMarket.get(market)!.map((t) => (
-                    <div key={t.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <Link
+                      key={t.id}
+                      href={`/teams/${teamSlug(t)}`}
+                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-brand-300 hover:shadow"
+                    >
                       <div>
                         <div className="font-semibold text-slate-900">{teamDisplayName(t)}</div>
                         <div className="text-xs text-slate-500">{teamShortName(t)} · {t._count.members} players</div>
                       </div>
                       {t.color && <span className={`h-4 w-4 shrink-0 rounded-full ${COLOR_DOT[t.color] ?? "bg-slate-300"}`} title={t.color} />}
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </section>

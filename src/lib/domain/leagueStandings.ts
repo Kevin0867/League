@@ -5,8 +5,9 @@
 // (LeagueTeam), not grouped by division.
 import { prisma } from "@/lib/db";
 import { computeStandings, pointDiff, type FixtureResult, type TeamStanding } from "@/lib/domain/standings";
+import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 
-export type LeagueStandingRow = TeamStanding & { teamName: string };
+export type LeagueStandingRow = TeamStanding & { teamName: string; teamSlug: string };
 
 function blankStanding(teamId: string): TeamStanding {
   return {
@@ -35,7 +36,9 @@ export async function leagueStandingsFlat(seasonId: string): Promise<LeagueStand
   const [entries, fixtures] = await Promise.all([
     prisma.leagueTeam.findMany({
       where: { seasonId },
-      include: { team: { select: { id: true, name: true } } },
+      include: {
+        team: { select: { id: true, name: true, club: true, market: true, divisionCode: true, color: true } },
+      },
     }),
     prisma.fixture.findMany({
       where: { seasonId },
@@ -43,7 +46,14 @@ export async function leagueStandingsFlat(seasonId: string): Promise<LeagueStand
     }),
   ]);
 
-  const names = new Map(entries.map((e) => [e.team.id, e.team.name]));
+  // Names are ALWAYS rendered from the stored parts (§6), never the legacy
+  // concatenated `name` string, so any part change propagates here at once.
+  const identity = new Map(
+    entries.map((e) => [
+      e.team.id,
+      { name: teamDisplayName(e.team) || e.team.name, slug: teamSlug(e.team) },
+    ])
+  );
 
   const fixtureResults: FixtureResult[] = fixtures.map((f) => ({
     homeTeamId: f.homeTeamId,
@@ -63,7 +73,8 @@ export async function leagueStandingsFlat(seasonId: string): Promise<LeagueStand
   return entries
     .map((e) => ({
       ...(ranked.get(e.team.id) ?? blankStanding(e.team.id)),
-      teamName: names.get(e.team.id) ?? "—",
+      teamName: identity.get(e.team.id)?.name ?? "—",
+      teamSlug: identity.get(e.team.id)?.slug ?? "",
     }))
     .sort(rankRows);
 }

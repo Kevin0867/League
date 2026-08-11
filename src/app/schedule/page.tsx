@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
+import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate } from "@/lib/time";
+import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +44,7 @@ export default async function PublicSchedulePage() {
                   <div key={f.id} className="card flex items-center justify-between">
                     <div>
                       <div className="font-medium text-slate-800">
-                        {f.homeTeam?.name ?? "TBD"} <span className="text-slate-400">vs</span> {f.awayTeam?.name ?? "TBD"}
+                        <TeamRef team={f.homeTeam} /> <span className="text-slate-400">vs</span> <TeamRef team={f.awayTeam} />
                       </div>
                       <div className="text-xs text-slate-400">
                         {formatDate(f.scheduledAt)} · {f.facility?.name ?? "hub TBD"}
@@ -60,5 +62,22 @@ export default async function PublicSchedulePage() {
       </div>
       <SiteFooter />
     </div>
+  );
+}
+
+// A team reference, name rendered from parts (§6) and linked to its public page
+// when it's a published PURE team.
+function TeamRef({
+  team,
+}: {
+  team: { club: string; market: string | null; divisionCode: string | null; color: string | null; published: boolean; name: string } | null;
+}) {
+  if (!team) return <span className="text-slate-500">TBD</span>;
+  const label = teamDisplayName(team) || team.name;
+  if (!team.published) return <>{label}</>;
+  return (
+    <Link href={`/teams/${teamSlug(team)}`} className="hover:text-brand-700 hover:underline">
+      {label}
+    </Link>
   );
 }
