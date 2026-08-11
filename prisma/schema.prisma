@@ -111,6 +111,11 @@ model Person {
   // consent must be recorded and honored against the person record.
   waiverSignedAt     DateTime?
   mediaOptOut        Boolean   @default(false)
+  /// Express opt-in to receive email / SMS from PURE (TCPA / Twilio A2P). Set
+  /// when the person checks the box on the opt-in form or during registration;
+  /// the exact language and timestamp are also captured in MessagingConsent.
+  emailConsentAt     DateTime?
+  smsConsentAt       DateTime?
   /// Set when a minor turns 18 and their parent-signed waiver must be replaced
   /// by an adult self-signed waiver. Cleared when they sign the new one.
   waiverRenewalRequiredAt DateTime?
@@ -731,6 +736,31 @@ model Season {
   fixtures      Fixture[]
   messages      Message[]
   leagueTeams   LeagueTeam[]
+}
+
+/// A stored record of express consent to receive email / SMS messages — the
+/// auditable proof of opt-in for TCPA and Twilio A2P 10DLC (who, when, what
+/// language, what channels, from where). Every submission of the /opt-in form
+/// and every consenting registration writes one.
+model MessagingConsent {
+  id             String   @id @default(cuid())
+  personId       String?
+  name           String
+  email          String?
+  phone          String?
+  emailOptIn     Boolean  @default(false)
+  smsOptIn       Boolean  @default(false)
+  /// The exact consent language shown to the person, and its version.
+  consentText    String
+  consentVersion String
+  /// Where the consent came from: opt-in-form | registration.
+  source         String
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([phone])
 }
 
 /// Phase-A interest from an outside club before ACP entries open (Sep 14). Just

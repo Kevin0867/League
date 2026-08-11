@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { registerAction, type RegisterState } from "@/app/register/actions";
 import { WaiverText, WAIVER_VERSION } from "@/components/WaiverText";
+import { EMAIL_CONSENT_TEXT, SMS_CONSENT_TEXT } from "@/lib/consent";
 
 const YOUTH_LEVELS = ["High School", "Middle", "Elementary"];
 const ADULT_TEAMS = ["Men's", "Women's"];
@@ -208,6 +209,19 @@ export function RegisterForm({
             <label className="label" htmlFor="waiverDate">Date</label>
             <input id="waiverDate" name="waiverDate" type="date" className="input" defaultValue={today} readOnly />
           </div>
+        </div>
+
+        {/* Express email/SMS opt-in — optional, never a condition of registration. */}
+        <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">Stay in the loop (optional)</p>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="emailOptIn" className="mt-0.5" defaultChecked />
+            <span className="text-slate-600">{EMAIL_CONSENT_TEXT}</span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="smsOptIn" className="mt-0.5" />
+            <span className="text-slate-600">{SMS_CONSENT_TEXT}</span>
+          </label>
         </div>
       </Section>
 

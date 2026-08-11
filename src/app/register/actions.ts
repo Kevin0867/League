@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { formatDate } from "@/lib/time";
+import { CONSENT_VERSION, consentRecordText } from "@/lib/consent";
 import {
   sendRegistrationConfirmation,
   notifyTeamOfRegistration,
@@ -213,6 +214,8 @@ export async function registerAction(
   const signatureName = g("signatureName");
   const mediaOptOut = formData.get("mediaOptOut") === "on";
   const waiverVersion = g("waiverVersion") || "2026-08";
+  const emailOptIn = formData.get("emailOptIn") === "on";
+  const smsOptIn = formData.get("smsOptIn") === "on";
 
   if (!firstName || !lastName)
     return { error: hasChildren && !adultPlaying ? "Parent/guardian name is required." : "Your name is required." };
@@ -263,6 +266,29 @@ export async function registerAction(
       data: { firstName, lastName, email: email || null, phone: phone || null, mediaOptOut },
     });
     primaryId = primary.id;
+  }
+
+  // Express email/SMS consent (TCPA / Twilio A2P). Recorded against the primary
+  // contact with the exact language and an auditable consent row.
+  if (emailOptIn || smsOptIn) {
+    const now = new Date();
+    await prisma.person.update({
+      where: { id: primaryId },
+      data: { ...(emailOptIn ? { emailConsentAt: now } : {}), ...(smsOptIn ? { smsConsentAt: now } : {}) },
+    });
+    await prisma.messagingConsent.create({
+      data: {
+        personId: primaryId,
+        name: `${firstName} ${lastName}`.trim(),
+        email: email || null,
+        phone: phone || null,
+        emailOptIn,
+        smsOptIn,
+        consentText: consentRecordText(emailOptIn, smsOptIn),
+        consentVersion: CONSENT_VERSION,
+        source: "registration",
+      },
+    });
   }
 
   const enrolled: EnrolledPlayer[] = [];

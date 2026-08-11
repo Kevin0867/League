@@ -29,6 +29,7 @@ export function SiteFooter() {
             <li><Link href="/terms" className="hover:text-brand-700 hover:underline">Terms of Service</Link></li>
             <li><Link href="/privacy" className="hover:text-brand-700 hover:underline">Privacy Policy</Link></li>
             <li><Link href="/season-terms" className="hover:text-brand-700 hover:underline">Season Terms &amp; Refund Policy</Link></li>
+            <li><Link href="/opt-in" className="hover:text-brand-700 hover:underline">Email &amp; text opt-in</Link></li>
             <li><a href="/waiver.pdf" className="hover:text-brand-700 hover:underline">Participation waiver (PDF)</a></li>
           </ul>
         </div>
