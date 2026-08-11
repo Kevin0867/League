@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm, hashPassword } from "@/lib/auth";
-import { can } from "@/lib/rbac";
+import { can, isStaff } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
 import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
@@ -48,13 +48,41 @@ export async function POST(req: Request) {
       const role = String(formData.get("role") ?? "COACH") as Role;
       const password = String(formData.get("password") ?? "");
 
+      if (!CREATABLE_ROLES.includes(role)) return back("?err=role");
+
+      // If an account already exists for this email, don't dead-end — link a
+      // Coach profile onto that existing person so they show up in the coaching
+      // area. We never touch their password and never downgrade a staff role.
+      const existingUser = await prisma.user.findUnique({ where: { email }, include: { person: true } });
+      if (existingUser) {
+        const person =
+          existingUser.person ??
+          (await prisma.person.findFirst({ where: { email } })) ??
+          (await prisma.person.create({ data: { firstName, lastName, email } }));
+        if (!existingUser.personId) {
+          await prisma.user.update({ where: { id: existingUser.id }, data: { personId: person.id } });
+        }
+        const existingCoach = await prisma.coach.findUnique({ where: { personId: person.id } });
+        if (!existingCoach) await prisma.coach.create({ data: { personId: person.id } });
+        // Only elevate a non-staff account (player/parent) to COACH; leave an
+        // existing admin/staff role untouched.
+        if (role === "COACH" && !isStaff(existingUser.role as Role)) {
+          await prisma.user.update({ where: { id: existingUser.id }, data: { role: "COACH" } });
+        }
+        await audit({
+          actorId: actor.userId,
+          entityType: "User",
+          entityId: existingUser.id,
+          action: "user.linkCoach",
+          summary: `Linked a coach profile to existing account ${email}`,
+        });
+        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?ok=account`, origin), 303);
+      }
+
+      // New account path: password required.
       if (!firstName || !lastName || !email || !password) return back("?err=fields");
       if (password.length < 8) return back("?err=short");
       if (password !== String(formData.get("passwordConfirm") ?? "")) return back("?err=mismatch");
-      if (!CREATABLE_ROLES.includes(role)) return back("?err=role");
-
-      const existingUser = await prisma.user.findUnique({ where: { email } });
-      if (existingUser) return back("?err=exists");
 
       // Reuse a Person with this email (e.g. a coach who also registered) if present.
       const person =
