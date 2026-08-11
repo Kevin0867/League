@@ -130,8 +130,11 @@ export default async function HomePage() {
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {CAPS.map((c) => (
             <div key={c.title} className="card">
-              <div className="text-2xl">{c.icon}</div>
-              <h3 className="mt-2 font-semibold text-slate-900">{c.title}</h3>
+              <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-50 ring-1 ring-brand-100">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={c.image} alt="" className="h-7 w-7 object-contain" />
+              </div>
+              <h3 className="mt-3 font-semibold text-slate-900">{c.title}</h3>
               <p className="mt-1 text-sm text-slate-600">{c.body}</p>
             </div>
           ))}
@@ -214,13 +217,17 @@ export default async function HomePage() {
   );
 }
 
+// `image` is a real photo from the PURE library where one exists, or the PURE
+// mark as the branded fallback (no emoji icons — build-list item 3). Drop a
+// photo into /public/season and point `image` at it to replace the mark.
+const PURE_MARK = "/brand/pure-icon.png";
 const CAPS = [
-  { icon: "📝", title: "Simple enrollment", body: "Enroll each player once — waiver, skill level, and emergency contacts, all in one place." },
-  { icon: "🧩", title: "Team placement", body: "Pick one division; the Director places you on the right team by age and skill after Week 1." },
-  { icon: "📅", title: "A full season", body: "A twelve-session season: six practice weeks, five league weeks, and championship week." },
-  { icon: "🏆", title: "League & championship", body: "Line-by-line scoring, live standings, and a championship bracket — every game DUPR-recorded." },
-  { icon: "💳", title: "Enroll today, flexible payments", body: "$495 per player. Secure checkout — pay in full, or in 3 payments (today, +30 and +60 days)." },
-  { icon: "💬", title: "Stay in the loop", body: "Team, coach, and league updates in-app and by email, with texts for time-critical alerts." },
+  { image: PURE_MARK, title: "Simple enrollment", body: "Enroll each player once — waiver, skill level, and emergency contacts, all in one place." },
+  { image: PURE_MARK, title: "Team placement", body: "Pick one division; the Director places you on the right team by age and skill after Week 1." },
+  { image: PURE_MARK, title: "A full season", body: "A twelve-session season: six practice weeks, five league weeks, and championship week." },
+  { image: PURE_MARK, title: "League & championship", body: "Line-by-line scoring, live standings, and a championship bracket — every game DUPR-recorded." },
+  { image: PURE_MARK, title: "Enroll today, flexible payments", body: "$495 per player. Secure checkout — pay in full, or in 3 payments (today, +30 and +60 days)." },
+  { image: PURE_MARK, title: "Stay in the loop", body: "Team, coach, and league updates in-app and by email, with texts for time-critical alerts." },
 ];
 
 const STATS = [
