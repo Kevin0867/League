@@ -2,6 +2,7 @@
 // of October 26. No matches the weekend of December 5–6, and Thanksgiving week
 // is dark. Minimum four teams per division (consolidate adjacent bands where a
 // division is short — surfaced as a warning here, enacted by staff).
+import { isSeasonDark } from "./seasonCalendar";
 
 const LEAGUE_WEEKS = 5;
 
@@ -40,11 +41,6 @@ function isSameDay(a: Date, b: Date) {
   return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
 }
 
-/** Dec 5–6 2026 weekend is explicitly excluded (§14). */
-function isDec5or6Weekend(d: Date) {
-  return d.getUTCFullYear() === 2026 && d.getUTCMonth() === 11 && (d.getUTCDate() === 5 || d.getUTCDate() === 6);
-}
-
 /**
  * Produce up to five weekly league dates starting from `start`, skipping
  * blackout dates and the Dec 5–6 weekend. Rescheduled fixtures also may not land
@@ -55,7 +51,7 @@ export function leagueWeekDates(start: Date, blackouts: Date[], count = LEAGUE_W
   const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate(), 12, 0, 0));
   let guard = 0;
   while (dates.length < count && guard++ < 60) {
-    const blocked = blackouts.some((b) => isSameDay(b, cursor)) || isDec5or6Weekend(cursor);
+    const blocked = blackouts.some((b) => isSameDay(b, cursor)) || isSeasonDark(cursor);
     if (!blocked) dates.push(new Date(cursor));
     cursor.setUTCDate(cursor.getUTCDate() + 7);
   }

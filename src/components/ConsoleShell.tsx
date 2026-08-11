@@ -20,6 +20,7 @@ const SECTIONS: NavSection[] = [
     title: "Season structure",
     items: [
       { href: "/console/setup", label: "Season Setup", icon: "⚙️", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/calendar", label: "Season Calendar", icon: "🗓️", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/registrations", label: "Registrations", icon: "📝", roles: ["COO", "DIRECTOR"] },
       { href: "/console/import", label: "Import", icon: "⬆️", roles: ["COO", "DIRECTOR"] },
     ],

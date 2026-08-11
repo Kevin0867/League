@@ -23,8 +23,11 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
     include: { availabilityBlocks: { select: { id: true } } },
   });
 
+  // Sessions still needing attendance: anything scheduled through the end of
+  // today (past sessions and today's), so a coach can check players in the day
+  // of — not only after the fact.
   const pendingWhere = coach
-    ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfToday() } }
+    ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfTomorrow() } }
     : undefined;
   const [headTeams, upcoming, pendingAttendance, pendingCount, earnings] = coach
     ? await Promise.all([
@@ -34,7 +37,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           orderBy: { name: "asc" },
         }),
         prisma.session.findMany({
-          where: { coaches: { some: { coachId: coach.id } }, date: { gte: startOfToday() } },
+          where: { coaches: { some: { coachId: coach.id } }, date: { gte: startOfTomorrow() } },
           include: { facility: true, teams: { include: { team: { select: { name: true } } } } },
           orderBy: { date: "asc" },
           take: 5,
@@ -157,9 +160,10 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
   );
 }
 
-function startOfToday() {
+function startOfTomorrow() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
   return d;
 }
 

@@ -29,9 +29,10 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { ok, err, view, month } = await searchParams;
+  const { ok, err, view, month, team } = await searchParams;
   const ticket = await mintConsoleTicket();
   const isCalendar = view === "calendar";
+  const teamFilter = team && team !== "all" ? team : null;
   const now = new Date();
   const [calYear, calMonth] = (() => {
     const m = /^(\d{4})-(\d{2})$/.exec(month ?? "");
@@ -55,14 +56,31 @@ export default async function SchedulePage({
     (t) => t.dayOfWeek && t.startTime && t.facilityId && t._count.sessions === 0
   );
 
+  // Team filter — clicking a team shows only that team's sessions.
+  const teamsWithSessions = teams
+    .filter((t) => t._count.sessions > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const selectedTeam = teamFilter ? teams.find((t) => t.id === teamFilter) ?? null : null;
+  const visibleSessions = teamFilter
+    ? sessions.filter((s) => s.teams.some((st) => st.teamId === teamFilter))
+    : sessions;
+  // Preserve the calendar/list view when switching the team filter.
+  const filterHref = (teamId: string | null) => {
+    const qs = new URLSearchParams();
+    if (isCalendar) qs.set("view", "calendar");
+    if (teamId) qs.set("team", teamId);
+    const s = qs.toString();
+    return `/console/schedule${s ? `?${s}` : ""}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Schedule" subtitle="The twelve-session season: six practice weeks, five league weeks, championship week." />
         <div className="flex items-center gap-2">
           <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm">
-            <Link href="/console/schedule" className={`px-3 py-1.5 ${!isCalendar ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>List</Link>
-            <Link href="/console/schedule?view=calendar" className={`px-3 py-1.5 ${isCalendar ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>Calendar</Link>
+            <Link href={teamFilter ? `/console/schedule?team=${teamFilter}` : "/console/schedule"} className={`px-3 py-1.5 ${!isCalendar ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>List</Link>
+            <Link href={teamFilter ? `/console/schedule?view=calendar&team=${teamFilter}` : "/console/schedule?view=calendar"} className={`px-3 py-1.5 ${isCalendar ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>Calendar</Link>
           </div>
           <PrintButton label="Print" />
         </div>
@@ -97,11 +115,40 @@ export default async function SchedulePage({
         </div>
       )}
 
+      {/* Team filter — view one team's schedule, or all */}
+      {teamsWithSessions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Team</span>
+          <Link
+            href={filterHref(null)}
+            className={`rounded-full px-3 py-1 text-sm font-medium ${!teamFilter ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+          >
+            All teams
+          </Link>
+          {teamsWithSessions.map((t) => (
+            <Link
+              key={t.id}
+              href={filterHref(t.id)}
+              className={`rounded-full px-3 py-1 text-sm font-medium ${teamFilter === t.id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >
+              {t.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {selectedTeam && (
+        <p className="text-sm text-slate-600">
+          Showing <span className="font-semibold text-slate-800">{selectedTeam.name}</span>&apos;s schedule ·{" "}
+          <Link href={filterHref(null)} className="text-brand-600 hover:underline">show all teams</Link>
+        </p>
+      )}
+
       {isCalendar ? (
         <ScheduleCalendar
           year={calYear}
           month={calMonth}
-          sessions={sessions.map((s) => ({
+          sessions={visibleSessions.map((s) => ({
             id: s.id,
             date: s.date,
             startTime: s.startTime,
@@ -126,7 +173,7 @@ export default async function SchedulePage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {sessions.map((s) => (
+            {visibleSessions.map((s) => (
               <tr key={s.id} className="hover:bg-slate-50">
                 <td className="py-2 text-slate-700">{formatDate(s.date)}</td>
                 <td className="hidden text-slate-500 lg:table-cell">{s.weekNumber ?? "—"}</td>
@@ -142,8 +189,8 @@ export default async function SchedulePage({
                 </td>
               </tr>
             ))}
-            {sessions.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-slate-400">No sessions scheduled yet.</td></tr>
+            {visibleSessions.length === 0 && (
+              <tr><td colSpan={8} className="py-8 text-center text-slate-400">{teamFilter ? "No sessions for this team yet." : "No sessions scheduled yet."}</td></tr>
             )}
           </tbody>
         </table>

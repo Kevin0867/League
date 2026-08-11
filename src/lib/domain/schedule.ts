@@ -2,6 +2,7 @@
 // cancellation rules, which differ by session type.
 
 import { WEEKDAYS } from "../enums";
+import { isSeasonDark } from "./seasonCalendar";
 
 const DAY_INDEX: Record<string, number> = {
   SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6,
@@ -39,7 +40,9 @@ export function generatePracticeDates(
   const cursor = firstDateOnOrAfter(seasonStart, dayOfWeek);
   let guard = 0;
   while (dates.length < count && guard++ < 60) {
-    if (!inBlackout(cursor, blackouts)) {
+    // Skip facility/global blackout days and the season-dark weeks (Thanksgiving
+    // week, Dec 5–6) — a slot that lands on one is pushed to the next week.
+    if (!inBlackout(cursor, blackouts) && !isSeasonDark(cursor)) {
       dates.push(new Date(cursor));
     }
     cursor.setUTCDate(cursor.getUTCDate() + 7);
