@@ -43,7 +43,16 @@ Everything in the repo is ready — the `production` branch, the
      Vercel URL) so the live domain is only production.
    - Keep its `DATABASE_URL` on the current (test) DB — the data stays.
    - Use Stripe **test** keys here so test payments never hit live.
-6. **Seed the real season on production** via the console (Season Setup, teams,
+6. **Create the first admin (production starts with zero users).** A fresh DB
+   has no accounts, so nobody can log in yet.
+   - Add repo secret `ADMIN_BOOTSTRAP_PASSWORD` (≥ 8 chars) in Settings →
+     Secrets and variables → Actions.
+   - Actions → **Create production admin** → Run workflow on the **`production`**
+     branch. Fill in your email / first / last. It creates one ADMIN account
+     (idempotent — re-running just resets that account's role + password).
+   - Log in at `/login` with that email and `ADMIN_BOOTSTRAP_PASSWORD`, then
+     change the password in the console immediately.
+7. **Seed the real season on production** via the console (Season Setup, teams,
    coaches, etc.) — production starts empty by design.
 
 ## Day-to-day: promoting a change

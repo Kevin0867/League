@@ -1,0 +1,63 @@
+name: Create production admin
+
+# One-time (idempotent) bootstrap for a fresh, empty database. A brand-new Neon
+# DB has zero users, so nobody can log into /console to seed the season — this
+# creates (or upgrades) a single ADMIN account you can sign in with.
+#
+# Runs scripts/create-admin.ts against the PRODUCTION connection string
+# (DATABASE_URL_PRODUCTION). Re-running with the same email just resets that
+# account's role + password, so it is safe to run more than once.
+#
+# Requires repo secrets:
+#   DATABASE_URL_PRODUCTION   the production Neon connection string
+#   ADMIN_BOOTSTRAP_PASSWORD  the initial password (≥ 8 chars) — change it in
+#                             the console right after first login
+#
+# Run this on the `production` branch (Actions → Create production admin →
+# Run workflow), filling in the email / first / last inputs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Admin email (the address you'll log in with)"
+        required: true
+        default: ""
+      first_name:
+        description: "First name"
+        required: false
+        default: "Admin"
+      last_name:
+        description: "Last name"
+        required: false
+        default: "User"
+
+jobs:
+  create-admin:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_PRODUCTION }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL_PRODUCTION || secrets.DATABASE_URL_PRODUCTION }}
+      ADMIN_EMAIL: ${{ github.event.inputs.email }}
+      ADMIN_FIRST: ${{ github.event.inputs.first_name }}
+      ADMIN_LAST: ${{ github.event.inputs.last_name }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify secrets are configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL_PRODUCTION secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          if [ -z "$ADMIN_PASSWORD" ]; then
+            echo "::error::ADMIN_BOOTSTRAP_PASSWORD secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Create (or upgrade) the admin account
+        run: npx tsx --tsconfig tsconfig.scripts.json scripts/create-admin.ts
