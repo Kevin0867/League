@@ -16,6 +16,34 @@ export const dynamic = "force-dynamic";
 
 const CREATABLE_ROLES: Role[] = ["ADMIN", "COACH"];
 
+// Mint a set-password link for a user, try to email it, and report back the
+// token + whether it actually sent + any send error. Shared by create, link,
+// and the explicit "Send invite" action so all three behave identically.
+async function issueInvite(user: { id: string; email: string }, name: string, role: string) {
+  const token = await createResetToken(user.id, INVITE_TTL_MS);
+  const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
+  let sent = false;
+  let error = "";
+  try {
+    const res = await sendConsoleInvite({ toEmail: user.email, name, role, link });
+    sent = res.ok && !res.simulated;
+    if (!res.ok && res.error) error = res.error;
+  } catch (e) {
+    error = e instanceof Error ? e.message : "send failed";
+    console.error("coach invite email failed", e);
+  }
+  return { token, sent, error };
+}
+
+// Build the redirect query that carries the invite result to the coach page.
+function inviteQuery(base: Record<string, string>, r: { token: string; sent: boolean; error: string }) {
+  const qs = new URLSearchParams(base);
+  qs.set("invitetoken", r.token);
+  if (r.sent) qs.set("invitesent", "1");
+  if (r.error) qs.set("inviteerr", r.error.slice(0, 180));
+  return qs.toString();
+}
+
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const formData = await req.formData();
@@ -47,23 +75,9 @@ export async function POST(req: Request) {
       const personId = String(formData.get("personId") ?? "");
       const user = await prisma.user.findFirst({ where: { personId }, include: { person: true } });
       if (!user) return back("?err=nouser");
-      const token = await createResetToken(user.id, INVITE_TTL_MS);
-      const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
-      let sent = false;
-      let sendErr = "";
-      try {
-        const res = await sendConsoleInvite({ toEmail: user.email, name: user.person?.firstName ?? user.email, role: user.role, link });
-        sent = res.ok && !res.simulated;
-        if (!res.ok && res.error) sendErr = res.error;
-      } catch (e) {
-        sendErr = e instanceof Error ? e.message : "send failed";
-        console.error("coach invite email failed", e);
-      }
-      await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: sent ? `Invite emailed to ${user.email}` : `Invite link generated for ${user.email}${sendErr ? ` (send failed: ${sendErr})` : " (email not delivered)"}` });
-      const qs = new URLSearchParams({ invitetoken: token });
-      if (sent) qs.set("invitesent", "1");
-      if (sendErr) qs.set("inviteerr", sendErr.slice(0, 180));
-      return back(`?${qs.toString()}`);
+      const inv = await issueInvite(user, user.person?.firstName ?? user.email, user.role);
+      await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: inv.sent ? `Invite emailed to ${user.email}` : `Invite link generated for ${user.email}${inv.error ? ` (send failed: ${inv.error})` : " (email not delivered)"}` });
+      return back(`?${inviteQuery({}, inv)}`);
     }
 
     case "create": {
@@ -103,7 +117,11 @@ export async function POST(req: Request) {
           action: "user.linkCoach",
           summary: `Linked a coach profile to existing account ${email}`,
         });
-        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?ok=account`, origin), 303);
+        // Auto-issue an invite so the admin gets the set-password link right
+        // away (and it's emailed when delivery is configured) — no separate
+        // "Send invite" click needed.
+        const inv = await issueInvite(existingUser, existingUser.person?.firstName ?? (firstName || email), "COACH");
+        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${inviteQuery({ ok: "account" }, inv)}`, origin), 303);
       }
 
       // New account path: password required.
@@ -135,33 +153,15 @@ export async function POST(req: Request) {
         summary: `Created ${role} account for ${email}`,
       });
 
-      // Notify the new account holder: email a set-password / join link so a
-      // coach doesn't depend on the admin relaying the temporary password. We
-      // capture the token and whether the email actually went out, so the admin
-      // can copy the link if email delivery isn't configured.
-      let inviteToken: string | null = null;
-      let inviteSent = false;
-      let inviteErr = "";
-      try {
-        inviteToken = await createResetToken(user.id, INVITE_TTL_MS);
-        const link = `${appUrl()}/reset?token=${encodeURIComponent(inviteToken)}&invite=1`;
-        const res = await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
-        inviteSent = res.ok && !res.simulated;
-        if (!res.ok && res.error) inviteErr = res.error;
-        await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: inviteSent ? `Invite emailed to ${email}` : `Invite link generated for ${email}${inviteErr ? ` (send failed: ${inviteErr})` : " (email not delivered)"}` });
-      } catch (e) {
-        inviteErr = e instanceof Error ? e.message : "send failed";
-        console.error("coach invite email failed", e);
-      }
+      // Email the new account holder a set-password link, and capture whether it
+      // actually went out so the admin can copy it if delivery fails.
+      const inv = await issueInvite(user, firstName, role);
+      await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: inv.sent ? `Invite emailed to ${email}` : `Invite link generated for ${email}${inv.error ? ` (send failed: ${inv.error})` : " (email not delivered)"}` });
 
       // For a coach, drop the admin straight onto the full profile form so they
       // can fill in certification, screening, markets, and availability now.
       if (role === "COACH") {
-        const qs = new URLSearchParams({ ok: "account" });
-        if (inviteToken) qs.set("invitetoken", inviteToken);
-        if (inviteSent) qs.set("invitesent", "1");
-        if (inviteErr) qs.set("inviteerr", inviteErr.slice(0, 180));
-        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${qs.toString()}`, origin), 303);
+        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${inviteQuery({ ok: "account" }, inv)}`, origin), 303);
       }
       return back("?ok=1");
     }
