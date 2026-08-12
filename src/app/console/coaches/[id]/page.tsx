@@ -247,6 +247,7 @@ export default async function EditCoachPage({
           certifications: coach?.certifications ?? "",
           bio: coach?.bio ?? "",
           coachingLevels: coach?.coachingLevels ?? "",
+          publicHidden: coach?.publicHidden ?? [],
           markets: parseMarkets(coach?.marketsCovered ?? null),
           availability: (coach?.availabilityBlocks ?? []).map((b) => ({
             dayOfWeek: b.dayOfWeek,

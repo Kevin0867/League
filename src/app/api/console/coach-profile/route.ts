@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { COACH_PUBLIC_FIELDS } from "@/lib/domain/coachPublic";
 
 // Coach profile save. Coaches edit their own; admins (manageCoaches) may edit any
 // coach by passing a `personId`. A COACH login may not yet have a Coach row
@@ -52,6 +53,11 @@ export async function POST(req: Request) {
     safeSportCertified: g("safeSport") === "yes",
     backgroundCheckDate: bgChecked && bgDate ? new Date(bgDate) : bgChecked ? new Date() : null,
     backgroundCheckCompany: bgChecked ? (g("bgCompany") || null) : null,
+    // Public-profile visibility: the form submits the fields to SHOW; anything
+    // not checked is hidden. Only written when the visibility section rendered.
+    ...(g("pubVisible") === "1"
+      ? { publicHidden: COACH_PUBLIC_FIELDS.map((f) => f.key).filter((k) => !list("pubShow").includes(k)) }
+      : {}),
   };
 
   // Compensation is admin-only. It is written only when the form was rendered

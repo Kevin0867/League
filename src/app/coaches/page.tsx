@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
+import { isPublic } from "@/lib/domain/coachPublic";
 
 export const dynamic = "force-dynamic";
 
@@ -74,17 +76,24 @@ export default async function CoachesPage() {
               <div className="p-8 sm:p-10">
                 <p className="eyebrow eyebrow-light">Director &amp; Head Coach</p>
                 <h2 className="display mt-2 text-3xl text-white">{director.person.firstName} {director.person.lastName}</h2>
-                <p className="mt-4 whitespace-pre-line text-brand-100">{director.bio || DIRECTOR_FALLBACK_BIO}</p>
-                {(director.rpoCertLevel || director.certifications) && (
+                {isPublic(director.publicHidden, "bio") && (
+                  <p className="mt-4 whitespace-pre-line text-brand-100">{director.bio || DIRECTOR_FALLBACK_BIO}</p>
+                )}
+                {isPublic(director.publicHidden, "credentials") && (director.rpoCertLevel || director.certifications) && (
                   <p className="mt-3 text-sm text-brand-200">{[director.rpoCertLevel, director.certifications].filter(Boolean).join(" · ")}</p>
                 )}
-                <p className="mt-3 text-sm text-brand-200">
-                  {directorMarkets.length > 0 ? directorMarkets.join(" · ") : DIRECTOR_FALLBACK_MARKETS}
-                </p>
+                {isPublic(director.publicHidden, "markets") && (
+                  <p className="mt-3 text-sm text-brand-200">
+                    {directorMarkets.length > 0 ? directorMarkets.join(" · ") : DIRECTOR_FALLBACK_MARKETS}
+                  </p>
+                )}
                 <p className="mt-5 border-l-2 border-accent-400 pl-4 text-lg italic text-white">
                   The Academy is directed by someone competing at the top of the sport during the same season she is
                   coaching it.
                 </p>
+                <Link href={`/coaches/${director.person.id}`} className="mt-6 inline-block text-sm font-semibold text-accent-300 hover:text-accent-200">
+                  View full profile →
+                </Link>
               </div>
             </div>
           </section>
@@ -96,34 +105,40 @@ export default async function CoachesPage() {
           </p>
         )}
 
-        {/* Coach grid */}
+        {/* Coach grid — the full staff, each card links to a public profile */}
         {grid.length > 0 && (
-          <section className="mt-12">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">The coaching staff</h2>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <section className="mt-14 border-t border-slate-200 pt-10">
+            <h2 className="display text-2xl text-brand-900">Meet the coaching staff</h2>
+            <p className="mt-1 text-sm text-slate-500">Tap a coach to see their background and credentials.</p>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {grid.map((c) => {
-                const markets = parseMarkets(c.marketsCovered);
+                const markets = isPublic(c.publicHidden, "markets") ? parseMarkets(c.marketsCovered) : [];
                 const name = `${c.person.firstName} ${c.person.lastName}`;
                 return (
-                  <div key={c.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="aspect-[4/3] bg-gradient-to-br from-brand-100 to-slate-100">
+                  <Link
+                    key={c.id}
+                    href={`/coaches/${c.person.id}`}
+                    className="group block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-brand-300 hover:shadow-md"
+                  >
+                    <div className="aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-slate-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={c.person.imageUrl ?? `/coaches/${c.person.id}.jpg`} alt={name} className="h-full w-full object-cover" />
+                      <img src={c.person.imageUrl ?? `/coaches/${c.person.id}.jpg`} alt={name} className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
                     </div>
                     <div className="p-5">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-bold text-slate-900">{name}</h3>
+                        <h3 className="font-bold text-slate-900 group-hover:text-brand-700">{name}</h3>
                         {c.isProCoach && <span className="badge bg-brand-100 text-brand-800">Pro</span>}
                       </div>
                       {markets.length > 0 && <p className="mt-0.5 text-sm text-slate-500">{markets.join(" · ")}</p>}
-                      {c.coachingLevels && <p className="mt-2 text-sm text-slate-600">{c.coachingLevels}</p>}
-                      {(c.rpoCertLevel || c.certifications) && (
+                      {isPublic(c.publicHidden, "levels") && c.coachingLevels && <p className="mt-2 text-sm text-slate-600">{c.coachingLevels}</p>}
+                      {isPublic(c.publicHidden, "credentials") && (c.rpoCertLevel || c.certifications) && (
                         <p className="mt-2 text-xs text-slate-500">
                           {[c.rpoCertLevel, c.certifications].filter(Boolean).join(" · ")}
                         </p>
                       )}
+                      <span className="mt-3 inline-block text-xs font-semibold text-brand-600 group-hover:text-brand-800">View profile →</span>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>

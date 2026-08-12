@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ACADEMY_MARKETS } from "@/lib/enums";
+import { COACH_PUBLIC_FIELDS as PUBLIC_FIELDS } from "@/lib/domain/coachPublic";
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
@@ -24,6 +25,7 @@ export function CoachProfileForm({
     certifications: string;
     bio: string;
     coachingLevels: string;
+    publicHidden: string[];
     markets: string[];
     availability: Block[];
     safeSport: boolean;
@@ -88,6 +90,23 @@ export function CoachProfileForm({
             <label className="label">Levels you can coach</label>
             <input name="coachingLevels" className="input" defaultValue={initial.coachingLevels}
               placeholder="e.g. 2.5–4.0, Youth (Elementary–High School), Beginners" />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-semibold text-slate-800">What the public sees</div>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Choose which fields show on your public profile (/coaches). Your name and photo always show once
+              published. Unchecked fields stay private.
+            </p>
+            <input type="hidden" name="pubVisible" value="1" />
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {PUBLIC_FIELDS.map((f) => (
+                <label key={f.key} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <input type="checkbox" name="pubShow" value={f.key} defaultChecked={!initial.publicHidden.includes(f.key)} className="h-4 w-4" />
+                  <span className="text-slate-700">{f.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
       </section>

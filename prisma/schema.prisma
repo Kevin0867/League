@@ -371,6 +371,10 @@ model Coach {
   /// coaches confirmed for the season, not the full prospective roster (§ build
   /// list item 2).
   publishedOnSite     Boolean   @default(false)
+  /// Field keys the coach/admin has chosen to HIDE from the public profile
+  /// (empty = everything shows). Keys: bio | credentials | markets | levels.
+  /// Name and photo are always public once publishedOnSite. See domain/coachPublic.
+  publicHidden        String[]  @default([])
 
   /// Secret token for the coach's personal calendar subscription feed
   /// (/api/calendar/<token>) — a URL they add to their phone's calendar so
