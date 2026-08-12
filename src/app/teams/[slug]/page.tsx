@@ -88,7 +88,12 @@ export default async function TeamPage({
               )}
               {data.coachName && (
                 <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
-                  <span className="text-slate-400">Coach:</span> {data.coachName}
+                  <span className="text-slate-400">Coach:</span>{" "}
+                  {data.coachPersonId ? (
+                    <Link href={`/coaches/${data.coachPersonId}`} className="font-medium text-brand-700 hover:underline">{data.coachName}</Link>
+                  ) : (
+                    data.coachName
+                  )}
                 </p>
               )}
             </div>
@@ -101,7 +106,9 @@ export default async function TeamPage({
                 <>
                   <ul className="mt-2 grid grid-cols-1 gap-1 text-sm text-slate-700">
                     {data.roster.map((p) => (
-                      <li key={p.id}>{p.label}</li>
+                      <li key={p.id}>
+                        <Link href={`/players/${p.slug}`} className="text-slate-700 hover:text-brand-700 hover:underline">{p.label}</Link>
+                      </li>
                     ))}
                   </ul>
                   <p className="mt-3 text-xs text-slate-400">{data.roster.length} players</p>

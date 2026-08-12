@@ -5,6 +5,7 @@
 import { prisma } from "@/lib/db";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 import { leagueStandingsFlat, type LeagueStandingRow } from "@/lib/domain/leagueStandings";
+import { publicPlayerName, publicPlayerSlug } from "@/lib/domain/publicPlayer";
 
 const DAY_LABEL: Record<string, string> = {
   MON: "Monday", TUE: "Tuesday", WED: "Wednesday", THU: "Thursday",
@@ -30,18 +31,12 @@ export type TeamPageData = {
   color: string | null;
   practice: { day: string | null; startTime: string | null; facility: string | null };
   coachName: string | null;
-  roster: { id: string; label: string }[];
+  coachPersonId: string | null;
+  roster: { id: string; label: string; slug: string }[];
   record: LeagueStandingRow | null;
   upcoming: TeamFixtureView[];
   recent: TeamFixtureView[];
 };
-
-/// Roster privacy: public pages show first name + last initial, never full
-/// surnames of (often minor) players.
-function rosterLabel(firstName: string, lastName: string): string {
-  const initial = lastName?.trim()?.[0];
-  return initial ? `${firstName} ${initial}.` : firstName;
-}
 
 export async function resolveTeamBySlug(slug: string) {
   // Small candidate set: only published PURE teams have public pages. Match on
@@ -62,7 +57,7 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
       where: { id: match.id },
       include: {
         facility: { select: { name: true } },
-        coach: { include: { person: { select: { firstName: true, lastName: true } } } },
+        coach: { include: { person: { select: { id: true, firstName: true, lastName: true } } } },
         teamContact: { select: { firstName: true, lastName: true } },
         members: {
           include: { person: { select: { id: true, firstName: true, lastName: true } } },
@@ -128,7 +123,12 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
       facility: team.facility?.name ?? null,
     },
     coachName,
-    roster: team.members.map((m) => ({ id: m.person.id, label: rosterLabel(m.person.firstName, m.person.lastName) })),
+    coachPersonId: team.coach?.person.id ?? null,
+    roster: team.members.map((m) => ({
+      id: m.person.id,
+      label: publicPlayerName(m.person),
+      slug: publicPlayerSlug(m.person, m.person.id),
+    })),
     record,
     upcoming,
     recent,
