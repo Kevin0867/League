@@ -30,6 +30,11 @@ export type DispatchResult = {
   messageId: string;
   recipients: number;
   failures: number;
+  /** Recipients whose send was SIMULATED (provider unconfigured) — nothing
+   *  actually left the building, even though it didn't error. */
+  simulated: number;
+  /** Human-readable reasons for each channel failure, for surfacing to admins. */
+  failureReasons: string[];
 };
 
 export async function dispatchMessage(input: DispatchInput): Promise<DispatchResult> {
@@ -56,6 +61,8 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
 
   const subject = input.subject ?? "PURE Academy";
   let failures = 0;
+  let simulated = 0;
+  const allFailureReasons: string[] = [];
 
   for (const r of recipients) {
     // In-app is always delivered — it lives in our own database.
@@ -63,20 +70,28 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
 
     let emailStatus: string | null = null;
     let smsStatus: string | null = null;
+    let wasSimulated = false;
     const failureReasons: string[] = [];
 
     if (channels.includes("EMAIL")) {
       const res = await sendEmail(r.email, subject, input.body, input.html, input.attachments);
       emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`email: ${res.error}`);
+      if (res.ok && res.simulated) wasSimulated = true;
     }
     if (channels.includes("SMS")) {
       const res = await sendSms(r.phone, `${subject}\n${input.body}`);
       smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`sms: ${res.error}`);
+      if (res.ok && res.simulated) wasSimulated = true;
     }
 
-    if (failureReasons.length) failures++;
+    if (failureReasons.length) {
+      failures++;
+      allFailureReasons.push(...failureReasons);
+    } else if (wasSimulated) {
+      simulated++;
+    }
 
     await prisma.messageRecipient.create({
       data: {
@@ -90,5 +105,5 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     });
   }
 
-  return { messageId: message.id, recipients: recipients.length, failures };
+  return { messageId: message.id, recipients: recipients.length, failures, simulated, failureReasons: allFailureReasons };
 }

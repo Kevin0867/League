@@ -62,13 +62,23 @@ export default async function PaymentsPage({
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Not authorized to run payouts.</div>
       )}
       {sp.ok === "resentAll" && (
-        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
-          Resent {sp.n ?? 0} outstanding fee request{sp.n === "1" ? "" : "s"}.
-        </div>
+        <ReminderResult n={sp.n} failed={sp.failed} sim={sp.sim} skipped={sp.skipped} reason={sp.reason} />
       )}
       {sp.ok === "testsent" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
           Preview sent — check your inbox for the sample fee-request email.
+        </div>
+      )}
+      {sp.ok === "testsim" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Preview was <strong>simulated</strong> — the email provider isn&apos;t configured, so nothing was actually delivered. Set <code>RESEND_API_KEY</code> to send real email.
+        </div>
+      )}
+      {sp.err === "sendfail" && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <p className="font-medium">The preview didn&apos;t send.</p>
+          {sp.reason && <p className="mt-1 font-mono text-xs text-rose-700">{sp.reason}</p>}
+          <p className="mt-1">Fix the issue above, then click &ldquo;Send me a preview&rdquo; again.</p>
         </div>
       )}
       {sp.err === "noemail" && (
@@ -279,6 +289,42 @@ function Ledger({ title, rows }: { title: string; rows: Array<{ id: string; amou
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+// Outcome banner for a bulk fee-reminder run. Green when everything went out,
+// but escalates to amber/rose the moment anything failed, was only simulated, or
+// was skipped — with the first error reason spelled out so staff can correct it
+// and re-select those recipients to resend.
+function ReminderResult({
+  n, failed, sim, skipped, reason,
+}: { n?: string; failed?: string; sim?: string; skipped?: string; reason?: string }) {
+  const sent = Number(n ?? 0);
+  const nFailed = Number(failed ?? 0);
+  const nSim = Number(sim ?? 0);
+  const nSkipped = Number(skipped ?? 0);
+  const problem = nFailed > 0 || nSim > 0 || nSkipped > 0;
+  const tone = nFailed > 0 || nSkipped > 0
+    ? "border-rose-200 bg-rose-50 text-rose-800"
+    : nSim > 0
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-emerald-200 bg-emerald-50 text-emerald-800";
+  return (
+    <div className={`rounded-lg border px-4 py-3 text-sm ${tone}`}>
+      <p className="font-medium">
+        {sent > 0 ? `Sent ${sent} reminder${sent === 1 ? "" : "s"}.` : "No reminders were delivered."}
+        {nFailed > 0 && ` ${nFailed} failed.`}
+        {nSim > 0 && ` ${nSim} simulated (not actually delivered).`}
+        {nSkipped > 0 && ` ${nSkipped} skipped.`}
+      </p>
+      {reason && <p className="mt-1 font-mono text-xs opacity-80">First issue — {reason}</p>}
+      {problem && (
+        <p className="mt-1">
+          Correct the issue, then re-select those recipients below and send again. Every send is logged in{" "}
+          <Link href="/console/messages" className="underline">Messages</Link>.
+        </p>
       )}
     </div>
   );

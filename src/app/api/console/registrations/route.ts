@@ -83,6 +83,23 @@ function reminderEmailFor(
   });
 }
 
+// Running tally for a bulk reminder run, so the UI can report exactly what
+// happened: how many actually went out, how many failed (with a sample error),
+// how many were only simulated (provider unconfigured), and how many were
+// skipped for having no payer/email on file.
+type ReminderTally = { sent: number; failed: number; simulated: number; skipped: number; reason: string };
+function newTally(): ReminderTally {
+  return { sent: 0, failed: 0, simulated: 0, skipped: 0, reason: "" };
+}
+function reminderResultQuery(t: ReminderTally): string {
+  const qs = new URLSearchParams({ ok: "resentAll", n: String(t.sent) });
+  if (t.failed) qs.set("failed", String(t.failed));
+  if (t.simulated) qs.set("sim", String(t.simulated));
+  if (t.skipped) qs.set("skipped", String(t.skipped));
+  if (t.reason) qs.set("reason", t.reason.slice(0, 180));
+  return qs.toString();
+}
+
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const back = (qs: string) => NextResponse.redirect(new URL(`/console/registrations${qs}`, origin), 303);
@@ -135,22 +152,31 @@ export async function POST(req: Request) {
         ...(seasonScope ? { seasonId: seasonScope } : {}),
       },
     });
-    let sent = 0;
+    const tally = newTally();
     for (const pay of payments) {
-      if (!pay.partyId) continue;
+      if (!pay.partyId) { tally.skipped++; if (!tally.reason) tally.reason = "a charge had no payer on file"; continue; }
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
-      if (!person) continue;
+      if (!person) { tally.skipped++; if (!tally.reason) tally.reason = "a payer record was missing"; continue; }
       const email = reminderEmailFor(pay, person);
       // Resend = email only. The original request already posted an in-app
       // announcement; re-nudging shouldn't pile up duplicates in the portal.
-      await dispatchMessage({
+      const res = await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? seasonScope ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
         channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
       });
-      sent++;
+      if (res.failures > 0) {
+        tally.failed++;
+        if (!tally.reason && res.failureReasons[0]) tally.reason = `${person.firstName} ${person.lastName}: ${res.failureReasons[0]}`;
+      } else if (res.simulated > 0) {
+        tally.simulated++;
+        if (!tally.reason) tally.reason = "email provider not configured — nothing was actually delivered";
+      } else {
+        tally.sent++;
+      }
     }
-    await audit({ actorId: actor.userId, entityType: "Payment", entityId: teamId || "all", action: "RESEND_BULK", summary: `Resent ${sent} fee request(s)` });
-    const dest = teamId ? `/console/teams/${teamId}?ok=resentAll&n=${sent}` : `/console/payments?ok=resentAll&n=${sent}`;
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: teamId || "all", action: "RESEND_BULK", summary: `Resent ${tally.sent} fee request(s)${tally.failed ? `, ${tally.failed} failed` : ""}${tally.simulated ? `, ${tally.simulated} simulated` : ""}` });
+    const q = reminderResultQuery(tally);
+    const dest = teamId ? `/console/teams/${teamId}?${q}` : `/console/payments?${q}`;
     return NextResponse.redirect(new URL(dest, origin), 303);
   }
 
@@ -168,20 +194,28 @@ export async function POST(req: Request) {
         status: { in: ["REQUESTED", "PENDING"] },
       },
     });
-    let sent = 0;
+    const tally = newTally();
     for (const pay of payments) {
-      if (!pay.partyId) continue;
+      if (!pay.partyId) { tally.skipped++; if (!tally.reason) tally.reason = "a charge had no payer on file"; continue; }
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
-      if (!person) continue;
+      if (!person) { tally.skipped++; if (!tally.reason) tally.reason = "a payer record was missing"; continue; }
       const email = reminderEmailFor(pay, person);
-      await dispatchMessage({
+      const res = await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
         channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
       });
-      sent++;
+      if (res.failures > 0) {
+        tally.failed++;
+        if (!tally.reason && res.failureReasons[0]) tally.reason = `${person.firstName} ${person.lastName}: ${res.failureReasons[0]}`;
+      } else if (res.simulated > 0) {
+        tally.simulated++;
+        if (!tally.reason) tally.reason = "email provider not configured — nothing was actually delivered";
+      } else {
+        tally.sent++;
+      }
     }
-    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "selected", action: "RESEND_BULK", summary: `Resent ${sent} selected fee request(s)` });
-    return NextResponse.redirect(new URL(`/console/payments?ok=resentAll&n=${sent}`, origin), 303);
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "selected", action: "RESEND_BULK", summary: `Resent ${tally.sent} selected fee request(s)${tally.failed ? `, ${tally.failed} failed` : ""}${tally.simulated ? `, ${tally.simulated} simulated` : ""}` });
+    return NextResponse.redirect(new URL(`/console/payments?${reminderResultQuery(tally)}`, origin), 303);
   }
 
   // Send a sample fee-request email to the signed-in admin, so staff can preview
@@ -198,8 +232,14 @@ export async function POST(req: Request) {
       description: "Sample — season fee preview",
       paymentId: "sample",
     });
-    await sendEmail(me.email, `[Preview] ${sample.subject}`, sample.text, sample.html);
-    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "preview", action: "TEST_EMAIL", summary: `Sent preview fee request to ${me.email}` });
+    const res = await sendEmail(me.email, `[Preview] ${sample.subject}`, sample.text, sample.html);
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "preview", action: "TEST_EMAIL", summary: res.ok ? (res.simulated ? `Preview simulated (provider unconfigured) for ${me.email}` : `Sent preview fee request to ${me.email}`) : `Preview to ${me.email} failed: ${res.error}` });
+    if (!res.ok) {
+      return NextResponse.redirect(new URL(`/console/payments?err=sendfail&reason=${encodeURIComponent((res.error ?? "send failed").slice(0, 180))}`, origin), 303);
+    }
+    if (res.simulated) {
+      return NextResponse.redirect(new URL(`/console/payments?ok=testsim`, origin), 303);
+    }
     return NextResponse.redirect(new URL(`/console/payments?ok=testsent`, origin), 303);
   }
 
