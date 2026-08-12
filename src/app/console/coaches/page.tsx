@@ -85,7 +85,7 @@ export default async function CoachesPage({
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
       {sp.ok && (
         <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">
-          {sp.ok === "profile" ? "Coach profile updated." : "Account created."}
+          {sp.ok === "profile" ? "Coach profile updated." : sp.ok === "publish" ? "Public site visibility updated." : "Account created."}
         </p>
       )}
       {sp.err && (
@@ -116,6 +116,7 @@ export default async function CoachesPage({
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="py-2">Coach</th>
+              <th>Public site</th>
               <th className="hidden lg:table-cell">Cert</th>
               <th className="hidden sm:table-cell">Screening</th>
               <th>Availability</th>
@@ -134,6 +135,29 @@ export default async function CoachesPage({
                       {person.firstName} {person.lastName}
                     </Link>
                     {coach?.isProCoach && <span className="ml-2 badge bg-brand-100 text-brand-800">Pro</span>}
+                  </td>
+                  <td>
+                    {!coach ? (
+                      <span className="text-xs text-slate-400">no profile</span>
+                    ) : (
+                      <form method="POST" action="/api/console/coaches" className="flex items-center gap-2">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="togglePublish" />
+                        <input type="hidden" name="personId" value={person.id} />
+                        <input type="hidden" name="returnTo" value="/console/coaches" />
+                        {coach.publishedOnSite ? (
+                          <>
+                            <span className="badge bg-emerald-100 text-emerald-800">Published</span>
+                            <button className="text-xs text-slate-500 hover:text-rose-600 hover:underline">Hide</button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="badge bg-slate-100 text-slate-500">Hidden</span>
+                            <button className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">Publish</button>
+                          </>
+                        )}
+                      </form>
+                    )}
                   </td>
                   <td className="hidden text-slate-600 lg:table-cell">{coach?.rpoCertLevel ?? "—"}</td>
                   <td className="hidden sm:table-cell">
@@ -155,9 +179,9 @@ export default async function CoachesPage({
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
-            <tr data-filter-empty hidden><td colSpan={6} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
+            <tr data-filter-empty hidden><td colSpan={7} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
           </tbody>
         </table>
       </div>
