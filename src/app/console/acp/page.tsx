@@ -158,8 +158,8 @@ export default async function ConsoleAcpPage({
                       defaults={{
                         name: e.contactName,
                         email: e.contactEmail,
-                        description: `ACP entry — ${e.clubName} (${e.divisionName})`,
-                        amount: (e.amountDueCents / 100).toFixed(2),
+                        description: `${e.clubName} — 3 league matches and entry into the Championships`,
+                        amount: "195.00",
                       }}
                     />
                   </div>

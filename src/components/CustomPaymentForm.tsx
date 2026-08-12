@@ -41,8 +41,9 @@ export function CustomPaymentForm({
         <input name="email" type="email" className="input" required defaultValue={defaults?.email} />
       </div>
       <div className="sm:col-span-2">
-        <label className="label">What&apos;s this for? *</label>
-        <input name="description" className="input" required defaultValue={defaults?.description} placeholder="e.g. ACP entry — Mesa Smash (3 matches)" />
+        <label className="label">Item — what they&apos;re paying for *</label>
+        <input name="description" className="input" required defaultValue={defaults?.description} placeholder="e.g. 3 league matches and entry into the Championships" />
+        <p className="mt-1 text-xs text-slate-400">This shows on their payment page and receipt, so make it clear.</p>
       </div>
       <div>
         <label className="label">Amount (USD) *</label>

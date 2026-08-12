@@ -104,9 +104,15 @@ function OneOffPayCard({
         </p>
       )}
 
-      <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-        <span className="text-sm font-medium text-slate-600">Amount due</span>
-        <span className="text-2xl font-bold text-slate-900">{formatCents(payment.amountCents)}</span>
+      <div className="mt-4 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-3">
+          <span className="text-sm font-medium text-slate-500">For</span>
+          <span className="text-right text-sm font-medium text-slate-800">{payment.description ?? fallbackDesc}</span>
+        </div>
+        <div className="flex items-center justify-between pt-3">
+          <span className="text-sm font-medium text-slate-600">Amount due</span>
+          <span className="text-2xl font-bold text-slate-900">{formatCents(payment.amountCents)}</span>
+        </div>
       </div>
 
       <p className="mt-4 text-xs text-slate-500">
