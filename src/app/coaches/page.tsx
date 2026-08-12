@@ -39,13 +39,12 @@ export default async function CoachesPage() {
     include: { person: true },
     orderBy: { person: { lastName: "asc" } },
   });
-  // The Director leads the page as a hero, so keep her out of the card grid.
-  // Normalize whitespace/case so a stray space or capitalization never demotes
-  // her from the hero.
+  // The Director is featured in a hero, but is NOT excluded from the staff grid —
+  // everyone published appears in the grid, the Director included.
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
   const isDirector = (c: (typeof coaches)[number]) => norm(`${c.person.firstName} ${c.person.lastName}`) === "stephanie newton";
   const director = coaches.find(isDirector);
-  const grid = coaches.filter((c) => !isDirector(c));
+  const grid = coaches;
   // The Director hero is a fixed, committed asset (managed by replacing the file
   // in the repo), so it's never overridden by an uploaded profile image.
   const heroImg = "/coaches/stephanie-hero.jpg";
