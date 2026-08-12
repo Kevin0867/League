@@ -39,12 +39,17 @@ export default async function CoachesPage() {
     include: { person: true },
     orderBy: { person: { firstName: "asc" } },
   });
-  // The Director is featured in a hero, but is NOT excluded from the staff grid —
-  // everyone published appears in the grid, the Director included.
+  // The Director is featured in the hero and excluded from the staff grid so she
+  // isn't shown twice (Community Layer §2.3). The grid hides incomplete profiles:
+  // a coach appears only once they have a photo, a market, and coaching levels —
+  // a name-only card reads worse than no card, and it keeps seeded/unconfirmed
+  // records off the one page a parent visits to decide whether to trust us.
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
   const isDirector = (c: (typeof coaches)[number]) => norm(`${c.person.firstName} ${c.person.lastName}`) === "stephanie newton";
   const director = coaches.find(isDirector);
-  const grid = coaches;
+  const isComplete = (c: (typeof coaches)[number]) =>
+    !!c.person.imageUrl && parseMarkets(c.marketsCovered).length > 0 && !!(c.coachingLevels && c.coachingLevels.trim());
+  const grid = coaches.filter((c) => !isDirector(c) && isComplete(c));
   // The Director hero is a fixed, committed asset (managed by replacing the file
   // in the repo), so it's never overridden by an uploaded profile image.
   const heroImg = "/coaches/stephanie-hero.jpg";
@@ -59,9 +64,6 @@ export default async function CoachesPage() {
         <h1 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">
           The people <em className="text-accent-600">on court</em> with your player
         </h1>
-        <p className="mt-2 max-w-2xl text-slate-600">
-          Every PURE coach completes a background check and PURE curriculum training before Week 1 — without exception.
-        </p>
 
         {/* Director — hero treatment (only when her coach record is published) */}
         {director && (
@@ -72,7 +74,7 @@ export default async function CoachesPage() {
                 <img
                   src={heroImg}
                   alt={`${director.person.firstName} ${director.person.lastName} — Director & Head Coach`}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover object-top"
                 />
               </div>
               <div className="p-8 sm:p-10">
@@ -89,10 +91,6 @@ export default async function CoachesPage() {
                     {directorMarkets.length > 0 ? directorMarkets.join(" · ") : DIRECTOR_FALLBACK_MARKETS}
                   </p>
                 )}
-                <p className="mt-5 border-l-2 border-accent-400 pl-4 text-lg italic text-white">
-                  The Academy is directed by someone competing at the top of the sport during the same season she is
-                  coaching it.
-                </p>
                 <Link href={`/coaches/${director.person.id}`} className="mt-6 inline-block text-sm font-semibold text-accent-300 hover:text-accent-200">
                   View full profile →
                 </Link>
@@ -125,7 +123,7 @@ export default async function CoachesPage() {
                   >
                     <div className="aspect-[4/3] overflow-hidden bg-gradient-to-br from-brand-100 to-slate-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={c.person.imageUrl ?? `/coaches/${c.person.id}.jpg`} alt={name} className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
+                      <img src={c.person.imageUrl ?? `/coaches/${c.person.id}.jpg`} alt={name} className="h-full w-full object-cover object-top transition group-hover:scale-[1.02]" />
                     </div>
                     <div className="p-5">
                       <div className="flex items-center justify-between gap-2">

@@ -49,7 +49,7 @@ export default async function PublicCoachPage({ params }: { params: Promise<{ id
         <div className="mt-4 grid gap-8 sm:grid-cols-[minmax(0,320px)_1fr]">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-100 to-slate-100 shadow-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={coach.person.imageUrl ?? `/coaches/${coach.person.id}.jpg`} alt={name} className="aspect-[4/5] h-full w-full object-cover" />
+            <img src={coach.person.imageUrl ?? `/coaches/${coach.person.id}.jpg`} alt={name} className="aspect-[4/5] h-full w-full object-cover object-top" />
           </div>
 
           <div>
@@ -80,9 +80,14 @@ export default async function PublicCoachPage({ params }: { params: Promise<{ id
               <p className="mt-5 text-slate-500">A PURE Academy coach.</p>
             )}
 
-            <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              Every PURE coach completes a background check and PURE curriculum training before Week 1 — without exception.
-            </div>
+            {/* Only claim a credential we can evidence (Community Layer §2.3):
+                show the screening line when this coach has a background check on
+                record, and say nothing where one isn't yet complete. */}
+            {coach.backgroundCheckDate && (
+              <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                Background check on file{coach.safeSportCertified ? " · SafeSport certified" : ""} · PURE curriculum training.
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -75,8 +75,8 @@ export default async function HomePage() {
                   "6 to 8 players per team; placement by age and skill level",
                   "2-hour weekly coach-led practices and matches",
                   "Youth teams: Elementary, Middle, High School age groups",
-                  "Adult teams: Men's and Women's 2.5, 3.0, 3.5, 4.0, and 4.5+",
-                  "Scottsdale, Chandler, Gilbert, Mesa, Phoenix, or Tempe",
+                  "Adult teams: Men's and Women's 2.5 through 5.0+",
+                  "Scottsdale, Paradise Valley, Phoenix, Tempe, Chandler, Gilbert, or Mesa",
                 ].map((line) => (
                   <li key={line} className="flex gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400" />
@@ -276,7 +276,7 @@ const CAPS = [
   { icon: "people", title: "Team placement", body: "Pick one division; the Director places you on the right team by age and skill after Week 1." },
   { icon: "calendar", title: "A full season", body: "A twelve-session season: six practice weeks, five league weeks, and championship week." },
   { icon: "trophy", title: "League & championship", body: "Line-by-line scoring, live standings, and a championship bracket — every game DUPR-recorded." },
-  { icon: "card", title: "Enroll today, flexible payments", body: "$495 per player. Secure checkout — pay in full, or in 3 payments (today, +30 and +60 days)." },
+  { icon: "card", title: "Enroll today, flexible payments", body: "$495 per player. Pay in full or in three payments, beginning when your player is placed on a team." },
   { icon: "bell", title: "Stay in the loop", body: "Team, coach, and league updates in-app and by email, with texts for time-critical alerts." },
 ] as const;
 
