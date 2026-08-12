@@ -105,14 +105,23 @@ export default async function TeamPage({
                 <p className="mt-2 text-sm text-slate-500">Roster is being finalized.</p>
               ) : (
                 <>
-                  <ul className="mt-2 grid grid-cols-1 gap-1 text-sm text-slate-700">
+                  <ul className="mt-2 divide-y divide-slate-100 text-sm">
                     {data.roster.map((p) => (
-                      <li key={p.id}>
-                        <Link href={`/players/${p.slug}`} className="text-slate-700 hover:text-brand-700 hover:underline">{p.label}</Link>
+                      <li key={p.id} className="flex items-center justify-between gap-2 py-1.5">
+                        <span className="flex min-w-0 items-center gap-2">
+                          {p.line != null && <span className="badge shrink-0 bg-brand-50 text-brand-700">#{p.line}</span>}
+                          <Link href={`/players/${p.slug}`} className="truncate text-slate-700 hover:text-brand-700 hover:underline">{p.label}</Link>
+                        </span>
+                        {p.dupr != null && <span className="shrink-0 text-xs tabular-nums text-slate-400">{p.dupr.toFixed(3)}</span>}
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-3 text-xs text-slate-400">{data.roster.length} players</p>
+                  <p className="mt-3 text-xs text-slate-400">
+                    {data.roster.length} players
+                    {data.avgDupr != null && data.combinedDupr != null
+                      ? ` · team DUPR ${data.combinedDupr.toFixed(1)} (avg ${data.avgDupr.toFixed(3)})`
+                      : ""}
+                  </p>
                 </>
               )}
             </div>
@@ -153,8 +162,8 @@ export default async function TeamPage({
 }
 
 function FixtureRow({ f }: { f: TeamFixtureView }) {
-  return (
-    <li className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm">
+  const header = (
+    <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <div className="text-slate-800">
           <span className="text-slate-400">{f.isHome ? "vs" : "@"}</span>{" "}
@@ -172,6 +181,36 @@ function FixtureRow({ f }: { f: TeamFixtureView }) {
         </div>
       </div>
       <StatusBadge status={f.status} />
+    </div>
+  );
+
+  // No line-up yet → a plain row. With a line-up card, make it expandable.
+  if (f.lines.length === 0) {
+    return <li className="rounded-lg border border-slate-100 px-3 py-2 text-sm">{header}</li>;
+  }
+  return (
+    <li className="rounded-lg border border-slate-100 text-sm">
+      <details>
+        <summary className="cursor-pointer list-none px-3 py-2 [&::-webkit-details-marker]:hidden">{header}</summary>
+        <div className="border-t border-slate-100 px-3 py-2">
+          <table className="w-full text-xs">
+            <tbody className="divide-y divide-slate-50">
+              {f.lines.map((l) => (
+                <tr key={l.lineNumber} className={l.result === "won" ? "text-emerald-700" : l.result === "lost" ? "text-rose-600" : "text-slate-600"}>
+                  <td className="py-1.5 pr-2 font-semibold text-slate-500">L{l.lineNumber}{l.isExhibition ? " · exh" : ""}</td>
+                  <td className="py-1.5 pr-2">
+                    <div className="font-medium text-slate-800">{l.ourPair ?? "TBD"}</div>
+                    <div className="text-slate-400">vs {l.theirPair ?? "TBD"}</div>
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {l.games.length > 0 ? l.games.map((g, i) => <span key={i} className="ml-1.5">{g.our}–{g.their}</span>) : <span className="text-slate-300">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </li>
   );
 }
