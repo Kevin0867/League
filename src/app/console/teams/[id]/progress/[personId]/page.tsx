@@ -5,6 +5,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
 import { PendingSubmit } from "@/components/ConfirmSubmit";
 import { RecipientChecklist } from "@/components/RecipientChecklist";
+import { SpeechToTextArea } from "@/components/SpeechToTextArea";
 import { formatStamp } from "@/lib/time";
 import {
   COACHING_WEEKS,
@@ -126,13 +127,13 @@ export default async function StudentProgressPage({
         </div>
 
         <div>
-          <label className="label" htmlFor="note">Coach&apos;s note (optional — customize freely)</label>
-          <textarea
+          <label className="label" htmlFor="note">Coach&apos;s note (optional — dictate or type, then edit)</label>
+          <SpeechToTextArea
             id="note"
             name="note"
             rows={4}
-            className="input"
             defaultValue={note?.note ?? ""}
+            ariaLabel={`Coaching note for ${student.firstName}`}
             placeholder={`e.g. ${student.firstName} had a great week on their third-shot drop and was a big help to newer players. Let's keep working on staying back on the return.`}
           />
         </div>

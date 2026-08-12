@@ -1,14 +1,24 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { mintConsoleTicket } from "@/lib/auth";
 import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
 import { COACHING_WEEKS, noteHasContent } from "@/lib/domain/coachingNotes";
+import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeamProgressPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TeamProgressPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id: teamId } = await params;
+  const sp = await searchParams;
   if (!(await canViewTeamNotes(teamId))) redirect("/console/teams");
+  const ticket = await mintConsoleTicket();
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -30,12 +40,33 @@ export default async function TeamProgressPage({ params }: { params: Promise<{ i
     <div className="space-y-6">
       <div>
         <Link href={`/console/teams/${teamId}`} className="text-sm text-brand-600 hover:underline">← {team.name}</Link>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">Progress reports</h1>
-        <p className="text-sm text-slate-500">
-          Six weekly notes per player. Tap a player to add notes and email a weekly update to their parent.
-        </p>
+        <h1 className="mt-1 text-2xl font-bold text-slate-900">{team.name}</h1>
+        <p className="text-sm text-slate-500">Message your team, and keep weekly progress notes per player.</p>
       </div>
 
+      {sp.ok === "teamsent" && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Update sent to {sp.n ?? 0} recipient{sp.n === "1" ? "" : "s"}{sp.failed ? ` · ${sp.failed} failed` : ""}
+          {sp.reason ? ` — ${sp.reason}` : ""}.
+        </div>
+      )}
+      {sp.err === "empty" && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">Write a message before sending.</div>
+      )}
+      {sp.err === "auth" && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">You can only message your own teams.</div>
+      )}
+
+      {/* Team update — one message to the whole team (players + parents). */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Message the team</h2>
+        <p className="mb-3 mt-0.5 text-sm text-slate-500">
+          Sends to every player and parent on {team.name}. Tap the mic to dictate, then edit before sending.
+        </p>
+        <TeamUpdateComposer ticket={ticket} teamId={teamId} teamName={team.name} />
+      </div>
+
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Progress notes</h2>
       <div className="card overflow-x-auto">
         {team.members.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">No players on this roster yet.</p>
