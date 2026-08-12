@@ -4,6 +4,8 @@ import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { teamDisplayName, teamShortName, teamSlug, PURE_MARKETS } from "@/lib/domain/teamName";
+import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
+import { formatDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +31,37 @@ export default async function TeamsPage() {
   // one team.
   const markets = new Set(teams.map((t) => t.market).filter(Boolean));
   const players = teams.reduce((n, t) => n + t._count.members, 0);
-  const [gamesPlayed, ratedPlayers] = await Promise.all([
+  const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
+  const teamIdentity = { club: true, market: true, divisionCode: true, color: true } as const;
+  const [gamesPlayed, ratedPlayers, gamesToDupr, fixtures] = await Promise.all([
     prisma.fixture.count({ where: { status: "COMPLETED" } }),
     prisma.person.count({ where: { duprVerified: true } }),
+    prisma.duprSubmission.count({ where: { status: "SUBMITTED" } }),
+    season
+      ? prisma.fixture.findMany({
+          where: { seasonId: season.id, homeTeamId: { not: null }, awayTeamId: { not: null } },
+          include: {
+            homeTeam: { select: teamIdentity },
+            awayTeam: { select: teamIdentity },
+            lines: { select: { isCounting: true, lineWinner: true } },
+          },
+          orderBy: [{ scheduledAt: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
+
+  // This-week / recent across the whole Academy — every division on one page.
+  const upcoming = fixtures.filter((f) => ["SCHEDULED", "CONFIRMED", "RESCHEDULED"].includes(f.status)).slice(0, 6);
+  const recent = fixtures.filter((f) => ["COMPLETED", "FORFEITED"].includes(f.status)).reverse().slice(0, 8);
+  const lineTally = (f: (typeof fixtures)[number]) => {
+    let home = 0, away = 0;
+    for (const l of f.lines) {
+      if (!l.isCounting) continue;
+      if (l.lineWinner === "HOME") home++;
+      else if (l.lineWinner === "AWAY") away++;
+    }
+    return { home, away };
+  };
 
   // Group by market, in the canonical market order.
   const byMarket = new Map<string, typeof teams>();
@@ -60,8 +89,57 @@ export default async function TeamsPage() {
           <Stat value={teams.length} label="Teams fielded" />
           <Stat value={markets.size} label="Markets" />
           <Stat value={players} label="Players" />
-          <Stat value={gamesPlayed > 0 ? gamesPlayed : ratedPlayers} label={gamesPlayed > 0 ? "Games played" : "DUPR-rated players"} />
+          <Stat value={gamesPlayed > 0 ? gamesPlayed : ratedPlayers} label={gamesPlayed > 0 ? "Matches played" : "DUPR-rated players"} />
         </div>
+        {gamesToDupr > 0 && (
+          <p className="mt-2 text-xs text-slate-400">{gamesToDupr} match{gamesToDupr === 1 ? "" : "es"} recorded to DUPR this season.</p>
+        )}
+
+        {/* This week / coming up across the Academy */}
+        {upcoming.length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">This week across the Academy</h2>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {upcoming.map((f) => (
+                <div key={f.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm shadow-sm">
+                  <span className="min-w-0 truncate text-slate-700">
+                    <Link href={`/teams/${teamSlug(f.homeTeam!)}`} className="hover:text-brand-700 hover:underline">{teamShortName(f.homeTeam!)}</Link>
+                    <span className="text-slate-400"> vs </span>
+                    <Link href={`/teams/${teamSlug(f.awayTeam!)}`} className="hover:text-brand-700 hover:underline">{teamShortName(f.awayTeam!)}</Link>
+                  </span>
+                  <span className="ml-3 shrink-0 text-xs text-slate-400">Wk {leagueWeekLabel(f.weekNumber)} · {formatDate(f.scheduledAt)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Recent results across every division */}
+        {recent.length > 0 && (
+          <section className="mt-8">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Recent results</h2>
+            <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
+              {recent.map((f) => {
+                const { home, away } = lineTally(f);
+                const homeWon = home > away;
+                const tie = home === away;
+                return (
+                  <div key={f.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                    <span className="min-w-0 truncate">
+                      <Link href={`/teams/${teamSlug(f.homeTeam!)}`} className={`hover:underline ${homeWon ? "font-semibold text-slate-900" : "text-slate-600"}`}>{teamShortName(f.homeTeam!)}</Link>
+                      <span className="mx-1.5 tabular-nums text-slate-400">{home}–{away}</span>
+                      <Link href={`/teams/${teamSlug(f.awayTeam!)}`} className={`hover:underline ${!homeWon && !tie ? "font-semibold text-slate-900" : "text-slate-600"}`}>{teamShortName(f.awayTeam!)}</Link>
+                    </span>
+                    <span className="ml-3 shrink-0 text-xs text-slate-400">Wk {leagueWeekLabel(f.weekNumber)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Full <Link href="/standings" className="text-brand-700 hover:underline">standings</Link> by division.
+            </p>
+          </section>
+        )}
 
         {teams.length === 0 ? (
           <p className="mt-10 rounded-lg border border-dashed border-slate-300 p-8 text-center text-slate-500">

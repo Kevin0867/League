@@ -5,6 +5,7 @@ import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { isPublic, parseMarketsJson } from "@/lib/domain/coachPublic";
+import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,14 @@ export default async function PublicCoachPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const coach = await getCoach(id);
   if (!coach) notFound();
+
+  // Teams this coach leads this season (published only), with player counts.
+  const teams = await prisma.team.findMany({
+    where: { coachId: coach.id, published: true },
+    select: { club: true, market: true, divisionCode: true, color: true, _count: { select: { members: true } } },
+    orderBy: [{ market: "asc" }, { divisionCode: "asc" }],
+  });
+  const playersCoached = teams.reduce((n, t) => n + t._count.members, 0);
 
   const name = `${coach.person.firstName} ${coach.person.lastName}`;
   const markets = parseMarketsJson(coach.marketsCovered);
@@ -78,6 +87,24 @@ export default async function PublicCoachPage({ params }: { params: Promise<{ id
 
             {!showBio && !showCred && !showMarkets && !showLevels && (
               <p className="mt-5 text-slate-500">A PURE Academy coach.</p>
+            )}
+
+            {teams.length > 0 && (
+              <div className="mt-6">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Teams this season · {playersCoached} player{playersCoached === 1 ? "" : "s"} coached
+                </h2>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {teams.map((t) => (
+                    <li key={teamSlug(t)}>
+                      <Link href={`/teams/${teamSlug(t)}`} className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700">
+                        {teamDisplayName(t)}
+                        <span className="ml-2 text-xs text-slate-400">{t._count.members}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {/* Only claim a credential we can evidence (Community Layer §2.3):
