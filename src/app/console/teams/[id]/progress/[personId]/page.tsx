@@ -11,6 +11,7 @@ import {
   parseTags,
   noteHasContent,
 } from "@/lib/domain/coachingNotes";
+import { personEmails } from "@/lib/domain/audience";
 
 export const dynamic = "force-dynamic";
 
@@ -59,10 +60,14 @@ export default async function StudentProgressPage({
   const strengths = parseTags(note?.strengths);
   const growth = parseTags(note?.growth);
 
-  const recipient = student.isMinor && student.guardian ? student.guardian : student;
-  const recipientLabel = student.isMinor && student.guardian
-    ? `${student.guardian.firstName} ${student.guardian.lastName} (guardian)`
-    : `${student.firstName} ${student.lastName}`;
+  // Everyone who will receive this report: all of the student's addresses plus,
+  // for a minor, the guardian's — deduped, so both parents and the student get it.
+  const seenEmail = new Set<string>();
+  const targetEmails: string[] = [];
+  for (const e of [...personEmails(student), ...(student.isMinor && student.guardian ? personEmails(student.guardian) : [])]) {
+    const k = e.toLowerCase();
+    if (!seenEmail.has(k)) { seenEmail.add(k); targetEmails.push(e); }
+  }
 
   return (
     <div className="space-y-6">
@@ -150,18 +155,21 @@ export default async function StudentProgressPage({
         <div>
           <h2 className="font-semibold text-slate-900">Send Week {active} to the parent</h2>
           <p className="text-sm text-slate-500">
-            Emails this week&apos;s note to <span className="font-medium text-slate-700">{recipientLabel}</span>
-            {recipient.email ? <> at {recipient.email}</> : <span className="text-rose-600"> — no email on file</span>}.
+            {targetEmails.length > 0 ? (
+              <>Emails this week&apos;s note to <span className="font-medium text-slate-700">{targetEmails.join(", ")}</span>.</>
+            ) : (
+              <span className="text-rose-600">No email on file — add a parent/guardian or student email on the player&apos;s record first.</span>
+            )}
             {note?.sentToParentAt && <span className="ml-1 text-emerald-700">Last sent {formatStamp(note.sentToParentAt)}.</span>}
           </p>
         </div>
         <ConfirmSubmit
           action="/api/console/coaching-notes"
           fields={{ ticket, op: "sendReport", teamId, personId, week: String(active) }}
-          confirm={`Email ${student.firstName}'s Week ${active} progress report to ${recipientLabel}? Send only what you've saved.`}
-          label={note?.sentToParentAt ? "Resend to parent" : "Send to parent"}
+          confirm={`Email ${student.firstName}'s Week ${active} progress report to ${targetEmails.length} recipient${targetEmails.length === 1 ? "" : "s"} (${targetEmails.join(", ")})? Send only what you've saved.`}
+          label={note?.sentToParentAt ? "Resend report" : "Send report"}
           className="btn-secondary text-sm"
-          disabled={!recipient.email}
+          disabled={targetEmails.length === 0}
         />
       </div>
     </div>

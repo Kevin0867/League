@@ -85,6 +85,13 @@ model Person {
   lastName           String
   dob                DateTime?
   email              String?
+  /// Additional notification addresses (up to three total). Used so both parents
+  /// AND a minor who has their own email can all receive updates. For a minor,
+  /// the parent/guardian email captured on the waiver is always stored among
+  /// these so we can always reach the family. Every email the platform sends to
+  /// this person goes to all non-empty addresses.
+  email2             String?
+  email3             String?
   phone              String?
 
   /// Public profile image (used on /coaches). Stored in object storage; this is

@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { coachingReportEmail } from "@/lib/domain/coachingReportEmail";
 import { isValidWeek, serializeTags, parseTags, labelsFor } from "@/lib/domain/coachingNotes";
+import { personEmails } from "@/lib/domain/audience";
 
 // Coaching notes / progress reports (native-form-POST + ticket auth, 303 back).
 // A coach keeps up to six weekly notes per student and can email a week's report
@@ -84,9 +85,13 @@ export async function POST(req: Request) {
       });
       if (!student) return progress(`?err=nostudent&week=${week}`);
 
-      // Recipient: the guardian for a minor, otherwise the student themselves.
-      const recipient = student.isMinor && student.guardian ? student.guardian : student;
-      if (!recipient.email) return progress(`?err=noemail&week=${week}`);
+      // Recipients: everyone on the student's record plus, for a minor, the
+      // guardian's addresses — so both parents and the student all get it.
+      // dispatchMessage to the student expands to the guardian and fans out to
+      // every stored email; here we just confirm at least one exists.
+      const targets = new Set(personEmails(student).map((e) => e.toLowerCase()));
+      if (student.isMinor && student.guardian) personEmails(student.guardian).forEach((e) => targets.add(e.toLowerCase()));
+      if (targets.size === 0) return progress(`?err=noemail&week=${week}`);
 
       const coachName = auth.team.coach
         ? `${auth.team.coach.person.firstName} ${auth.team.coach.person.lastName}`
@@ -105,7 +110,7 @@ export async function POST(req: Request) {
         senderId: actor.userId,
         seasonId: auth.team.seasonId,
         audienceType: "SINGLE_PERSON",
-        audienceRef: recipient.id,
+        audienceRef: student.id,
         channels: ["EMAIL"],
         triggerType: "PROGRESS_REPORT",
         subject: email.subject,
@@ -115,11 +120,11 @@ export async function POST(req: Request) {
 
       if (res.failures > 0) {
         const reason = res.failureReasons[0] ?? "send failed";
-        await audit({ actorId: actor.userId, entityType: "CoachingNote", entityId: `${teamId}:${personId}:${week}`, action: "coachingNote.sendFailed", summary: `Week ${week} report to ${recipient.email} failed: ${reason}` });
+        await audit({ actorId: actor.userId, entityType: "CoachingNote", entityId: `${teamId}:${personId}:${week}`, action: "coachingNote.sendFailed", summary: `Week ${week} report failed: ${reason}` });
         return progress(`?err=sendfail&week=${week}&reason=${encodeURIComponent(reason.slice(0, 180))}`);
       }
       await prisma.coachingNote.update({ where: { id: note.id }, data: { sentToParentAt: new Date() } });
-      await audit({ actorId: actor.userId, entityType: "CoachingNote", entityId: `${teamId}:${personId}:${week}`, action: "coachingNote.sent", summary: res.simulated ? `Week ${week} report simulated (provider unconfigured)` : `Emailed Week ${week} report to ${recipient.email}` });
+      await audit({ actorId: actor.userId, entityType: "CoachingNote", entityId: `${teamId}:${personId}:${week}`, action: "coachingNote.sent", summary: res.simulated ? `Week ${week} report simulated (provider unconfigured)` : `Emailed Week ${week} report to ${res.recipients} recipient(s)` });
       return progress(`?ok=${res.simulated ? "sentsim" : "sent"}&week=${week}`);
     }
 

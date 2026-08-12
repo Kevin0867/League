@@ -387,6 +387,8 @@ export async function POST(req: Request) {
           firstName: g("firstName") || undefined,
           lastName: g("lastName") || undefined,
           email: nn("email"),
+          email2: nn("email2"),
+          email3: nn("email3"),
           phone: nn("phone"),
           dob: g("dob") ? new Date(g("dob")) : null,
           gender: nn("gender"),

@@ -45,17 +45,22 @@ export async function sendSms(to: string | null | undefined, body: string): Prom
 /** A file attached to an email (content is base64-encoded). */
 export type EmailAttachment = { filename: string; content: string; contentType?: string };
 
-/** Send an email via Resend's REST API (no SDK needed). */
+/** Send an email via Resend's REST API (no SDK needed). Accepts a single address
+ *  or a list — a person may carry up to three notification addresses (both
+ *  parents + the student), and all should receive the same email. */
 export async function sendEmail(
-  to: string | null | undefined,
+  to: string | string[] | null | undefined,
   subject: string,
   body: string,
   html?: string,
   attachments?: EmailAttachment[]
 ): Promise<SendResult> {
-  if (!to) return { ok: false, simulated: false, error: "no email on record" };
+  const recipients = (Array.isArray(to) ? to : [to])
+    .map((t) => (t ?? "").trim())
+    .filter(Boolean);
+  if (recipients.length === 0) return { ok: false, simulated: false, error: "no email on record" };
   if (!emailConfigured()) {
-    console.log(`[Email simulated] → ${to}: ${subject}${attachments?.length ? ` (+${attachments.length} attachment)` : ""}`);
+    console.log(`[Email simulated] → ${recipients.join(", ")}: ${subject}${attachments?.length ? ` (+${attachments.length} attachment)` : ""}`);
     return { ok: true, simulated: true };
   }
   try {
@@ -67,7 +72,7 @@ export async function sendEmail(
       },
       body: JSON.stringify({
         from: process.env.EMAIL_FROM ?? "PURE Academy <team@purepickleball.com>",
-        to,
+        to: recipients,
         // Replies go to the team inbox by default (override with EMAIL_REPLY_TO).
         reply_to: process.env.EMAIL_REPLY_TO ?? "team@purepickleball.com",
         // Optionally copy every outbound email to a shared inbox for a record.

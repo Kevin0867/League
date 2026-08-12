@@ -13,6 +13,7 @@ const ERRORS: Record<string, string> = {
   token: "This link is invalid or has expired. Please contact us for a new one.",
   agree: "Please check the box to agree before signing.",
   name: "Please type the full legal name to sign.",
+  guardianemail: "Please enter the parent/guardian email so we can reach you about your player.",
 };
 
 export default async function WaiverSignPage({
@@ -114,6 +115,29 @@ export default async function WaiverSignPage({
             <input id="date" type="date" className="input" defaultValue={today} readOnly />
           </div>
         </div>
+
+        {isMinor && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-800">Parent/guardian contact</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              We&apos;ll use this to reach you about {person.firstName}&apos;s team, schedule, payments, and weekly
+              progress. Required.
+            </p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="guardianEmail">Parent/guardian email *</label>
+                <input id="guardianEmail" name="guardianEmail" type="email" className="input" required
+                  defaultValue={person.email ?? ""} placeholder="parent@email.com" />
+              </div>
+              <div>
+                <label className="label" htmlFor="guardianPhone">Parent/guardian phone (optional)</label>
+                <input id="guardianPhone" name="guardianPhone" type="tel" className="input"
+                  defaultValue={person.phone ?? ""} placeholder="(480) 555-0100" />
+              </div>
+            </div>
+          </div>
+        )}
+
         <button type="submit" className="btn-primary">Sign waiver</button>
       </form>
     </Shell>

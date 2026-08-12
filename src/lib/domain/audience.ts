@@ -18,9 +18,27 @@ export type AudienceType =
 export type Recipient = {
   personId: string;
   name: string;
+  /** Primary address (back-compat); may be null. Prefer `emails` for delivery. */
   email: string | null;
+  /** Every non-empty address for this person (email + email2 + email3), deduped. */
+  emails: string[];
   phone: string | null;
 };
+
+/** All non-empty, de-duplicated notification addresses for a person row. */
+export function personEmails(p: { email?: string | null; email2?: string | null; email3?: string | null }): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const e of [p.email, p.email2, p.email3]) {
+    const v = (e ?? "").trim();
+    if (!v) continue;
+    const key = v.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+  }
+  return out;
+}
 
 async function expandGuardians(personIds: string[]): Promise<string[]> {
   if (personIds.length === 0) return [];
@@ -37,12 +55,13 @@ async function toRecipients(personIds: string[]): Promise<Recipient[]> {
   if (unique.length === 0) return [];
   const people = await prisma.person.findMany({
     where: { id: { in: unique } },
-    select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+    select: { id: true, firstName: true, lastName: true, email: true, email2: true, email3: true, phone: true },
   });
   return people.map((p) => ({
     personId: p.id,
     name: `${p.firstName} ${p.lastName}`,
     email: p.email,
+    emails: personEmails(p),
     phone: p.phone,
   }));
 }

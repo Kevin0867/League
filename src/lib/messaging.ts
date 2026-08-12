@@ -74,7 +74,10 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     const failureReasons: string[] = [];
 
     if (channels.includes("EMAIL")) {
-      const res = await sendEmail(r.email, subject, input.body, input.html, input.attachments);
+      // Deliver to every address on file for this person (both parents + the
+      // student). Fall back to the primary if the list is empty.
+      const to = r.emails.length ? r.emails : r.email;
+      const res = await sendEmail(to, subject, input.body, input.html, input.attachments);
       emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`email: ${res.error}`);
       if (res.ok && res.simulated) wasSimulated = true;

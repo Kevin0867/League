@@ -207,6 +207,8 @@ export default async function RegistrationDetail({
           <Field label="Last name" name="lastName" defaultValue={p.lastName} />
           <Field label="Email" name="email" type="email" defaultValue={p.email ?? ""} />
           <Field label="Phone" name="phone" type="tel" defaultValue={p.phone ?? ""} />
+          <Field label="Additional email (parent 2 / student)" name="email2" type="email" defaultValue={p.email2 ?? ""} />
+          <Field label="Additional email (3rd)" name="email3" type="email" defaultValue={p.email3 ?? ""} />
           <Field label="Date of birth" name="dob" type="date" defaultValue={p.dob ? p.dob.toISOString().slice(0, 10) : ""} />
           <Select label="Gender" name="gender" defaultValue={p.gender ?? ""} options={GENDERS.map((g) => ({ value: g, label: g || "—" }))} />
           <Field label="Address" name="address" defaultValue={p.address ?? ""} />
