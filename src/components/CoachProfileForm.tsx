@@ -11,12 +11,19 @@ type Block = { dayOfWeek: string; startTime: string; endTime: string };
 export function CoachProfileForm({
   ticket,
   email,
+  firstName = "",
+  lastName = "",
+  editableIdentity = false,
   targetPersonId,
   initial,
   pay,
 }: {
   ticket: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  /** When true (admin context), first/last name and email are editable. */
+  editableIdentity?: boolean;
   /** Set when an admin edits another coach; omitted for self-service. */
   targetPersonId?: string;
   initial: {
@@ -57,16 +64,38 @@ export function CoachProfileForm({
 
       <section className="card space-y-4">
         <h2 className="font-semibold text-slate-900">Contact</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">Email</label>
-            <input className="input bg-slate-50" value={email} readOnly />
+        {editableIdentity ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">First name</label>
+              <input name="firstName" className="input" defaultValue={firstName} required />
+            </div>
+            <div>
+              <label className="label">Last name</label>
+              <input name="lastName" className="input" defaultValue={lastName} required />
+            </div>
+            <div>
+              <label className="label">Email</label>
+              <input name="email" type="email" className="input" defaultValue={email} />
+              <p className="mt-1 text-xs text-slate-400">Updates their login email too, if they have an account.</p>
+            </div>
+            <div>
+              <label className="label">Phone</label>
+              <input name="phone" type="tel" className="input" defaultValue={initial.phone} />
+            </div>
           </div>
-          <div>
-            <label className="label">Phone</label>
-            <input name="phone" type="tel" className="input" defaultValue={initial.phone} />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Email</label>
+              <input className="input bg-slate-50" value={email} readOnly />
+            </div>
+            <div>
+              <label className="label">Phone</label>
+              <input name="phone" type="tel" className="input" defaultValue={initial.phone} />
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="card space-y-4">

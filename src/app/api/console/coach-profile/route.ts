@@ -35,11 +35,29 @@ export async function POST(req: Request) {
 
   if (!personId) return back("?err=noperson");
 
-  // Contact lives on the Person.
-  await prisma.person.update({
-    where: { id: personId },
-    data: { phone: g("phone") || null },
-  });
+  // Contact lives on the Person. Name + email are editable only in the admin
+  // context (manageCoaches) — a coach editing their own profile can't rename
+  // themselves or change their login email here.
+  const identityEditable = can(actor.role, "manageCoaches") && fd.has("firstName");
+  const personData: Record<string, unknown> = { phone: g("phone") || null };
+  let newEmail = "";
+  if (identityEditable) {
+    if (g("firstName")) personData.firstName = g("firstName");
+    if (g("lastName")) personData.lastName = g("lastName");
+    newEmail = g("email").toLowerCase();
+    if (newEmail) personData.email = newEmail;
+  }
+  await prisma.person.update({ where: { id: personId }, data: personData });
+
+  // Keep the login email in sync when an admin changes it — but never clobber
+  // another account's email (skip silently if it's taken).
+  if (identityEditable && newEmail) {
+    const user = await prisma.user.findFirst({ where: { personId }, select: { id: true, email: true } });
+    if (user && user.email.toLowerCase() !== newEmail) {
+      const clash = await prisma.user.findUnique({ where: { email: newEmail }, select: { id: true } });
+      if (!clash) await prisma.user.update({ where: { id: user.id }, data: { email: newEmail } });
+    }
+  }
 
   const markets = list("market").filter(Boolean);
   const bgChecked = g("bgCheck") === "yes";

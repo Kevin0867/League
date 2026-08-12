@@ -240,6 +240,9 @@ export default async function EditCoachPage({
       <CoachProfileForm
         ticket={ticket}
         email={person.email ?? ""}
+        firstName={person.firstName}
+        lastName={person.lastName}
+        editableIdentity
         targetPersonId={person.id}
         initial={{
           phone: person.phone ?? "",

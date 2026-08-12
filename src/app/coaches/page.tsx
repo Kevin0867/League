@@ -37,7 +37,7 @@ export default async function CoachesPage() {
   const coaches = await prisma.coach.findMany({
     where: { publishedOnSite: true },
     include: { person: true },
-    orderBy: { person: { lastName: "asc" } },
+    orderBy: { person: { firstName: "asc" } },
   });
   // The Director is featured in a hero, but is NOT excluded from the staff grid —
   // everyone published appears in the grid, the Director included.
