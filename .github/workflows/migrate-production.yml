@@ -1,0 +1,35 @@
+name: Migrate database (PRODUCTION)
+
+# Manually-triggered, non-destructive migration runner for the PRODUCTION Neon
+# database. Same as migrate.yml, but points at the production connection string
+# (DATABASE_URL_PRODUCTION) so the test platform (migrate.yml → DATABASE_URL) and
+# production are migrated independently. Never wipes or seeds data.
+#
+# Requires repo secret DATABASE_URL_PRODUCTION (the production Neon connection
+# string). Run this against the `production` branch after promoting schema
+# changes into it.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_PRODUCTION }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL_PRODUCTION || secrets.DATABASE_URL_PRODUCTION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify DATABASE_URL_PRODUCTION is configured
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL_PRODUCTION secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply pending migrations
+        run: npx prisma migrate deploy

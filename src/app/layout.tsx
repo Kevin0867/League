@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { StagingBanner } from "@/components/StagingBanner";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://academy.purepickleball.com"),
@@ -31,7 +32,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <StagingBanner />
+        {children}
+      </body>
     </html>
   );
 }
