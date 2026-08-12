@@ -8,6 +8,7 @@ import { dispatchMessage } from "@/lib/messaging";
 import { sendEmail } from "@/lib/notify";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
+import { customPaymentEmailContent } from "@/lib/payments/customPaymentEmail";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
@@ -50,6 +51,35 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
     seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
     channels: opts?.emailOnly ? ["EMAIL"] : ["IN_APP", "EMAIL"], triggerType: "TEAM_ASSIGNMENT",
     subject: email.subject, body: email.text, html: email.html,
+  });
+}
+
+// Reminder-eligible categories: any inbound charge we'd nudge someone about.
+// (REFUND/COACH_PAYOUT are outbound and never reminded.)
+const REMINDABLE_CATEGORIES = ["PLAYER_FEE", "ALA_CARTE", "CUSTOM", "ACP_ENTRY", "FACILITY_FEE"] as const;
+
+// Build the right reminder email for a payment. A season fee gets the full
+// two-CTA (pay-in-full / 3-payments) template; everything else — a private
+// lesson, an ACP entry, a custom charge — gets the single "Pay now" template,
+// so a $20 lesson never receives a "your season fee reserves a place on a team,
+// pay in 3 installments" email.
+function reminderEmailFor(
+  pay: { id: string; amountCents: number; description: string | null; category: string },
+  person: { firstName: string }
+): { subject: string; text: string; html: string } {
+  if (pay.category === "PLAYER_FEE") {
+    return paymentRequestEmail({
+      name: person.firstName,
+      amountCents: pay.amountCents,
+      description: pay.description ?? "Season fee",
+      paymentId: pay.id,
+    });
+  }
+  return customPaymentEmailContent({
+    name: person.firstName,
+    amountCents: pay.amountCents,
+    description: pay.description ?? "Payment due",
+    paymentId: pay.id,
   });
 }
 
@@ -98,7 +128,8 @@ export async function POST(req: Request) {
     }
     const payments = await prisma.payment.findMany({
       where: {
-        category: "PLAYER_FEE",
+        direction: "IN",
+        category: { in: [...REMINDABLE_CATEGORIES] },
         status: { in: ["REQUESTED", "PENDING"] },
         ...(partyIds ? { partyId: { in: partyIds } } : {}),
         ...(seasonScope ? { seasonId: seasonScope } : {}),
@@ -109,7 +140,7 @@ export async function POST(req: Request) {
       if (!pay.partyId) continue;
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
       if (!person) continue;
-      const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      const email = reminderEmailFor(pay, person);
       // Resend = email only. The original request already posted an in-app
       // announcement; re-nudging shouldn't pile up duplicates in the portal.
       await dispatchMessage({
@@ -130,14 +161,19 @@ export async function POST(req: Request) {
     const ids = fd.getAll("paymentId").map((v) => String(v)).filter(Boolean);
     if (ids.length === 0) return NextResponse.redirect(new URL("/console/payments?ok=resentAll&n=0", origin), 303);
     const payments = await prisma.payment.findMany({
-      where: { id: { in: ids }, category: "PLAYER_FEE", status: { in: ["REQUESTED", "PENDING"] } },
+      where: {
+        id: { in: ids },
+        direction: "IN",
+        category: { in: [...REMINDABLE_CATEGORIES] },
+        status: { in: ["REQUESTED", "PENDING"] },
+      },
     });
     let sent = 0;
     for (const pay of payments) {
       if (!pay.partyId) continue;
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
       if (!person) continue;
-      const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      const email = reminderEmailFor(pay, person);
       await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
         channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,

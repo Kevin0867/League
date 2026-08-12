@@ -4,16 +4,17 @@ import { formatCents } from "@/lib/money";
 import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
 import { sendEmail } from "@/lib/notify";
 
-// A one-off, admin-created payment request (custom amount, optional discount) —
-// a single "Pay now" CTA to the public /pay page. No installments.
-export async function sendCustomPaymentEmail(opts: {
-  toEmail: string;
+// Pure builder for a one-off payment request (custom amount, optional discount) —
+// a single "Pay now" CTA to the public /pay page. No installments. Returns the
+// {subject, text, html} so it can be sent directly OR routed through
+// dispatchMessage (e.g. as a reminder) with consistent logging.
+export function customPaymentEmailContent(opts: {
   name: string;
   amountCents: number;
   description: string;
   paymentId: string;
   discountNote?: string | null;
-}) {
+}): { subject: string; text: string; html: string } {
   const base = appUrl();
   const amount = formatCents(opts.amountCents);
   const payUrl = `${base}/pay/${opts.paymentId}?plan=full`;
@@ -42,10 +43,23 @@ export async function sendCustomPaymentEmail(opts: {
     .filter((l) => l !== "")
     .join("\n");
 
-  return sendEmail(
-    opts.toEmail,
-    `Your PURE Academy payment — ${amount}`,
+  return {
+    subject: `Your PURE Academy payment — ${amount}`,
     text,
-    brandedEmailHtml({ heading: "Payment request", intro: `Hi ${opts.name},`, contentHtml })
-  );
+    html: brandedEmailHtml({ heading: "Payment request", intro: `Hi ${opts.name},`, contentHtml }),
+  };
+}
+
+// A one-off, admin-created payment request (custom amount, optional discount) —
+// a single "Pay now" CTA to the public /pay page. No installments.
+export async function sendCustomPaymentEmail(opts: {
+  toEmail: string;
+  name: string;
+  amountCents: number;
+  description: string;
+  paymentId: string;
+  discountNote?: string | null;
+}) {
+  const c = customPaymentEmailContent(opts);
+  return sendEmail(opts.toEmail, c.subject, c.text, c.html);
 }
