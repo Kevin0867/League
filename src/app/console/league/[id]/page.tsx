@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { mintConsoleTicket } from "@/lib/auth";
+import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export default async function FixtureDetail({
           <StatusBadge status={fixture.status} />
         </div>
         <p className="text-sm text-slate-500">
-          Week {fixture.weekNumber} · {formatDate(fixture.scheduledAt)} · {fixture.facility?.name ?? "hub TBD"} · {fixture.courtAllocation}
+          Week {leagueWeekLabel(fixture.weekNumber)} · {formatDate(fixture.scheduledAt)} · {fixture.facility?.name ?? "hub TBD"} · {fixture.courtAllocation}
         </p>
       </div>
 

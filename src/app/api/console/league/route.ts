@@ -7,6 +7,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { roundRobin, leagueWeekDates, LEAGUE_WEEKS } from "@/lib/domain/fixtures";
+import { leagueStartDate, FIRST_LEAGUE_WEEK } from "@/lib/domain/seasonCalendar";
 import { teamConfirmation, shouldEscalate } from "@/lib/domain/availability";
 import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
 
@@ -173,7 +174,9 @@ export async function POST(req: Request) {
       if (entries.length < 2) return back("?err=fewteams");
 
       const blackouts = (await prisma.blackoutDate.findMany({ where: { facilityId: null } })).map((b) => b.date);
-      const dates = leagueWeekDates(season.startDate, blackouts, LEAGUE_WEEKS);
+      // League nights are dated from the week of Oct 26 (season week 7), not the
+      // practice-season start, and numbered as season weeks 7–11 (§2.6).
+      const dates = leagueWeekDates(leagueStartDate(), blackouts, LEAGUE_WEEKS);
       const hub = await prisma.facility.findFirst({ where: { acpLeagueOption: true } });
       const facilityOf = new Map(entries.map((e) => [e.team.id, e.team.facilityId]));
 
@@ -186,7 +189,7 @@ export async function POST(req: Request) {
           await prisma.fixture.create({
             data: {
               seasonId: season.id,
-              weekNumber: r + 1,
+              weekNumber: r + FIRST_LEAGUE_WEEK,
               scheduledAt: when,
               facilityId: hub?.id ?? facilityOf.get(pair.homeId) ?? null,
               homeTeamId: pair.homeId,

@@ -41,6 +41,25 @@ export const SEASON_WEEKS: WeekPlan[] = [
   { week: 12, startISO: "2026-12-07", endISO: "2026-12-13", focus: "ACP Championships — division events Mon Dec 7 to Fri Dec 11; Sat Dec 12 and Sun Dec 13 held in reserve", milestone: "Championship • Final evaluation • Winter invitations", kind: "championship" },
 ];
 
+/// Season structure: practice weeks 1–6, then ACP league weeks 7–11 (§2.6).
+export const PRACTICE_WEEKS = 6;
+export const FIRST_LEAGUE_WEEK = PRACTICE_WEEKS + 1; // 7
+
+/// Present a fixture's stored week as its SEASON week. Fixtures store the league
+/// round (1..5); the season numbers those rounds 7..11 (they follow the six
+/// practice weeks). Values already in league range pass through unchanged.
+export function leagueWeekLabel(fixtureWeek: number): number {
+  return fixtureWeek >= FIRST_LEAGUE_WEEK ? fixtureWeek : fixtureWeek + PRACTICE_WEEKS;
+}
+
+/// The anchor date for league night 1 — the week of Oct 26 (season week 7),
+/// taken from the template so fixtures are dated from the league start, not the
+/// practice-season start.
+export function leagueStartDate(): Date {
+  const w = SEASON_WEEKS.find((x) => x.kind === "league");
+  return new Date(`${w?.startISO ?? "2026-10-26"}T12:00:00Z`);
+}
+
 /// The weeks to show for a season: its stored, edited calendar if it has one,
 /// otherwise the standard template. Accepts the raw Season.calendar JSON value.
 export function getSeasonWeeks(calendar: unknown): WeekPlan[] {

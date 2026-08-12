@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatTime12 } from "@/lib/time";
 import { getTeamPageData, type TeamFixtureView } from "@/lib/domain/teamPage";
+import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 
 export const dynamic = "force-dynamic";
 
@@ -166,7 +167,7 @@ function FixtureRow({ f }: { f: TeamFixtureView }) {
           )}
         </div>
         <div className="text-xs text-slate-400">
-          Week {f.weekNumber} · {formatDate(f.scheduledAt)}
+          Week {leagueWeekLabel(f.weekNumber)} · {formatDate(f.scheduledAt)}
           {f.facilityName ? ` · ${f.facilityName}` : ""}
         </div>
       </div>

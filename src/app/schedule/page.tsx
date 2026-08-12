@@ -6,6 +6,7 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate } from "@/lib/time";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
+import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function PublicSchedulePage() {
         <div className="mt-8 space-y-8">
           {[...byWeek.entries()].map(([week, fs]) => (
             <section key={week}>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Week {week}</h2>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Week {leagueWeekLabel(week)}</h2>
               <div className="space-y-2">
                 {fs.map((f) => (
                   <div key={f.id} className="card flex items-center justify-between">
