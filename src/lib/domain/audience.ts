@@ -69,7 +69,10 @@ async function toRecipients(personIds: string[]): Promise<Recipient[]> {
 export async function resolveAudience(
   type: AudienceType,
   ref: string | null,
-  seasonId: string | null
+  seasonId: string | null,
+  // When false, never expand a minor to their guardian — used for explicit,
+  // hand-picked recipient sends so a single message isn't duplicated per person.
+  expandOverride?: boolean
 ): Promise<Recipient[]> {
   let personIds: string[] = [];
   let expandMinors = true;
@@ -133,6 +136,7 @@ export async function resolveAudience(
     }
   }
 
+  if (expandOverride === false) expandMinors = false;
   if (expandMinors) personIds = await expandGuardians(personIds);
   return toRecipients(personIds);
 }

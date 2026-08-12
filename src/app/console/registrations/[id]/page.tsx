@@ -9,6 +9,7 @@ import { ACADEMY_MARKETS } from "@/lib/enums";
 import { formatDate } from "@/lib/time";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { RecipientChecklist } from "@/components/RecipientChecklist";
 
 // Sensitive fields are encrypted at rest and only decrypted for staff here.
 // A key mismatch yields a marker — show blank so we never re-save the marker.
@@ -52,7 +53,7 @@ export default async function RegistrationDetail({
   const reg = await prisma.registration.findUnique({
     where: { id },
     include: {
-      person: true,
+      person: { include: { guardian: true } },
       division: true,
       season: { include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } } },
       locationPrefs: { orderBy: { rank: "asc" }, include: { facility: true } },
@@ -61,6 +62,7 @@ export default async function RegistrationDetail({
   if (!reg) redirect("/console/registrations?err=notfound");
 
   const p = reg.person;
+  const guardian = p.isMinor ? p.guardian : null;
   const [teams, membership, payments] = await Promise.all([
     prisma.team.findMany({ where: { seasonId: reg.seasonId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.teamMember.findFirst({ where: { personId: p.id, team: { seasonId: reg.seasonId } }, include: { team: true } }),
@@ -163,10 +165,14 @@ export default async function RegistrationDetail({
                 </form>
               )}
               {outstanding && (
-                <form method="POST" action="/api/console/registrations">
-                  {hidden}<input type="hidden" name="op" value="resendPayment" />
-                  <button className="text-xs text-brand-700 hover:underline">Resend fee request</button>
-                </form>
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Resend fee request…</summary>
+                  <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
+                    {hidden}<input type="hidden" name="op" value="resendPayment" />
+                    <RecipientChecklist person={p} guardian={guardian} purpose="all" legend="Send reminder to" />
+                    <button className="btn-secondary py-1 text-xs">Send reminder</button>
+                  </form>
+                </details>
               )}
               {paid && (
                 <form method="POST" action="/api/console/registrations">
@@ -207,8 +213,6 @@ export default async function RegistrationDetail({
           <Field label="Last name" name="lastName" defaultValue={p.lastName} />
           <Field label="Email" name="email" type="email" defaultValue={p.email ?? ""} />
           <Field label="Phone" name="phone" type="tel" defaultValue={p.phone ?? ""} />
-          <Field label="Additional email (parent 2 / student)" name="email2" type="email" defaultValue={p.email2 ?? ""} />
-          <Field label="Additional email (3rd)" name="email3" type="email" defaultValue={p.email3 ?? ""} />
           <Field label="Date of birth" name="dob" type="date" defaultValue={p.dob ? p.dob.toISOString().slice(0, 10) : ""} />
           <Select label="Gender" name="gender" defaultValue={p.gender ?? ""} options={GENDERS.map((g) => ({ value: g, label: g || "—" }))} />
           <Field label="Address" name="address" defaultValue={p.address ?? ""} />
@@ -218,6 +222,31 @@ export default async function RegistrationDetail({
           <div className="sm:col-span-2">
             <label className="label">Medical disclosures</label>
             <textarea name="medical" rows={2} className="input" defaultValue={dec(p.medicalNotes)} />
+          </div>
+        </div>
+
+        {/* Notification emails — up to three addresses, each with a name/label,
+            so staff can choose per-email who receives what (both parents, the
+            player). */}
+        <div className="border-t border-slate-100 pt-4">
+          <h3 className="text-sm font-semibold text-slate-700">Notification emails</h3>
+          <p className="mb-3 mt-0.5 text-xs text-slate-500">
+            Both parents and the player can each get a copy. Label each address with a name so you can choose who
+            receives each email — a progress report to parents, a payment reminder to just the paying parent, and so on.
+          </p>
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Primary email label (e.g. Mom)" name="emailLabel" defaultValue={p.emailLabel ?? ""} />
+              <div className="hidden sm:block" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Additional email" name="email2" type="email" defaultValue={p.email2 ?? ""} />
+              <Field label="Its label (e.g. Dad)" name="email2Label" defaultValue={p.email2Label ?? ""} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Additional email" name="email3" type="email" defaultValue={p.email3 ?? ""} />
+              <Field label="Its label (e.g. Player)" name="email3Label" defaultValue={p.email3Label ?? ""} />
+            </div>
           </div>
         </div>
 
@@ -268,7 +297,7 @@ export default async function RegistrationDetail({
       </form>
 
       {/* Waiver request — email a no-login signing link to the player/parent. */}
-      <div className="card flex flex-wrap items-center justify-between gap-3">
+      <div className="card space-y-3">
         <div>
           <h2 className="font-semibold text-slate-900">Participation waiver</h2>
           <p className="text-sm text-slate-500">
@@ -279,11 +308,12 @@ export default async function RegistrationDetail({
                 : "Not on file. Sends the player a link to complete their waiver."}
           </p>
         </div>
-        <form method="POST" action="/api/console/registrations">
+        <form method="POST" action="/api/console/registrations" className="space-y-3">
           <input type="hidden" name="ticket" value={ticket} />
           <input type="hidden" name="op" value="sendWaiver" />
           <input type="hidden" name="personId" value={p.id} />
           <input type="hidden" name="registrationId" value={reg.id} />
+          <RecipientChecklist person={p} guardian={guardian} purpose={p.isMinor ? "report" : "all"} legend="Send the signing link to" />
           <button className="btn-secondary text-sm">
             {p.waiverSignedAt ? "Resend waiver link" : "Send waiver request"}
           </button>

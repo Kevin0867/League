@@ -9,6 +9,7 @@ import { sendEmail } from "@/lib/notify";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { customPaymentEmailContent } from "@/lib/payments/customPaymentEmail";
+import { personContacts, filterToContacts } from "@/lib/domain/contacts";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
@@ -98,6 +99,17 @@ function reminderResultQuery(t: ReminderTally): string {
   if (t.skipped) qs.set("skipped", String(t.skipped));
   if (t.reason) qs.set("reason", t.reason.slice(0, 180));
   return qs.toString();
+}
+
+// Resolve hand-picked "Send to" recipients for a person (and their guardian,
+// for a minor), validated against real contacts. `picked` is empty when the
+// caller didn't show a checklist (e.g. the list-view quick resend) — callers
+// then fall back to sending to all addresses on file.
+async function pickedRecipients(personId: string, submitted: string[]): Promise<{ contacts: number; picked: string[] }> {
+  const person = await prisma.person.findUnique({ where: { id: personId }, include: { guardian: true } });
+  if (!person) return { contacts: 0, picked: [] };
+  const contacts = personContacts(person, person.isMinor ? person.guardian : null);
+  return { contacts: contacts.length, picked: filterToContacts(submitted, contacts) };
 }
 
 export async function POST(req: Request) {
@@ -355,7 +367,8 @@ export async function POST(req: Request) {
       if (!actor) return back("?err=auth");
       const person = await prisma.person.findUnique({ where: { id: personId } });
       if (!person) return back("?err=fields");
-      if (!person.email) return back("?err=noemail");
+      const { contacts, picked } = await pickedRecipients(personId, fd.getAll("to").map((v) => String(v)));
+      if (contacts === 0) return back("?err=noemail");
 
       const token = await signWaiverToken(person.id);
       const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
@@ -364,6 +377,7 @@ export async function POST(req: Request) {
         senderId: actor.userId, seasonId: reg?.seasonId ?? null, audienceType: "SINGLE_PERSON", audienceRef: person.id,
         channels: ["IN_APP", "EMAIL"], triggerType: "WAIVER_REQUEST",
         subject: email.subject, body: email.text, html: email.html,
+        ...(picked.length ? { toEmails: picked } : {}),
       });
       await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "WAIVER_REQUESTED", summary: "Waiver request sent" });
       return back("?ok=waiverSent");
@@ -389,6 +403,9 @@ export async function POST(req: Request) {
           email: nn("email"),
           email2: nn("email2"),
           email3: nn("email3"),
+          emailLabel: nn("emailLabel"),
+          email2Label: nn("email2Label"),
+          email3Label: nn("email3Label"),
           phone: nn("phone"),
           dob: g("dob") ? new Date(g("dob")) : null,
           gender: nn("gender"),
@@ -460,10 +477,14 @@ export async function POST(req: Request) {
       });
       if (!person || !pay) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nopayment`, origin), 303);
       const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      // Hand-picked recipients from the detail-page checklist; the list-view
+      // quick resend sends to every address on file (picked empty → fan-out).
+      const { picked } = await pickedRecipients(personId, fd.getAll("to").map((v) => String(v)));
       // Resend = email only (no new in-app announcement — see resendAllFees).
       await dispatchMessage({
         senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
         channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        ...(picked.length ? { toEmails: picked } : {}),
       });
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "RESEND", summary: "Resent fee request" });
       const dest = String(fd.get("from") ?? "") === "list"

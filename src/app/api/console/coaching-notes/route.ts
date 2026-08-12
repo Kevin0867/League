@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { coachingReportEmail } from "@/lib/domain/coachingReportEmail";
 import { isValidWeek, serializeTags, parseTags, labelsFor } from "@/lib/domain/coachingNotes";
-import { personEmails } from "@/lib/domain/audience";
+import { personContacts, filterToContacts } from "@/lib/domain/contacts";
 
 // Coaching notes / progress reports (native-form-POST + ticket auth, 303 back).
 // A coach keeps up to six weekly notes per student and can email a week's report
@@ -85,13 +85,13 @@ export async function POST(req: Request) {
       });
       if (!student) return progress(`?err=nostudent&week=${week}`);
 
-      // Recipients: everyone on the student's record plus, for a minor, the
-      // guardian's addresses — so both parents and the student all get it.
-      // dispatchMessage to the student expands to the guardian and fans out to
-      // every stored email; here we just confirm at least one exists.
-      const targets = new Set(personEmails(student).map((e) => e.toLowerCase()));
-      if (student.isMinor && student.guardian) personEmails(student.guardian).forEach((e) => targets.add(e.toLowerCase()));
-      if (targets.size === 0) return progress(`?err=noemail&week=${week}`);
+      // Recipients are hand-picked from the "Send to" checklist. Validate the
+      // submitted addresses against the student's (and guardian's) real
+      // contacts, so a send can only go to addresses on the record.
+      const contacts = personContacts(student, student.isMinor ? student.guardian : null);
+      if (contacts.length === 0) return progress(`?err=noemail&week=${week}`);
+      const picked = filterToContacts(fd.getAll("to").map((v) => String(v)), contacts);
+      if (picked.length === 0) return progress(`?err=norecipients&week=${week}`);
 
       const coachName = auth.team.coach
         ? `${auth.team.coach.person.firstName} ${auth.team.coach.person.lastName}`
@@ -116,6 +116,7 @@ export async function POST(req: Request) {
         subject: email.subject,
         body: email.text,
         html: email.html,
+        toEmails: picked,
       });
 
       if (res.failures > 0) {

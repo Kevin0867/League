@@ -24,6 +24,10 @@ export type DispatchInput = {
   /** Optional email attachments (e.g. an .ics calendar invite). */
   attachments?: EmailAttachment[];
   triggerType?: string | null;
+  /** Explicit, hand-picked email recipients (from a "Send to" checklist). When
+   *  set, the EMAIL channel goes to exactly these addresses and guardian
+   *  expansion is suppressed, so the sender controls precisely who receives it. */
+  toEmails?: string[];
 };
 
 export type DispatchResult = {
@@ -39,10 +43,14 @@ export type DispatchResult = {
 
 export async function dispatchMessage(input: DispatchInput): Promise<DispatchResult> {
   const channels = input.channels.length ? input.channels : ["IN_APP"];
+  const pickedEmails = (input.toEmails ?? []).map((e) => e.trim()).filter(Boolean);
+  const hasPicked = pickedEmails.length > 0;
   const recipients = await resolveAudience(
     input.audienceType,
     input.audienceRef ?? null,
-    input.seasonId ?? null
+    input.seasonId ?? null,
+    // Hand-picked recipients: don't expand to the guardian (avoids duplicate sends).
+    hasPicked ? false : undefined
   );
 
   const message = await prisma.message.create({
@@ -74,9 +82,9 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     const failureReasons: string[] = [];
 
     if (channels.includes("EMAIL")) {
-      // Deliver to every address on file for this person (both parents + the
-      // student). Fall back to the primary if the list is empty.
-      const to = r.emails.length ? r.emails : r.email;
+      // Hand-picked recipients win; otherwise deliver to every address on file
+      // for this person (both parents + the student).
+      const to = hasPicked ? pickedEmails : r.emails.length ? r.emails : r.email;
       const res = await sendEmail(to, subject, input.body, input.html, input.attachments);
       emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`email: ${res.error}`);

@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
-import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { PendingSubmit } from "@/components/ConfirmSubmit";
+import { RecipientChecklist } from "@/components/RecipientChecklist";
 import { formatStamp } from "@/lib/time";
 import {
   COACHING_WEEKS,
@@ -11,7 +12,6 @@ import {
   parseTags,
   noteHasContent,
 } from "@/lib/domain/coachingNotes";
-import { personEmails } from "@/lib/domain/audience";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ const ERR: Record<string, string> = {
   notmember: "That player isn't on this team's roster.",
   empty: "Add a tag or a note before sending a report.",
   noemail: "No parent/guardian email on file — add one on the player's record first.",
+  norecipients: "Select at least one recipient before sending.",
   nostudent: "Player not found.",
   op: "Unknown action.",
 };
@@ -60,14 +61,6 @@ export default async function StudentProgressPage({
   const strengths = parseTags(note?.strengths);
   const growth = parseTags(note?.growth);
 
-  // Everyone who will receive this report: all of the student's addresses plus,
-  // for a minor, the guardian's — deduped, so both parents and the student get it.
-  const seenEmail = new Set<string>();
-  const targetEmails: string[] = [];
-  for (const e of [...personEmails(student), ...(student.isMinor && student.guardian ? personEmails(student.guardian) : [])]) {
-    const k = e.toLowerCase();
-    if (!seenEmail.has(k)) { seenEmail.add(k); targetEmails.push(e); }
-  }
 
   return (
     <div className="space-y-6">
@@ -150,28 +143,26 @@ export default async function StudentProgressPage({
         </div>
       </form>
 
-      {/* Send this week to the parent/guardian */}
-      <div className="card flex flex-wrap items-center justify-between gap-3">
+      {/* Send this week — pick exactly who receives it. Progress reports default
+          to the parents/guardians (not a minor's own address). */}
+      <form method="POST" action="/api/console/coaching-notes" className="card space-y-3">
+        <input type="hidden" name="ticket" value={ticket} />
+        <input type="hidden" name="op" value="sendReport" />
+        <input type="hidden" name="teamId" value={teamId} />
+        <input type="hidden" name="personId" value={personId} />
+        <input type="hidden" name="week" value={active} />
         <div>
-          <h2 className="font-semibold text-slate-900">Send Week {active} to the parent</h2>
+          <h2 className="font-semibold text-slate-900">Send Week {active} report</h2>
           <p className="text-sm text-slate-500">
-            {targetEmails.length > 0 ? (
-              <>Emails this week&apos;s note to <span className="font-medium text-slate-700">{targetEmails.join(", ")}</span>.</>
-            ) : (
-              <span className="text-rose-600">No email on file — add a parent/guardian or student email on the player&apos;s record first.</span>
-            )}
+            Choose who receives it — checked by default for parents/guardians.
             {note?.sentToParentAt && <span className="ml-1 text-emerald-700">Last sent {formatStamp(note.sentToParentAt)}.</span>}
           </p>
         </div>
-        <ConfirmSubmit
-          action="/api/console/coaching-notes"
-          fields={{ ticket, op: "sendReport", teamId, personId, week: String(active) }}
-          confirm={`Email ${student.firstName}'s Week ${active} progress report to ${targetEmails.length} recipient${targetEmails.length === 1 ? "" : "s"} (${targetEmails.join(", ")})? Send only what you've saved.`}
-          label={note?.sentToParentAt ? "Resend report" : "Send report"}
-          className="btn-secondary text-sm"
-          disabled={targetEmails.length === 0}
-        />
-      </div>
+        <RecipientChecklist person={student} guardian={student.guardian} purpose="report" />
+        <div className="flex justify-end">
+          <PendingSubmit label={note?.sentToParentAt ? "Resend report" : "Send report"} className="btn-secondary text-sm" pendingLabel="Sending…" />
+        </div>
+      </form>
     </div>
   );
 }
