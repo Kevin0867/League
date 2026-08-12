@@ -23,8 +23,13 @@ async function main() {
   const passwordHash = await bcrypt.hash(password, 10);
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    await prisma.user.update({ where: { id: existing.id }, data: { role: "ADMIN", extraRoles: [], active: true, passwordHash } });
-    console.log(`Updated existing user ${email} → ADMIN (password reset).`);
+    await prisma.user.update({
+      where: { id: existing.id },
+      // Reset the brute-force lockout too, so a fresh bootstrap always yields a
+      // usable, unlocked account with a known password.
+      data: { role: "ADMIN", extraRoles: [], active: true, passwordHash, failedLoginCount: 0, lockedUntil: null },
+    });
+    console.log(`Updated existing user ${email} → ADMIN (password reset, lockout cleared).`);
   } else {
     const person =
       (await prisma.person.findFirst({ where: { email } })) ??
