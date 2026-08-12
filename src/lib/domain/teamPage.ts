@@ -5,7 +5,7 @@
 import { prisma } from "@/lib/db";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 import { leagueStandingsFlat, type LeagueStandingRow } from "@/lib/domain/leagueStandings";
-import { publicPlayerName, publicPlayerSlug } from "@/lib/domain/publicPlayer";
+import { publicPlayerName, publicPlayerSlug, teamPhotoPublishable } from "@/lib/domain/publicPlayer";
 
 const DAY_LABEL: Record<string, string> = {
   MON: "Monday", TUE: "Tuesday", WED: "Wednesday", THU: "Thursday",
@@ -50,6 +50,7 @@ export type TeamPageData = {
   practice: { day: string | null; startTime: string | null; facility: string | null };
   coachName: string | null;
   coachPersonId: string | null;
+  photoUrl: string | null; // null unless a photo exists AND all players consent
   roster: RosterPlayer[];
   combinedDupr: number | null; // sum of adult ratings
   avgDupr: number | null;
@@ -80,7 +81,7 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
         coach: { include: { person: { select: { id: true, firstName: true, lastName: true } } } },
         teamContact: { select: { firstName: true, lastName: true } },
         members: {
-          include: { person: { select: { id: true, firstName: true, lastName: true, isMinor: true, duprRating: true } } },
+          include: { person: { select: { id: true, firstName: true, lastName: true, isMinor: true, duprRating: true, waiverSignedAt: true, mediaOptOut: true } } },
           orderBy: { person: { firstName: "asc" } },
         },
       },
@@ -212,6 +213,10 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
     },
     coachName,
     coachPersonId: team.coach?.person.id ?? null,
+    photoUrl:
+      team.photoUrl && teamPhotoPublishable(team.members.map((m) => ({ waiverSignedAt: m.person.waiverSignedAt, mediaOptOut: m.person.mediaOptOut })))
+        ? team.photoUrl
+        : null,
     roster: rosterPlayers,
     combinedDupr,
     avgDupr,

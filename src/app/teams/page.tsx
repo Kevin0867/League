@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { teamDisplayName, teamShortName, teamSlug, PURE_MARKETS } from "@/lib/domain/teamName";
 import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 import { formatDate } from "@/lib/time";
+import { TeamsFilter } from "@/components/TeamsFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,8 @@ export default async function TeamsPage() {
     (byMarket.get(key) ?? byMarket.set(key, []).get(key)!).push(t);
   }
   const orderedMarkets = [...PURE_MARKETS, "Other"].filter((m) => byMarket.has(m));
+  const filterMarkets = orderedMarkets.filter((m) => m !== "Other");
+  const divisions = [...new Set(teams.map((t) => t.divisionCode).filter((d): d is string => !!d))].sort();
 
   return (
     <div>
@@ -146,9 +149,13 @@ export default async function TeamsPage() {
             Teams are published to families in Week 2. Check back soon.
           </p>
         ) : (
-          <div className="mt-10 space-y-8">
+          <>
+          {(filterMarkets.length > 1 || divisions.length > 1) && (
+            <TeamsFilter markets={filterMarkets} divisions={divisions} />
+          )}
+          <div className="mt-6 space-y-8">
             {orderedMarkets.map((market) => (
-              <section key={market}>
+              <section key={market} data-market-section={market}>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                   {market === "Other" ? "Other" : `PURE ${market}`}
                 </h2>
@@ -157,6 +164,9 @@ export default async function TeamsPage() {
                     <Link
                       key={t.id}
                       href={`/teams/${teamSlug(t)}`}
+                      data-team-card
+                      data-market={t.market ?? ""}
+                      data-division={t.divisionCode ?? ""}
                       className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-brand-300 hover:shadow"
                     >
                       <div>
@@ -170,6 +180,7 @@ export default async function TeamsPage() {
               </section>
             ))}
           </div>
+          </>
         )}
 
         <p className="mt-10 text-sm text-slate-500">

@@ -295,6 +295,11 @@ model Team {
   divisionCode  String?
   color         String?
 
+  /// Optional team photo (object-storage URL). Shown on the public team page
+  /// ONLY when every rostered player has media consent (Community Layer §3.5) —
+  /// where any player is missing consent the photo is withheld, never cropped.
+  photoUrl      String?
+
   /// Team cannot be published to families until the facility agreement is
   /// executed (§4 publication gate).
   published     Boolean   @default(false)

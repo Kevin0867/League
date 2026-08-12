@@ -9,6 +9,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { PrintButton } from "@/components/PrintButton";
+import { TeamPhotoUploadForm } from "@/components/TeamPhotoUploadForm";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function TeamDetailPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err } = await searchParams;
+  const { ok, err, imgok, imgerr } = await searchParams;
   const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
     where: { id },
@@ -98,9 +99,24 @@ export default async function TeamDetailPage({
       {ok && OK_MSG[ok] && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{OK_MSG[ok]}</div>
       )}
+      {imgok === "team" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Team photo uploaded.</div>
+      )}
       {err && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{ERR_MSG[err] ?? "Something went wrong."}</div>
       )}
+      {imgerr && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{imgerr === "auth" ? "Not authorized to change this team's photo." : imgerr}</div>
+      )}
+
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Team photo</h2>
+        <p className="mb-3 mt-0.5 text-sm text-slate-500">
+          Shown on the public team page — but only once every rostered player has media consent (a signed waiver with
+          media consent). Where any player is missing consent, it&apos;s withheld rather than cropping anyone out.
+        </p>
+        <TeamPhotoUploadForm ticket={ticket} teamId={team.id} currentUrl={team.photoUrl} />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Roster */}
