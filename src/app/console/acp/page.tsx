@@ -3,6 +3,9 @@ import { formatCents } from "@/lib/money";
 import { formatDateTime12 } from "@/lib/time";
 import { acpEntryWindow } from "@/lib/domain/acpEntry";
 import { DIVISION_MIN_TEAMS } from "@/lib/domain/seasonCalendar";
+import { mintConsoleTicket } from "@/lib/auth";
+import { CustomPaymentForm } from "@/components/CustomPaymentForm";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 
 // Admin view of ACP outside-club interest (Phase A) and entries (Phase B).
 // Groups entries by division so staff can see which divisions clear the
@@ -15,7 +18,13 @@ const WINDOW_LABEL: Record<string, string> = {
   closed: "Entries closed",
 };
 
-export default async function ConsoleAcpPage() {
+export default async function ConsoleAcpPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const [interests, entries] = await Promise.all([
     prisma.acpInterest.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.acpEntry.findMany({
@@ -44,6 +53,17 @@ export default async function ConsoleAcpPage() {
         </div>
         <span className="badge bg-brand-100 text-brand-800 self-center">{WINDOW_LABEL[window]}</span>
       </div>
+
+      {sp.ok === "requested" && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <p className="font-medium">Payment request created.</p>
+          <p className="mt-1">{sp.cpunsent ? "Email didn't complete — copy the pay link and send it directly:" : "We emailed a secure pay link. You can also copy it:"}</p>
+          {sp.pid && <div className="mt-2"><CopyLinkButton path={`/pay/${sp.pid}`} label="Copy pay link" /></div>}
+        </div>
+      )}
+      {(sp.err === "cpname" || sp.err === "cpemail" || sp.err === "cpamount") && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Check the payment details and try again.</div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Interest sign-ups" value={interests.length} />
@@ -123,6 +143,25 @@ export default async function ConsoleAcpPage() {
                         </li>
                       ))}
                     </ol>
+                  </div>
+                </div>
+
+                {/* Request a card payment for this entry — prefilled, discountable */}
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Request payment</div>
+                  <div className="mt-2">
+                    <CustomPaymentForm
+                      ticket={ticket}
+                      returnTo="/console/acp"
+                      category="ACP_ENTRY"
+                      compact
+                      defaults={{
+                        name: e.contactName,
+                        email: e.contactEmail,
+                        description: `ACP entry — ${e.clubName} (${e.divisionName})`,
+                        amount: (e.amountDueCents / 100).toFixed(2),
+                      }}
+                    />
                   </div>
                 </div>
               </details>

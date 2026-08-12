@@ -7,6 +7,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { mintConsoleTicket } from "@/lib/auth";
+import { CustomPaymentForm } from "@/components/CustomPaymentForm";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +74,32 @@ export default async function PaymentsPage({
       {sp.err === "noemail" && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">No email on your account to send the preview to.</div>
       )}
+      {sp.err === "cpname" && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Enter the recipient&apos;s name.</div>}
+      {sp.err === "cpemail" && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Enter a valid recipient email.</div>}
+      {sp.err === "cpamount" && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Enter an amount greater than $0.50.</div>}
+      {sp.ok === "requested" && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <p className="font-medium">Payment request created.</p>
+          <p className="mt-1">
+            {sp.cpunsent
+              ? "Email delivery didn't complete — copy the pay link and send it directly:"
+              : "We emailed the recipient a secure pay link. You can also copy it:"}
+          </p>
+          {sp.pid && (
+            <div className="mt-2"><CopyLinkButton path={`/pay/${sp.pid}`} label="Copy pay link" /></div>
+          )}
+        </div>
+      )}
+
+      {/* Request a custom card payment (any amount + optional discount) */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Request a payment</h2>
+        <p className="mb-3 mt-0.5 text-sm text-slate-500">
+          Charge any amount to a recipient by card — for ACP entries ($195, $125…) or any one-off. Add a discount
+          if you like; we email them a secure Stripe pay link.
+        </p>
+        <CustomPaymentForm ticket={ticket} />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Collected" value={formatCents(collected)} tone="emerald" />

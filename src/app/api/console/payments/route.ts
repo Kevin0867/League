@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { dollarsToCents, formatCents } from "@/lib/money";
+import { sendCustomPaymentEmail } from "@/lib/payments/customPaymentEmail";
 import {
   computeStatement,
   coachSessionPayCents,
@@ -25,12 +27,13 @@ function monthRange(year: number, month: number) {
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
-  const back = (qs: string) =>
-    NextResponse.redirect(new URL(`/console/payments${qs}`, origin), 303);
-
   const formData = await req.formData();
+  const rawReturn = String(formData.get("returnTo") ?? "");
+  const returnBase = rawReturn.startsWith("/console") ? rawReturn : "/console/payments";
+  const back = (qs: string) => NextResponse.redirect(new URL(`${returnBase}${qs}`, origin), 303);
+
   const actor = await actorFromForm(formData);
-  // Both operations preserve the original requireFinance() gate: runPayouts.
+  // All operations preserve the original requireFinance() gate: runPayouts.
   if (!actor || !can(actor.role, "runPayouts")) return back("?err=auth");
 
   const op = String(formData.get("op") ?? "");
@@ -45,7 +48,81 @@ export async function POST(req: Request) {
     return back("?ok=payouts");
   }
 
+  if (op === "customRequest") {
+    return customPaymentRequest(formData, actor, back);
+  }
+
   return back("?err=op");
+}
+
+/**
+ * Admin-created custom payment request: any amount, an optional percentage
+ * discount, sent to a recipient as a Stripe pay link. Used for ACP entries
+ * ($195, $125, …) and any other one-off charge. Card data never touches us.
+ */
+async function customPaymentRequest(
+  formData: FormData,
+  actor: { userId: string; role: string },
+  back: (qs: string) => NextResponse
+) {
+  const g = (k: string) => String(formData.get(k) ?? "").trim();
+  const name = g("name");
+  const email = g("email").toLowerCase();
+  const description = g("description") || "PURE Academy payment";
+  const amount = parseFloat(g("amount"));
+  const discountPct = Math.max(0, Math.min(100, parseInt(g("discountPercent") || "0", 10) || 0));
+  const category = g("category") === "ACP_ENTRY" ? "ACP_ENTRY" : "CUSTOM";
+
+  if (!name) return back("?err=cpname");
+  if (!email || !/.+@.+\..+/.test(email)) return back("?err=cpemail");
+  if (!Number.isFinite(amount) || amount <= 0) return back("?err=cpamount");
+
+  const baseCents = dollarsToCents(amount);
+  const finalCents = Math.round((baseCents * (100 - discountPct)) / 100);
+  if (finalCents < 50) return back("?err=cpamount"); // Stripe minimum
+  const discountNote = discountPct > 0 ? `${discountPct}% off ${formatCents(baseCents)}` : null;
+  const fullDescription = discountNote ? `${description} (${discountNote})` : description;
+
+  // Link to an existing person by email, or create a lightweight contact so the
+  // charge shows a party in the ledger.
+  const [firstName, ...rest] = name.split(/\s+/);
+  const lastName = rest.join(" ") || "—";
+  const party =
+    (await prisma.person.findFirst({ where: { email } })) ??
+    (await prisma.person.create({ data: { firstName, lastName, email } }));
+
+  const payment = await prisma.payment.create({
+    data: {
+      direction: "IN",
+      partyId: party.id,
+      amountCents: finalCents,
+      method: "STRIPE",
+      status: "REQUESTED",
+      category,
+      description: fullDescription,
+    },
+  });
+
+  const sendRes = await sendCustomPaymentEmail({
+    toEmail: email,
+    name: firstName,
+    amountCents: finalCents,
+    description,
+    paymentId: payment.id,
+    discountNote,
+  });
+
+  await audit({
+    actorId: actor.userId,
+    entityType: "Payment",
+    entityId: payment.id,
+    action: "payment.customRequest",
+    summary: `Requested ${formatCents(finalCents)} from ${email}${discountNote ? ` (${discountNote})` : ""}${sendRes.ok && !sendRes.simulated ? " — emailed" : " — email not delivered"}`,
+  });
+
+  const qs = new URLSearchParams({ ok: "requested", pid: payment.id });
+  if (!(sendRes.ok && !sendRes.simulated)) qs.set("cpunsent", "1");
+  return back(`?${qs.toString()}`);
 }
 
 /**

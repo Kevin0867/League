@@ -50,7 +50,9 @@ export default async function PublicPayPage({
             <p className="mt-2 text-slate-500">This fee has already been paid. Thank you!</p>
           </div>
         ) : payment!.category === "ALA_CARTE" ? (
-          <ClinicPayCard payment={payment!} canceled={canceled} err={err} />
+          <OneOffPayCard payment={payment!} title="Confirm your spot" fallbackDesc="PURE Academy clinic" canceled={canceled} err={err} />
+        ) : payment!.category === "CUSTOM" || payment!.category === "ACP_ENTRY" ? (
+          <OneOffPayCard payment={payment!} title="Complete your payment" fallbackDesc="PURE Academy payment" canceled={canceled} err={err} />
         ) : (
           <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} />
         )}
@@ -64,20 +66,25 @@ export default async function PublicPayPage({
   );
 }
 
-// Clinics & private lessons: a single one-time charge, no installment option.
-function ClinicPayCard({
+// Clinics, private lessons, and admin-created custom/ACP charges: a single
+// one-time payment, no installment option.
+function OneOffPayCard({
   payment,
+  title,
+  fallbackDesc,
   canceled,
   err,
 }: {
   payment: { id: string; amountCents: number; description: string | null; party: { firstName: string } | null };
+  title: string;
+  fallbackDesc: string;
   canceled?: string;
   err?: string;
 }) {
   return (
     <div className="card">
-      <h1 className="text-2xl font-bold text-slate-900">Confirm your spot</h1>
-      <p className="mt-1 text-sm text-slate-500">{payment.description ?? "PURE Academy clinic"}</p>
+      <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+      <p className="mt-1 text-sm text-slate-500">{payment.description ?? fallbackDesc}</p>
 
       {canceled && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">

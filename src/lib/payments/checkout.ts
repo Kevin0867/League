@@ -31,9 +31,15 @@ export async function createCheckoutRedirect(opts: {
   const success = `${base}/pay/success?session_id={CHECKOUT_SESSION_ID}`;
   const cancel = `${base}/pay/${payment.id}?canceled=1`;
   const isAlaCarte = payment.category === "ALA_CARTE";
-  const productName = payment.description ?? (isAlaCarte ? "PURE Academy clinic" : "PURE Academy season fee");
+  // Admin-created one-off charges (custom / ACP entry) get a neutral blurb and
+  // use the description verbatim as the product name.
+  const isCustom = payment.category === "CUSTOM" || payment.category === "ACP_ENTRY";
+  const productName =
+    payment.description ?? (isAlaCarte ? "PURE Academy clinic" : isCustom ? "PURE Academy payment" : "PURE Academy season fee");
   const productBlurb = isAlaCarte
     ? "Reserves your spot for this session. Your place is confirmed once payment clears."
+    : isCustom
+    ? "Payment to PURE Academy / Arizona Club Pickleball."
     : "Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.";
 
   // Dev / unconfigured Stripe — simulate a successful charge, clearly flagged.
