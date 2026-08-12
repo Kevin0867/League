@@ -8,10 +8,10 @@ import { CommandPalette, CommandPaletteButton } from "@/components/CommandPalett
 import type { Role } from "@/lib/enums";
 import { ROLE_LABELS } from "@/lib/enums";
 
-type NavItem = { href: string; label: string; icon: string; roles?: Role[] };
+type NavItem = { href: string; label: string; roles?: Role[] };
 type NavSection = { title: string; items: NavItem[] };
 
-const DASHBOARD: NavItem = { href: "/console", label: "Dashboard", icon: "▚" };
+const DASHBOARD: NavItem = { href: "/console", label: "Dashboard" };
 
 // Grouped into logical clusters so a first-time admin can find where a task
 // lives instead of scanning one long flat list.
@@ -19,50 +19,50 @@ const SECTIONS: NavSection[] = [
   {
     title: "Season structure",
     items: [
-      { href: "/console/setup", label: "Season Setup", icon: "⚙️", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/calendar", label: "Season Calendar", icon: "🗓️", roles: ["COO", "DIRECTOR", "COACH"] },
-      { href: "/console/registrations", label: "Registrations", icon: "📝", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/import", label: "Import", icon: "⬆️", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/setup", label: "Season Setup", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/calendar", label: "Season Calendar", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/registrations", label: "Registrations", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/import", label: "Import", roles: ["COO", "DIRECTOR"] },
     ],
   },
   {
     title: "Rostering",
     items: [
-      { href: "/console/pools", label: "Assignment", icon: "🧮", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/board", label: "Boards", icon: "🔀", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/teams", label: "Team Build", icon: "🧩", roles: ["COO", "DIRECTOR", "COACH"] },
-      { href: "/console/requests", label: "Requests", icon: "🙋", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/pools", label: "Assignment", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/board", label: "Boards", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/teams", label: "Team Build", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/requests", label: "Requests", roles: ["COO", "DIRECTOR"] },
     ],
   },
   {
     title: "People",
     items: [
-      { href: "/console/coaches", label: "Coaches", icon: "🎯", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/matching", label: "Coach matching", icon: "🧭", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/users", label: "Access", icon: "🔑", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/profile", label: "My Profile", icon: "👤", roles: ["COACH"] },
+      { href: "/console/coaches", label: "Coaches", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/matching", label: "Coach matching", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/users", label: "Access", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/profile", label: "My Profile", roles: ["COACH"] },
     ],
   },
   {
     title: "Operations",
     items: [
-      { href: "/console/facilities", label: "Facilities", icon: "🏟️", roles: ["COO", "CEO", "DIRECTOR"] },
-      { href: "/console/schedule", label: "Schedule", icon: "📅", roles: ["COO", "DIRECTOR", "COACH"] },
-      { href: "/console/league", label: "League", icon: "🏆", roles: ["COO", "DIRECTOR", "COACH"] },
-      { href: "/console/championship", label: "Championship", icon: "🥇", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/acp", label: "ACP Entries", icon: "🎟️", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/alacarte", label: "Private Lessons", icon: "🎾", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/facilities", label: "Facilities", roles: ["COO", "CEO", "DIRECTOR"] },
+      { href: "/console/schedule", label: "Schedule", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/league", label: "League", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/championship", label: "Championship", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/acp", label: "ACP Entries", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/alacarte", label: "Private Lessons", roles: ["COO", "DIRECTOR"] },
     ],
   },
   {
     title: "Money & comms",
     items: [
-      { href: "/console/payments", label: "Payments", icon: "💳", roles: ["COO", "CEO", "DIRECTOR"] },
-      { href: "/console/inbox", label: "Inbox", icon: "✉️", roles: ["COO", "DIRECTOR", "COACH"] },
-      { href: "/console/messages", label: "Broadcasts", icon: "💬" },
-      { href: "/console/compliance", label: "Compliance", icon: "✅", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/consent", label: "Consent log", icon: "📨", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/reports", label: "Reports", icon: "📊", roles: ["COO", "CEO", "DIRECTOR"] },
+      { href: "/console/payments", label: "Payments", roles: ["COO", "CEO", "DIRECTOR"] },
+      { href: "/console/inbox", label: "Inbox", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/messages", label: "Broadcasts" },
+      { href: "/console/compliance", label: "Compliance", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/consent", label: "Consent log", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/reports", label: "Reports", roles: ["COO", "CEO", "DIRECTOR"] },
     ],
   },
 ];
@@ -90,9 +90,14 @@ export function ConsoleShell({
   );
 
   const isActive = (href: string) => (href === "/console" ? pathname === "/console" : pathname.startsWith(href));
+  // Every item renders as a squared button block. The active section is
+  // illuminated with the lime fill; inactive items are quiet outlined buttons on
+  // the navy rail. No icons — the label carries it.
   const linkClass = (active: boolean) =>
-    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-      active ? "bg-accent-500 text-brand-900 shadow-sm" : "text-brand-200 hover:bg-white/10 hover:text-white"
+    `block w-full rounded-md px-3 py-2 text-sm font-semibold ring-1 ring-inset transition-colors ${
+      active
+        ? "bg-accent-500 text-brand-900 ring-accent-400 shadow-lg shadow-accent-500/20"
+        : "bg-white/[0.04] text-brand-100 ring-white/10 hover:bg-white/10 hover:text-white hover:ring-white/20"
     }`;
 
   const chip = "inline-flex items-center rounded-lg bg-white px-2 py-1 shadow-sm";
@@ -129,18 +134,16 @@ export function ConsoleShell({
           </Link>
           <nav className="px-3 pb-6 pt-2">
             <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
-              <span className="w-5 text-center">{DASHBOARD.icon}</span>
               {DASHBOARD.label}
             </Link>
             {sections.map((section) => (
               <div key={section.title} className="mt-4">
-                <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-brand-300/70">
+                <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-300/70">
                   {section.title}
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {section.items.map((item) => (
                     <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={linkClass(isActive(item.href))}>
-                      <span className="w-5 text-center">{item.icon}</span>
                       {item.label}
                     </Link>
                   ))}
