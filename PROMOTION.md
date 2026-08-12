@@ -66,7 +66,12 @@ Everything in the repo is ready — the `production` branch, the
    ```
    (Vercel auto-deploys the production project from `production`.)
 3. If the change includes a **new migration**, run **Migrate database
-   (PRODUCTION)** on the `production` branch before/with the deploy.
+   (PRODUCTION)** on the `production` branch **before** the deploy. The Vercel
+   build does **not** auto-migrate (`vercel-build` is just `next build`) — the
+   database schema is owned entirely by the migrate workflows, so a new
+   migration only reaches a database when you run its workflow. The Prisma
+   `DIRECT_URL` is likewise only needed by those workflows (from the
+   `DIRECT_URL_PRODUCTION` GitHub secret), not by the running app.
 
 ## Notes
 
