@@ -7,6 +7,8 @@ import { formatCents } from "@/lib/money";
 import { decryptField } from "@/lib/crypto";
 import { ACADEMY_MARKETS } from "@/lib/enums";
 import { formatDate } from "@/lib/time";
+import { CustomPaymentForm } from "@/components/CustomPaymentForm";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 
 // Sensitive fields are encrypted at rest and only decrypted for staff here.
 // A key mismatch yields a marker — show blank so we never re-save the marker.
@@ -90,7 +92,23 @@ export default async function RegistrationDetail({
         </div>
       </div>
       {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>}
-      {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>}
+      {sp.ok === "requested" && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <p className="font-medium">Custom payment request created.</p>
+          <p className="mt-1">
+            {sp.cpunsent
+              ? "Email delivery didn't complete — copy the pay link and send it directly:"
+              : "We emailed a secure Stripe pay link. You can also copy it:"}
+          </p>
+          {sp.pid && <div className="mt-2"><CopyLinkButton path={`/pay/${sp.pid}`} label="Copy pay link" /></div>}
+        </div>
+      )}
+      {sp.err === "cpname" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter the recipient&apos;s name.</p>}
+      {sp.err === "cpemail" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter a valid recipient email.</p>}
+      {sp.err === "cpamount" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter an amount greater than $0.50.</p>}
+      {sp.err && !["cpname", "cpemail", "cpamount"].includes(sp.err) && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>
+      )}
 
       {/* Signup comments / placement requests — surfaced prominently. */}
       {reg.partnerRequests && reg.partnerRequests.trim() && (
@@ -159,6 +177,23 @@ export default async function RegistrationDetail({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Request a one-off custom payment for this person — no need to detour to
+          the Payments tab. Any amount + optional discount, emailed as a Stripe
+          pay link. Pre-filled with this player's name and email. */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Request a custom payment</h2>
+        <p className="mb-3 mt-0.5 text-sm text-slate-500">
+          Charge {p.firstName} any amount by card — a private lesson, a make-up, an ACP entry, any one-off. Add a
+          discount if you like; we email a secure Stripe pay link and you can copy it here too.
+        </p>
+        <CustomPaymentForm
+          ticket={ticket}
+          returnTo={`/console/registrations/${reg.id}`}
+          category="CUSTOM"
+          defaults={{ name: `${p.firstName} ${p.lastName}`.trim(), email: p.email ?? "" }}
+        />
       </div>
 
       {/* Editable details */}
