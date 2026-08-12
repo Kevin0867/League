@@ -40,7 +40,10 @@ export default async function CoachesPage() {
     orderBy: { person: { lastName: "asc" } },
   });
   // The Director leads the page as a hero, so keep her out of the card grid.
-  const isDirector = (c: (typeof coaches)[number]) => `${c.person.firstName} ${c.person.lastName}`.toLowerCase() === "stephanie newton";
+  // Normalize whitespace/case so a stray space or capitalization never demotes
+  // her from the hero.
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const isDirector = (c: (typeof coaches)[number]) => norm(`${c.person.firstName} ${c.person.lastName}`) === "stephanie newton";
   const director = coaches.find(isDirector);
   const grid = coaches.filter((c) => !isDirector(c));
   // The Director hero is a fixed, committed asset (managed by replacing the file
