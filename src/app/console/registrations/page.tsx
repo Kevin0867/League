@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { findDuplicateGroups } from "@/lib/domain/registrations";
 import { AddPlayerForm } from "./AddPlayerForm";
 import { RowActions } from "@/components/RowActions";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function RegistrationsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const seasonRows = await prisma.season.findMany({

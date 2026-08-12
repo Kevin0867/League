@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
-import { can } from "@/lib/rbac";
+import { can, requireAdmin } from "@/lib/rbac";
 import { StaffForm } from "./StaffForm";
 import { TableFilter } from "@/components/TableFilter";
 
@@ -35,6 +35,7 @@ export default async function CoachesPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   // Auth enforced by the console layout; read the session only to gate the form.
   const session = await getSession();

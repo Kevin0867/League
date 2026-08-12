@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 export default async function CompliancePage() {
+  await requireAdmin();
   const [peopleNoWaiver, coaches, mediaOptOuts, unverifiedDupr] = await Promise.all([
     prisma.person.findMany({
       where: { waiverSignedAt: null, registrations: { some: {} } },

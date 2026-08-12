@@ -8,6 +8,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { LessonSetupForm } from "@/components/LessonSetupForm";
 import Link from "next/link";
 import { formatDateTime12 } from "@/lib/time";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function AlaCartePage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const [offerings, bookings, alaFacilities, coaches, activeCounts] = await Promise.all([

@@ -4,6 +4,7 @@ import { PoolsSearch } from "@/components/PoolsSearch";
 import { buildPools, type PoolRegistration } from "@/lib/domain/pools";
 import { TEAM_CAP } from "@/lib/enums";
 import { mintConsoleTicket } from "@/lib/auth";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function PoolsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const season = await prisma.season.findFirst({

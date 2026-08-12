@@ -5,10 +5,12 @@ import { formatCents } from "@/lib/money";
 import { teamContribution, completionRate, type TeamPnL } from "@/lib/domain/reporting";
 import type { FacilityRates, DeliveredSession } from "@/lib/domain/finance";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
+  await requireAdmin();
   const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });
 
   // ---- Retention funnel (§16) ----

@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatDateTime12 } from "@/lib/time";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function ChampionshipPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   // Divisions across active seasons that have teams.

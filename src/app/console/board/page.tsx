@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { AssignmentBoard, type BoardColumn } from "@/components/AssignmentBoard";
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ const toCard = (r: {
 });
 
 export default async function BoardPage() {
+  await requireAdmin();
   const ticket = await mintConsoleTicket();
   const season = await prisma.season.findFirst({
     where: { active: true, program: "PURE_ACADEMY" },

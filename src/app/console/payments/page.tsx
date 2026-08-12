@@ -9,6 +9,8 @@ import { formatDate } from "@/lib/time";
 import { mintConsoleTicket } from "@/lib/auth";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { personContacts } from "@/lib/domain/contacts";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,7 @@ export default async function PaymentsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const now = new Date();
@@ -36,7 +39,7 @@ export default async function PaymentsPage({
       orderBy: { createdAt: "desc" }, take: 12, include: { facility: true },
     }),
     prisma.payment.findMany({ where: { direction: "IN", status: "FAILED" }, include: { party: true }, orderBy: { updatedAt: "desc" } }),
-    prisma.payment.findMany({ where: { direction: "IN", status: { in: ["REQUESTED", "PENDING"] } }, include: { party: true }, orderBy: { createdAt: "desc" } }),
+    prisma.payment.findMany({ where: { direction: "IN", status: { in: ["REQUESTED", "PENDING"] } }, include: { party: { include: { guardian: true } } }, orderBy: { createdAt: "desc" } }),
     prisma.payment.aggregate({ where: { direction: "IN", status: "PAID" }, _sum: { amountCents: true } }),
     prisma.payment.aggregate({ where: { direction: "OUT", status: "PAID" }, _sum: { amountCents: true } }),
   ]);
@@ -176,6 +179,9 @@ export default async function PaymentsPage({
               name: p.party ? `${p.party.firstName} ${p.party.lastName}` : "Unknown payer",
               amount: formatCents(p.amountCents),
               description: (p.description ?? p.category.replace(/_/g, " ")) + (p.status === "PENDING" ? " · in checkout" : ""),
+              contacts: p.party
+                ? personContacts(p.party, p.party.isMinor ? p.party.guardian : null).map((c) => ({ email: c.email, name: c.name, source: c.source }))
+                : [],
             }))}
           />
         )}

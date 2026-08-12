@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { TableFilter } from "@/components/TableFilter";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, effectiveRoles, type Role } from "@/lib/enums";
+import { requireAdmin } from "@/lib/rbac";
 
 // De-duplicated, human labels for a role set (legacy COO/CEO/DIRECTOR all show
 // as "Admin", so collapse duplicates).
@@ -31,6 +32,7 @@ export default async function UsersPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const session = await getSession();
   const ticket = await mintConsoleTicket();

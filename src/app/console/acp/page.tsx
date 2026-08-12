@@ -6,6 +6,7 @@ import { DIVISION_MIN_TEAMS } from "@/lib/domain/seasonCalendar";
 import { mintConsoleTicket } from "@/lib/auth";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { requireAdmin } from "@/lib/rbac";
 
 // Admin view of ACP outside-club interest (Phase A) and entries (Phase B).
 // Groups entries by division so staff can see which divisions clear the
@@ -23,6 +24,7 @@ export default async function ConsoleAcpPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const [interests, entries] = await Promise.all([

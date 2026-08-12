@@ -4,6 +4,7 @@ import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
 import { TableFilter } from "@/components/TableFilter";
 import { FacilityForm, DeleteFacilityButton } from "./FacilityForm";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function FacilitiesPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const allFacilities = await prisma.facility.findMany({

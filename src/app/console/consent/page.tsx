@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { formatDateTime12 } from "@/lib/time";
 import { CONSENT_VERSION } from "@/lib/consent";
+import { requireAdmin } from "@/lib/rbac";
 
 // Auditable messaging-consent log — the defensible record of who opted in to
 // email/SMS, when, in what language, and from where. This is what we show a
@@ -18,6 +19,7 @@ export default async function ConsentLogPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const channel = sp.channel === "email" || sp.channel === "sms" ? sp.channel : null;
   const source = sp.source && sp.source !== "all" ? sp.source : null;

@@ -212,9 +212,13 @@ export async function POST(req: Request) {
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
       if (!person) { tally.skipped++; if (!tally.reason) tally.reason = "a payer record was missing"; continue; }
       const email = reminderEmailFor(pay, person);
+      // Per-payment address picks from the reminder list (name="to_<paymentId>").
+      // Empty → fan out to all of the payer's addresses.
+      const { picked } = await pickedRecipients(pay.partyId, fd.getAll(`to_${pay.id}`).map((v) => String(v)));
       const res = await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
         channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        ...(picked.length ? { toEmails: picked } : {}),
       });
       if (res.failures > 0) {
         tally.failed++;

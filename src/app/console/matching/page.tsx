@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { formatTime12, formatTimeRange12 } from "@/lib/time";
+import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function MatchingPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
 
