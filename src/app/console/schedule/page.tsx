@@ -13,7 +13,7 @@ const TYPE_LABEL: Record<string, string> = {
   PRACTICE: "Practice",
   LEAGUE_MATCH: "League",
   CHAMPIONSHIP: "Championship",
-  ALA_CARTE: "À la carte",
+  ALA_CARTE: "Private Lessons",
 };
 
 const OK_LABEL: Record<string, string> = {

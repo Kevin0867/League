@@ -88,7 +88,7 @@ export function ScheduleCalendar({ sessions, year, month }: { sessions: CalSessi
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-brand-400" /> Practice</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> League</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Championship</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-slate-400" /> À la carte</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-slate-400" /> Private Lessons</span>
       </div>
     </div>
   );

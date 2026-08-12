@@ -67,6 +67,16 @@ export async function POST(req: Request) {
       return back("?ok=publish");
     }
 
+    // Publish (or hide) every coach profile on the public site at once.
+    case "publishAll":
+    case "hideAll": {
+      if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
+      const publish = op === "publishAll";
+      const res = await prisma.coach.updateMany({ data: { publishedOnSite: publish } });
+      await audit({ actorId: actor.userId, entityType: "Coach", entityId: "all", action: "coach.publishAll", summary: `${publish ? "Published" : "Hid"} ${res.count} coach profile(s) on /coaches` });
+      return back("?ok=publish");
+    }
+
     // (Re)send a console invite — mints a fresh set-password link, tries to
     // email it, and ALWAYS returns the link so the admin can copy/share it even
     // when email delivery isn't configured (Resend key unset → simulated send).

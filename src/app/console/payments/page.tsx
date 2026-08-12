@@ -176,7 +176,7 @@ export default async function PaymentsPage({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-semibold text-slate-900">Coach payout register</h2>
-            <p className="text-sm text-slate-500">Sessions delivered × flat rate (assistant 50%) plus à la carte earnings.</p>
+            <p className="text-sm text-slate-500">Sessions delivered × flat rate (assistant 50%) plus private-lesson earnings.</p>
           </div>
           <MonthForm op="payouts" ticket={ticket} label="Generate payout run" now={now} />
         </div>

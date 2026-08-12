@@ -99,17 +99,18 @@ export default async function CoachesPage() {
           </section>
         )}
 
-        {!director && grid.length === 0 && (
-          <p className="mt-8 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-            Our coaches are being published for the season — check back soon.
-          </p>
-        )}
-
-        {/* Coach grid — the full staff, each card links to a public profile */}
-        {grid.length > 0 && (
+        {/* Coach grid — the full staff, each card links to a public profile.
+            The section always shows once anyone is published (incl. just the
+            Director hero), with a placeholder until more staff are published. */}
+        {(director || grid.length > 0) && (
           <section className="mt-14 border-t border-slate-200 pt-10">
             <h2 className="display text-2xl text-brand-900">Meet the coaching staff</h2>
             <p className="mt-1 text-sm text-slate-500">Tap a coach to see their background and credentials.</p>
+            {grid.length === 0 ? (
+              <p className="mt-6 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                More of our coaching staff will be featured here as the season is finalized.
+              </p>
+            ) : (
             <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {grid.map((c) => {
                 const markets = isPublic(c.publicHidden, "markets") ? parseMarkets(c.marketsCovered) : [];
@@ -142,7 +143,15 @@ export default async function CoachesPage() {
                 );
               })}
             </div>
+            )}
           </section>
+        )}
+
+        {/* Nothing published yet — no hero, no staff */}
+        {!director && grid.length === 0 && (
+          <p className="mt-8 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+            Our coaches are being published for the season — check back soon.
+          </p>
         )}
 
         {/* Trust block */}

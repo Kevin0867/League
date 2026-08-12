@@ -107,7 +107,7 @@ export default async function FacilitiesPage({
                   <Detail label="Fee basis" value={FEE_LABEL[f.feeBasis] ?? f.feeBasis} />
                   <Detail label="Rate" value={rate} />
                   <Detail
-                    label="À la carte"
+                    label="Private Lessons"
                     value={
                       f.alaCarteAllowed
                         ? <span className="badge bg-emerald-100 text-emerald-800">Allowed</span>

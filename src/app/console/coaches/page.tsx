@@ -107,8 +107,26 @@ export default async function CoachesPage({
         </div>
       )}
 
-      <div className="max-w-md">
-        <TableFilter targetId="coaches-table" placeholder="Search coaches by name…" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-md flex-1">
+          <TableFilter targetId="coaches-table" placeholder="Search coaches by name…" />
+        </div>
+        {session && can(session.role, "manageCoaches") && (
+          <div className="flex gap-2">
+            <form method="POST" action="/api/console/coaches">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="publishAll" />
+              <input type="hidden" name="returnTo" value="/console/coaches" />
+              <button className="btn-secondary text-sm">Publish all to site</button>
+            </form>
+            <form method="POST" action="/api/console/coaches">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="hideAll" />
+              <input type="hidden" name="returnTo" value="/console/coaches" />
+              <button className="text-sm text-slate-500 hover:text-rose-600 hover:underline">Hide all</button>
+            </form>
+          </div>
+        )}
       </div>
 
       <div className="card overflow-x-auto">

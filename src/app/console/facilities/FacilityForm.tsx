@@ -118,17 +118,31 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-5 text-sm">
-        <label className="flex items-center gap-2">
-          <input type="checkbox" name="alaCarteAllowed" defaultChecked={facility?.alaCarteAllowed ?? false} /> À la carte allowed
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" name="acpLeagueOption" defaultChecked={facility?.acpLeagueOption ?? false} /> ACP league option
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" name="isPrivate" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-          Private residence/court
-        </label>
+      <div>
+        <div className="label">What this venue allows</div>
+        <div className="mt-1 grid gap-2 sm:grid-cols-3">
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm transition hover:border-slate-300">
+            <input type="checkbox" name="alaCarteAllowed" defaultChecked={facility?.alaCarteAllowed ?? false} className="mt-0.5 h-4 w-4" />
+            <span>
+              <span className="font-medium text-slate-800">Private Lessons</span>
+              <span className="mt-0.5 block text-xs text-slate-500">Coaches may run private &amp; semi-private lessons here.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm transition hover:border-slate-300">
+            <input type="checkbox" name="acpLeagueOption" defaultChecked={facility?.acpLeagueOption ?? false} className="mt-0.5 h-4 w-4" />
+            <span>
+              <span className="font-medium text-slate-800">ACP league play</span>
+              <span className="mt-0.5 block text-xs text-slate-500">Can host Arizona Club Pickleball league matches.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm transition hover:border-slate-300">
+            <input type="checkbox" name="isPrivate" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} className="mt-0.5 h-4 w-4" />
+            <span>
+              <span className="font-medium text-slate-800">Private residence / court</span>
+              <span className="mt-0.5 block text-xs text-slate-500">A home or private court, not a public facility.</span>
+            </span>
+          </label>
+        </div>
       </div>
 
       {isPrivate ? (

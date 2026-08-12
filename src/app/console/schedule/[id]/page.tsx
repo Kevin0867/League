@@ -11,7 +11,7 @@ import { PendingSubmit } from "@/components/ConfirmSubmit";
 export const dynamic = "force-dynamic";
 
 const TYPE_LABEL: Record<string, string> = {
-  PRACTICE: "Practice", LEAGUE_MATCH: "League match", CHAMPIONSHIP: "Championship", ALA_CARTE: "À la carte",
+  PRACTICE: "Practice", LEAGUE_MATCH: "League match", CHAMPIONSHIP: "Championship", ALA_CARTE: "Private Lessons",
 };
 
 const OK_LABEL: Record<string, string> = {
