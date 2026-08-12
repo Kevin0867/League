@@ -110,6 +110,11 @@ export default async function TeamDetailPage({
               <h2 className="font-semibold text-slate-900">Roster</h2>
               <span className="text-sm text-slate-500">{roster.effective}/{TEAM_CAP}{team.coachPlays ? " (coach plays)" : ""}</span>
             </div>
+            {team.members.length > 0 && (
+              <Link href={`/console/teams/${team.id}/progress`} className="mb-3 inline-flex items-center gap-1 rounded-md bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-100 hover:bg-brand-100">
+                Progress reports →
+              </Link>
+            )}
             <div className="mb-3 h-2 overflow-hidden rounded-full bg-slate-100">
               <div className={`h-full ${roster.meetsMinimum ? "bg-emerald-500" : "bg-amber-400"}`}
                 style={{ width: `${Math.min(100, (roster.effective / TEAM_CAP) * 100)}%` }} />
@@ -130,13 +135,18 @@ export default async function TeamDetailPage({
                         {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
                       </div>
                     </div>
-                    <ConfirmSubmit
-                      action="/api/console/teams"
-                      fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
-                      confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
-                      label="remove"
-                      className="text-xs text-rose-600 hover:underline"
-                    />
+                    <div className="flex items-center gap-3">
+                      <Link href={`/console/teams/${team.id}/progress/${m.personId}`} className="text-xs font-semibold text-brand-600 hover:underline">
+                        notes
+                      </Link>
+                      <ConfirmSubmit
+                        action="/api/console/teams"
+                        fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
+                        confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
+                        label="remove"
+                        className="text-xs text-rose-600 hover:underline"
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>

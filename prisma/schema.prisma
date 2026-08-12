@@ -151,6 +151,7 @@ model Person {
   conversationParts    ConversationParticipant[]
   chatMessages         ChatMessage[]             @relation("ChatMessageSender")
   alaCarteBookings   AlaCarteBooking[] @relation("AlaCarteClient")
+  coachingNotes      CoachingNote[]
   recruitedByCoachId String?
   recruitedByCoach   Coach?           @relation("CoachRecruits", fields: [recruitedByCoachId], references: [id])
 
@@ -303,6 +304,7 @@ model Team {
   sessions      SessionTeam[]
   assistantCoaches TeamCoach[]
   leagueEntries LeagueTeam[]
+  coachingNotes CoachingNote[]
 
   @@index([seasonId, divisionId])
   @@index([coachId])
@@ -338,6 +340,33 @@ model TeamMember {
 
   @@unique([teamId, personId])
   @@index([personId])
+}
+
+/// Weekly coaching note / progress report for one student on a team. Up to six
+/// one-week sections per (team, student). `strengths` and `growth` hold JSON
+/// string arrays of preset tag ids (see domain/coachingNotes) the student
+/// excelled at / needs to work on; `note` is free text the coach can customize.
+/// `sentToParentAt` records the last time this week's report was emailed to the
+/// parent/guardian, so the roster can show what's been shared.
+model CoachingNote {
+  id             String    @id @default(cuid())
+  teamId         String
+  team           Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  personId       String
+  person         Person    @relation(fields: [personId], references: [id])
+  week           Int
+  strengths      String    @default("[]")
+  growth         String    @default("[]")
+  note           String?
+  /// User id of the coach/admin who last edited this note.
+  authorId       String?
+  sentToParentAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([teamId, personId, week])
+  @@index([personId])
+  @@index([teamId])
 }
 
 /// Coach profile (§5). One-to-one with a Person.
