@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 const ERRORS: Record<string, string> = {
   auth: "Not authorized to manage access.",
   role: "That role can't be assigned.",
-  self: "You can't change your own access.",
+  self: "You can't disable or delete your own login.",
   notfound: "User not found.",
   fields: "Missing information.",
   exists: "A user with that email already exists.",
@@ -110,8 +110,10 @@ export default async function UsersPage({
           <tbody className="divide-y divide-slate-100">
             {users.map((u) => {
               const isSelf = u.id === session?.userId;
-              // Admins can change anyone's role except their own (self-lockout guard).
-              const locked = isSelf || !isAdmin;
+              // Admins can change anyone's roles — including their own. The route
+              // still blocks stripping the last admin, so no one can lock the org
+              // out. Only disabling/deleting your OWN login is barred (below).
+              const locked = !isAdmin;
               const assignable = assignableRoles;
               return (
                 <tr key={u.id} data-filter-row data-filter-text={`${u.person ? `${u.person.firstName} ${u.person.lastName}` : ""} ${u.email}`}>
@@ -154,10 +156,10 @@ export default async function UsersPage({
                     {!u.lastLoginAt && <span className="ml-2 text-xs text-amber-600" title="Hasn't set a password / signed in yet">invited</span>}
                   </td>
                   <td className="px-4 py-3 text-right align-top">
-                    {!isSelf && isAdmin && (
+                    {isAdmin && (
                       <div className="flex flex-col items-end gap-2">
                         <div className="flex items-center justify-end gap-3">
-                          {!u.lastLoginAt && (
+                          {!u.lastLoginAt && !isSelf && (
                             <form method="POST" action="/api/console/users">
                               <input type="hidden" name="ticket" value={ticket} />
                               <input type="hidden" name="op" value="resendInvite" />
@@ -165,13 +167,16 @@ export default async function UsersPage({
                               <button className="text-xs font-semibold text-brand-700 hover:underline" title="Email a fresh set-password link">Resend invite</button>
                             </form>
                           )}
-                          <form method="POST" action="/api/console/users">
-                            <input type="hidden" name="ticket" value={ticket} />
-                            <input type="hidden" name="op" value="toggleActive" />
-                            <input type="hidden" name="userId" value={u.id} />
-                            <input type="hidden" name="active" value={u.active ? "false" : "true"} />
-                            <button className="text-xs text-slate-500 hover:underline">{u.active ? "Disable" : "Enable"}</button>
-                          </form>
+                          {/* Can't disable your own login out from under yourself. */}
+                          {!isSelf && (
+                            <form method="POST" action="/api/console/users">
+                              <input type="hidden" name="ticket" value={ticket} />
+                              <input type="hidden" name="op" value="toggleActive" />
+                              <input type="hidden" name="userId" value={u.id} />
+                              <input type="hidden" name="active" value={u.active ? "false" : "true"} />
+                              <button className="text-xs text-slate-500 hover:underline">{u.active ? "Disable" : "Enable"}</button>
+                            </form>
+                          )}
                         </div>
 
                         {/* Full management — edit identity, copy a set-password
@@ -202,7 +207,8 @@ export default async function UsersPage({
                               <button className="text-xs font-semibold text-brand-700 hover:underline" title="Generate a link to copy and send yourself">Get set-password link</button>
                             </form>
 
-                            {/* Delete — guarded behind a second disclosure so it's deliberate */}
+                            {/* Delete — guarded behind a second disclosure so it's deliberate. Hidden for your own login. */}
+                            {!isSelf && (
                             <details className="border-t border-slate-200 pt-2">
                               <summary className="cursor-pointer list-none text-xs font-semibold text-rose-600 hover:text-rose-700">Delete this login…</summary>
                               <div className="mt-2 space-y-2">
@@ -215,6 +221,7 @@ export default async function UsersPage({
                                 </form>
                               </div>
                             </details>
+                            )}
                           </div>
                         </details>
                       </div>
