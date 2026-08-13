@@ -39,7 +39,7 @@ export default async function CoachProfilePage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="My coach profile" subtitle="Keep your certification, availability, and contact details current." />
+      <PageHeader title="My account" subtitle="Your sign-in, password, and profile details." />
       {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile saved.</p>}
       {sp.imgok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile photo updated.</p>}
       {sp.imgerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{sp.imgerr}</p>}
@@ -72,13 +72,14 @@ export default async function CoachProfilePage({
         </form>
       </div>
 
-      {person && (
+      {coach && person && (
         <div className="card">
           <h2 className="mb-1 font-semibold text-slate-900">Profile photo</h2>
           <p className="mb-3 text-sm text-slate-500">Shown on the public coaches page. JPG, PNG, or WebP up to 8 MB.</p>
           <ImageUploadForm ticket={ticket} returnTo="/console/profile" currentUrl={person.imageUrl} name={`${person.firstName} ${person.lastName}`} />
         </div>
       )}
+      {coach && (
       <CoachProfileForm
         ticket={ticket}
         email={session?.email ?? ""}
@@ -101,6 +102,7 @@ export default async function CoachProfilePage({
           backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
         }}
       />
+      )}
     </div>
   );
 }
