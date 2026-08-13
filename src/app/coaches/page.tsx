@@ -87,6 +87,16 @@ export default async function CoachesPage() {
           </div>
         </section>
 
+        {/* How we screen and train — directly below the hero. */}
+        <section className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+          <h2 className="font-semibold text-slate-900">How we screen and train our coaches</h2>
+          <ul className="mt-3 space-y-2 text-sm text-slate-700">
+            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>Every coach completes a background check and PURE curriculum training before Week 1, without exception.</span></li>
+            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>RPO is an official sponsor of PURE Academy. RPO Level 1 certification carries SafeSport certification and additional insurance.</span></li>
+            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>One coach per team for the full twelve weeks wherever possible.</span></li>
+          </ul>
+        </section>
+
         {/* Coach grid — the published staff, each card links to a public profile. */}
         <section className="mt-14 border-t border-slate-200 pt-10">
             <h2 className="display text-2xl text-brand-900">Meet the coaching staff</h2>
@@ -131,15 +141,6 @@ export default async function CoachesPage() {
             )}
           </section>
 
-        {/* Trust block */}
-        <section className="mt-12 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-          <h2 className="font-semibold text-slate-900">How we screen and train our coaches</h2>
-          <ul className="mt-3 space-y-2 text-sm text-slate-700">
-            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>Every coach completes a background check and PURE curriculum training before Week 1, without exception.</span></li>
-            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>RPO is an official sponsor of PURE Academy. RPO Level 1 certification carries SafeSport certification and additional insurance.</span></li>
-            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>One coach per team for the full twelve weeks wherever possible.</span></li>
-          </ul>
-        </section>
       </div>
 
       <SiteFooter />
