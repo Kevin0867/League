@@ -20,11 +20,13 @@ const ERRORS: Record<string, string> = {
   notfound: "User not found.",
   fields: "Missing information.",
   exists: "A user with that email already exists.",
+  "invite-send": "The account was created, but the invitation email could not be sent. Check email settings, then re-send the invite.",
 };
 const OKS: Record<string, string> = {
   role: "Role updated.",
   active: "Access updated.",
   invited: "Invitation sent — they'll get an email to set their password.",
+  "invited-sim": "Account created, but email isn't configured on this environment, so no invitation was actually sent.",
 };
 
 export default async function UsersPage({

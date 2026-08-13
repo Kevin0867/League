@@ -52,8 +52,18 @@ export async function POST(req: Request) {
     }
     const token = await createResetToken(user.id, INVITE_TTL_MS);
     const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
-    await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
-    await audit({ actorId: actor.userId, entityType: "User", entityId: user.id, action: "user.invite", summary: `Invited ${email} as ${role}` });
+    const sent = await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
+    await audit({
+      actorId: actor.userId,
+      entityType: "User",
+      entityId: user.id,
+      action: "user.invite",
+      summary: `Invited ${email} as ${role}${sent.ok ? (sent.simulated ? " (email simulated — not configured)" : "") : ` (email FAILED: ${sent.error ?? "unknown"})`}`,
+    });
+    // Surface delivery problems instead of silently claiming success — the
+    // account exists either way, but the admin needs to know the email didn't go.
+    if (!sent.ok) return back("?err=invite-send");
+    if (sent.simulated) return back("?ok=invited-sim");
     return back("?ok=invited");
   }
 
