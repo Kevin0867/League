@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm, hashPassword } from "@/lib/auth";
 import { can } from "@/lib/rbac";
-import { ASSIGNABLE_ROLES, splitRoles, type Role } from "@/lib/enums";
+import { ASSIGNABLE_ROLES, ADMIN_ROLES, splitRoles, type Role } from "@/lib/enums";
 import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
 import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
@@ -136,6 +136,61 @@ export async function POST(req: Request) {
       if (!sent.ok) return back("?err=invite-send");
       if (sent.simulated) return back("?ok=invited-sim");
       return back("?ok=invite-resent");
+    }
+
+    // Edit a user's identity — name, login email, phone. Updates the login
+    // email and the linked Person (creating/linking one if this login had none).
+    case "editUser": {
+      const firstName = String(fd.get("firstName") ?? "").trim();
+      const lastName = String(fd.get("lastName") ?? "").trim();
+      const email = String(fd.get("email") ?? "").toLowerCase().trim();
+      const phone = String(fd.get("phone") ?? "").trim() || null;
+      if (!firstName || !lastName || !email) return back("?err=fields");
+      // Login email must stay unique.
+      const clash = await prisma.user.findFirst({ where: { email, id: { not: userId } }, select: { id: true } });
+      if (clash) return back("?err=exists");
+
+      if (target.personId) {
+        await prisma.person.update({ where: { id: target.personId }, data: { firstName, lastName, email, phone } });
+      } else {
+        const person = await prisma.person.create({ data: { firstName, lastName, email, phone } });
+        await prisma.user.update({ where: { id: userId }, data: { personId: person.id } });
+      }
+      await prisma.user.update({ where: { id: userId }, data: { email } });
+      await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.edit", summary: `Edited login ${email}` });
+      return back("?ok=edited");
+    }
+
+    // Generate a set-password link WITHOUT emailing it — the admin copies it and
+    // delivers it however they like (text, in person). Handy when email delivery
+    // is unreliable. The link is shown once, in a copy box, on return.
+    case "inviteLink": {
+      const token = await createResetToken(userId, INVITE_TTL_MS);
+      const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
+      await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.inviteLink", summary: "Generated set-password link" });
+      return back(`?link=${encodeURIComponent(link)}&linkFor=${userId}`);
+    }
+
+    // Delete a login account. Keeps the person's records (registrations, team
+    // memberships, coach profile) — only the sign-in is removed. Guarded so the
+    // org can't delete its last admin and lock everyone out (self is already
+    // blocked above).
+    case "deleteUser": {
+      const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, extraRoles: true, email: true } });
+      if (!u) return back("?err=notfound");
+      const targetIsAdmin = [u.role, ...u.extraRoles].some((r) => ADMIN_ROLES.includes(r as never));
+      if (targetIsAdmin) {
+        const all = await prisma.user.findMany({ where: { active: true }, select: { role: true, extraRoles: true } });
+        const admins = all.filter((a) => [a.role, ...a.extraRoles].some((r) => ADMIN_ROLES.includes(r as never)));
+        if (admins.length <= 1) return back("?err=lastadmin");
+      }
+      try {
+        await prisma.user.delete({ where: { id: userId } });
+      } catch {
+        return back("?err=delete");
+      }
+      await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.delete", summary: `Deleted login ${u.email}` });
+      return back("?ok=deleted");
     }
 
     default:

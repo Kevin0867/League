@@ -21,10 +21,14 @@ const ERRORS: Record<string, string> = {
   fields: "Missing information.",
   exists: "A user with that email already exists.",
   "invite-send": "The account was created, but the invitation email could not be sent. Check email settings, then re-send the invite.",
+  lastadmin: "That's the last admin login — assign admin to someone else before removing it.",
+  delete: "Couldn't delete that login. It may still be referenced elsewhere.",
 };
 const OKS: Record<string, string> = {
   role: "Role updated.",
   active: "Access updated.",
+  edited: "User updated.",
+  deleted: "Login deleted. The person's records were kept.",
   invited: "Invitation sent — they'll get an email to set their password.",
   "invite-resent": "Invitation re-sent — a fresh set-password link is on its way.",
   "invited-sim": "Account created, but email isn't configured on this environment, so no invitation was actually sent.",
@@ -53,6 +57,16 @@ export default async function UsersPage({
       <PageHeader title="Access" subtitle="Invite people and assign roles. Admins can do anything; coaches are scoped to their own teams; players and parents use the family portal." />
       {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OKS[sp.ok] ?? "Done."}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
+
+      {/* A freshly generated set-password link, shown once for the admin to copy
+          and hand off (text, in person) when email delivery isn't reliable. */}
+      {sp.link && (
+        <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 text-sm">
+          <p className="font-semibold text-brand-900">Set-password link — copy it now, it won&apos;t show again.</p>
+          <p className="mt-0.5 text-xs text-brand-700">Send this to the person however you like. It sets their password and signs them in. Expires in 7 days.</p>
+          <input readOnly value={sp.link} className="input mt-2 w-full bg-white font-mono text-xs" />
+        </div>
+      )}
 
       {/* Invite a new user */}
       <form method="POST" action="/api/console/users" className="card space-y-4">
@@ -139,24 +153,70 @@ export default async function UsersPage({
                     </span>
                     {!u.lastLoginAt && <span className="ml-2 text-xs text-amber-600" title="Hasn't set a password / signed in yet">invited</span>}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right align-top">
                     {!isSelf && isAdmin && (
-                      <div className="flex items-center justify-end gap-3">
-                        {!u.lastLoginAt && (
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center justify-end gap-3">
+                          {!u.lastLoginAt && (
+                            <form method="POST" action="/api/console/users">
+                              <input type="hidden" name="ticket" value={ticket} />
+                              <input type="hidden" name="op" value="resendInvite" />
+                              <input type="hidden" name="userId" value={u.id} />
+                              <button className="text-xs font-semibold text-brand-700 hover:underline" title="Email a fresh set-password link">Resend invite</button>
+                            </form>
+                          )}
                           <form method="POST" action="/api/console/users">
                             <input type="hidden" name="ticket" value={ticket} />
-                            <input type="hidden" name="op" value="resendInvite" />
+                            <input type="hidden" name="op" value="toggleActive" />
                             <input type="hidden" name="userId" value={u.id} />
-                            <button className="text-xs font-semibold text-brand-700 hover:underline" title="Send a fresh set-password link">Resend invite</button>
+                            <input type="hidden" name="active" value={u.active ? "false" : "true"} />
+                            <button className="text-xs text-slate-500 hover:underline">{u.active ? "Disable" : "Enable"}</button>
                           </form>
-                        )}
-                        <form method="POST" action="/api/console/users">
-                          <input type="hidden" name="ticket" value={ticket} />
-                          <input type="hidden" name="op" value="toggleActive" />
-                          <input type="hidden" name="userId" value={u.id} />
-                          <input type="hidden" name="active" value={u.active ? "false" : "true"} />
-                          <button className="text-xs text-slate-500 hover:underline">{u.active ? "Disable" : "Enable"}</button>
-                        </form>
+                        </div>
+
+                        {/* Full management — edit identity, copy a set-password
+                            link, delete the login — tucked behind a disclosure so
+                            the row stays uncluttered. */}
+                        <details className="w-full text-left">
+                          <summary className="cursor-pointer list-none text-xs font-semibold text-slate-500 hover:text-slate-700">⚙ Manage ▾</summary>
+                          <div className="mt-2 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            {/* Edit identity */}
+                            <form method="POST" action="/api/console/users" className="space-y-2">
+                              <input type="hidden" name="ticket" value={ticket} />
+                              <input type="hidden" name="op" value="editUser" />
+                              <input type="hidden" name="userId" value={u.id} />
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <div><label className="label">First name</label><input name="firstName" className="input py-1 text-sm" defaultValue={u.person?.firstName ?? ""} required /></div>
+                                <div><label className="label">Last name</label><input name="lastName" className="input py-1 text-sm" defaultValue={u.person?.lastName ?? ""} required /></div>
+                                <div><label className="label">Login email</label><input name="email" type="email" className="input py-1 text-sm" defaultValue={u.email} required /></div>
+                                <div><label className="label">Phone</label><input name="phone" type="tel" className="input py-1 text-sm" defaultValue={u.person?.phone ?? ""} /></div>
+                              </div>
+                              <button className="btn-secondary text-xs">Save changes</button>
+                            </form>
+
+                            {/* Copy a set-password link (no email needed) */}
+                            <form method="POST" action="/api/console/users">
+                              <input type="hidden" name="ticket" value={ticket} />
+                              <input type="hidden" name="op" value="inviteLink" />
+                              <input type="hidden" name="userId" value={u.id} />
+                              <button className="text-xs font-semibold text-brand-700 hover:underline" title="Generate a link to copy and send yourself">Get set-password link</button>
+                            </form>
+
+                            {/* Delete — guarded behind a second disclosure so it's deliberate */}
+                            <details className="border-t border-slate-200 pt-2">
+                              <summary className="cursor-pointer list-none text-xs font-semibold text-rose-600 hover:text-rose-700">Delete this login…</summary>
+                              <div className="mt-2 space-y-2">
+                                <p className="text-xs text-slate-500">Removes their sign-in only. Their records (registrations, team, coach profile) are kept. This can&apos;t be undone.</p>
+                                <form method="POST" action="/api/console/users">
+                                  <input type="hidden" name="ticket" value={ticket} />
+                                  <input type="hidden" name="op" value="deleteUser" />
+                                  <input type="hidden" name="userId" value={u.id} />
+                                  <button className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">Delete login for {u.person ? u.person.firstName : u.email}</button>
+                                </form>
+                              </div>
+                            </details>
+                          </div>
+                        </details>
                       </div>
                     )}
                   </td>
