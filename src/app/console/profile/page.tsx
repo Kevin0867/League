@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
+import { PasswordField } from "@/components/PasswordField";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,31 @@ export default async function CoachProfilePage({
       {sp.err === "noperson" && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Your login isn&apos;t linked to a person record — contact an administrator.</p>
       )}
+
+      <div className="card">
+        <h2 className="mb-1 font-semibold text-slate-900">Change password</h2>
+        <p className="mb-3 text-sm text-slate-500">Update the password you use to sign in.</p>
+        {sp.pwok && <p className="mb-3 rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Password updated.</p>}
+        {sp.pwerr && (
+          <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {sp.pwerr === "current"
+              ? "Your current password is incorrect."
+              : sp.pwerr === "short"
+              ? "New password must be at least 8 characters."
+              : sp.pwerr === "mismatch"
+              ? "The new passwords don't match."
+              : sp.pwerr === "fields"
+              ? "Fill in your current and new password."
+              : "Couldn't update your password — please sign in again and retry."}
+          </p>
+        )}
+        <form method="POST" action="/api/console/change-password" className="max-w-sm space-y-4">
+          <input type="hidden" name="ticket" value={ticket} />
+          <PasswordField name="currentPassword" label="Current password" minLength={0} autoComplete="current-password" />
+          <PasswordField name="newPassword" label="New password" confirm hint="At least 8 characters." autoComplete="new-password" />
+          <button type="submit" className="btn-primary">Update password</button>
+        </form>
+      </div>
 
       {person && (
         <div className="card">
