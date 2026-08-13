@@ -107,6 +107,39 @@ export async function POST(req: Request) {
       return back("?ok=updateTeam");
     }
 
+    // Bulk-set practice day / start time / home facility across many teams from
+    // one grid on the Team build board — so imported teams can be scheduled
+    // without opening each card. Only fields with a value are written; a blank
+    // input leaves that team's existing value untouched (clearing is done from
+    // the single-team edit). No auto-messaging — this is pure setup.
+    case "setSchedule": {
+      const ids = String(formData.get("teamIds") ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      let updated = 0;
+      for (const id of ids) {
+        const day = String(formData.get(`day_${id}`) ?? "").trim();
+        const time = String(formData.get(`time_${id}`) ?? "").trim();
+        const facilityId = String(formData.get(`facility_${id}`) ?? "").trim();
+        const data: { dayOfWeek?: string; startTime?: string; facilityId?: string } = {};
+        if (day) data.dayOfWeek = day;
+        if (time) data.startTime = time;
+        if (facilityId) data.facilityId = facilityId;
+        if (Object.keys(data).length === 0) continue;
+        await prisma.team.update({ where: { id }, data });
+        updated++;
+      }
+      await audit({
+        actorId: actor.userId,
+        entityType: "Team",
+        entityId: "bulk",
+        action: "UPDATE",
+        summary: `Bulk-set day/time/facility for ${updated} team(s)`,
+      });
+      return back(`?ok=schedule&n=${updated}`);
+    }
+
     // Assign / move / clear a team's coach from the matching board. A partial
     // update (unlike updateTeam, which rewrites every field), honoring the
     // screening gate. Empty coachId clears the assignment.

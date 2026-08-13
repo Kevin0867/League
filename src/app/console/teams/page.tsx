@@ -10,12 +10,13 @@ import {
 } from "@/lib/domain/teams";
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
 import { TeamCreateForm } from "./TeamCreateForm";
+import { BulkScheduleEditor } from "./BulkScheduleEditor";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TableFilter } from "@/components/TableFilter";
 
 export const dynamic = "force-dynamic";
 
-const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool." };
+const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool.", schedule: "Day, time, and facility saved. Generate practices on the Schedule page." };
 const ERRORS: Record<string, string> = {
   fields: "Team name and season are required.",
   auth: "You don't have permission to manage teams.",
@@ -114,6 +115,21 @@ export default async function TeamBuildBoard({
       </div>
 
       <TeamCreateForm ticket={ticket} seasons={seasons} facilities={facilities} />
+
+      {teams.length > 0 && (
+        <BulkScheduleEditor
+          ticket={ticket}
+          facilities={facilities}
+          teams={teams.map((t) => ({
+            id: t.id,
+            name: t.name,
+            market: t.market,
+            dayOfWeek: t.dayOfWeek,
+            startTime: t.startTime,
+            facilityId: t.facilityId,
+          }))}
+        />
+      )}
 
       {teams.length === 0 ? (
         <div className="card">
