@@ -246,6 +246,38 @@ export async function POST(req: Request) {
       return back("?ok=editSeasonWeek");
     }
 
+    // Master date control: set Week 1's start date and shift the WHOLE 12-week
+    // arc by the same offset, keeping each week's focus, milestone, and kind.
+    // Also aligns the season's own start/end dates to the new arc.
+    case "shiftSeasonCalendar": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      const newStart = String(formData.get("startDate") ?? "").trim();
+      if (!seasonId) return back("?err=season");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(newStart)) return back("?err=fields");
+      const season = await prisma.season.findUnique({ where: { id: seasonId } });
+      if (!season) return back("?err=notfound");
+
+      const weeks = getSeasonWeeks(season.calendar);
+      if (weeks.length === 0) return back("?err=notfound");
+      // Whole-day offset from the current Week-1 (first week) start to the new one.
+      const dayMs = 86400000;
+      const asUTC = (iso: string) => new Date(`${iso}T12:00:00Z`).getTime();
+      const addDays = (iso: string, days: number) => new Date(asUTC(iso) + days * dayMs).toISOString().slice(0, 10);
+      const deltaDays = Math.round((asUTC(newStart) - asUTC(weeks[0].startISO)) / dayMs);
+      const shifted = weeks.map((w) => ({ ...w, startISO: addDays(w.startISO, deltaDays), endISO: addDays(w.endISO, deltaDays) }));
+
+      await prisma.season.update({
+        where: { id: seasonId },
+        data: {
+          calendar: shifted as unknown as Prisma.InputJsonValue,
+          startDate: new Date(`${shifted[0].startISO}T12:00:00Z`),
+          endDate: new Date(`${shifted[shifted.length - 1].endISO}T12:00:00Z`),
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "season.calendar.shift", summary: `Shifted season calendar ${deltaDays >= 0 ? "+" : ""}${deltaDays} days (Week 1 → ${shifted[0].startISO})` });
+      return back("?ok=shiftSeasonCalendar");
+    }
+
     // Consolidate one division into another (adjacent bands / school levels).
     // Moves every team and registration from source → target, then deletes the
     // now-empty source. Chosen explicitly by an admin from the readiness view.

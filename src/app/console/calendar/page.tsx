@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
-import { getSeasonWeeks, weekStatus, DIVISION_MIN_TEAMS, type WeekKind, type WeekPlan } from "@/lib/domain/seasonCalendar";
+import { getSeasonWeeks, weekStatus, DIVISION_MIN_TEAMS, type WeekKind, type WeekPlan, type WeekStatus } from "@/lib/domain/seasonCalendar";
 import { ConsolidateDivisions } from "./ConsolidateDivisions";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ const OK_MSG: Record<string, string> = {
   initSeasonCalendar: "Calendar is now editable — tweak any week below.",
   resetSeasonCalendar: "Calendar reset to the standard template.",
   editSeasonWeek: "Week updated.",
+  shiftSeasonCalendar: "Whole calendar shifted to the new start date.",
 };
 const ERR_MSG: Record<string, string> = {
   auth: "You are not authorized to make that change.",
@@ -104,85 +105,49 @@ export default async function SeasonCalendarPage({
         </div>
       </div>
 
-      {/* The 12-week arc */}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-            <tr>
-              <th className="py-2 pr-2">Week</th>
-              <th className="pr-2">Dates</th>
-              <th className="pr-2">Primary focus</th>
-              <th>Milestone</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {arcWeeks.map((w) => {
-              const status = weekStatus(w, now);
-              const meta = KIND_META[w.kind];
-              return (
-                <tr
-                  key={`${w.startISO}`}
-                  className={
-                    status === "current"
-                      ? `ring-1 ${meta.ring} bg-brand-50/40`
-                      : status === "past"
-                      ? "text-slate-400"
-                      : w.kind === "break"
-                      ? "bg-slate-50/60"
-                      : ""
-                  }
-                >
-                  <td className="py-2.5 pr-2">
-                    <span className="inline-flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
-                      <span className="font-semibold text-slate-700">{w.week ?? "—"}</span>
-                      {status === "current" && <span className="badge bg-brand-100 text-brand-800">now</span>}
-                    </span>
-                  </td>
-                  <td className="pr-2 whitespace-nowrap text-slate-600">{fmtRange(w.startISO, w.endISO)}</td>
-                  <td className={`pr-2 ${w.kind === "break" ? "font-medium text-slate-600" : "text-slate-700"}`}>{w.focus}</td>
-                  <td className="text-slate-600">
-                    {w.milestone ? <span className="badge bg-accent-100 text-accent-800">{w.milestone}</span> : <span className="text-slate-300">—</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* The 12-week arc — inline-editable per week for admins */}
+      <div className="card">
+        {/* Master date control: shift the whole arc by setting Week 1's start. */}
+        {admin && season && arcWeeks.length > 0 && (
+          <form method="POST" action="/api/console/setup" className="mb-4 flex flex-wrap items-end gap-3 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-100">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="shiftSeasonCalendar" />
+            <input type="hidden" name="seasonId" value={season.id} />
+            <input type="hidden" name="returnTo" value="/console/calendar" />
+            <div>
+              <label className="label">Season start (Week 1 Monday)</label>
+              <input name="startDate" type="date" defaultValue={arcWeeks[0].startISO} className="input text-sm" />
+            </div>
+            <button className="btn-secondary text-sm">Shift whole calendar</button>
+            <p className="text-xs text-slate-500">Moves all 12 weeks together, keeping each week&apos;s focus &amp; milestone. Fine-tune any single week below.</p>
+          </form>
+        )}
+
+        {/* Column header */}
+        <div className={`hidden gap-2 px-2 pb-2 text-xs uppercase tracking-wide text-slate-400 sm:grid ${admin ? "sm:grid-cols-[3.5rem_9rem_1fr_10rem_5rem]" : "sm:grid-cols-[3.5rem_9rem_1fr_10rem]"}`}>
+          <div>Week</div><div>Dates</div><div>Primary focus</div><div>Milestone</div>{admin && <div>Edit</div>}
+        </div>
+
+        <div className="rounded-lg ring-1 ring-slate-100">
+          {arcWeeks.map((w, i) => (
+            <WeekRow key={`${w.startISO}-${i}`} w={w} status={weekStatus(w, now)} admin={admin && !!season} ticket={ticket} seasonId={season?.id ?? ""} index={i} />
+          ))}
+        </div>
+
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
           <Link href="/console/schedule" className="text-brand-600 hover:underline">Practice schedule →</Link>
           <Link href="/console/league" className="text-brand-600 hover:underline">League matches →</Link>
           <Link href="/console/championship" className="text-brand-600 hover:underline">Championship →</Link>
-          {admin && season && !calendarEditable && (
+          {admin && season && calendarEditable && (
             <form method="POST" action="/api/console/setup" className="ml-auto">
-              <input type="hidden" name="ticket" value={ticket} />
-              <input type="hidden" name="op" value="initSeasonCalendar" />
-              <input type="hidden" name="seasonId" value={season.id} />
-              <input type="hidden" name="returnTo" value="/console/calendar" />
-              <button className="font-semibold text-brand-700 hover:underline">Edit this calendar ✎</button>
-            </form>
-          )}
-        </div>
-
-        {/* Editable weeks (admins) */}
-        {admin && season && calendarEditable && (
-          <details className="mt-4 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-100">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-800">Edit weeks</summary>
-            <p className="mt-1 text-xs text-slate-500">Adjust any week&apos;s dates, focus, or milestone. Leave a date blank to keep it.</p>
-            <div className="mt-3 space-y-2">
-              {arcWeeks.map((w, i) => (
-                <EditWeekForm key={i} ticket={ticket} seasonId={season.id} index={i} week={w} />
-              ))}
-            </div>
-            <form method="POST" action="/api/console/setup" className="mt-3">
               <input type="hidden" name="ticket" value={ticket} />
               <input type="hidden" name="op" value="resetSeasonCalendar" />
               <input type="hidden" name="seasonId" value={season.id} />
               <input type="hidden" name="returnTo" value="/console/calendar" />
-              <button className="text-xs text-rose-600 hover:underline">Reset to the standard template</button>
+              <button className="text-rose-600 hover:underline">Reset to the standard template</button>
             </form>
-          </details>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Division readiness — the four-team minimum */}
@@ -211,6 +176,60 @@ export default async function SeasonCalendarPage({
         )}
       </div>
     </div>
+  );
+}
+
+// One week of the arc. Read-only for coaches; for admins it's a disclosure whose
+// summary is the week row and whose body is the inline edit form — so editing
+// happens right next to the week, not in a separate view.
+function WeekRow({
+  w,
+  status,
+  admin,
+  ticket,
+  seasonId,
+  index,
+}: {
+  w: WeekPlan;
+  status: WeekStatus;
+  admin: boolean;
+  ticket: string;
+  seasonId: string;
+  index: number;
+}) {
+  const meta = KIND_META[w.kind];
+  const cols = admin ? "sm:grid-cols-[3.5rem_9rem_1fr_10rem_5rem]" : "sm:grid-cols-[3.5rem_9rem_1fr_10rem]";
+  const rowTone =
+    status === "current" ? `bg-brand-50/50 ${meta.ring} ring-1` : status === "past" ? "text-slate-400" : w.kind === "break" ? "bg-slate-50/60" : "";
+
+  const summary = (
+    <div className={`grid grid-cols-1 items-center gap-1 px-3 py-2.5 sm:gap-2 ${cols} ${rowTone}`}>
+      <div className="flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
+        <span className="font-semibold text-slate-700">{w.week ?? "—"}</span>
+        {status === "current" && <span className="badge bg-brand-100 text-brand-800">now</span>}
+      </div>
+      <div className="whitespace-nowrap text-slate-600">{fmtRange(w.startISO, w.endISO)}</div>
+      <div className={w.kind === "break" ? "font-medium text-slate-600" : "text-slate-700"}>{w.focus}</div>
+      <div>{w.milestone ? <span className="badge bg-accent-100 text-accent-800">{w.milestone}</span> : <span className="text-slate-300">—</span>}</div>
+      {admin && (
+        <div className="text-xs font-semibold text-brand-700">
+          <span className="group-open:hidden">✎ Edit</span>
+          <span className="hidden text-slate-500 group-open:inline">Close ▲</span>
+        </div>
+      )}
+    </div>
+  );
+
+  if (!admin) return <div className="border-b border-slate-100 last:border-0">{summary}</div>;
+
+  return (
+    <details className="group border-b border-slate-100 last:border-0">
+      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">{summary}</summary>
+      <div className="bg-slate-50/70 px-3 pb-3 pt-1">
+        <EditWeekForm ticket={ticket} seasonId={seasonId} index={index} week={w} />
+      </div>
+    </details>
   );
 }
 
