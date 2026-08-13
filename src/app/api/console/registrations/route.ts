@@ -315,9 +315,11 @@ export async function POST(req: Request) {
         data: { status: "ASSIGNED" },
       });
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Assigned/moved ${personId}` });
-      // The board moves players provisionally; it sets silent=1 so a placement
-      // email isn't fired on every drag (staff send it explicitly afterward).
-      if (String(fd.get("silent") ?? "") !== "1") await notifyAssignment(teamId, personId, team.seasonId);
+      // Assignment is SILENT by design: players/parents are never messaged just
+      // for being placed. Staff control who and when — messaging goes out later,
+      // deliberately, from the team Launch flow (welcome + fee + waiver) or the
+      // explicit "Resend assignment email" action. Notify only on opt-in.
+      if (String(fd.get("notify") ?? "") === "1") await notifyAssignment(teamId, personId, team.seasonId);
       if (String(fd.get("from") ?? "") === "requests")
         return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
       return back("?ok=assign");
@@ -346,7 +348,9 @@ export async function POST(req: Request) {
 
       for (const pid of people) await placeOnTeam(pid, teamId, team.seasonId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Placed pair on team: ${people.join(" + ")}` });
-      for (const pid of people) await notifyAssignment(teamId, pid, team.seasonId);
+      // Silent by design — see assignToTeam. Placement never auto-messages.
+      if (String(fd.get("notify") ?? "") === "1")
+        for (const pid of people) await notifyAssignment(teamId, pid, team.seasonId);
       return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
     }
 

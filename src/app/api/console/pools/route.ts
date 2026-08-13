@@ -114,8 +114,12 @@ export async function POST(req: Request) {
         summary: `Assigned ${regs.length} player(s): ${regs.map((r) => `${r.person.firstName} ${r.person.lastName}`).join(", ")}`,
       });
 
-      const t = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
-      if (t) await notifyAssignment(teamId, regs.map((r) => r.personId), t.seasonId);
+      // Silent by design: pool placement never auto-messages players/parents.
+      // Messaging goes out deliberately later from the team Launch flow.
+      if (String(formData.get("notify") ?? "") === "1") {
+        const t = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
+        if (t) await notifyAssignment(teamId, regs.map((r) => r.personId), t.seasonId);
+      }
 
       return back("?ok=assign");
     }
@@ -168,7 +172,9 @@ export async function POST(req: Request) {
         summary: `Formed "${name}" from pool with ${regs.length} player(s)`,
       });
 
-      await notifyAssignment(team.id, regs.map((r) => r.personId), seasonId);
+      // Silent by design: forming a team from the pool never auto-messages.
+      if (String(formData.get("notify") ?? "") === "1")
+        await notifyAssignment(team.id, regs.map((r) => r.personId), seasonId);
 
       return back("?ok=create");
     }
