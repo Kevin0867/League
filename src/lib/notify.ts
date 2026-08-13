@@ -25,11 +25,19 @@ export async function sendSms(to: string | null | undefined, body: string): Prom
   }
   const sid = process.env.TWILIO_ACCOUNT_SID!;
   const auth = Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN!}`).toString("base64");
+  const from = process.env.TWILIO_FROM!;
+  // TWILIO_FROM may be a Messaging Service SID (starts "MG" — recommended for
+  // A2P 10DLC / toll-free so traffic is tied to the approved campaign and Twilio
+  // picks the sender from the pool) or a single sender number in E.164 (+1…).
+  // Use whichever Twilio parameter matches.
+  const params: Record<string, string> = { To: to, Body: body };
+  if (from.startsWith("MG")) params.MessagingServiceSid = from;
+  else params.From = from;
   try {
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
       method: "POST",
       headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ To: to, From: process.env.TWILIO_FROM!, Body: body }),
+      body: new URLSearchParams(params),
     });
     if (!res.ok) {
       const text = await res.text();
