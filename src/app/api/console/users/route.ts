@@ -117,6 +117,27 @@ export async function POST(req: Request) {
       return back("?ok=active");
     }
 
+    // Re-send the set-password invite to an existing account (e.g. one whose
+    // first invite bounced or was never delivered). Mints a fresh 7-day link
+    // and reports the actual delivery result, like the original invite.
+    case "resendInvite": {
+      const u = await prisma.user.findUnique({ where: { id: userId }, include: { person: true } });
+      if (!u) return back("?err=notfound");
+      const token = await createResetToken(u.id, INVITE_TTL_MS);
+      const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
+      const sent = await sendConsoleInvite({ toEmail: u.email, name: u.person?.firstName ?? "there", role: u.role, link });
+      await audit({
+        actorId: actor.userId,
+        entityType: "User",
+        entityId: u.id,
+        action: "user.resendInvite",
+        summary: `Re-sent invite to ${u.email}${sent.ok ? (sent.simulated ? " (simulated)" : "") : ` (FAILED: ${sent.error ?? "unknown"})`}`,
+      });
+      if (!sent.ok) return back("?err=invite-send");
+      if (sent.simulated) return back("?ok=invited-sim");
+      return back("?ok=invite-resent");
+    }
+
     default:
       return back("?err=op");
   }
