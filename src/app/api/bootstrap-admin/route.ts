@@ -77,5 +77,20 @@ export async function GET(req: Request) {
     select: { email: true, role: true, active: true, failedLoginCount: true, lockedUntil: true },
   });
 
-  return NextResponse.json({ ok: true, dbHost, action, totalUsers: users.length, users });
+  // Node-runtime view of AUTH_SECRET, to compare against the edge probe. If the
+  // lengths differ, the edge middleware can't validate sessions this handler
+  // signs — which explains a successful login that immediately bounces back.
+  const authSecret = process.env.AUTH_SECRET ?? "";
+
+  return NextResponse.json({
+    ok: true,
+    dbHost,
+    action,
+    totalUsers: users.length,
+    users,
+    runtime: "node",
+    authSecretPresent: !!process.env.AUTH_SECRET,
+    authSecretLen: authSecret.length,
+    nodeEnv: process.env.NODE_ENV ?? null,
+  });
 }
