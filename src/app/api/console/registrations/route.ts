@@ -437,6 +437,31 @@ export async function POST(req: Request) {
       return back("?ok=waiverSent");
     }
 
+    // Remove a registration entirely — a mistaken or withdrawn signup. Pulls the
+    // person off every team in that registration's season first (so no ghost on a
+    // roster), then deletes the registration; its location preferences cascade
+    // away via the FK. The Person and any payment history are kept — a person may
+    // hold other registrations, waivers, or be a parent — and financial records
+    // are never silently destroyed.
+    case "deleteRegistration": {
+      if (!actor) return back("?err=auth");
+      if (!reg) return back("?err=notfound");
+      const seasonTeams = await seasonTeamIds(reg.seasonId);
+      if (seasonTeams.length) {
+        await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: seasonTeams } } });
+      }
+      await prisma.registration.delete({ where: { id: reg.id } });
+      await audit({
+        actorId: actor.userId,
+        entityType: "Registration",
+        entityId: reg.id,
+        action: "DELETE",
+        summary: `Removed registration for ${personId}; pulled from ${seasonTeams.length ? "season teams" : "no teams"}`,
+      });
+      // The detail page is gone now — land on the list with a confirmation.
+      return NextResponse.redirect(new URL(`/console/registrations?ok=regDeleted`, origin), 303);
+    }
+
     // Edit the registration + the player's core details from the detail page.
     case "editRegistration": {
       if (!reg) return back("?err=fields");

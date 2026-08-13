@@ -17,6 +17,7 @@ const OK: Record<string, string> = {
   feeexists: "That player already has a fee on file.",
   refund: "Refund started.",
   resent: "Fee request resent.",
+  regDeleted: "Registration removed — the player was pulled from any team in that season.",
 };
 const ERRORS: Record<string, string> = {
   name: "First and last name are required.",
