@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } from "@/lib/domain/teams";
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
+import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
 import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -33,6 +34,7 @@ const ERR_MSG: Record<string, string> = {
   coachgate: "Cannot add this coach — not cleared (background check required).",
   coachishead: "That coach is already the head coach of this team.",
   coachclash: "That coach already coaches another team at this day/time. Pick a non-overlapping slot or use “add anyway.”",
+  colorclash: "Another team in this division already uses that color. Every team in a division needs a distinct color.",
   player: "Missing player.",
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",
@@ -81,6 +83,15 @@ export default async function TeamDetailPage({
     : [];
   const paidOrRequested = new Set(existingFees.map((p) => p.partyId));
   const feesToRequest = memberIds.filter((id) => !paidOrRequested.has(id)).length;
+
+  // Colors already used by OTHER teams in this team's division — shown as taken
+  // in the color picker so every team in a division stays a distinct color.
+  const usedColors = team.divisionId
+    ? ((await prisma.team.findMany({ where: { divisionId: team.divisionId, id: { not: team.id } }, select: { color: true } }))
+        .map((t) => t.color)
+        .filter(Boolean) as string[])
+    : [];
+  const usedColorSet = new Set(usedColors.map((c) => c.toLowerCase()));
 
   // Launch readiness + how many players still need a waiver (coach-players skip).
   const waiversNeeded = team.members.filter((m) => m.roleOnTeam !== "COACH_PLAYER" && !m.person.waiverSignedAt).length;
@@ -340,6 +351,22 @@ export default async function TeamDetailPage({
                 options={[{ value: "", label: "—" }, ...team.season.divisions.map((d) => ({ value: d.id, label: d.name }))]} />
               <Field label="Level band" name="levelBand" defaultValue={team.levelBand ?? ""} placeholder="e.g. 4.0–4.5" />
               <Field label="Market" name="market" defaultValue={team.market ?? ""} />
+
+              <div>
+                <label className="label" htmlFor="color">Team color</label>
+                <select id="color" name="color" defaultValue={team.color ?? ""} className="input">
+                  <option value="">— none —</option>
+                  {TEAM_COLOR_PALETTE.map((c) => {
+                    const taken = usedColorSet.has(c.toLowerCase()) && c.toLowerCase() !== (team.color ?? "").toLowerCase();
+                    return (
+                      <option key={c} value={c} disabled={taken}>
+                        {c}{taken ? " — taken in division" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="mt-1 text-xs text-slate-400">Every team in a division needs a distinct color.</p>
+              </div>
 
               <div>
                 <label className="label" htmlFor="coachId">Coach {team.origin === "ACP_CLUB" && <span className="text-xs text-slate-400">(optional for outside teams)</span>}</label>

@@ -7,9 +7,11 @@
 
 export const PURE_MARKETS = ["Scottsdale", "Mesa", "Gilbert", "Chandler", "Tempe", "Phoenix", "Paradise Valley"] as const;
 
-/// Deterministic team-color palette. A color is only used where a market fields
-/// two or more teams in a division; assigned in this fixed order.
-export const TEAM_COLOR_PALETTE = ["Blue", "Green", "Red", "Yellow", "Orange", "Purple"] as const;
+/// Team-color palette. Every team in a division must be a DIFFERENT color — the
+/// color is what tells two same-division teams apart (e.g. "PURE Mesa W3.0 Red"
+/// vs "…Blue"). Leads with the core solid colors; the rest are overflow so a
+/// large division can still give everyone a distinct color.
+export const TEAM_COLOR_PALETTE = ["Red", "Blue", "Green", "White", "Black", "Yellow", "Orange", "Purple"] as const;
 
 export type TeamParts = {
   club?: string | null;
