@@ -20,6 +20,7 @@ const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "T
 const ERRORS: Record<string, string> = {
   fields: "Team name and season are required.",
   auth: "You don't have permission to manage teams.",
+  colorclash: "Another team in that division already uses that color — each team in a division needs a distinct color.",
 };
 
 export default async function TeamBuildBoard({
