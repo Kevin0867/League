@@ -29,6 +29,25 @@ async function seasonTeamIds(seasonId: string): Promise<string[]> {
   return teams.map((t) => t.id);
 }
 
+/**
+ * Place one person on a team as a move: drop them from any other team in the
+ * same season, upsert the membership, and mark their registration ASSIGNED.
+ * Shared by assignToTeam and assignPair so both behave identically.
+ */
+async function placeOnTeam(personId: string, teamId: string, seasonId: string) {
+  const ids = (await seasonTeamIds(seasonId)).filter((id) => id !== teamId);
+  if (ids.length) await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: ids } } });
+  await prisma.teamMember.upsert({
+    where: { teamId_personId: { teamId, personId } },
+    create: { teamId, personId, roleOnTeam: "PLAYER" },
+    update: {},
+  });
+  await prisma.registration.updateMany({
+    where: { personId, seasonId, status: { not: "ASSIGNED" } },
+    data: { status: "ASSIGNED" },
+  });
+}
+
 async function notifyAssignment(teamId: string, personId: string, seasonId: string, opts?: { emailOnly?: boolean }) {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -302,6 +321,33 @@ export async function POST(req: Request) {
       if (String(fd.get("from") ?? "") === "requests")
         return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
       return back("?ok=assign");
+    }
+
+    // Place two players (a requester and a matched friend/sibling) on the same
+    // team in one action — the "Place both on…" control on the requests page.
+    // Honors a pairing request by moving both, cap-checked for the pair at once.
+    case "assignPair": {
+      const teamId = String(fd.get("teamId") ?? "");
+      const partnerPersonId = String(fd.get("partnerPersonId") ?? "");
+      if (!partnerPersonId) return NextResponse.redirect(new URL(`/console/requests?err=fields`, origin), 303);
+      const team = teamId
+        ? await prisma.team.findUnique({ where: { id: teamId }, include: { _count: { select: { members: true } } } })
+        : null;
+      if (!team) return NextResponse.redirect(new URL(`/console/requests?err=team`, origin), 303);
+
+      const people = personId === partnerPersonId ? [personId] : [personId, partnerPersonId];
+      // Seats we're actually adding = pair members not already on this team.
+      const existing = await prisma.teamMember.findMany({ where: { teamId, personId: { in: people } } });
+      const adding = people.filter((id) => !existing.some((m) => m.personId === id)).length;
+      const override = String(fd.get("override") ?? "") === "1";
+      if (!override && team._count.members + (team.coachPlays ? 1 : 0) + adding > TEAM_CAP) {
+        return NextResponse.redirect(new URL(`/console/requests?err=cap`, origin), 303);
+      }
+
+      for (const pid of people) await placeOnTeam(pid, teamId, team.seasonId);
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Placed pair on team: ${people.join(" + ")}` });
+      for (const pid of people) await notifyAssignment(teamId, pid, team.seasonId);
+      return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
     }
 
     // Board: drop a player into a division pool — unassign from any team and set

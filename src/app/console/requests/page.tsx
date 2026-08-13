@@ -5,6 +5,54 @@ import { TEAM_CAP } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
+type TeamOption = { id: string; name: string; full: boolean };
+
+// A compact "move to team" control: a team dropdown + Go, posting to the shared
+// registrations action. Used three ways on this page — move the requester, move
+// one matched player, or (with partnerPersonId set) move BOTH onto one team via
+// the assignPair op. Admins can always override a full team here, so a pairing
+// request can be honored onto a team that's already at cap.
+function TeamMovePicker({
+  ticket,
+  teamOptions,
+  personId,
+  registrationId,
+  partnerPersonId,
+  currentTeamId,
+  label,
+}: {
+  ticket: string;
+  teamOptions: TeamOption[];
+  personId: string;
+  registrationId?: string;
+  partnerPersonId?: string;
+  currentTeamId?: string | null;
+  label: string;
+}) {
+  const op = partnerPersonId ? "assignPair" : "assignToTeam";
+  return (
+    <form method="POST" action="/api/console/registrations" className="flex items-center gap-1">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value={op} />
+      <input type="hidden" name="from" value="requests" />
+      <input type="hidden" name="personId" value={personId} />
+      {registrationId && <input type="hidden" name="registrationId" value={registrationId} />}
+      {partnerPersonId && <input type="hidden" name="partnerPersonId" value={partnerPersonId} />}
+      {/* Explicit admin move — allow exceeding the cap to honor the request. */}
+      <input type="hidden" name="override" value="1" />
+      <select name="teamId" defaultValue="" required className="input py-1 text-xs">
+        <option value="" disabled>{label}</option>
+        {teamOptions.map((t) => (
+          <option key={t.id} value={t.id} disabled={t.id === currentTeamId}>
+            {t.name}{t.full ? " · full" : ""}{t.id === currentTeamId ? " · current" : ""}
+          </option>
+        ))}
+      </select>
+      <button className="btn-secondary text-xs">Go</button>
+    </form>
+  );
+}
+
 // Placement requests: read the free-text comments a family left at signup
 // ("wants to play with Mary", "coached by Coach Lee") and help an admin honor
 // them — matching the named player/coach, showing where they're placed, and
@@ -33,6 +81,9 @@ export default async function RequestsPage({
   const teamByPerson = new Map(memberships.map((m) => [m.personId, m.team]));
   const teams = await prisma.team.findMany({ where: { seasonId: season.id }, include: { coach: { include: { person: true } }, _count: { select: { members: true } } } });
   const coaches = await prisma.coach.findMany({ include: { person: true } });
+  const teamOptions = teams
+    .map((t) => ({ id: t.id, name: t.name, full: t._count.members + (t.coachPlays ? 1 : 0) + 1 > TEAM_CAP }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Name index for matching mentions in the comment text.
   const norm = (s: string) => s.toLowerCase();
@@ -49,7 +100,7 @@ export default async function RequestsPage({
       // Named matches: a fellow player whose first name appears in the comment.
       const named = regs
         .filter((o) => o.personId !== r.personId && w.has(norm(o.person.firstName)))
-        .map((o) => ({ person: o.person, team: teamByPerson.get(o.personId) ?? null, reason: "named" as const }));
+        .map((o) => ({ person: o.person, regId: o.id, team: teamByPerson.get(o.personId) ?? null, reason: "named" as const }));
 
       // Likely siblings: when the comment says brother/sister/sibling/twin but
       // names no one, surface same-family players — same last name, or a shared
@@ -64,7 +115,7 @@ export default async function RequestsPage({
               const parentChild = (!!self.guardianId && self.guardianId === p.id) || (!!p.guardianId && p.guardianId === self.id);
               return sameLast || sharedGuardian || parentChild;
             })
-            .map((o) => ({ person: o.person, team: teamByPerson.get(o.personId) ?? null, reason: "sibling" as const }))
+            .map((o) => ({ person: o.person, regId: o.id, team: teamByPerson.get(o.personId) ?? null, reason: "sibling" as const }))
         : [];
 
       // Named matches win; add sibling candidates not already named. De-dup by id.
@@ -107,7 +158,18 @@ export default async function RequestsPage({
                     {reg.division?.name ?? "unplaced"} · {myTeam ? `on ${myTeam.name}` : "in pool"}
                   </div>
                 </div>
-                {mentionsSibling && <span className="badge bg-violet-100 text-violet-800">👧👦 sibling request</span>}
+                <div className="flex flex-wrap items-center gap-2">
+                  {mentionsSibling && <span className="badge bg-violet-100 text-violet-800">👧👦 sibling request</span>}
+                  {/* Move just the requester to any team (or off their current one). */}
+                  <TeamMovePicker
+                    ticket={ticket}
+                    teamOptions={teamOptions}
+                    personId={reg.person.id}
+                    registrationId={reg.id}
+                    currentTeamId={myTeam?.id ?? null}
+                    label={myTeam ? "Move to team…" : "Place on team…"}
+                  />
+                </div>
               </div>
 
               <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">“{text}”</p>
@@ -118,30 +180,56 @@ export default async function RequestsPage({
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                     {candidates.some((c) => c.reason === "sibling") ? "Matches & likely family" : `Matched player${candidates.length > 1 ? "s" : ""}`}
                   </div>
-                  {candidates.map(({ person, team, reason }) => {
+                  {candidates.map(({ person, regId, team, reason }) => {
                     const full = team ? team._count.members + (team.coachPlays ? 1 : 0) + 1 > TEAM_CAP : false;
+                    const together = !!team && !!myTeam && myTeam.id === team.id;
                     return (
-                      <div key={person.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg ring-1 ring-slate-100 px-3 py-2 text-sm">
-                        <span className="text-slate-700">
-                          {person.firstName} {person.lastName}
-                          {reason === "sibling" && <span className="ml-2 badge bg-violet-50 text-violet-700">likely sibling</span>}
-                          <span className="ml-2 text-xs text-slate-400">{team ? `on ${team.name}${full ? " · FULL" : ""}` : "in pool — assign both to a team"}</span>
-                        </span>
-                        {team && myTeam?.id !== team.id && (
-                          <form method="POST" action="/api/console/registrations">
-                            <input type="hidden" name="ticket" value={ticket} />
-                            <input type="hidden" name="op" value="assignToTeam" />
-                            <input type="hidden" name="from" value="requests" />
-                            <input type="hidden" name="personId" value={reg.person.id} />
-                            <input type="hidden" name="registrationId" value={reg.id} />
-                            <input type="hidden" name="teamId" value={team.id} />
-                            {full && <input type="hidden" name="override" value="1" />}
-                            <button className={full ? "btn-secondary text-xs text-amber-700 ring-amber-200" : "btn-primary text-xs"}>
-                              {full ? "Place anyway (override cap)" : `Place on ${team.name}`}
-                            </button>
-                          </form>
+                      <div key={person.id} className="space-y-2 rounded-lg ring-1 ring-slate-100 px-3 py-2 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-slate-700">
+                            {person.firstName} {person.lastName}
+                            {reason === "sibling" && <span className="ml-2 badge bg-violet-50 text-violet-700">likely sibling</span>}
+                            <span className="ml-2 text-xs text-slate-400">{team ? `on ${team.name}${full ? " · FULL" : ""}` : "in pool"}</span>
+                          </span>
+                          {together ? (
+                            <span className="badge bg-emerald-100 text-emerald-800">together ✓</span>
+                          ) : team && myTeam?.id !== team.id ? (
+                            // One click to move the requester onto this player's team.
+                            <form method="POST" action="/api/console/registrations">
+                              <input type="hidden" name="ticket" value={ticket} />
+                              <input type="hidden" name="op" value="assignToTeam" />
+                              <input type="hidden" name="from" value="requests" />
+                              <input type="hidden" name="personId" value={reg.person.id} />
+                              <input type="hidden" name="registrationId" value={reg.id} />
+                              <input type="hidden" name="teamId" value={team.id} />
+                              {full && <input type="hidden" name="override" value="1" />}
+                              <button className={full ? "btn-secondary text-xs text-amber-700 ring-amber-200" : "btn-primary text-xs"}>
+                                {full ? `Move ${reg.person.firstName} here (override cap)` : `Move ${reg.person.firstName} to ${team.name}`}
+                              </button>
+                            </form>
+                          ) : null}
+                        </div>
+                        {/* Fine-grained moves: this player alone, or both players onto one team. */}
+                        {!together && (
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <TeamMovePicker
+                              ticket={ticket}
+                              teamOptions={teamOptions}
+                              personId={person.id}
+                              registrationId={regId}
+                              currentTeamId={team?.id ?? null}
+                              label={`Move ${person.firstName}…`}
+                            />
+                            <TeamMovePicker
+                              ticket={ticket}
+                              teamOptions={teamOptions}
+                              personId={reg.person.id}
+                              registrationId={reg.id}
+                              partnerPersonId={person.id}
+                              label="Place both on…"
+                            />
+                          </div>
                         )}
-                        {team && myTeam?.id === team.id && <span className="badge bg-emerald-100 text-emerald-800">together ✓</span>}
                       </div>
                     );
                   })}
