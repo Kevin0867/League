@@ -16,9 +16,20 @@ export function emailConfigured(): boolean {
   return !!process.env.RESEND_API_KEY;
 }
 
+// Every SMS leads with the business name so recipients recognize the sender and
+// carriers treat it as identified A2P traffic — unbranded texts are the single
+// biggest trigger for carrier spam filtering. Skip when the body already starts
+// with the brand (e.g. dispatchMessage leads with a "PURE Academy" subject line)
+// so we never produce "PURE Academy: PURE Academy …".
+const SMS_BRAND = "PURE Academy";
+function brandSms(body: string): string {
+  return new RegExp(`^\\s*${SMS_BRAND}`, "i").test(body) ? body : `${SMS_BRAND}: ${body}`;
+}
+
 /** Send an SMS via Twilio's REST API (no SDK needed). */
-export async function sendSms(to: string | null | undefined, body: string): Promise<SendResult> {
+export async function sendSms(to: string | null | undefined, rawBody: string): Promise<SendResult> {
   if (!to) return { ok: false, simulated: false, error: "no phone number on record" };
+  const body = brandSms(rawBody);
   if (!smsConfigured()) {
     console.log(`[SMS simulated] → ${to}: ${body}`);
     return { ok: true, simulated: true };

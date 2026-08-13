@@ -91,7 +91,12 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
       if (res.ok && res.simulated) wasSimulated = true;
     }
     if (channels.includes("SMS")) {
-      const res = await sendSms(r.phone, `${subject}\n${input.body}`);
+      // Manual broadcasts (no triggerType — the Messaging composer) carry opt-out
+      // language, as A2P 10DLC best practice / TCPA expects. Transactional texts
+      // (assignment, payment, reminders — each has a triggerType) rely on Twilio's
+      // built-in STOP handling and stay concise.
+      const optOut = input.triggerType ? "" : "\nReply STOP to opt out.";
+      const res = await sendSms(r.phone, `${subject}\n${input.body}${optOut}`);
       smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`sms: ${res.error}`);
       if (res.ok && res.simulated) wasSimulated = true;
