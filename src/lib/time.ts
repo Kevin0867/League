@@ -73,6 +73,25 @@ export function formatDateTime12(d: Date | string | null | undefined): string {
   });
 }
 
+/** Compact "time ago" for an instant — "just now", "5m ago", "3h ago",
+ *  "2d ago", "3w ago", else a MM/DD/YYYY date. For login/activity displays. */
+export function relativeTime(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  const secs = Math.round((Date.now() - dt.getTime()) / 1000);
+  if (secs < 45) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  const wks = Math.round(days / 7);
+  if (wks < 5) return `${wks}w ago`;
+  return formatStamp(dt);
+}
+
 /** MM/DD/YYYY – MM/DD/YYYY range. */
 export function formatDateRange(a: Date | string | null | undefined, b: Date | string | null | undefined): string {
   const s = formatDate(a), e = formatDate(b);

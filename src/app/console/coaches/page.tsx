@@ -6,6 +6,7 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { can, requireAdmin } from "@/lib/rbac";
 import { StaffForm } from "./StaffForm";
 import { TableFilter } from "@/components/TableFilter";
+import { LoginStatus } from "@/components/LoginStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,14 @@ export default async function CoachesPage({
   const coaches = [...byPerson.values()].sort((a, b) =>
     `${a.person.lastName} ${a.person.firstName}`.localeCompare(`${b.person.lastName} ${b.person.firstName}`)
   );
+
+  // Login activity per coach: whether they hold an account and when they last
+  // signed in — the definitive answer to "was the coach able to log on yet?".
+  const accountRows = await prisma.user.findMany({
+    where: { personId: { in: [...byPerson.keys()] } },
+    select: { personId: true, lastLoginAt: true, active: true },
+  });
+  const accountByPerson = new Map(accountRows.map((a) => [a.personId as string, a]));
 
   // Availability completeness — a coach only shows up as a location/day match in
   // Coach matching once they've set both locations and day/time blocks.
@@ -138,6 +147,7 @@ export default async function CoachesPage({
               <th>Public site</th>
               <th className="hidden lg:table-cell">Cert</th>
               <th className="hidden sm:table-cell">Screening</th>
+              <th>Login</th>
               <th>Waiver</th>
               <th>Availability</th>
               <th className="hidden md:table-cell">Teams</th>
@@ -186,6 +196,12 @@ export default async function CoachesPage({
                       : <span className="badge bg-amber-100 text-amber-800" title={gate.reasons.join(", ")}>{gate.reasons.length} issue{gate.reasons.length > 1 ? "s" : ""}</span>}
                   </td>
                   <td>
+                    {(() => {
+                      const acct = accountByPerson.get(person.id);
+                      return <LoginStatus lastLoginAt={acct?.lastLoginAt ?? null} active={acct?.active ?? true} hasAccount={!!acct} />;
+                    })()}
+                  </td>
+                  <td>
                     {person.waiverSignedAt ? (
                       <span className="badge bg-emerald-100 text-emerald-800" title={`Signed ${person.waiverSignedAt.toISOString().slice(0, 10)}`}>signed</span>
                     ) : (
@@ -213,9 +229,9 @@ export default async function CoachesPage({
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={9} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
-            <tr data-filter-empty hidden><td colSpan={8} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
+            <tr data-filter-empty hidden><td colSpan={9} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
           </tbody>
         </table>
       </div>

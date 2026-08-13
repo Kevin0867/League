@@ -6,14 +6,25 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { isPublic, parseMarketsJson } from "@/lib/domain/coachPublic";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
+import { effectiveRoles } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
+
+// The featured Director is always reachable regardless of her login's roles.
+const DIRECTOR_NAME = "stephanie newton";
 
 async function getCoach(personId: string) {
   const coach = await prisma.coach.findFirst({
     where: { personId, publishedOnSite: true },
-    include: { person: true },
+    include: { person: { include: { user: true } } },
   });
+  if (!coach) return null;
+  // Mirror the grid rule: if the person holds a login, it must carry the COACH
+  // role to be public — so unchecking Coach on the Access page hides this page
+  // too. Login-less seeded records and the Director are always allowed.
+  const u = coach.person.user;
+  const isDirector = `${coach.person.firstName} ${coach.person.lastName}`.replace(/\s+/g, " ").trim().toLowerCase() === DIRECTOR_NAME;
+  if (u && !isDirector && !effectiveRoles(u).includes("COACH")) return null;
   return coach;
 }
 
