@@ -30,7 +30,8 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/console/pools", label: "Assignment", roles: ["COO", "DIRECTOR"] },
       { href: "/console/board", label: "Boards", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/teams", label: "Team Build", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/teams", label: "Teams", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/team-import", label: "Team import", roles: ["COO", "DIRECTOR"] },
       { href: "/console/requests", label: "Requests", roles: ["COO", "DIRECTOR"] },
     ],
   },
