@@ -26,6 +26,7 @@ const OKS: Record<string, string> = {
   role: "Role updated.",
   active: "Access updated.",
   invited: "Invitation sent — they'll get an email to set their password.",
+  "invite-resent": "Invitation re-sent — a fresh set-password link is on its way.",
   "invited-sim": "Account created, but email isn't configured on this environment, so no invitation was actually sent.",
 };
 
@@ -136,16 +137,27 @@ export default async function UsersPage({
                     <span className={`rounded px-2 py-1 text-xs font-medium ${u.active ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
                       {u.active ? "Active" : "Disabled"}
                     </span>
+                    {!u.lastLoginAt && <span className="ml-2 text-xs text-amber-600" title="Hasn't set a password / signed in yet">invited</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {!isSelf && isAdmin && (
-                      <form method="POST" action="/api/console/users">
-                        <input type="hidden" name="ticket" value={ticket} />
-                        <input type="hidden" name="op" value="toggleActive" />
-                        <input type="hidden" name="userId" value={u.id} />
-                        <input type="hidden" name="active" value={u.active ? "false" : "true"} />
-                        <button className="text-xs text-slate-500 hover:underline">{u.active ? "Disable" : "Enable"}</button>
-                      </form>
+                      <div className="flex items-center justify-end gap-3">
+                        {!u.lastLoginAt && (
+                          <form method="POST" action="/api/console/users">
+                            <input type="hidden" name="ticket" value={ticket} />
+                            <input type="hidden" name="op" value="resendInvite" />
+                            <input type="hidden" name="userId" value={u.id} />
+                            <button className="text-xs font-semibold text-brand-700 hover:underline" title="Send a fresh set-password link">Resend invite</button>
+                          </form>
+                        )}
+                        <form method="POST" action="/api/console/users">
+                          <input type="hidden" name="ticket" value={ticket} />
+                          <input type="hidden" name="op" value="toggleActive" />
+                          <input type="hidden" name="userId" value={u.id} />
+                          <input type="hidden" name="active" value={u.active ? "false" : "true"} />
+                          <button className="text-xs text-slate-500 hover:underline">{u.active ? "Disable" : "Enable"}</button>
+                        </form>
+                      </div>
                     )}
                   </td>
                 </tr>
