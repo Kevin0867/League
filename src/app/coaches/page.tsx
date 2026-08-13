@@ -23,37 +23,38 @@ function parseMarkets(json: string | null): string[] {
   }
 }
 
-// Fallback hero copy for the Director, used until her coach record carries its
-// own bio. Her actual profile fields override these when present.
-const DIRECTOR_FALLBACK_BIO =
+// Fixed hero banner for /coaches. Deliberately NOT tied to any coach record —
+// it's a committed page asset (image + copy) so it always shows regardless of
+// which coaches exist in the database. Managed by editing these constants and
+// replacing the image file in the repo.
+const HERO_IMG = "/coaches/stephanie-hero.jpg";
+const HERO_EYEBROW = "Director & Head Coach";
+const HERO_NAME = "Stephanie Newton";
+const HERO_BIO =
   "Professional player — Phoenix Firebirds, Major League Pickleball Champions Series, 40+ Prime Division. " +
   "Competing through the Fall 2026 season. RPO Level 1 and Level 2 certified. 2025 APPL State and National Champion. " +
   "20+ years coaching Arizona athletes. Director, Arizona High School Pickleball. Director, Arizona Club Pickleball.";
-const DIRECTOR_FALLBACK_MARKETS = "Mesa · Youth and adults, beginner through professional.";
+const HERO_MARKETS = "Mesa · Youth and adults, beginner through professional.";
 
 export default async function CoachesPage() {
   // Only PUBLISHED coach records appear — the "Publish to site" toggle governs
-  // visibility for everyone, including the Director.
+  // grid visibility. The hero above the grid is a fixed page element (see the
+  // HERO_* constants), so it no longer depends on a coach record existing.
   const coaches = await prisma.coach.findMany({
     where: { publishedOnSite: true },
     include: { person: true },
     orderBy: { person: { firstName: "asc" } },
   });
-  // The Director is featured in the hero and excluded from the staff grid so she
-  // isn't shown twice (Community Layer §2.3). The grid hides incomplete profiles:
+  // Keep the featured Director out of the staff grid so she isn't shown twice
+  // (once in the fixed hero, once as a card). The grid hides incomplete profiles:
   // a coach appears only once they have a photo, a market, and coaching levels —
   // a name-only card reads worse than no card, and it keeps seeded/unconfirmed
   // records off the one page a parent visits to decide whether to trust us.
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
-  const isDirector = (c: (typeof coaches)[number]) => norm(`${c.person.firstName} ${c.person.lastName}`) === "stephanie newton";
-  const director = coaches.find(isDirector);
+  const isDirector = (c: (typeof coaches)[number]) => norm(`${c.person.firstName} ${c.person.lastName}`) === norm(HERO_NAME);
   const isComplete = (c: (typeof coaches)[number]) =>
     !!c.person.imageUrl && parseMarkets(c.marketsCovered).length > 0 && !!(c.coachingLevels && c.coachingLevels.trim());
   const grid = coaches.filter((c) => !isDirector(c) && isComplete(c));
-  // The Director hero is a fixed, committed asset (managed by replacing the file
-  // in the repo), so it's never overridden by an uploaded profile image.
-  const heroImg = "/coaches/stephanie-hero.jpg";
-  const directorMarkets = director ? parseMarkets(director.marketsCovered) : [];
 
   return (
     <div>
@@ -65,45 +66,29 @@ export default async function CoachesPage() {
           The people <em className="text-accent-600">on court</em> with your player
         </h1>
 
-        {/* Director — hero treatment (only when her coach record is published) */}
-        {director && (
-          <section className="mt-8 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 text-white shadow-xl ring-1 ring-white/10">
-            <div className="grid gap-0 lg:grid-cols-2">
-              <div className="min-h-[360px] bg-gradient-to-br from-brand-800 to-brand-950">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={heroImg}
-                  alt={`${director.person.firstName} ${director.person.lastName} — Director & Head Coach`}
-                  className="h-full w-full object-cover object-top"
-                />
-              </div>
-              <div className="p-8 sm:p-10">
-                <p className="eyebrow eyebrow-light">Director &amp; Head Coach</p>
-                <h2 className="display mt-2 text-3xl text-white">{director.person.firstName} {director.person.lastName}</h2>
-                {isPublic(director.publicHidden, "bio") && (
-                  <p className="mt-4 whitespace-pre-line text-brand-100">{director.bio || DIRECTOR_FALLBACK_BIO}</p>
-                )}
-                {isPublic(director.publicHidden, "credentials") && (director.rpoCertLevel || director.certifications) && (
-                  <p className="mt-3 text-sm text-brand-200">{[director.rpoCertLevel, director.certifications].filter(Boolean).join(" · ")}</p>
-                )}
-                {isPublic(director.publicHidden, "markets") && (
-                  <p className="mt-3 text-sm text-brand-200">
-                    {directorMarkets.length > 0 ? directorMarkets.join(" · ") : DIRECTOR_FALLBACK_MARKETS}
-                  </p>
-                )}
-                <Link href={`/coaches/${director.person.id}`} className="mt-6 inline-block text-sm font-semibold text-accent-300 hover:text-accent-200">
-                  View full profile →
-                </Link>
-              </div>
+        {/* Fixed hero banner — a committed page asset, always shown, not tied to
+            any coach record (see the HERO_* constants). */}
+        <section className="mt-8 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-900 via-brand-800 to-brand-950 text-white shadow-xl ring-1 ring-white/10">
+          <div className="grid gap-0 lg:grid-cols-2">
+            <div className="min-h-[360px] bg-gradient-to-br from-brand-800 to-brand-950">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={HERO_IMG}
+                alt={`${HERO_NAME} — ${HERO_EYEBROW}`}
+                className="h-full w-full object-cover object-top"
+              />
             </div>
-          </section>
-        )}
+            <div className="p-8 sm:p-10">
+              <p className="eyebrow eyebrow-light">{HERO_EYEBROW}</p>
+              <h2 className="display mt-2 text-3xl text-white">{HERO_NAME}</h2>
+              <p className="mt-4 whitespace-pre-line text-brand-100">{HERO_BIO}</p>
+              <p className="mt-3 text-sm text-brand-200">{HERO_MARKETS}</p>
+            </div>
+          </div>
+        </section>
 
-        {/* Coach grid — the full staff, each card links to a public profile.
-            The section always shows once anyone is published (incl. just the
-            Director hero), with a placeholder until more staff are published. */}
-        {(director || grid.length > 0) && (
-          <section className="mt-14 border-t border-slate-200 pt-10">
+        {/* Coach grid — the published staff, each card links to a public profile. */}
+        <section className="mt-14 border-t border-slate-200 pt-10">
             <h2 className="display text-2xl text-brand-900">Meet the coaching staff</h2>
             <p className="mt-1 text-sm text-slate-500">Tap a coach to see their background and credentials.</p>
             {grid.length === 0 ? (
@@ -145,14 +130,6 @@ export default async function CoachesPage() {
             </div>
             )}
           </section>
-        )}
-
-        {/* Nothing published yet — no hero, no staff */}
-        {!director && grid.length === 0 && (
-          <p className="mt-8 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-            Our coaches are being published for the season — check back soon.
-          </p>
-        )}
 
         {/* Trust block */}
         <section className="mt-12 rounded-2xl border border-slate-200 bg-slate-50 p-6">
