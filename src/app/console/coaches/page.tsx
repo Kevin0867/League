@@ -64,7 +64,7 @@ export default async function CoachesPage({
   // Coach relation shape shared by both sources (the profile source carries an
   // extra `person`, which is structurally assignable to this smaller type).
   type CoachRel = NonNullable<(typeof coachUsers)[number]["person"]>["coach"];
-  const byPerson = new Map<string, { person: { id: string; firstName: string; lastName: string }; coach: CoachRel }>();
+  const byPerson = new Map<string, { person: { id: string; firstName: string; lastName: string; waiverSignedAt: Date | null }; coach: CoachRel }>();
   for (const u of coachUsers) if (u.person) byPerson.set(u.person.id, { person: u.person, coach: u.person.coach });
   for (const c of coachProfiles) if (!byPerson.has(c.personId)) byPerson.set(c.personId, { person: c.person, coach: c });
   const coaches = [...byPerson.values()].sort((a, b) =>
@@ -86,7 +86,7 @@ export default async function CoachesPage({
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
       {sp.ok && (
         <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">
-          {sp.ok === "profile" ? "Coach profile updated." : sp.ok === "publish" ? "Public site visibility updated." : "Account created."}
+          {sp.ok === "profile" ? "Coach profile updated." : sp.ok === "publish" ? "Public site visibility updated." : sp.ok === "waiverSent" ? "Waiver request sent to the coach." : "Account created."}
         </p>
       )}
       {sp.err && (
@@ -138,6 +138,7 @@ export default async function CoachesPage({
               <th>Public site</th>
               <th className="hidden lg:table-cell">Cert</th>
               <th className="hidden sm:table-cell">Screening</th>
+              <th>Waiver</th>
               <th>Availability</th>
               <th className="hidden md:table-cell">Teams</th>
               <th className="hidden lg:table-cell">Recruited</th>
@@ -185,6 +186,20 @@ export default async function CoachesPage({
                       : <span className="badge bg-amber-100 text-amber-800" title={gate.reasons.join(", ")}>{gate.reasons.length} issue{gate.reasons.length > 1 ? "s" : ""}</span>}
                   </td>
                   <td>
+                    {person.waiverSignedAt ? (
+                      <span className="badge bg-emerald-100 text-emerald-800" title={`Signed ${person.waiverSignedAt.toISOString().slice(0, 10)}`}>signed</span>
+                    ) : (
+                      <form method="POST" action="/api/console/coaches" className="flex items-center gap-2">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="sendWaiver" />
+                        <input type="hidden" name="personId" value={person.id} />
+                        <input type="hidden" name="returnTo" value="/console/coaches" />
+                        <span className="badge bg-amber-100 text-amber-800">not signed</span>
+                        <button className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">Send waiver</button>
+                      </form>
+                    )}
+                  </td>
+                  <td>
                     {avail.complete
                       ? <span className="badge bg-emerald-100 text-emerald-800">complete</span>
                       : <span className="badge bg-amber-100 text-amber-800" title={`Missing: ${avail.missing.join(", ")}`}>needs {avail.missing.join(" + ")}</span>}
@@ -198,9 +213,9 @@ export default async function CoachesPage({
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={7} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
-            <tr data-filter-empty hidden><td colSpan={7} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
+            <tr data-filter-empty hidden><td colSpan={8} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
           </tbody>
         </table>
       </div>

@@ -6,6 +6,9 @@ import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
 import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
 import { appUrl } from "@/lib/stripe";
+import { signWaiverToken } from "@/lib/domain/waiverRenewal";
+import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
+import { dispatchMessage } from "@/lib/messaging";
 import type { Role } from "@/lib/enums";
 
 // Staff/coach account creation as a native-form-POST route handler with ticket
@@ -56,6 +59,35 @@ export async function POST(req: Request) {
   const op = String(formData.get("op") ?? "");
 
   switch (op) {
+    // Send a coach their participation waiver — a tokenized, no-login link to
+    // the same /waiver/sign flow players use. Coaches sign for themselves (adult,
+    // no parental consent). Recorded on their Person like any other waiver.
+    case "sendWaiver": {
+      if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      const person = await prisma.person.findUnique({
+        where: { id: personId },
+        select: { id: true, firstName: true, isMinor: true },
+      });
+      if (!person) return back("?err=notfound");
+      const token = await signWaiverToken(person.id);
+      const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
+      const email = waiverRequestEmail({ name: person.firstName, link, isMinor: person.isMinor });
+      await dispatchMessage({
+        senderId: actor.userId,
+        seasonId: null,
+        audienceType: "SINGLE_PERSON",
+        audienceRef: person.id,
+        channels: ["IN_APP", "EMAIL"],
+        triggerType: "WAIVER_REQUEST",
+        subject: email.subject,
+        body: email.text,
+        html: email.html,
+      });
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "WAIVER_REQUESTED", summary: "Coach waiver request sent" });
+      return back("?ok=waiverSent");
+    }
+
     // Show/hide a coach on the public /coaches page.
     case "togglePublish": {
       if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
