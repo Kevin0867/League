@@ -88,15 +88,33 @@ export async function POST(req: Request) {
     acpLeagueOption: formData.get("acpLeagueOption") === "on",
   };
 
+  // Parallel arrays from the availability rows — keep only complete blocks.
+  const days = formData.getAll("availDay").map(String);
+  const starts = formData.getAll("availStart").map(String);
+  const ends = formData.getAll("availEnd").map(String);
+  const courts = formData.getAll("availCourts").map(String);
+  const courtBlocks = days
+    .map((d, i) => ({
+      dayOfWeek: d.trim(),
+      startTime: (starts[i] ?? "").trim(),
+      endTime: (ends[i] ?? "").trim(),
+      courtCount: parseInt(courts[i] ?? "1", 10) || 1,
+    }))
+    .filter((b) => b.dayOfWeek && b.startTime && b.endTime);
+
   if (op === "edit") {
     const facilityId = String(formData.get("facilityId") ?? "");
     if (!facilityId) return back("?err=name");
     await prisma.facility.update({ where: { id: facilityId }, data });
+    // Replace the availability set wholesale from what the form submitted.
+    await prisma.courtBlock.deleteMany({ where: { facilityId } });
+    if (courtBlocks.length) await prisma.courtBlock.createMany({ data: courtBlocks.map((b) => ({ ...b, facilityId })) });
     await audit({ actorId: actor.userId, entityType: "Facility", entityId: facilityId, action: "facility.update", summary: `Edited facility ${name}` });
     return back("?ok=edited");
   }
 
   const facility = await prisma.facility.create({ data });
+  if (courtBlocks.length) await prisma.courtBlock.createMany({ data: courtBlocks.map((b) => ({ ...b, facilityId: facility.id })) });
   await audit({ actorId: actor.userId, entityType: "Facility", entityId: facility.id, action: "facility.create", summary: `Created facility ${name}` });
   return back("?added=1");
 }
