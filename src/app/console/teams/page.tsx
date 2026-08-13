@@ -35,6 +35,10 @@ export default async function TeamBuildBoard({
       coach: { include: { person: true } },
       facility: true,
       division: true,
+      members: {
+        include: { person: { select: { firstName: true, lastName: true } } },
+        orderBy: { joinedAt: "asc" },
+      },
     },
     orderBy: [{ market: "asc" }, { name: "asc" }],
   });
@@ -149,7 +153,7 @@ export default async function TeamBuildBoard({
             const roster = rosterStatus(t._count.members, t.coachPlays);
             const publish = canPublishTeam(t, t.facility);
             return (
-              <div key={t.id} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""}`} className="card transition-shadow hover:shadow-md">
+              <div key={t.id} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""} ${t.members.map((m) => `${m.person.firstName} ${m.person.lastName}`).join(" ")}`} className="card transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div>
                     <Link href={`/console/teams/${t.id}`} className="font-semibold text-slate-900 hover:text-brand-700">{t.name}</Link>
@@ -188,6 +192,19 @@ export default async function TeamBuildBoard({
                       style={{ width: `${Math.min(100, (roster.effective / TEAM_CAP) * 100)}%` }}
                     />
                   </div>
+                  {/* The players themselves, right on the card — no need to open
+                      the team to see who's on it. */}
+                  {t.members.length > 0 ? (
+                    <ul className="mt-2 flex flex-wrap gap-1.5">
+                      {t.members.map((m) => (
+                        <li key={m.personId} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                          {m.person.firstName} {m.person.lastName}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-400">No players yet.</p>
+                  )}
                 </div>
 
                 {/* Gates */}
