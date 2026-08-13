@@ -5,6 +5,7 @@ import { formatTime12 } from "@/lib/time";
 import { formatCents } from "@/lib/money";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
+import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { CopyLink } from "@/components/CopyLink";
 
 function parseMarkets(json: string | null): string[] {
@@ -75,11 +76,20 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
   const hasCert = !!(coach?.rpoCertLevel || coach?.certifications);
   const gate = coach ? coachAssignmentGate(coach) : { ok: false, reasons: ["profile not set up"] };
 
+  // Coaches complete the same participation waiver as players — signed for
+  // themselves via a tokenized, no-login link. Minted only while unsigned.
+  const person = await prisma.person.findUnique({ where: { id: personId }, select: { waiverSignedAt: true } });
+  const waiverSigned = !!person?.waiverSignedAt;
+  const waiverLink = waiverSigned
+    ? "/console/profile"
+    : `/waiver/sign?token=${encodeURIComponent(await signWaiverToken(personId))}`;
+
   const steps = [
     { done: hasCert, label: "Add your certification & coaching background", href: "/console/profile" },
     { done: hasLocations, label: "Set the locations you can coach", href: "/console/profile" },
     { done: hasDayTimes, label: "Set your day & time availability", href: "/console/profile" },
     { done: gate.ok, label: "Screening cleared (background check)", href: "/console/profile" },
+    { done: waiverSigned, label: "Complete your participation waiver", href: waiverLink },
   ];
   const nextIdx = steps.findIndex((s) => !s.done);
 
