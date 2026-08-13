@@ -122,12 +122,34 @@ function computeAge(dobStr: string | null): number | null {
   return age;
 }
 
+// First non-empty value from any column whose header contains ALL the given
+// keywords (case-insensitive). Tolerant of the exact CSV wording — matches
+// "Parent Email", "Parent Email Address", "Parent/Guardian Email", etc.
+function pickContact(rec: Record<string, string>, keywords: string[]): string {
+  for (const [k, v] of Object.entries(rec)) {
+    const key = k.toLowerCase();
+    if (keywords.every((w) => key.includes(w))) {
+      const val = (v ?? "").trim();
+      if (val) return val;
+    }
+  }
+  return "";
+}
+
 /** Map one CSV record (header→value) into a MappedEnrollment. */
 export function mapEnrollmentRow(rec: Record<string, string>): MappedEnrollment | null {
   const firstName = (rec["First Name"] ?? "").trim();
   const lastName = (rec["Last Name"] ?? "").trim();
-  const email = (rec["Email Address"] ?? "").trim().toLowerCase() || null;
-  const phone = (rec["Phone Number"] ?? "").trim() || null;
+  const ownEmail = (rec["Email Address"] ?? "").trim().toLowerCase() || null;
+  const ownPhone = (rec["Phone Number"] ?? "").trim() || null;
+  // Fall back to the parent/guardian contact when the registrant has none of
+  // their own — otherwise youth entries (whose own Email/Phone cells are blank,
+  // with the contact living under the Parent columns) get dropped as
+  // unidentifiable. Parent info becomes the default contact for those rows.
+  const parentEmail = (pickContact(rec, ["parent", "email"]) || pickContact(rec, ["guardian", "email"])).toLowerCase() || null;
+  const parentPhone = pickContact(rec, ["parent", "phone"]) || pickContact(rec, ["guardian", "phone"]) || null;
+  const email = ownEmail ?? parentEmail;
+  const phone = ownPhone ?? parentPhone;
   if (!firstName || !lastName || (!email && !phone)) return null;
 
   const program = rec["Program"] ?? "";
