@@ -70,15 +70,27 @@ export async function POST(req: Request) {
   const userId = String(fd.get("userId") ?? "");
   if (!userId) return back("?err=fields");
 
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, personId: true } });
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, extraRoles: true, personId: true } });
   if (!target) return back("?err=notfound");
-  // Never let someone change their own access (avoid self-lockout).
-  if (target.id === actor.userId) return back("?err=self");
+  const isSelf = target.id === actor.userId;
+
+  // Would removing admin from this target leave the org with zero admins? Used to
+  // guard role changes — admins may adjust anyone's access (including their own),
+  // but not strip the last admin and lock everyone out.
+  async function wouldOrphanAdmins(keepsAdmin: boolean): Promise<boolean> {
+    if (keepsAdmin) return false;
+    const targetIsAdmin = [target!.role, ...target!.extraRoles].some((r) => ADMIN_ROLES.includes(r as never));
+    if (!targetIsAdmin) return false;
+    const all = await prisma.user.findMany({ where: { active: true }, select: { id: true, role: true, extraRoles: true } });
+    const admins = all.filter((a) => [a.role, ...a.extraRoles].some((r) => ADMIN_ROLES.includes(r as never)));
+    return admins.length <= 1;
+  }
 
   switch (op) {
     case "setRole": {
       const role = String(fd.get("role") ?? "");
       if (!ASSIGNABLE.includes(role)) return back("?err=role");
+      if (await wouldOrphanAdmins(role === "ADMIN")) return back("?err=lastadmin");
 
       await prisma.user.update({ where: { id: userId }, data: { role, extraRoles: [] } });
 
@@ -97,6 +109,7 @@ export async function POST(req: Request) {
     case "setRoles": {
       const chosen = fd.getAll("roles").map(String).filter((r) => ASSIGNABLE.includes(r)) as Role[];
       if (chosen.length === 0) return back("?err=role");
+      if (await wouldOrphanAdmins(chosen.includes("ADMIN" as Role))) return back("?err=lastadmin");
       const { role, extraRoles } = splitRoles(chosen);
 
       await prisma.user.update({ where: { id: userId }, data: { role, extraRoles } });
@@ -112,6 +125,8 @@ export async function POST(req: Request) {
 
     case "toggleActive": {
       const active = String(fd.get("active") ?? "") === "true";
+      // Don't let someone disable their own login out from under themselves.
+      if (isSelf && !active) return back("?err=self");
       await prisma.user.update({ where: { id: userId }, data: { active } });
       await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.toggleActive", summary: active ? "Enabled" : "Disabled" });
       return back("?ok=active");
@@ -176,6 +191,7 @@ export async function POST(req: Request) {
     // org can't delete its last admin and lock everyone out (self is already
     // blocked above).
     case "deleteUser": {
+      if (isSelf) return back("?err=self");
       const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, extraRoles: true, email: true } });
       if (!u) return back("?err=notfound");
       const targetIsAdmin = [u.role, ...u.extraRoles].some((r) => ADMIN_ROLES.includes(r as never));
