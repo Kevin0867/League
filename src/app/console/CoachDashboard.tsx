@@ -79,7 +79,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
     { done: hasCert, label: "Add your certification & coaching background", href: "/console/profile" },
     { done: hasLocations, label: "Set the locations you can coach", href: "/console/profile" },
     { done: hasDayTimes, label: "Set your day & time availability", href: "/console/profile" },
-    { done: gate.ok, label: "Screening cleared (background check + onboarding)", href: "/console/profile" },
+    { done: gate.ok, label: "Screening cleared (background check)", href: "/console/profile" },
   ];
   const nextIdx = steps.findIndex((s) => !s.done);
 

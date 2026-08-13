@@ -30,7 +30,6 @@ export default async function CompliancePage() {
     (c) => c.backgroundCheckExpiry && c.backgroundCheckExpiry <= in30
   );
   const bgMissing = coaches.filter((c) => !c.backgroundCheckDate);
-  const onboardingMissing = coaches.filter((c) => !c.onboardingCompletedAt);
 
   return (
     <div className="space-y-6">
@@ -42,7 +41,6 @@ export default async function CompliancePage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Waivers outstanding" value={peopleNoWaiver.length} warn={peopleNoWaiver.length > 0} />
         <Metric label="Background checks expired / expiring (30d)" value={bgExpiring.length} warn={bgExpiring.length > 0} />
-        <Metric label="Coaches without onboarding" value={onboardingMissing.length} warn={onboardingMissing.length > 0} />
         <Metric label="Unverified DUPR IDs" value={unverifiedDupr} warn={unverifiedDupr > 0} />
       </div>
 
@@ -71,7 +69,7 @@ export default async function CompliancePage() {
           )}
         </Panel>
 
-        <Panel title="Coach screening gate" subtitle="No team assignment without background check + onboarding (§5).">
+        <Panel title="Coach screening gate" subtitle="No team assignment without a completed background check (§5).">
           {coaches.length === 0 ? (
             <Ok text="No coaches on file yet." />
           ) : (
@@ -81,7 +79,6 @@ export default async function CompliancePage() {
                 if (!c.backgroundCheckDate) issues.push("no background check");
                 else if (c.backgroundCheckExpiry && c.backgroundCheckExpiry <= now) issues.push("bg check expired");
                 else if (c.backgroundCheckExpiry && c.backgroundCheckExpiry <= in30) issues.push("bg check expiring");
-                if (!c.onboardingCompletedAt) issues.push("onboarding incomplete");
                 return (
                   <li key={c.id} className="flex items-center justify-between py-2">
                     <Link href={`/console/coaches/${c.person.id}`} className="font-medium text-slate-700 hover:text-brand-700 hover:underline">

@@ -39,7 +39,6 @@ export function CoachProfileForm({
     backgroundCheck: boolean;
     backgroundCheckDate: string;
     backgroundCheckCompany: string;
-    onboarding: boolean;
   };
   /** Admin-only compensation. Present only in the admin edit context, so a
    *  coach editing their own profile never sees (or can post) pay fields. */
@@ -157,14 +156,6 @@ export function CoachProfileForm({
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
-          </div>
-          <div>
-            <label className="label">Curriculum onboarding</label>
-            <select name="onboarding" className="input" defaultValue={initial.onboarding ? "yes" : "no"}>
-              <option value="no">Not complete</option>
-              <option value="yes">Complete</option>
-            </select>
-            <p className="mt-1 text-xs text-slate-400">A completed background check and onboarding are both required before a coach can be assigned to a team.</p>
           </div>
           {bgCheck && (
             <>

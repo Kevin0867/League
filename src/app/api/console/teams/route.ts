@@ -67,7 +67,7 @@ export async function POST(req: Request) {
 
       const coachId = g("coachId");
       const force = String(formData.get("force") ?? "") === "1";
-      // Coach screening hard gate (§5): no assignment without background check + onboarding.
+      // Coach screening hard gate (§5): no assignment without background check.
       if (coachId) {
         const coach = await prisma.coach.findUnique({ where: { id: coachId } });
         if (!coach) return back("?err=coach");

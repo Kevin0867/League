@@ -14,7 +14,7 @@ const OK: Record<string, string> = {
 const ERR: Record<string, string> = {
   auth: "Not authorized.",
   team: "Team not found.",
-  coach: "That coach can't be assigned — not cleared (background check + onboarding required).",
+  coach: "That coach can't be assigned — not cleared (background check required).",
   coachclash: "That coach already coaches another team at this day/time — pick a non-overlapping slot.",
 };
 
@@ -213,7 +213,7 @@ export default async function MatchingPage({
         <p className="text-xs text-slate-400">
           Coaches set their locations, levels, and day/time availability in their profile. A program shows{" "}
           <span className="font-medium">✓location</span> / <span className="font-medium">✓day</span> where the coach fits.
-          Only cleared coaches (background check + onboarding) can be assigned.
+          Only cleared coaches (background check) can be assigned.
         </p>
       </section>
     </div>

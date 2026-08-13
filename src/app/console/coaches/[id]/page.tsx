@@ -171,7 +171,7 @@ export default async function EditCoachPage({
       )}
       {err === "coach" && (
         <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          Couldn&apos;t assign — the coach isn&apos;t cleared for assignment yet (background check + onboarding).
+          Couldn&apos;t assign — the coach isn&apos;t cleared for assignment yet (background check).
         </div>
       )}
 
@@ -211,7 +211,7 @@ export default async function EditCoachPage({
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">Save the coach&apos;s profile first to enable team assignment.</p>
         ) : !gate.ok ? (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Not cleared for assignment yet: {gate.reasons.join(", ")}. Set the background check and curriculum onboarding in the <strong>Screening &amp; compliance</strong> section below, then save.
+            Not cleared for assignment yet: {gate.reasons.join(", ")}. Record the background check in the <strong>Screening &amp; compliance</strong> section below, then save.
           </p>
         ) : openTeams.length === 0 ? (
           <p className="text-sm text-slate-400">No teams are waiting for a head coach right now.</p>
@@ -261,7 +261,6 @@ export default async function EditCoachPage({
           backgroundCheck: !!coach?.backgroundCheckDate,
           backgroundCheckDate: coach?.backgroundCheckDate ? new Date(coach.backgroundCheckDate).toISOString().slice(0, 10) : "",
           backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
-          onboarding: !!coach?.onboardingCompletedAt,
         }}
         pay={{
           seasonRate: coach?.seasonPayCents != null ? (coach.seasonPayCents / 100).toFixed(2) : "",
