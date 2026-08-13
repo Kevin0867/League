@@ -4,6 +4,7 @@ import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { isPublic } from "@/lib/domain/coachPublic";
+import { effectiveRoles } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,7 @@ export default async function CoachesPage() {
   // HERO_* constants), so it no longer depends on a coach record existing.
   const coaches = await prisma.coach.findMany({
     where: { publishedOnSite: true },
-    include: { person: true },
+    include: { person: { include: { user: true } } },
     orderBy: { person: { firstName: "asc" } },
   });
   // Keep the featured Director out of the staff grid so she isn't shown twice
@@ -54,7 +55,15 @@ export default async function CoachesPage() {
   const isDirector = (c: (typeof coaches)[number]) => norm(`${c.person.firstName} ${c.person.lastName}`) === norm(HERO_NAME);
   const isComplete = (c: (typeof coaches)[number]) =>
     !!c.person.imageUrl && parseMarkets(c.marketsCovered).length > 0 && !!(c.coachingLevels && c.coachingLevels.trim());
-  const grid = coaches.filter((c) => !isDirector(c) && isComplete(c));
+  // Only actual coaches appear: if the person holds a login, it must carry the
+  // COACH role — so unchecking Coach on the Access page removes them here. A
+  // published coach with NO login (e.g. a seeded record) stays governed by the
+  // publish toggle alone, so we don't hide anyone who simply never got an account.
+  const hasCoachRole = (c: (typeof coaches)[number]) => {
+    const u = c.person.user;
+    return !u || effectiveRoles(u).includes("COACH");
+  };
+  const grid = coaches.filter((c) => !isDirector(c) && isComplete(c) && hasCoachRole(c));
 
   return (
     <div>

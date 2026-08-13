@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { TableFilter } from "@/components/TableFilter";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, effectiveRoles, type Role } from "@/lib/enums";
+import { LoginStatus } from "@/components/LoginStatus";
 import { requireAdmin } from "@/lib/rbac";
 
 // De-duplicated, human labels for a role set (legacy COO/CEO/DIRECTOR all show
@@ -103,7 +104,7 @@ export default async function UsersPage({
               <th className="px-4 py-3">Name</th>
               <th className="hidden px-4 py-3 sm:table-cell">Email</th>
               <th className="px-4 py-3">Role</th>
-              <th className="hidden px-4 py-3 sm:table-cell">Status</th>
+              <th className="hidden px-4 py-3 sm:table-cell">Login activity</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -150,10 +151,7 @@ export default async function UsersPage({
                     )}
                   </td>
                   <td className="hidden px-4 py-3 sm:table-cell">
-                    <span className={`rounded px-2 py-1 text-xs font-medium ${u.active ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                      {u.active ? "Active" : "Disabled"}
-                    </span>
-                    {!u.lastLoginAt && <span className="ml-2 text-xs text-amber-600" title="Hasn't set a password / signed in yet">invited</span>}
+                    <LoginStatus lastLoginAt={u.lastLoginAt} active={u.active} />
                   </td>
                   <td className="px-4 py-3 text-right align-top">
                     {isAdmin && (
