@@ -7,9 +7,9 @@ import { COACH_PUBLIC_FIELDS } from "@/lib/domain/coachPublic";
 
 // Coach profile save. Coaches edit their own; admins (manageCoaches) may edit any
 // coach by passing a `personId`. A COACH login may not yet have a Coach row
-// (accounts are created as Person+User only), so we upsert by personId. Screening
-// fields (background check + curriculum onboarding) are set from the Screening &
-// compliance section and gate whether a coach can be assigned to a team.
+// (accounts are created as Person+User only), so we upsert by personId. The
+// background check set in the Screening & compliance section gates whether a
+// coach can be assigned to a team.
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
@@ -63,9 +63,6 @@ export async function POST(req: Request) {
   const markets = list("market").filter(Boolean);
   const bgChecked = g("bgCheck") === "yes";
   const bgDate = g("bgDate");
-  // Preserve the original onboarding-completion timestamp; only stamp "now" the
-  // first time it's marked complete, and clear it if unset.
-  const existing = await prisma.coach.findUnique({ where: { personId }, select: { onboardingCompletedAt: true } });
   const data: Record<string, unknown> = {
     rpoCertLevel: g("rpoCertLevel") || null,
     certifications: g("certifications") || null,
@@ -75,7 +72,6 @@ export async function POST(req: Request) {
     safeSportCertified: g("safeSport") === "yes",
     backgroundCheckDate: bgChecked && bgDate ? new Date(bgDate) : bgChecked ? new Date() : null,
     backgroundCheckCompany: bgChecked ? (g("bgCompany") || null) : null,
-    onboardingCompletedAt: g("onboarding") === "yes" ? (existing?.onboardingCompletedAt ?? new Date()) : null,
     // Public-profile visibility: the form submits the fields to SHOW; anything
     // not checked is hidden. Only written when the visibility section rendered.
     ...(g("pubVisible") === "1"

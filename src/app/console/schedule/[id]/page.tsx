@@ -27,7 +27,7 @@ const ERR_LABEL: Record<string, string> = {
   auth: "You are not authorized to perform that action.",
   session: "Session not found.",
   facility: "Choose a facility to relocate to.",
-  coachgate: "That coach isn't cleared to be assigned (background check + onboarding required).",
+  coachgate: "That coach isn't cleared to be assigned (background check required).",
   subclash: "That coach already covers another class at this time. Use “add anyway” to override.",
   op: "Unknown action.",
 };

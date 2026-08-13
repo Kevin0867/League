@@ -85,17 +85,15 @@ export function canPublishTeam(
 
 /**
  * Coach assignment hard gate (§5): no coach is assigned to a team without a
- * completed background check (unexpired) and curriculum onboarding.
+ * completed, unexpired background check.
  */
 export function coachAssignmentGate(coach: {
   backgroundCheckDate: Date | null;
   backgroundCheckExpiry: Date | null;
-  onboardingCompletedAt: Date | null;
 }): { ok: boolean; reasons: string[] } {
   const reasons: string[] = [];
   if (!coach.backgroundCheckDate) reasons.push("no background check on file");
   if (coach.backgroundCheckExpiry && coach.backgroundCheckExpiry < new Date())
     reasons.push("background check expired");
-  if (!coach.onboardingCompletedAt) reasons.push("curriculum onboarding incomplete");
   return { ok: reasons.length === 0, reasons };
 }

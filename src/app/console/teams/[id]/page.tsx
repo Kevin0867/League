@@ -27,8 +27,8 @@ const OK_MSG: Record<string, string> = {
 const ERR_MSG: Record<string, string> = {
   auth: "Not authorized to manage teams.",
   team: "Missing team.",
-  coach: "Cannot assign this coach — not cleared (background check + onboarding required).",
-  coachgate: "Cannot add this coach — not cleared (background check + onboarding required).",
+  coach: "Cannot assign this coach — not cleared (background check required).",
+  coachgate: "Cannot add this coach — not cleared (background check required).",
   coachishead: "That coach is already the head coach of this team.",
   coachclash: "That coach already coaches another team at this day/time. Pick a non-overlapping slot or use “add anyway.”",
   player: "Missing player.",
