@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
+import { formatTime12 } from "@/lib/time";
 import { TableFilter } from "@/components/TableFilter";
 import { FacilityForm, DeleteFacilityButton } from "./FacilityForm";
 import { requireAdmin } from "@/lib/rbac";
@@ -15,6 +16,8 @@ const FEE_LABEL: Record<string, string> = {
   PER_SESSION: "Per session",
   PERCENTAGE: "Percentage of on-site revenue",
 };
+
+const DAY_LABEL: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
 
 const NEXT_ACTION: Record<string, string> = {
   IDENTIFIED: "Make first contact",
@@ -32,7 +35,10 @@ export default async function FacilitiesPage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const allFacilities = await prisma.facility.findMany({
-    include: { _count: { select: { teams: true, sessions: true } } },
+    include: {
+      _count: { select: { teams: true, sessions: true } },
+      courtBlocks: { orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] },
+    },
     orderBy: [{ agreementStatus: "asc" }, { name: "asc" }],
   });
   const facilities = allFacilities.filter((f) => !f.archived);
@@ -124,6 +130,20 @@ export default async function FacilitiesPage({
                   />
                 </dl>
 
+                {f.courtBlocks.length > 0 && (
+                  <div className="border-t border-slate-100 pt-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</div>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {f.courtBlocks.map((b) => (
+                        <span key={b.id} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {DAY_LABEL[b.dayOfWeek] ?? b.dayOfWeek} {formatTime12(b.startTime)}–{formatTime12(b.endTime)}
+                          {b.courtCount > 1 ? ` · ${b.courtCount} courts` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                   <FacilityForm
                     ticket={ticket}
@@ -135,6 +155,7 @@ export default async function FacilitiesPage({
                       contactEmail: f.contactEmail, contactPhone: f.contactPhone, isPrivate: f.isPrivate,
                       generalArea: f.generalArea, exactAddress: f.exactAddress,
                       alaCarteAllowed: f.alaCarteAllowed, acpLeagueOption: f.acpLeagueOption,
+                      courtBlocks: f.courtBlocks.map((b) => ({ dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime, courtCount: b.courtCount })),
                     }}
                   />
                   <div className="flex items-center gap-3">
