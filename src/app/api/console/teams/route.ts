@@ -8,6 +8,11 @@ import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { accrueFamilySeasonFee } from "@/lib/payments/familyFee";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
+import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
+import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
+import { signWaiverToken } from "@/lib/domain/waiverRenewal";
+import { appUrl } from "@/lib/stripe";
+import { formatTime12 } from "@/lib/time";
 
 // Team mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -316,6 +321,86 @@ export async function POST(req: Request) {
       });
 
       return back("?ok=requestSeasonFees");
+    }
+
+    // LAUNCH — deliberate welcome/placement to the whole team. This is the send
+    // that used to fire automatically on assignment; it now happens only when an
+    // admin chooses to launch, so families hear from us on our schedule, not on
+    // every roster move. Coach-players are skipped.
+    case "sendTeamWelcome": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const team = await prisma.team.findUnique({
+        where: { id: teamId },
+        include: { facility: true, coach: { include: { person: true } }, members: { include: { person: true } } },
+      });
+      if (!team) return back("?err=notfound");
+      const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
+      const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
+      const practiceWhen = team.dayOfWeek
+        ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
+        : "A day and time to be confirmed";
+      let sent = 0;
+      for (const m of team.members) {
+        if (m.roleOnTeam === "COACH_PLAYER") continue;
+        const email = teamAssignmentEmail({
+          name: m.person.firstName,
+          teamId: team.id,
+          teamName: team.name,
+          coachName,
+          coachContact,
+          locationName: team.facility?.name ?? "To be confirmed",
+          locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
+          practiceWhen,
+        });
+        await dispatchMessage({
+          senderId: actor.userId,
+          seasonId: team.seasonId,
+          audienceType: "SINGLE_PERSON",
+          audienceRef: m.personId,
+          channels: ["IN_APP", "EMAIL"],
+          triggerType: "TEAM_ASSIGNMENT",
+          subject: email.subject,
+          body: email.text,
+          html: email.html,
+        });
+        sent++;
+      }
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "NOTIFY", summary: `Sent welcome/placement to ${sent} member(s)` });
+      return back(`?ok=welcome&n=${sent}`);
+    }
+
+    // LAUNCH — waiver requests to rostered players who haven't signed. Tokenized
+    // no-login links to the same /waiver/sign flow. Already-signed players and
+    // coach-players are skipped.
+    case "sendTeamWaivers": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const team = await prisma.team.findUnique({
+        where: { id: teamId },
+        include: { members: { include: { person: true } } },
+      });
+      if (!team) return back("?err=notfound");
+      let sent = 0;
+      for (const m of team.members) {
+        if (m.roleOnTeam === "COACH_PLAYER") continue;
+        if (m.person.waiverSignedAt) continue;
+        const token = await signWaiverToken(m.personId);
+        const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
+        const email = waiverRequestEmail({ name: m.person.firstName, link, isMinor: m.person.isMinor });
+        await dispatchMessage({
+          senderId: actor.userId,
+          seasonId: team.seasonId,
+          audienceType: "SINGLE_PERSON",
+          audienceRef: m.personId,
+          channels: ["IN_APP", "EMAIL"],
+          triggerType: "WAIVER_REQUEST",
+          subject: email.subject,
+          body: email.text,
+          html: email.html,
+        });
+        sent++;
+      }
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "WAIVER_REQUESTED", summary: `Sent waiver request to ${sent} team member(s)` });
+      return back(`?ok=waivers&n=${sent}`);
     }
 
     case "unpublishTeam": {

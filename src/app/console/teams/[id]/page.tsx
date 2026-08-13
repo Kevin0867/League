@@ -19,6 +19,8 @@ const OK_MSG: Record<string, string> = {
   publishTeam: "Team published to families.",
   unpublishTeam: "Team unpublished.",
   requestSeasonFees: "Season fee requests sent.",
+  welcome: "Welcome / placement email sent to the team.",
+  waivers: "Waiver requests sent to players who hadn't signed.",
   resentAll: "Fee reminders resent to unpaid players.",
   addTeamCoach: "Coach added to the team.",
   removeTeamCoach: "Coach removed from the team.",
@@ -80,6 +82,13 @@ export default async function TeamDetailPage({
   const paidOrRequested = new Set(existingFees.map((p) => p.partyId));
   const feesToRequest = memberIds.filter((id) => !paidOrRequested.has(id)).length;
 
+  // Launch readiness + how many players still need a waiver (coach-players skip).
+  const waiversNeeded = team.members.filter((m) => m.roleOnTeam !== "COACH_PLAYER" && !m.person.waiverSignedAt).length;
+  const hasCoach = !!team.coachId;
+  const hasFacility = !!team.facilityId;
+  const hasDayTime = !!(team.dayOfWeek && team.startTime);
+  const readyToLaunch = hasCoach && hasFacility && hasDayTime && roster.meetsMinimum;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -108,6 +117,83 @@ export default async function TeamDetailPage({
       {imgerr && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{imgerr === "auth" ? "Not authorized to change this team's photo." : imgerr}</div>
       )}
+
+      {/* LAUNCH — the deliberate go-live. Assigning players messages no one;
+          families hear from us only when an admin sends from here. */}
+      <div className="card border-l-4 border-brand-500">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-slate-900">Launch this team</h2>
+          {readyToLaunch ? (
+            <span className="badge bg-emerald-100 text-emerald-800">ready to launch</span>
+          ) : (
+            <span className="badge bg-amber-100 text-amber-800">finish setup first</span>
+          )}
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          Assigning players never messages anyone. When the team is set — coach, facility, day/time, and roster —
+          send the welcome, request season fees, and request waivers here, deliberately. You control who and when.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <ReadyChip ok={hasCoach} label="Coach" />
+          <ReadyChip ok={hasFacility} label="Facility" />
+          <ReadyChip ok={hasDayTime} label="Day / time" />
+          <ReadyChip ok={roster.meetsMinimum} label={roster.meetsMinimum ? `Roster ${roster.effective}` : `Roster · need ${roster.needed}`} />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">1 · Welcome</div>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">Placement email: team, coach, location, day &amp; time.</p>
+            {team.members.length === 0 ? (
+              <span className="text-xs text-slate-400">No players yet.</span>
+            ) : (
+              <ConfirmSubmit
+                action="/api/console/teams"
+                fields={{ ticket, op: "sendTeamWelcome", teamId: team.id }}
+                confirm={`Send the welcome / placement email to all ${team.members.length} player${team.members.length > 1 ? "s" : ""} on "${team.name}"?`}
+                label="Send welcome"
+                className="btn-secondary w-full text-sm"
+              />
+            )}
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">2 · Season fee</div>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">{feesToRequest === 0 ? "All players billed." : `${feesToRequest} not yet billed.`}</p>
+            {team.members.length === 0 ? (
+              <span className="text-xs text-slate-400">No players yet.</span>
+            ) : feesToRequest === 0 ? (
+              <span className="text-xs font-medium text-emerald-700">✓ Done</span>
+            ) : (
+              <ConfirmSubmit
+                action="/api/console/teams"
+                fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
+                confirm={`Email the season fee request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}?`}
+                label={`Request fees (${feesToRequest})`}
+                className="btn-secondary w-full text-sm"
+              />
+            )}
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">3 · Waiver</div>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">{waiversNeeded === 0 ? "All players signed." : `${waiversNeeded} not signed.`}</p>
+            {team.members.length === 0 ? (
+              <span className="text-xs text-slate-400">No players yet.</span>
+            ) : waiversNeeded === 0 ? (
+              <span className="text-xs font-medium text-emerald-700">✓ Done</span>
+            ) : (
+              <ConfirmSubmit
+                action="/api/console/teams"
+                fields={{ ticket, op: "sendTeamWaivers", teamId: team.id }}
+                confirm={`Send a waiver request to ${waiversNeeded} player${waiversNeeded > 1 ? "s" : ""} who haven't signed yet?`}
+                label={`Request waivers (${waiversNeeded})`}
+                className="btn-secondary w-full text-sm"
+              />
+            )}
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-400">Publishing the team to families is in the Publication panel below.</p>
+      </div>
 
       <div className="card">
         <h2 className="font-semibold text-slate-900">Team photo</h2>
@@ -373,6 +459,15 @@ export default async function TeamDetailPage({
         </div>
       </div>
     </div>
+  );
+}
+
+function ReadyChip({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${ok ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
+      <span>{ok ? "✓" : "○"}</span>
+      {label}
+    </span>
   );
 }
 
