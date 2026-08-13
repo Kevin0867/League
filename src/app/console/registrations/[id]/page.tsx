@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/time";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { RecipientChecklist } from "@/components/RecipientChecklist";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 // Sensitive fields are encrypted at rest and only decrypted for staff here.
 // A key mismatch yields a marker — show blank so we never re-save the marker.
@@ -333,6 +334,26 @@ export default async function RegistrationDetail({
           </dl>
         </details>
       )}
+
+      {/* Danger zone — remove the registration and pull the player off any team
+          in this season. Account, waiver, and payment history are preserved. */}
+      <div className="card border border-rose-200">
+        <h2 className="font-semibold text-rose-700">Remove registration</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Deletes this {reg.season?.name ?? "season"} registration and removes {p.firstName} from
+          {membership?.team ? ` “${membership.team.name}.”` : " any team in this season."} Their account,
+          waiver, and any payment history are kept. This can&apos;t be undone.
+        </p>
+        <div className="mt-3">
+          <ConfirmSubmit
+            action="/api/console/registrations"
+            fields={{ ticket, op: "deleteRegistration", registrationId: reg.id, personId: p.id }}
+            confirm={`Remove ${p.firstName} ${p.lastName}'s registration${membership?.team ? ` and take them off “${membership.team.name}”` : ""}? This can't be undone.`}
+            label="Remove registration"
+            className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+          />
+        </div>
+      </div>
     </div>
   );
 }
