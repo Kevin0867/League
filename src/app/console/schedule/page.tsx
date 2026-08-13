@@ -63,6 +63,11 @@ export default async function SchedulePage({
   const ungenerated = teams.filter(
     (t) => t.dayOfWeek && t.startTime && t.facilityId && t._count.sessions === 0
   );
+  // Teams that can't be generated yet because they're missing a day, time, or
+  // facility — the setup step that must come first.
+  const needSetup = teams.filter(
+    (t) => t._count.sessions === 0 && (!t.dayOfWeek || !t.startTime || !t.facilityId)
+  ).length;
 
   // Team filter — clicking a team shows only that team's sessions.
   const teamsWithSessions = teams
@@ -100,6 +105,21 @@ export default async function SchedulePage({
       {err && (
         <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{ERR_LABEL[err] ?? "Something went wrong — please try again, and contact us if it persists."}</div>
       )}
+
+      {/* What the schedule is and how it fills — shown up top so it's never a
+          mystery why the list is empty. */}
+      <div className="card border-l-4 border-brand-500">
+        <h2 className="font-semibold text-slate-900">How the schedule fills</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          This is every <span className="font-medium">practice, league match, and championship</span> session for the season. It doesn&apos;t populate on its own — you generate it per team:
+        </p>
+        <ol className="mt-3 space-y-1.5 text-sm text-slate-700">
+          <li className="flex gap-2"><span className="font-semibold text-brand-700">1.</span><span>Give each team a <span className="font-medium">day, time, and home facility</span> on the <Link href="/console/teams" className="text-brand-700 underline">Teams</Link> page.{needSetup > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">{needSetup} team{needSetup === 1 ? "" : "s"} still need this</span>}</span></li>
+          <li className="flex gap-2"><span className="font-semibold text-brand-700">2.</span><span><span className="font-medium">Generate practices</span> below — one click per team creates its six weekly practices, skipping blackout weeks (Thanksgiving is dark).{ungenerated.length > 0 && <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">{ungenerated.length} ready now</span>}</span></li>
+          <li className="flex gap-2"><span className="font-semibold text-brand-700">3.</span><span><span className="font-medium">League matches</span> are created from the <Link href="/console/league" className="text-brand-700 underline">League</Link> page once teams are entered into a league.</span></li>
+          <li className="flex gap-2"><span className="font-semibold text-brand-700">4.</span><span>Need a one-off? Use <span className="font-medium">Add practice</span> below to place a single session by hand.</span></li>
+        </ol>
+      </div>
 
       {ungenerated.length > 0 && (
         <div className="card">
