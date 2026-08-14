@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { teamMissingFields } from "@/lib/domain/teams";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getSession } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
+import { computeEnrollmentBreakdown, type BreakdownRow } from "@/lib/domain/enrollmentBreakdown";
 import { CoachDashboard } from "./CoachDashboard";
 
 export default async function ConsoleDashboard() {
@@ -36,6 +38,24 @@ export default async function ConsoleDashboard() {
   ]);
 
   const failedPayments = await prisma.payment.count({ where: { direction: "IN", status: "FAILED" } });
+
+  // Enrollment breakdown — admins only. Splits live signups by chosen location
+  // and by program/skill level (Active vs. Waitlist). Only queried for admins so
+  // non-admin staff who reach this dashboard don't pay for it.
+  const admin = !!session && isAdmin(session.roles ?? session.role);
+  const breakdown = admin
+    ? computeEnrollmentBreakdown(
+        await prisma.registration.findMany({
+          select: {
+            status: true,
+            programInterest: true,
+            skillLevel: true,
+            division: { select: { name: true } },
+            locationPrefs: { select: { marketName: true, facility: { select: { name: true, market: true } } } },
+          },
+        }),
+      )
+    : null;
 
   const completeTeams = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const publishedTeams = teams.filter((t) => t.published).length;
@@ -131,6 +151,28 @@ export default async function ConsoleDashboard() {
         <Stat label="Waivers outstanding" value={waiversOutstanding} href="/console/compliance" hint="no court-ready roster without one" tone={waiversOutstanding > 0 ? "warn" : "ok"} />
       </div>
 
+      {/* Enrollment breakdown — admins only */}
+      {breakdown && (
+        <div className="card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">Enrollment breakdown</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Based on {breakdown.base} live enrollment{breakdown.base === 1 ? "" : "s"} (withdrawn and duplicate signups
+                excluded). A signup that listed more than one location counts once under each, so the location column can add
+                up to more than the total.
+              </p>
+            </div>
+            <a href="/console/export/enrollment-breakdown" className="btn-secondary whitespace-nowrap text-sm">Export breakdown</a>
+          </div>
+
+          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+            <BreakdownTable title="By location" rows={breakdown.byLocation} unit="location" />
+            <BreakdownTable title="By program / skill level" rows={breakdown.byProgram} unit="program" />
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Team build board preview */}
         <div className="card lg:col-span-2">
@@ -198,6 +240,55 @@ function Stat({
     </div>
   );
   return href ? <Link href={href} className="block h-full">{body}</Link> : body;
+}
+
+function BreakdownTable({ title, rows, unit }: { title: string; rows: BreakdownRow[]; unit: string }) {
+  const totals = rows.reduce(
+    (acc, r) => ({ active: acc.active + r.active, waitlist: acc.waitlist + r.waitlist, total: acc.total + r.total }),
+    { active: 0, waitlist: 0, total: 0 },
+  );
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</h3>
+        <span className="text-xs text-slate-400">{rows.length} {unit}{rows.length === 1 ? "" : "s"}</span>
+      </div>
+      {rows.length === 0 ? (
+        <Empty text="No enrollments yet." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr>
+                <th className="py-1.5 pr-3 font-medium">{title.replace("By ", "")}</th>
+                <th className="px-3 text-right font-medium">Active</th>
+                <th className="px-3 text-right font-medium">Waitlist</th>
+                <th className="pl-3 text-right font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r) => (
+                <tr key={r.label}>
+                  <td className="py-1.5 pr-3 text-slate-700">{r.label}</td>
+                  <td className="px-3 text-right tabular-nums text-slate-600">{r.active}</td>
+                  <td className="px-3 text-right tabular-nums text-slate-600">{r.waitlist}</td>
+                  <td className="pl-3 text-right font-semibold tabular-nums text-slate-900">{r.total}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t-2 border-slate-200 text-sm">
+              <tr>
+                <td className="py-1.5 pr-3 text-xs font-semibold uppercase tracking-wide text-slate-400">All</td>
+                <td className="px-3 text-right tabular-nums text-slate-600">{totals.active}</td>
+                <td className="px-3 text-right tabular-nums text-slate-600">{totals.waitlist}</td>
+                <td className="pl-3 text-right font-semibold tabular-nums text-slate-900">{totals.total}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ComplianceRow({ label, value, warn }: { label: string; value: number; warn: boolean }) {
