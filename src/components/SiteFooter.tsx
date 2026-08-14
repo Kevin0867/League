@@ -17,9 +17,59 @@ const PARTNERS: { name: string; href: string; logo: string }[] = [];
 // { name: "HonorHealth", href: "https://www.honorhealth.com/medical-services/sports-medicine", logo: "/brand/partner-honorhealth.png" },
 // { name: "Wolfgang Puck Catering", href: "https://wolfgangpuckcatering.com/", logo: "/brand/partner-wolfgangpuck.png" },
 
+// Academy-specific links kept above the mirrored PURE footer, so the compliance
+// pages a paying / minor-enrolling program needs (season terms, opt-in, waiver)
+// stay one click away even though the main footer points at the parent site.
+const ACADEMY_LINKS = [
+  { label: "Programs", href: "/programs" },
+  { label: "Coaches", href: "/coaches" },
+  { label: "Teams", href: "/teams" },
+  { label: "Schedule", href: "/schedule" },
+  { label: "Standings", href: "/standings" },
+  { label: "Clinics", href: "/clinics" },
+];
+const ACADEMY_LEGAL = [
+  { label: "Season Terms & Refunds", href: "/season-terms" },
+  { label: "Email & Text Opt-in", href: "/opt-in" },
+  { label: "Participation Waiver (PDF)", href: "/waiver.pdf" },
+];
+
 export function SiteFooter() {
   return (
     <div className="mt-16">
+      {/* ===== Slim PURE Academy bar (light) — academy nav + compliance links ===== */}
+      <section className="border-t border-slate-200 bg-slate-50 px-6 py-8 md:px-14">
+        <div className="mx-auto flex max-w-[1300px] flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-xs">
+            <div className="text-sm font-extrabold uppercase tracking-wide text-brand-900">PURE Academy</div>
+            <p className="mt-1.5 text-sm text-slate-500">Team-based pickleball training across the Phoenix Valley.</p>
+            <p className="mt-2 text-sm text-slate-600">
+              <a href="mailto:team@purepickleball.com" className="hover:text-brand-700 hover:underline">team@purepickleball.com</a>
+              <span className="mx-1.5 text-slate-300">·</span>
+              <a href="tel:+12085695500" className="hover:text-brand-700 hover:underline">208.569.5500</a>
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-x-10 gap-y-4">
+            <div>
+              <div className="text-[0.7rem] font-semibold uppercase tracking-wider text-slate-400">Academy</div>
+              <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                {ACADEMY_LINKS.map((l) => (
+                  <li key={l.href}><a href={l.href} className="hover:text-brand-700 hover:underline">{l.label}</a></li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-[0.7rem] font-semibold uppercase tracking-wider text-slate-400">Season &amp; Legal</div>
+              <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                {ACADEMY_LEGAL.map((l) => (
+                  <li key={l.href}><a href={l.href} className="hover:text-brand-700 hover:underline">{l.label}</a></li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ===== Partners bar (white) — renders only when logos are hosted ===== */}
       {PARTNERS.length > 0 && (
         <section className="bg-white px-6 py-16 md:px-14">
