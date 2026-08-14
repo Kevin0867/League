@@ -20,11 +20,16 @@ export async function POST(req: Request) {
 
   // Team apparel is required for a season fee. Persist the cart (server-priced)
   // before checkout; reject if the fee needs apparel and none was chosen.
-  const payment = await prisma.payment.findUnique({ where: { id: paymentId }, select: { partyId: true, category: true } });
+  const payment = await prisma.payment.findUnique({ where: { id: paymentId }, select: { partyId: true, category: true, coveredPersonIds: true } });
   if (payment && apparelRequiredFor(payment.category)) {
-    const lines = normalizeCart(form.get("cart"));
+    const allowed = Array.isArray(payment.coveredPersonIds)
+      ? (payment.coveredPersonIds as string[])
+      : payment.partyId
+      ? [payment.partyId]
+      : [];
+    const lines = normalizeCart(form.get("cart"), allowed);
     if (lines.length === 0) return NextResponse.redirect(new URL(`/pay/${paymentId}?err=apparel`, origin), 303);
-    await saveApparelForPayment(paymentId, lines, { personId: payment.partyId });
+    await saveApparelForPayment(paymentId, lines, { personId: payment.partyId, allowedPersonIds: allowed });
   }
 
   const result = await createCheckoutRedirect({ paymentId, plan });

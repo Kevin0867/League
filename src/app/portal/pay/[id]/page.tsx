@@ -67,6 +67,17 @@ export default async function PayPage({
   const shirtCents = rate?.shirtPriceCents ?? 2500;
   const tankCents = rate?.tankPriceCents ?? 2500;
   const needsApparel = payment.category === "PLAYER_FEE";
+  const coveredIds = Array.isArray(payment.coveredPersonIds)
+    ? (payment.coveredPersonIds as string[])
+    : payment.partyId
+    ? [payment.partyId]
+    : [];
+  const apparelPlayers = coveredIds.length
+    ? (await prisma.person.findMany({ where: { id: { in: coveredIds } }, select: { id: true, firstName: true, lastName: true } })).map((p) => ({
+        id: p.id,
+        name: `${p.firstName} ${p.lastName}`,
+      }))
+    : [];
 
   return (
     <div className="mx-auto max-w-lg py-8">
@@ -99,6 +110,7 @@ export default async function PayPage({
               installmentCount={INSTALLMENT_COUNT}
               action="/api/portal"
               extraFields={{ ticket, op: "startCheckout" }}
+              players={apparelPlayers}
             />
           </div>
         ) : (

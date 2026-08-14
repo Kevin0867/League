@@ -149,9 +149,14 @@ export async function POST(req: Request) {
       // Team apparel is required for a season fee — persist the cart (server-
       // priced) before checkout; bounce back if none was chosen.
       if (apparelRequiredFor(payment.category)) {
-        const lines = normalizeCart(formData.get("cart"));
+        const allowed = Array.isArray(payment.coveredPersonIds)
+          ? (payment.coveredPersonIds as string[])
+          : payment.partyId
+          ? [payment.partyId]
+          : [];
+        const lines = normalizeCart(formData.get("cart"), allowed);
         if (lines.length === 0) return NextResponse.redirect(new URL(`/portal/pay/${payment.id}?err=apparel`, origin), 303);
-        await saveApparelForPayment(payment.id, lines, { personId: payment.partyId });
+        await saveApparelForPayment(payment.id, lines, { personId: payment.partyId, allowedPersonIds: allowed });
       }
 
       const plan = String(formData.get("plan") ?? "full") === "installments" ? "installments" : "full";

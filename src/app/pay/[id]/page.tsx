@@ -28,6 +28,22 @@ export default async function PublicPayPage({
   const shirtCents = rate?.shirtPriceCents ?? 2500;
   const tankCents = rate?.tankPriceCents ?? 2500;
 
+  // Players this invoice covers — so apparel can be tagged per child on a family
+  // invoice. coveredPersonIds lists the kids; otherwise it's the single payer.
+  const coveredIds = payment
+    ? Array.isArray(payment.coveredPersonIds)
+      ? (payment.coveredPersonIds as string[])
+      : payment.partyId
+      ? [payment.partyId]
+      : []
+    : [];
+  const players = coveredIds.length
+    ? (await prisma.person.findMany({ where: { id: { in: coveredIds } }, select: { id: true, firstName: true, lastName: true } })).map((p) => ({
+        id: p.id,
+        name: `${p.firstName} ${p.lastName}`,
+      }))
+    : [];
+
   const invalid = !payment || payment.direction !== "IN";
 
   return (
@@ -60,7 +76,7 @@ export default async function PublicPayPage({
         ) : payment!.category === "CUSTOM" || payment!.category === "ACP_ENTRY" ? (
           <OneOffPayCard payment={payment!} title="Complete your payment" fallbackDesc="PURE Academy payment" canceled={canceled} err={err} />
         ) : (
-          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} />
+          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} />
         )}
 
         <p className="mt-6 text-center text-xs text-slate-400">
@@ -141,6 +157,7 @@ function PayCard({
   err,
   shirtCents,
   tankCents,
+  players,
 }: {
   payment: { id: string; amountCents: number; description: string | null; party: { firstName: string } | null };
   plan?: string;
@@ -148,6 +165,7 @@ function PayCard({
   err?: string;
   shirtCents: number;
   tankCents: number;
+  players: { id: string; name: string }[];
 }) {
   const recommendInstall = plan === "installments";
   const forWho = payment.party?.firstName ? ` for ${payment.party.firstName}` : "";
@@ -193,6 +211,7 @@ function PayCard({
           recommendInstall={recommendInstall}
           perInstallmentCents={splitInstallments(payment.amountCents)[1]}
           installmentCount={INSTALLMENT_COUNT}
+          players={players}
         />
       </div>
     </div>

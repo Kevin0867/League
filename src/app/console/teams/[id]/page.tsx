@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } from "@/lib/domain/teams";
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
+import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
 import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -99,6 +100,21 @@ export default async function TeamDetailPage({
   const hasFacility = !!team.facilityId;
   const hasDayTime = !!(team.dayOfWeek && team.startTime);
   const readyToLaunch = hasCoach && hasFacility && hasDayTime && roster.meetsMinimum;
+
+  // Team apparel orders (what to print, and the size tally for bulk ordering).
+  const apparelItems = memberIds.length
+    ? await prisma.apparelOrderItem.findMany({
+        where: { personId: { in: memberIds } },
+        include: { payment: { select: { status: true } } },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const nameById = new Map(team.members.map((m) => [m.personId, `${m.person.firstName} ${m.person.lastName}`]));
+  // Size tally per garment for the printer, e.g. { SHIRT: { AM: 3, AL: 2 } }.
+  const tally: Record<string, Record<string, number>> = {};
+  for (const it of apparelItems) {
+    (tally[it.garment] ??= {})[it.size] = (tally[it.garment]?.[it.size] ?? 0) + it.quantity;
+  }
 
   return (
     <div className="space-y-6">
@@ -204,6 +220,47 @@ export default async function TeamDetailPage({
           </div>
         </div>
         <p className="mt-3 text-xs text-slate-400">Publishing the team to families is in the Publication panel below.</p>
+      </div>
+
+      {/* Team apparel — what each player ordered + a size tally for the printer. */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Team apparel</h2>
+        {apparelItems.length === 0 ? (
+          <p className="mt-1 text-sm text-slate-400">No apparel orders yet — they come in with each player&apos;s season-fee payment.</p>
+        ) : (
+          <div className="mt-3 space-y-4">
+            {/* Size tally for bulk ordering */}
+            <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Order tally</div>
+              <div className="mt-1 space-y-0.5 text-sm text-slate-700">
+                {Object.entries(tally).map(([g, sizes]) => (
+                  <div key={g}>
+                    <span className="font-medium">{garmentLabel(g)}:</span>{" "}
+                    {Object.entries(sizes).map(([s, n], i) => (
+                      <span key={s}>{i > 0 ? ", " : ""}{sizeLabel(s)} ×{n}</span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Per-player breakdown */}
+            <ul className="divide-y divide-slate-100 text-sm">
+              {apparelItems.map((it) => (
+                <li key={it.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="text-slate-700">
+                    <span className="font-medium text-slate-800">{nameById.get(it.personId ?? "") ?? "—"}</span>
+                    <span className="text-slate-400"> · </span>
+                    {it.quantity} × {garmentLabel(it.garment)} {sizeLabel(it.size)}
+                  </span>
+                  {it.payment.status !== "PAID" && (
+                    <span className="badge bg-amber-100 text-amber-800">{it.payment.status === "PENDING" ? "pending" : "unpaid"}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-slate-400">Full order export: Reports → Apparel orders.</p>
+          </div>
+        )}
       </div>
 
       <div className="card">
