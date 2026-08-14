@@ -21,6 +21,7 @@ const OK_MSG: Record<string, string> = {
   publishTeam: "Team published to families.",
   unpublishTeam: "Team unpublished.",
   requestSeasonFees: "Season fee + apparel requests sent. Players pick their apparel on the pay page.",
+  launched: "Team launched — one combined email (welcome + apparel & fee + waiver) sent to each family.",
   welcome: "Welcome / placement email sent to the team.",
   waivers: "Waiver requests sent to players who hadn't signed.",
   resentAll: "Fee reminders resent to unpaid players.",
@@ -167,8 +168,8 @@ export default async function TeamDetailPage({
           )}
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          Assigning players never messages anyone. When the team is set — coach, facility, day/time, and roster —
-          send the welcome, request season fees, and request waivers here, deliberately. You control who and when.
+          Assigning players never messages anyone. When the team is set, launch it — <strong>one email per family</strong>{" "}
+          with the welcome, apparel + season-fee payment, and the waiver, all together. You control who and when.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -178,7 +179,29 @@ export default async function TeamDetailPage({
           <ReadyChip ok={team.members.length > 0} label={`Roster ${roster.effective}`} />
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {/* One-click launch — the combined email. */}
+        <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Launch team — send everything</div>
+              <p className="mt-0.5 text-xs text-slate-500">One email per family: welcome + pick apparel &amp; pay the season fee + complete the waiver.</p>
+            </div>
+            {team.members.length === 0 ? (
+              <span className="text-xs text-slate-400">Add players first.</span>
+            ) : (
+              <ConfirmSubmit
+                action="/api/console/teams"
+                fields={{ ticket, op: "launchTeam", teamId: team.id }}
+                confirm={`Launch "${team.name}"? Sends one combined email (welcome + apparel & fee + waiver) to every player's family.`}
+                label="Launch team"
+                className="btn-primary text-sm"
+              />
+            )}
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">Or send individually (backup)</p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">1 · Welcome</div>
             <p className="mb-2 mt-0.5 text-xs text-slate-500">Placement email: team, coach, location, day &amp; time.</p>
