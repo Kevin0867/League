@@ -11,11 +11,11 @@
 
 const SITE = "https://purepickleball.com";
 
-// Partner logos live in /public/brand once provided; until then the bar is off.
-const PARTNERS: { name: string; href: string; logo: string }[] = [];
-// Example once assets exist:
-// { name: "HonorHealth", href: "https://www.honorhealth.com/medical-services/sports-medicine", logo: "/brand/partner-honorhealth.png" },
-// { name: "Wolfgang Puck Catering", href: "https://wolfgangpuckcatering.com/", logo: "/brand/partner-wolfgangpuck.png" },
+// Partner logos hosted in /public/brand. The bar renders when this is non-empty.
+const PARTNERS: { name: string; href: string; logo: string }[] = [
+  { name: "HonorHealth", href: "https://www.honorhealth.com/medical-services/sports-medicine", logo: "/brand/partner-honorhealth.png" },
+  { name: "Wolfgang Puck Catering", href: "https://wolfgangpuckcatering.com/", logo: "/brand/partner-wolfgangpuck.png" },
+];
 
 // Academy-specific links kept above the mirrored PURE footer, so the compliance
 // pages a paying / minor-enrolling program needs (season terms, opt-in, waiver)
