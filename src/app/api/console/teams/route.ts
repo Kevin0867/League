@@ -424,12 +424,15 @@ export async function POST(req: Request) {
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
-          audienceRef: m.personId,
-          channels: ["IN_APP", "EMAIL"],
+          // Send to the paying guardian (or the player if they're the adult) so
+          // it lands the same way the Launch email does.
+          audienceRef: m.person.guardianId ?? m.personId,
+          channels: ["IN_APP", "EMAIL", "SMS"],
           triggerType: "TEAM_ASSIGNMENT",
           subject: email.subject,
           body: email.text,
           html: email.html,
+          smsBody: `PURE Academy — welcome to ${team.name}! ${m.person.firstName}'s team info (coach, location & practice day/time) is in your email.`,
         });
         sent++;
       }
@@ -447,10 +450,13 @@ export async function POST(req: Request) {
         include: { members: { include: { person: true } } },
       });
       if (!team) return back("?err=notfound");
+      // all=1 re-sends to everyone (a deliberate resend); otherwise only players
+      // who haven't signed yet.
+      const resendAll = String(formData.get("all") ?? "") === "1";
       let sent = 0;
       for (const m of team.members) {
         if (m.roleOnTeam === "COACH_PLAYER") continue;
-        if (m.person.waiverSignedAt) continue;
+        if (!resendAll && m.person.waiverSignedAt) continue;
         const token = await signWaiverToken(m.personId);
         const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
         const email = waiverRequestEmail({ name: m.person.firstName, link, isMinor: m.person.isMinor });
@@ -458,7 +464,7 @@ export async function POST(req: Request) {
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
-          audienceRef: m.personId,
+          audienceRef: m.person.guardianId ?? m.personId,
           channels: ["IN_APP", "EMAIL"],
           triggerType: "WAIVER_REQUEST",
           subject: email.subject,

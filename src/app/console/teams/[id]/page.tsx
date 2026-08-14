@@ -7,6 +7,7 @@ import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } 
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
 import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
+import { TeamColorDot } from "@/components/TeamColorDot";
 import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -132,7 +133,11 @@ export default async function TeamDetailPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/console/teams" className="text-sm text-brand-600 hover:underline">← Team build board</Link>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">{team.name}</h1>
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-slate-900">
+            <TeamColorDot color={team.color} size={16} />
+            {team.name}
+            {team.color && <span className="text-sm font-medium text-slate-400">{team.color}</span>}
+          </h1>
           <p className="text-sm text-slate-500">
             {team.origin === "ACP_CLUB" ? team.clubName ?? "Outside club" : "PURE Academy"} · {team.season.name}
           </p>
@@ -219,12 +224,10 @@ export default async function TeamDetailPage({
           </div>
           <div className="rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">2 · Season fee + apparel</div>
-            <p className="mb-2 mt-0.5 text-xs text-slate-500">{feesToRequest === 0 ? "All players billed." : `${feesToRequest} not yet billed.`}</p>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">{feesToRequest === 0 ? "✓ All players billed." : `${feesToRequest} not yet billed.`}</p>
             {team.members.length === 0 ? (
               <span className="text-xs text-slate-400">No players yet.</span>
-            ) : feesToRequest === 0 ? (
-              <span className="text-xs font-medium text-emerald-700">✓ Done</span>
-            ) : (
+            ) : feesToRequest > 0 ? (
               <ConfirmSubmit
                 action="/api/console/teams"
                 fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
@@ -232,21 +235,35 @@ export default async function TeamDetailPage({
                 label={`Request fee + apparel (${feesToRequest})`}
                 className="btn-secondary w-full text-sm"
               />
+            ) : (
+              <ConfirmSubmit
+                action="/api/console/registrations"
+                fields={{ ticket, op: "resendAllFees", teamId: team.id }}
+                confirm={`Resend the season fee + apparel request to everyone on "${team.name}" who hasn't paid?`}
+                label="Resend fee + apparel"
+                className="btn-secondary w-full text-sm"
+              />
             )}
           </div>
           <div className="rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">3 · Waiver</div>
-            <p className="mb-2 mt-0.5 text-xs text-slate-500">{waiversNeeded === 0 ? "All players signed." : `${waiversNeeded} not signed.`}</p>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">{waiversNeeded === 0 ? "✓ All players signed." : `${waiversNeeded} not signed.`}</p>
             {team.members.length === 0 ? (
               <span className="text-xs text-slate-400">No players yet.</span>
-            ) : waiversNeeded === 0 ? (
-              <span className="text-xs font-medium text-emerald-700">✓ Done</span>
-            ) : (
+            ) : waiversNeeded > 0 ? (
               <ConfirmSubmit
                 action="/api/console/teams"
                 fields={{ ticket, op: "sendTeamWaivers", teamId: team.id }}
                 confirm={`Send a waiver request to ${waiversNeeded} player${waiversNeeded > 1 ? "s" : ""} who haven't signed yet?`}
-                label={`Request waivers (${waiversNeeded})`}
+                label={`Send waiver (${waiversNeeded})`}
+                className="btn-secondary w-full text-sm"
+              />
+            ) : (
+              <ConfirmSubmit
+                action="/api/console/teams"
+                fields={{ ticket, op: "sendTeamWaivers", teamId: team.id, all: "1" }}
+                confirm={`Resend the waiver to everyone on "${team.name}"?`}
+                label="Resend waiver"
                 className="btn-secondary w-full text-sm"
               />
             )}

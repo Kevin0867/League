@@ -12,6 +12,7 @@ import { TEAM_CAP } from "@/lib/enums";
 import { TeamCreateForm } from "./TeamCreateForm";
 import { BulkScheduleEditor } from "./BulkScheduleEditor";
 import { deriveDivisionCode } from "@/lib/domain/teamName";
+import { TeamColorDot } from "@/components/TeamColorDot";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TableFilter } from "@/components/TableFilter";
 
@@ -228,7 +229,10 @@ export default async function TeamBuildBoard({
               <div key={t.id} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""} ${t.members.map((m) => `${m.person.firstName} ${m.person.lastName}`).join(" ")}`} className="card transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div>
-                    <Link href={`/console/teams/${t.id}`} className="font-semibold text-slate-900 hover:text-brand-700">{t.name}</Link>
+                    <Link href={`/console/teams/${t.id}`} className="inline-flex items-center gap-1.5 font-semibold text-slate-900 hover:text-brand-700">
+                      <TeamColorDot color={t.color} />
+                      {t.name}
+                    </Link>
                     <p className="text-xs text-slate-400">
                       {t.origin === "ACP_CLUB" ? t.clubName ?? "Outside club" : "PURE Academy"}
                     </p>
