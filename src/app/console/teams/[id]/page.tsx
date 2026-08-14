@@ -184,8 +184,8 @@ export default async function TeamDetailPage({
           )}
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          Assigning players never messages anyone. When the team is set, launch it — <strong>one email per family</strong>{" "}
-          with the welcome, apparel + season-fee payment, and the waiver, all together. You control who and when.
+          Assigning players never messages anyone. When the team is set, launch it — <strong>one combined email per player</strong>{" "}
+          (to their family) with the welcome, apparel + that player&apos;s season-fee payment, and the waiver, all together. You control who and when.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -200,7 +200,7 @@ export default async function TeamDetailPage({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div className="text-sm font-semibold text-slate-900">Launch team — send everything</div>
-              <p className="mt-0.5 text-xs text-slate-500">One email per family: welcome + pick apparel &amp; pay the season fee + complete the waiver.</p>
+              <p className="mt-0.5 text-xs text-slate-500">One combined email per player (to their family): welcome + pick apparel &amp; pay their season fee + complete the waiver.</p>
             </div>
             {team.members.length === 0 ? (
               <span className="text-xs text-slate-400">Add players first.</span>

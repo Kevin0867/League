@@ -15,8 +15,9 @@ import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
-import { accrueFamilySeasonFee } from "@/lib/payments/familyFee";
+import { accruePlayerSeasonFee } from "@/lib/payments/familyFee";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
+import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { formatTime12 } from "@/lib/time";
 
 // Console registration actions: add a walk-in player, and per-registrant roster
@@ -388,7 +389,7 @@ export async function POST(req: Request) {
     }
 
     // Request the season fee from this one player (single-person version of §8).
-    // Rolls up to the household invoice so a family sees one consolidated total.
+    // Per-player season-fee invoice (billed to the paying adult), then emailed.
     case "requestFee": {
       if (!reg) return back("?err=fields");
       const person = await prisma.person.findUnique({ where: { id: personId } });
@@ -399,8 +400,7 @@ export async function POST(req: Request) {
       const season = await prisma.season.findUnique({ where: { id: reg.seasonId } });
       const seasonName = season?.name ?? "Season";
 
-      const res = await accrueFamilySeasonFee({ playerId: personId, seasonId: reg.seasonId, feeCents, seasonName });
-      if (!res) return back("?ok=feeexists");
+      const res = await accruePlayerSeasonFee({ playerId: personId, seasonId: reg.seasonId, feeCents, seasonName });
 
       const [payer, payment] = await Promise.all([
         prisma.person.findUnique({ where: { id: res.payerId } }),
@@ -413,7 +413,7 @@ export async function POST(req: Request) {
           channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
         });
       }
-      await audit({ actorId: actor.userId, entityType: "Payment", entityId: res.paymentId, action: "REQUESTED", summary: "Fee requested (household invoice)" });
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: res.paymentId, action: "REQUESTED", summary: `Fee ${res.created ? "requested" : "re-sent"} for ${person.firstName} ${person.lastName}` });
       return back("?ok=fee");
     }
 
@@ -548,11 +548,11 @@ export async function POST(req: Request) {
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=resent`, origin), 303);
     }
 
-    // SEND ALL — one combined email to this registrant's household: welcome +
-    // team details, pick apparel & pay the season fee, and complete the waiver.
-    // The single-registration mirror of the team's Launch. Requires a team
-    // placement (the welcome needs team/coach/location/time); the individual
-    // buttons cover each piece when the player isn't assigned yet.
+    // SEND ALL — one combined email + SMS to this player's household: welcome +
+    // team details (if placed), pick apparel & pay their season fee, and complete
+    // the waiver. Per-player: charges only this player. Can be sent at any time —
+    // no team, payment, or placement is required; unknown team details show as
+    // "to be confirmed".
     case "launchRegistration": {
       if (!reg) return back("?err=fields");
       const person = await prisma.person.findUnique({ where: { id: personId } });
@@ -562,53 +562,49 @@ export async function POST(req: Request) {
       const membership = ids.length
         ? await prisma.teamMember.findFirst({
             where: { personId, teamId: { in: ids } },
-            include: { team: { include: { facility: true, coach: { include: { person: true } }, season: true } } },
+            include: { team: { include: { facility: true, coach: { include: { person: true } } } } },
           })
         : null;
-      if (!membership) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=notassigned`, origin), 303);
-      const team = membership.team;
+      const team = membership?.team ?? null;
 
       const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
       const feeCents = rate?.seasonFeeCents ?? 49500;
-      const seasonName = team.season?.name ?? "Season";
+      const season = await prisma.season.findUnique({ where: { id: reg.seasonId } });
+      const seasonName = season?.name ?? "Season";
       const payerId = person.guardianId ?? person.id;
 
-      // Ensure the household invoice exists (unless waived), then locate it.
-      if (!reg.feeWaived) await accrueFamilySeasonFee({ playerId: person.id, seasonId: team.seasonId, feeCents, seasonName });
-      const payment = await prisma.payment.findFirst({
-        where: { partyId: payerId, seasonId: team.seasonId, category: "PLAYER_FEE", status: { not: "REFUNDED" } },
-        orderBy: { createdAt: "desc" },
-      });
-      if (!payment) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nopayment`, origin), 303);
+      // This player's own invoice (unless their registration is fee-waived).
+      const res = reg.feeWaived ? null : await accruePlayerSeasonFee({ playerId: person.id, seasonId: reg.seasonId, feeCents, seasonName });
+      const payUrl = res ? `${appUrl()}/pay/${res.paymentId}` : null;
 
       const payer = await prisma.person.findUnique({ where: { id: payerId } });
       if (!payer) return back("?err=fields");
 
-      const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
-      const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
-      const practiceWhen = team.dayOfWeek
+      const coachName = team?.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
+      const coachContact = team?.coach ? [team.coach.person.email, team.coach.person.phone].filter(Boolean).join(" · ") || null : null;
+      const practiceWhen = team?.dayOfWeek
         ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
-        : "A day and time to be confirmed";
+        : "To be confirmed";
       const needsWaiver = !payer.waiverSignedAt || !person.waiverSignedAt;
       const waiverUrl = needsWaiver ? `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}` : null;
 
       const email = teamLaunchEmail({
         recipientName: payer.firstName,
-        teamName: team.name,
+        teamName: team?.name ?? "PURE Academy",
         players: [`${person.firstName} ${person.lastName}`],
         coachName,
         coachContact,
-        locationName: team.facility?.name ?? "To be confirmed",
-        locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
+        locationName: team?.facility?.name ?? "To be confirmed",
+        locationAddress: team?.facility?.exactAddress ?? team?.facility?.generalArea ?? null,
         practiceWhen,
-        payUrl: `${appUrl()}/pay/${payment.id}`,
+        payUrl: payUrl ?? `${appUrl()}/portal`,
         feeCents,
         waiverUrl,
       });
-      const smsBody = `PURE Academy — welcome to ${team.name}! Pick your team apparel & pay the season fee here: ${appUrl()}/pay/${payment.id} Full details${waiverUrl ? " + your waiver" : ""} are in your email.`;
+      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details${waiverUrl ? " + your waiver" : ""} are in your email.`;
       await dispatchMessage({
         senderId: actor.userId,
-        seasonId: team.seasonId,
+        seasonId: reg.seasonId,
         audienceType: "SINGLE_PERSON",
         audienceRef: payerId,
         channels: ["IN_APP", "EMAIL", "SMS"],
@@ -618,8 +614,31 @@ export async function POST(req: Request) {
         html: email.html,
         smsBody,
       });
-      await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "LAUNCH", summary: "Sent all — combined welcome + fee + waiver" });
+      await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "LAUNCH", summary: `Sent all to ${person.firstName} ${person.lastName}'s family — welcome + fee + waiver` });
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=sentall`, origin), 303);
+    }
+
+    // WELCOME — send just the welcome/placement note any time. If the player is
+    // on a team it's the placement email (team, coach, location, day/time); if
+    // not, a generic PURE Academy welcome. No gating.
+    case "sendWelcome": {
+      if (!reg) return back("?err=fields");
+      const person = await prisma.person.findUnique({ where: { id: personId } });
+      if (!person) return back("?err=fields");
+      const ids = await seasonTeamIds(reg.seasonId);
+      const membership = ids.length ? await prisma.teamMember.findFirst({ where: { personId, teamId: { in: ids } } }) : null;
+      if (membership) {
+        await notifyAssignment(membership.teamId, personId, reg.seasonId, { emailOnly: false });
+      } else {
+        const email = welcomeEmail({ recipientName: person.guardianId ? "there" : person.firstName, playerName: `${person.firstName} ${person.lastName}` });
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON",
+          audienceRef: person.guardianId ?? person.id, channels: ["IN_APP", "EMAIL"], triggerType: "TEAM_ASSIGNMENT",
+          subject: email.subject, body: email.text, html: email.html,
+        });
+      }
+      await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "RESEND", summary: `Welcome sent to ${person.firstName} ${person.lastName}` });
+      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=welcomeSent`, origin), 303);
     }
 
     // Resend the season-fee request email for an outstanding payment.
