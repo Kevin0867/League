@@ -84,11 +84,14 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
     ? "/console/profile"
     : `/waiver/sign?token=${encodeURIComponent(await signWaiverToken(personId))}`;
 
+  // Each step deep-links to the exact section that completes it — the profile
+  // sections carry matching anchors (#certification, #locations, …) and the
+  // waiver step opens the coach's own tokenized sign page.
   const steps = [
-    { done: hasCert, label: "Add your certification & coaching background", href: "/console/profile" },
-    { done: hasLocations, label: "Set the locations you can coach", href: "/console/profile" },
-    { done: hasDayTimes, label: "Set your day & time availability", href: "/console/profile" },
-    { done: gate.ok, label: "Screening cleared (background check)", href: "/console/profile" },
+    { done: hasCert, label: "Add your certification & coaching background", href: "/console/profile#certification" },
+    { done: hasLocations, label: "Set the locations you can coach", href: "/console/profile#locations" },
+    { done: hasDayTimes, label: "Set your day & time availability", href: "/console/profile#availability" },
+    { done: gate.ok, label: "Screening cleared (background check)", href: "/console/profile#screening" },
     { done: waiverSigned, label: "Complete your participation waiver", href: waiverLink },
   ];
   const nextIdx = steps.findIndex((s) => !s.done);
@@ -110,11 +113,17 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           <p className="mt-0.5 text-sm text-slate-600">
             Next: <Link href={steps[nextIdx].href} className="font-medium text-brand-700 hover:underline">{steps[nextIdx].label}</Link>
           </p>
-          <ol className="mt-3 space-y-1.5 text-sm">
+          <ol className="mt-3 space-y-1">
             {steps.map((s, i) => (
-              <li key={i} className="flex items-center gap-2">
-                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${s.done ? "bg-emerald-100 text-emerald-700" : i === nextIdx ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-400"}`}>{s.done ? "✓" : i + 1}</span>
-                <span className={s.done ? "text-slate-500 line-through" : "text-slate-700"}>{s.label}</span>
+              <li key={i}>
+                <Link
+                  href={s.href}
+                  className={`-mx-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50 ${i === nextIdx ? "bg-brand-50/60" : ""}`}
+                >
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${s.done ? "bg-emerald-100 text-emerald-700" : i === nextIdx ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-400"}`}>{s.done ? "✓" : i + 1}</span>
+                  <span className={`flex-1 ${s.done ? "text-slate-500 line-through" : "text-slate-700"}`}>{s.label}</span>
+                  {!s.done && <span className="text-xs font-medium text-brand-600">{i === nextIdx ? "Start →" : "Open"}</span>}
+                </Link>
               </li>
             ))}
           </ol>

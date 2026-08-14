@@ -98,7 +98,7 @@ export function CoachProfileForm({
         )}
       </section>
 
-      <section className="card space-y-4">
+      <section id="certification" className="card space-y-4 scroll-mt-24 target:ring-2 target:ring-brand-400">
         <h2 className="font-semibold text-slate-900">Certification &amp; experience</h2>
         <div className="grid gap-4">
           <div>
@@ -140,7 +140,7 @@ export function CoachProfileForm({
         </div>
       </section>
 
-      <section className="card space-y-4">
+      <section id="screening" className="card space-y-4 scroll-mt-24 target:ring-2 target:ring-brand-400">
         <h2 className="font-semibold text-slate-900">Screening &amp; compliance</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -235,7 +235,7 @@ export function CoachProfileForm({
         </section>
       )}
 
-      <section className="card space-y-3">
+      <section id="locations" className="card space-y-3 scroll-mt-24 target:ring-2 target:ring-brand-400">
         <h2 className="font-semibold text-slate-900">Location availability</h2>
         <p className="text-sm text-slate-500">Which markets can you coach in?</p>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
@@ -247,7 +247,7 @@ export function CoachProfileForm({
         </div>
       </section>
 
-      <section className="card space-y-3">
+      <section id="availability" className="card space-y-3 scroll-mt-24 target:ring-2 target:ring-brand-400">
         <h2 className="font-semibold text-slate-900">Day &amp; time availability</h2>
         <div className="space-y-2">
           {blocks.map((b, i) => (
