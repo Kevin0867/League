@@ -30,7 +30,8 @@ const OK: Record<string, string> = {
   refund: "Refund started.",
   waiverSent: "Waiver request emailed.",
   sentall: "Sent — welcome, season fee + apparel, and waiver, in one combined email to the family.",
-  feeexists: "This family's season fee was already invoiced — nothing new sent.",
+  welcomeSent: "Welcome sent.",
+  feeexists: "This player's season fee was already invoiced — nothing new sent.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -73,6 +74,23 @@ export default async function RegistrationDetail({
   ]);
   const outstanding = payments.find((x) => x.category === "PLAYER_FEE" && ["REQUESTED", "PENDING"].includes(x.status));
   const paid = payments.find((x) => x.category === "PLAYER_FEE" && x.status === "PAID");
+
+  // When each thing was last sent — read from the message log (audienceRef is the
+  // player or, for fee/launch, the paying guardian), so admins can see the
+  // history without a schema change. Latest per trigger type.
+  const audienceRefs = [p.id, ...(p.guardianId ? [p.guardianId] : [])];
+  const sentMsgs = await prisma.message.findMany({
+    where: { audienceRef: { in: audienceRefs }, triggerType: { in: ["TEAM_ASSIGNMENT", "PAYMENT_REQUEST", "WAIVER_REQUEST", "TEAM_LAUNCH"] } },
+    orderBy: { createdAt: "desc" },
+    select: { triggerType: true, createdAt: true },
+  });
+  const latest = (t: string) => sentMsgs.find((m) => m.triggerType === t)?.createdAt ?? null;
+  const lastSent = {
+    welcome: latest("TEAM_ASSIGNMENT"),
+    fee: latest("PAYMENT_REQUEST"),
+    waiver: latest("WAIVER_REQUEST"),
+    launch: latest("TEAM_LAUNCH"),
+  };
   const raw = (reg.importRaw && typeof reg.importRaw === "object" ? reg.importRaw : null) as Record<string, string> | null;
 
   const currentMarkets = reg.locationPrefs.map((l) => l.marketName ?? l.facility?.market ?? "").filter(Boolean);
@@ -133,19 +151,15 @@ export default async function RegistrationDetail({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div className="text-sm font-semibold text-slate-900">Send all — one combined email</div>
-              <p className="mt-0.5 text-xs text-slate-500">Welcome + pick apparel &amp; pay the season fee + complete the waiver, to {p.firstName}&apos;s family.</p>
+              <p className="mt-0.5 text-xs text-slate-500">Welcome + pick apparel &amp; pay the season fee + complete the waiver, to {p.firstName}&apos;s family.{lastSent.launch ? ` Last sent ${formatDate(lastSent.launch)}.` : ""}</p>
             </div>
-            {membership ? (
-              <ConfirmSubmit
-                action="/api/console/registrations"
-                fields={{ ticket, op: "launchRegistration", personId: p.id, registrationId: reg.id }}
-                confirm={`Send everything (welcome + apparel & fee + waiver) to ${p.firstName}'s family in one email?`}
-                label="Send all"
-                className="btn-primary text-sm"
-              />
-            ) : (
-              <span className="text-xs text-slate-400">Assign to a team first.</span>
-            )}
+            <ConfirmSubmit
+              action="/api/console/registrations"
+              fields={{ ticket, op: "launchRegistration", personId: p.id, registrationId: reg.id }}
+              confirm={`Send everything (welcome + apparel & fee + waiver) to ${p.firstName}'s family in one email?`}
+              label="Send all"
+              className="btn-primary text-sm"
+            />
           </div>
         </div>
 
@@ -153,24 +167,26 @@ export default async function RegistrationDetail({
         <div className="mt-2 grid gap-3 sm:grid-cols-3">
           <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">1 · Welcome</div>
-            <p className="mb-2 mt-0.5 text-xs text-slate-500">{membership ? `Placement email — ${membership.team.name}.` : "Assign to a team first."}</p>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">
+              {membership ? `Placement email — ${membership.team.name}.` : "Generic welcome (no team yet)."}
+              {lastSent.welcome ? ` Last sent ${formatDate(lastSent.welcome)}.` : ""}
+            </p>
             <div className="mt-auto">
-              {membership ? (
-                <ConfirmSubmit
-                  action="/api/console/registrations"
-                  fields={{ ticket, op: "resendAssignment", personId: p.id, registrationId: reg.id }}
-                  confirm={`Send the welcome / placement email to ${p.firstName}'s family?`}
-                  label="Send welcome"
-                  className="btn-secondary w-full text-sm"
-                />
-              ) : (
-                <span className="text-xs text-slate-400">Not assigned.</span>
-              )}
+              <ConfirmSubmit
+                action="/api/console/registrations"
+                fields={{ ticket, op: "sendWelcome", personId: p.id, registrationId: reg.id }}
+                confirm={`Send the welcome ${membership ? "/ placement " : ""}email to ${p.firstName}'s family?`}
+                label="Send welcome"
+                className="btn-secondary w-full text-sm"
+              />
             </div>
           </div>
           <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">2 · Season fee + apparel</div>
-            <p className="mb-2 mt-0.5 text-xs text-slate-500">{paid ? "✓ Paid." : outstanding ? `${outstanding.status.toLowerCase()} — not yet paid.` : "Not requested yet."}</p>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">
+              {paid ? "✓ Paid." : outstanding ? `${outstanding.status.toLowerCase()} — not yet paid.` : "Not requested yet."}
+              {lastSent.fee ? ` Last sent ${formatDate(lastSent.fee)}.` : ""}
+            </p>
             <div className="mt-auto">
               {paid ? (
                 <span className="text-xs text-emerald-600">Paid — nothing to send.</span>
@@ -195,7 +211,10 @@ export default async function RegistrationDetail({
           </div>
           <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">3 · Waiver</div>
-            <p className="mb-2 mt-0.5 text-xs text-slate-500">{p.waiverSignedAt ? `✓ Signed ${formatDate(p.waiverSignedAt)}.` : "Not signed."}</p>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">
+              {p.waiverSignedAt ? `✓ Signed ${formatDate(p.waiverSignedAt)}.` : "Not signed."}
+              {lastSent.waiver ? ` Request last sent ${formatDate(lastSent.waiver)}.` : ""}
+            </p>
             <div className="mt-auto">
               <ConfirmSubmit
                 action="/api/console/registrations"
