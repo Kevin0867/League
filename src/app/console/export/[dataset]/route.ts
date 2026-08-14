@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
 import { toCsv, csvResponse } from "@/lib/csv";
 import { formatCents } from "@/lib/money";
+import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
 
 // CSV export for the key registers (§18). Staff only.
 export async function GET(_req: Request, { params }: { params: Promise<{ dataset: string }> }) {
@@ -40,6 +41,28 @@ export async function GET(_req: Request, { params }: { params: Promise<{ dataset
         party: p.party ? `${p.party.firstName} ${p.party.lastName}` : "",
         amount: formatCents(p.amountCents), method: p.method,
         description: p.description, paidAt: p.paidAt, createdAt: p.createdAt,
+      }))));
+    }
+    case "apparel": {
+      const items = await prisma.apparelOrderItem.findMany({
+        include: { payment: { include: { party: true } } },
+        orderBy: { createdAt: "desc" },
+      });
+      const personIds = [...new Set(items.map((i) => i.personId).filter(Boolean) as string[])];
+      const people = personIds.length
+        ? await prisma.person.findMany({ where: { id: { in: personIds } }, select: { id: true, firstName: true, lastName: true } })
+        : [];
+      const nameOf = new Map(people.map((p) => [p.id, `${p.firstName} ${p.lastName}`]));
+      return csvResponse("apparel-orders.csv", toCsv(items.map((i) => ({
+        garment: garmentLabel(i.garment),
+        size: sizeLabel(i.size),
+        quantity: i.quantity,
+        unitPrice: formatCents(i.unitPriceCents),
+        player: i.personId ? nameOf.get(i.personId) ?? "" : "",
+        payer: i.payment.party ? `${i.payment.party.firstName} ${i.payment.party.lastName}` : "",
+        paymentStatus: i.payment.status,
+        fulfillment: i.fulfillment,
+        orderedAt: i.createdAt,
       }))));
     }
     case "payouts": {

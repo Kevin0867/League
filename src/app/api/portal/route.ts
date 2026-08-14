@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { createCheckoutRedirect } from "@/lib/payments/checkout";
+import { saveApparelForPayment, apparelRequiredFor } from "@/lib/payments/apparel";
+import { normalizeCart } from "@/lib/domain/apparel";
 import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/notify";
 import { SUPPORT_EMAIL } from "@/lib/payments/receipt";
@@ -143,6 +145,14 @@ export async function POST(req: Request) {
       const household = await householdPersonIds(personId);
       if (!payment.partyId || !household.includes(payment.partyId)) return payerr("auth");
       if (payment.status === "PAID") return NextResponse.redirect(new URL("/portal?paid=1", origin), 303);
+
+      // Team apparel is required for a season fee — persist the cart (server-
+      // priced) before checkout; bounce back if none was chosen.
+      if (apparelRequiredFor(payment.category)) {
+        const lines = normalizeCart(formData.get("cart"));
+        if (lines.length === 0) return NextResponse.redirect(new URL(`/portal/pay/${payment.id}?err=apparel`, origin), 303);
+        await saveApparelForPayment(payment.id, lines, { personId: payment.partyId });
+      }
 
       const plan = String(formData.get("plan") ?? "full") === "installments" ? "installments" : "full";
       const result = await createCheckoutRedirect({ paymentId: payment.id, plan, actorId: actor.userId });

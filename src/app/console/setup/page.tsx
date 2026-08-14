@@ -26,6 +26,7 @@ const OK_MESSAGE: Record<string, string> = {
   deleteDivision: "Division removed.",
   addStandardDivisions: "Standard divisions added.",
   setFee: "Season fee updated.",
+  setApparel: "Team apparel prices updated.",
 };
 
 const ERR_MESSAGE: Record<string, string> = {
@@ -91,6 +92,8 @@ export default async function SetupPage({
 
   const activeSeason = seasons.find((s) => s.active && s.program === "PURE_ACADEMY");
   const feeCents = rate?.seasonFeeCents ?? 49500;
+  const shirtCents = rate?.shirtPriceCents ?? 2500;
+  const tankCents = rate?.tankPriceCents ?? 2500;
 
   // Guided next step — the first incomplete milestone drives the CTA.
   const steps = [
@@ -184,6 +187,29 @@ export default async function SetupPage({
                 <span className="ml-1 text-xs text-slate-400">applies to new fee requests</span>
               </div>
               <SeasonFeeForm ticket={ticket} currentFeeCents={feeCents} />
+            </div>
+          )}
+
+          {s.active && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <div className="text-sm">
+                <span className="text-slate-500">Team apparel</span>{" "}
+                <span className="font-semibold text-slate-800">T-shirt ${(shirtCents / 100).toFixed(0)} · Tank ${(tankCents / 100).toFixed(0)}</span>
+                <span className="ml-1 text-xs text-slate-400">required with each season-fee payment</span>
+              </div>
+              <form method="POST" action="/api/console/setup" className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="setApparelPrices" />
+                <div>
+                  <label className="block text-xs font-medium text-slate-500">T-shirt $</label>
+                  <input name="shirtPrice" type="number" min={0} step="1" defaultValue={(shirtCents / 100).toFixed(0)} className="input w-24 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500">Tank $</label>
+                  <input name="tankPrice" type="number" min={0} step="1" defaultValue={(tankCents / 100).toFixed(0)} className="input w-24 py-1.5 text-sm" />
+                </div>
+                <button className="btn-secondary text-sm">Save prices</button>
+              </form>
             </div>
           )}
 

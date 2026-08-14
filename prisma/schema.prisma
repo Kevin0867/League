@@ -681,8 +681,34 @@ model Payment {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  /// Team apparel bought alongside this payment (season fee). Bundled into the
+  /// same Stripe checkout as one-time line items.
+  apparelItems  ApparelOrderItem[]
+
   @@index([direction, category, status])
   @@index([partyId])
+}
+
+/// A line of team apparel a player buys with their season fee — required for
+/// team-assigned players. Bundled into the season-fee checkout; these rows are
+/// the fulfillment record (what to print/order and for whom).
+model ApparelOrderItem {
+  id           String  @id @default(cuid())
+  paymentId    String
+  payment      Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  /// Which player it's for (optional; the paying adult may buy for several kids).
+  personId     String?
+  /// SHIRT | TANK
+  garment      String
+  /// Size key — YS..YXL (youth), AXS..A2XL (adult). See lib/domain/apparel.
+  size         String
+  quantity     Int     @default(1)
+  unitPriceCents Int
+  /// FULFILLMENT: PENDING | ORDERED | DELIVERED
+  fulfillment  String  @default("PENDING")
+  createdAt    DateTime @default(now())
+
+  @@index([paymentId])
 }
 
 /// Configurable rate sets (§0, §9, §11). Both the coach-teaches and
@@ -697,6 +723,11 @@ model RateConfig {
   coachPerSessionCents Int   @default(10000)
   assistantPct      Float    @default(0.5)
   proCoachPerSessionCents Int?
+
+  /// Team apparel prices — every team-assigned player buys at least one item
+  /// (T-shirt or tank top) bundled with their season fee. Editable in settings.
+  shirtPriceCents   Int      @default(2500)
+  tankPriceCents    Int      @default(2500)
 
   // À la carte split (§0, §11) — court cost off the top, then split net
   alaCoachSharePct     Float @default(0.5)  // assigned coach teaches

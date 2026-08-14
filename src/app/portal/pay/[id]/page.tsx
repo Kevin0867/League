@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
 import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT } from "@/lib/payments/receipt";
+import { SeasonFeePayForm } from "@/app/pay/[id]/SeasonFeePayForm";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,10 @@ export default async function PayPage({
 
   const per = formatCents(splitInstallments(payment.amountCents)[1]);
   const recommendInstall = plan === "installments";
+  const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+  const shirtCents = rate?.shirtPriceCents ?? 2500;
+  const tankCents = rate?.tankPriceCents ?? 2500;
+  const needsApparel = payment.category === "PLAYER_FEE";
 
   return (
     <div className="mx-auto max-w-lg py-8">
@@ -77,46 +82,60 @@ export default async function PayPage({
         <h1 className="text-2xl font-bold text-slate-900">Pay your season fee</h1>
         <p className="mt-1 text-sm text-slate-500">{payment.description ?? "PURE Academy season fee"}</p>
 
-        <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-          <span className="text-sm font-medium text-slate-600">Amount due</span>
-          <span className="text-2xl font-bold text-slate-900">{formatCents(payment.amountCents)}</span>
-        </div>
-
-        <p className="mt-4 text-xs text-slate-500">
-          Choose how you&apos;d like to pay. Secure checkout is hosted by Stripe — we never see your
-          card details. The fee reserves a place on a team, not a session count.
+        <p className="mt-2 text-xs text-slate-500">
+          Secure checkout is hosted by Stripe — we never see your card details. The fee reserves a place on a
+          team, not a session count.
         </p>
 
-        <form method="POST" action="/api/portal" className="mt-5 space-y-3">
-          <input type="hidden" name="ticket" value={ticket} />
-          <input type="hidden" name="op" value="startCheckout" />
-          <input type="hidden" name="paymentId" value={payment.id} />
-
-          <button
-            name="plan" value="full"
-            className={`w-full rounded-xl border px-4 py-3 text-left ${
-              recommendInstall ? "border-slate-200 bg-white hover:border-slate-300" : "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
-            }`}
-          >
-            <span className="block font-semibold text-slate-900">Pay in full — {formatCents(payment.amountCents)}</span>
-            <span className="block text-xs text-slate-500">One secure payment now.</span>
-          </button>
-
-          <button
-            name="plan" value="installments"
-            className={`w-full rounded-xl border px-4 py-3 text-left ${
-              recommendInstall ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
-            }`}
-          >
-            <span className="block font-semibold text-slate-900">
-              Pay in {INSTALLMENT_COUNT} — {per} today, then 2 more
-            </span>
-            <span className="block text-xs text-slate-500">
-              {per} charged today, then two more every 30 days ({INSTALLMENT_COUNT} equal payments).
-              Automatic — nothing else to do.
-            </span>
-          </button>
-        </form>
+        {needsApparel ? (
+          <div className="mt-4">
+            <SeasonFeePayForm
+              paymentId={payment.id}
+              seasonFeeCents={payment.amountCents}
+              shirtCents={shirtCents}
+              tankCents={tankCents}
+              recommendInstall={recommendInstall}
+              perInstallmentCents={splitInstallments(payment.amountCents)[1]}
+              installmentCount={INSTALLMENT_COUNT}
+              action="/api/portal"
+              extraFields={{ ticket, op: "startCheckout" }}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+              <span className="text-sm font-medium text-slate-600">Amount due</span>
+              <span className="text-2xl font-bold text-slate-900">{formatCents(payment.amountCents)}</span>
+            </div>
+            <form method="POST" action="/api/portal" className="mt-5 space-y-3">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="startCheckout" />
+              <input type="hidden" name="paymentId" value={payment.id} />
+              <button
+                name="plan" value="full"
+                className={`w-full rounded-xl border px-4 py-3 text-left ${
+                  recommendInstall ? "border-slate-200 bg-white hover:border-slate-300" : "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
+                }`}
+              >
+                <span className="block font-semibold text-slate-900">Pay in full — {formatCents(payment.amountCents)}</span>
+                <span className="block text-xs text-slate-500">One secure payment now.</span>
+              </button>
+              <button
+                name="plan" value="installments"
+                className={`w-full rounded-xl border px-4 py-3 text-left ${
+                  recommendInstall ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <span className="block font-semibold text-slate-900">
+                  Pay in {INSTALLMENT_COUNT} — {per} today, then 2 more
+                </span>
+                <span className="block text-xs text-slate-500">
+                  {per} charged today, then two more every 30 days ({INSTALLMENT_COUNT} equal payments).
+                </span>
+              </button>
+            </form>
+          </>
+        )}
 
         <Link href="/portal" className="mt-5 inline-block text-sm text-slate-400 hover:underline">
           ← Back to my portal

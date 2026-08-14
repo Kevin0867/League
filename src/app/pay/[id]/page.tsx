@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
+import { SeasonFeePayForm } from "./SeasonFeePayForm";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,11 @@ export default async function PublicPayPage({
     where: { id },
     include: { party: true },
   });
+
+  // Apparel prices for the season-fee picker.
+  const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+  const shirtCents = rate?.shirtPriceCents ?? 2500;
+  const tankCents = rate?.tankPriceCents ?? 2500;
 
   const invalid = !payment || payment.direction !== "IN";
 
@@ -54,7 +60,7 @@ export default async function PublicPayPage({
         ) : payment!.category === "CUSTOM" || payment!.category === "ACP_ENTRY" ? (
           <OneOffPayCard payment={payment!} title="Complete your payment" fallbackDesc="PURE Academy payment" canceled={canceled} err={err} />
         ) : (
-          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} />
+          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} />
         )}
 
         <p className="mt-6 text-center text-xs text-slate-400">
@@ -133,13 +139,16 @@ function PayCard({
   plan,
   canceled,
   err,
+  shirtCents,
+  tankCents,
 }: {
   payment: { id: string; amountCents: number; description: string | null; party: { firstName: string } | null };
   plan?: string;
   canceled?: string;
   err?: string;
+  shirtCents: number;
+  tankCents: number;
 }) {
-  const per = formatCents(splitInstallments(payment.amountCents)[1]);
   const recommendInstall = plan === "installments";
   const forWho = payment.party?.firstName ? ` for ${payment.party.firstName}` : "";
 
@@ -151,6 +160,11 @@ function PayCard({
       {canceled && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Checkout was canceled — no charge was made. You can try again below.
+        </p>
+      )}
+      {err === "apparel" && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Please add at least one team T-shirt or tank top to your order before checking out.
         </p>
       )}
       {err === "notfound" && (
@@ -166,44 +180,21 @@ function PayCard({
         </p>
       )}
 
-      <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-        <span className="text-sm font-medium text-slate-600">Amount due</span>
-        <span className="text-2xl font-bold text-slate-900">{formatCents(payment.amountCents)}</span>
-      </div>
-
       <p className="mt-4 text-xs text-slate-500">
-        Choose how you&apos;d like to pay. Secure checkout is hosted by Stripe — we never see your
-        card details. No account or login required.
+        Secure checkout is hosted by Stripe — we never see your card details. No account or login required.
       </p>
 
-      <form method="POST" action="/api/pay" className="mt-5 space-y-3">
-        <input type="hidden" name="paymentId" value={payment.id} />
-
-        <button
-          name="plan" value="full"
-          className={`w-full rounded-xl border px-4 py-3 text-left ${
-            recommendInstall ? "border-slate-200 bg-white hover:border-slate-300" : "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
-          }`}
-        >
-          <span className="block font-semibold text-slate-900">Pay in full — {formatCents(payment.amountCents)}</span>
-          <span className="block text-xs text-slate-500">One secure payment now.</span>
-        </button>
-
-        <button
-          name="plan" value="installments"
-          className={`w-full rounded-xl border px-4 py-3 text-left ${
-            recommendInstall ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
-          }`}
-        >
-          <span className="block font-semibold text-slate-900">
-            Pay in {INSTALLMENT_COUNT} — {per} today, then 2 more
-          </span>
-          <span className="block text-xs text-slate-500">
-            {per} charged today, then two more every 30 days ({INSTALLMENT_COUNT} equal payments).
-            Automatic — nothing else to do.
-          </span>
-        </button>
-      </form>
+      <div className="mt-4">
+        <SeasonFeePayForm
+          paymentId={payment.id}
+          seasonFeeCents={payment.amountCents}
+          shirtCents={shirtCents}
+          tankCents={tankCents}
+          recommendInstall={recommendInstall}
+          perInstallmentCents={splitInstallments(payment.amountCents)[1]}
+          installmentCount={INSTALLMENT_COUNT}
+        />
+      </div>
     </div>
   );
 }
