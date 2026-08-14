@@ -85,10 +85,10 @@ export default async function TeamDetailPage({
   const paidOrRequested = new Set(existingFees.map((p) => p.partyId));
   const feesToRequest = memberIds.filter((id) => !paidOrRequested.has(id)).length;
 
-  // Colors already used by OTHER teams in this team's division — shown as taken
-  // in the color picker so every team in a division stays a distinct color.
-  const usedColors = team.divisionId
-    ? ((await prisma.team.findMany({ where: { divisionId: team.divisionId, id: { not: team.id } }, select: { color: true } }))
+  // Colors used by OTHER teams in this team's gender+level group (divisionCode) —
+  // shown as taken in the picker so every team in a division stays a distinct color.
+  const usedColors = team.divisionCode
+    ? ((await prisma.team.findMany({ where: { divisionCode: team.divisionCode, id: { not: team.id } }, select: { color: true } }))
         .map((t) => t.color)
         .filter(Boolean) as string[])
     : [];
@@ -422,7 +422,7 @@ export default async function TeamDetailPage({
                     );
                   })}
                 </select>
-                <p className="mt-1 text-xs text-slate-400">Every team in a division needs a distinct color.</p>
+                <p className="mt-1 text-xs text-slate-400">Every team in a gender+level group{team.divisionCode ? ` (${team.divisionCode})` : ""} needs a distinct color.</p>
               </div>
 
               <div>
