@@ -8,7 +8,7 @@ import {
   rosterStatus,
   canPublishTeam,
 } from "@/lib/domain/teams";
-import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
+import { TEAM_CAP } from "@/lib/enums";
 import { TeamCreateForm } from "./TeamCreateForm";
 import { BulkScheduleEditor } from "./BulkScheduleEditor";
 import { deriveDivisionCode } from "@/lib/domain/teamName";
@@ -55,7 +55,7 @@ export default async function TeamBuildBoard({
   const ready = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const published = teams.filter((t) => t.published).length;
   const buildingCount = teams.filter((t) => teamMissingFields(t).length > 0).length;
-  const belowMin = teams.filter((t) => !rosterStatus(t._count.members, t.coachPlays).meetsMinimum).length;
+  const withoutPlayers = teams.filter((t) => t._count.members === 0).length;
   const readyToPublish = teams.filter((t) => canPublishTeam(t, t.facility).ok && !t.published).length;
   const allPublished = teams.length > 0 && teams.every((t) => t.published);
 
@@ -64,7 +64,7 @@ export default async function TeamBuildBoard({
   const steps = [
     { done: teams.length > 0, label: "Create your first team", href: null, cta: "Create a team below" },
     { done: teams.length > 0 && buildingCount === 0, label: "Complete each team (division, coach, facility, day/time)", href: null, cta: "" },
-    { done: teams.length > 0 && belowMin === 0, label: `Fill every roster to the minimum (${TEAM_MIN})`, href: "/console/board", cta: "Assignment board" },
+    { done: teams.length > 0 && withoutPlayers === 0, label: "Add players to each team", href: "/console/board", cta: "Assignment board" },
     { done: allPublished, label: "Publish ready teams to families", href: null, cta: "" },
   ];
   const nextStep = steps.find((s) => !s.done);
@@ -97,7 +97,7 @@ export default async function TeamBuildBoard({
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Team build board</h1>
           <p className="text-slate-500">
-            Every team&apos;s six fields and completion status. Cap {TEAM_CAP}, minimum {TEAM_MIN}.
+            Every team&apos;s six fields and completion status. Cap {TEAM_CAP} per team.
           </p>
         </div>
         <div className="flex items-center gap-3 text-sm">
@@ -256,11 +256,11 @@ export default async function TeamBuildBoard({
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <span>Roster {roster.effective}/{TEAM_CAP}{t.coachPlays ? " (coach plays)" : ""}</span>
-                    <span>{roster.meetsMinimum ? "min met" : `need ${roster.needed}`}</span>
+                    <span>{roster.effective === 0 ? "no players yet" : ""}</span>
                   </div>
                   <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className={`h-full ${roster.meetsMinimum ? "bg-emerald-500" : "bg-amber-400"}`}
+                      className={`h-full ${roster.effective > 0 ? "bg-emerald-500" : "bg-slate-300"}`}
                       style={{ width: `${Math.min(100, (roster.effective / TEAM_CAP) * 100)}%` }}
                     />
                   </div>
