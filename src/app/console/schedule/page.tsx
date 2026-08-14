@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatTime12, formatTimeRange12, formatDate } from "@/lib/time";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { PrintButton } from "@/components/PrintButton";
+import { AddPracticeForm } from "./AddPracticeForm";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ const ERR_LABEL: Record<string, string> = {
   config: "Set the team's day, time, and facility before generating a schedule.",
   exists: "This team already has a practice schedule.",
   adddate: "Pick a valid date for the practice.",
+  addslot: "That date and time is outside the facility's available hours — pick a day/time the facility is open.",
   op: "Unknown action.",
 };
 
@@ -56,8 +58,19 @@ export default async function SchedulePage({
       include: { _count: { select: { sessions: true } } },
       orderBy: { name: "asc" },
     }),
-    prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, include: { courtBlocks: true } }),
   ]);
+
+  // Availability windows per facility, so the Add-a-practice form can show which
+  // days/times a facility is actually open (and validate against them server-side).
+  const WD = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  const facilitySlots: Record<string, { day: string; start: string; end: string }[]> = {};
+  for (const f of facilities) {
+    const blocks = f.courtBlocks
+      .map((b) => ({ day: b.dayOfWeek, start: b.startTime, end: b.endTime }))
+      .sort((a, b) => WD.indexOf(a.day) - WD.indexOf(b.day) || a.start.localeCompare(b.start));
+    if (blocks.length) facilitySlots[f.id] = blocks;
+  }
 
   // Teams ready to generate: have day/time/facility but no sessions yet.
   const ungenerated = teams.filter(
@@ -145,51 +158,12 @@ export default async function SchedulePage({
 
       {/* Add a single practice (make-up or extra) — notifies the team */}
       {teams.length > 0 && (
-        <details className="card">
-          <summary className="cursor-pointer font-semibold text-slate-900">Add a practice</summary>
-          <p className="mt-1 text-sm text-slate-500">
-            A one-off practice — a make-up or an extra session. Time and location default to the team&apos;s, and the
-            team is notified unless you turn that off.
-          </p>
-          <form method="POST" action="/api/console/schedule" className="mt-3 grid gap-3 sm:grid-cols-6 sm:items-end">
-            <input type="hidden" name="ticket" value={ticket} />
-            <input type="hidden" name="op" value="addSession" />
-            <input type="hidden" name="returnTo" value="/console/schedule" />
-            <div className="sm:col-span-2">
-              <label className="label">Team</label>
-              <select name="teamId" className="input" required>
-                <option value="">— choose team —</option>
-                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Date</label>
-              <input name="date" type="date" className="input" required />
-            </div>
-            <div>
-              <label className="label">Start</label>
-              <input name="startTime" type="time" className="input" />
-            </div>
-            <div>
-              <label className="label">End</label>
-              <input name="endTime" type="time" className="input" />
-            </div>
-            <div className="sm:col-span-3">
-              <label className="label">Facility</label>
-              <select name="facilityId" className="input">
-                <option value="">Team&apos;s facility</option>
-                {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
-              <input type="checkbox" name="notify" value="1" defaultChecked />
-              Notify the team
-            </label>
-            <div className="sm:col-span-1">
-              <button className="btn-primary w-full">Add practice</button>
-            </div>
-          </form>
-        </details>
+        <AddPracticeForm
+          ticket={ticket}
+          teams={teams.map((t) => ({ id: t.id, name: t.name, facilityId: t.facilityId }))}
+          facilities={facilities.map((f) => ({ id: f.id, name: f.name }))}
+          facilitySlots={facilitySlots}
+        />
       )}
 
       {/* Team filter — view one team's schedule, or all */}

@@ -8,7 +8,7 @@ import {
   rosterStatus,
   canPublishTeam,
 } from "@/lib/domain/teams";
-import { TEAM_CAP } from "@/lib/enums";
+import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { TeamCreateForm } from "./TeamCreateForm";
 import { BulkScheduleEditor } from "./BulkScheduleEditor";
 import { deriveDivisionCode } from "@/lib/domain/teamName";
@@ -51,7 +51,27 @@ export default async function TeamBuildBoard({
     include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
   });
   const seasons = seasonRows.map((s) => ({ id: s.id, name: s.name, divisions: s.divisions }));
-  const facilities = (await prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }));
+  const facilityRows = await prisma.facility.findMany({
+    where: { archived: false },
+    orderBy: { name: "asc" },
+    include: { courtBlocks: true },
+  });
+  const facilities = facilityRows.map((f) => ({ id: f.id, name: f.name }));
+
+  // Availability windows per facility, so the bulk editor can constrain a team's
+  // day/time to exactly the facility's open slots (falls back to free entry when
+  // a facility has none defined).
+  const slotsByFacility: Record<string, { day: string; start: string; end: string }[]> = {};
+  for (const f of facilityRows) {
+    const blocks = f.courtBlocks
+      .map((b) => ({ day: b.dayOfWeek, start: b.startTime, end: b.endTime }))
+      .sort(
+        (a, b) =>
+          (WEEKDAYS as readonly string[]).indexOf(a.day) - (WEEKDAYS as readonly string[]).indexOf(b.day) ||
+          a.start.localeCompare(b.start),
+      );
+    if (blocks.length) slotsByFacility[f.id] = blocks;
+  }
 
   const ready = teams.filter((t) => teamMissingFields(t).length === 0).length;
   const published = teams.filter((t) => t.published).length;
@@ -109,7 +129,10 @@ export default async function TeamBuildBoard({
       </div>
 
       {sp.ok && OK[sp.ok] && (
-        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">
+          {OK[sp.ok]}
+          {sp.ok === "schedule" && sp.skipped ? ` (${sp.skipped} skipped — day/time was outside the facility's available hours.)` : ""}
+        </p>
       )}
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -149,6 +172,7 @@ export default async function TeamBuildBoard({
         <BulkScheduleEditor
           ticket={ticket}
           facilities={facilities}
+          slotsByFacility={slotsByFacility}
           teams={teams.map((t) => ({
             id: t.id,
             name: t.name,

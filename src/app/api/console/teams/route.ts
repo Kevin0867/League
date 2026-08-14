@@ -170,7 +170,21 @@ export async function POST(req: Request) {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
+      // Availability windows for every facility referenced in this submit, so a
+      // team's day/time can be validated against its facility's open slots.
+      const facilityIds = [
+        ...new Set(ids.map((id) => String(formData.get(`facility_${id}`) ?? "").trim()).filter(Boolean)),
+      ];
+      const blocks = facilityIds.length
+        ? await prisma.courtBlock.findMany({ where: { facilityId: { in: facilityIds } } })
+        : [];
+      const blocksByFacility = new Map<string, typeof blocks>();
+      for (const b of blocks) {
+        if (!blocksByFacility.has(b.facilityId)) blocksByFacility.set(b.facilityId, []);
+        blocksByFacility.get(b.facilityId)!.push(b);
+      }
       let updated = 0;
+      let skipped = 0;
       for (const id of ids) {
         const day = String(formData.get(`day_${id}`) ?? "").trim();
         const time = String(formData.get(`time_${id}`) ?? "").trim();
@@ -180,6 +194,16 @@ export async function POST(req: Request) {
         if (time) data.startTime = time;
         if (facilityId) data.facilityId = facilityId;
         if (Object.keys(data).length === 0) continue;
+        // If a facility has availability windows, the chosen day/time must fall
+        // inside one — otherwise skip this row rather than book an unavailable
+        // slot. (Facilities with no windows keep free day/time entry.)
+        if (facilityId && day && time) {
+          const fb = blocksByFacility.get(facilityId);
+          if (fb && fb.length && !fb.some((b) => b.dayOfWeek === day && time >= b.startTime && time <= b.endTime)) {
+            skipped++;
+            continue;
+          }
+        }
         await prisma.team.update({ where: { id }, data });
         updated++;
       }
@@ -188,9 +212,9 @@ export async function POST(req: Request) {
         entityType: "Team",
         entityId: "bulk",
         action: "UPDATE",
-        summary: `Bulk-set day/time/facility for ${updated} team(s)`,
+        summary: `Bulk-set day/time/facility for ${updated} team(s)${skipped ? `, ${skipped} skipped (outside facility hours)` : ""}`,
       });
-      return back(`?ok=schedule&n=${updated}`);
+      return back(`?ok=schedule&n=${updated}${skipped ? `&skipped=${skipped}` : ""}`);
     }
 
     // Deterministically give every team a distinct color within its gender+level
