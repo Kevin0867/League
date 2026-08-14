@@ -20,7 +20,7 @@ const OK_MSG: Record<string, string> = {
   removePlayer: "Player removed back to the pool.",
   publishTeam: "Team published to families.",
   unpublishTeam: "Team unpublished.",
-  requestSeasonFees: "Season fee requests sent.",
+  requestSeasonFees: "Season fee + apparel requests sent. Players pick their apparel on the pay page.",
   welcome: "Welcome / placement email sent to the team.",
   waivers: "Waiver requests sent to players who hadn't signed.",
   resentAll: "Fee reminders resent to unpaid players.",
@@ -195,7 +195,7 @@ export default async function TeamDetailPage({
             )}
           </div>
           <div className="rounded-lg border border-slate-200 p-3">
-            <div className="text-sm font-medium text-slate-800">2 · Season fee</div>
+            <div className="text-sm font-medium text-slate-800">2 · Season fee + apparel</div>
             <p className="mb-2 mt-0.5 text-xs text-slate-500">{feesToRequest === 0 ? "All players billed." : `${feesToRequest} not yet billed.`}</p>
             {team.members.length === 0 ? (
               <span className="text-xs text-slate-400">No players yet.</span>
@@ -205,8 +205,8 @@ export default async function TeamDetailPage({
               <ConfirmSubmit
                 action="/api/console/teams"
                 fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
-                confirm={`Email the season fee request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}?`}
-                label={`Request fees (${feesToRequest})`}
+                confirm={`Email the season fee + apparel request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}? They'll pick their apparel on the pay page.`}
+                label={`Request fee + apparel (${feesToRequest})`}
                 className="btn-secondary w-full text-sm"
               />
             )}
@@ -383,8 +383,8 @@ export default async function TeamDetailPage({
                     <ConfirmSubmit
                       action="/api/console/teams"
                       fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
-                      confirm={`Email the season fee request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}?`}
-                      label={`Request season fee (${feesToRequest})`}
+                      confirm={`Email the season fee + apparel request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}? They'll pick their apparel on the pay page.`}
+                      label={`Request season fee + apparel (${feesToRequest})`}
                       className="btn-primary text-sm"
                     />
                   </div>
