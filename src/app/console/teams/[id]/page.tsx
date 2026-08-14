@@ -109,7 +109,7 @@ export default async function TeamDetailPage({
   const hasCoach = !!team.coachId;
   const hasFacility = !!team.facilityId;
   const hasDayTime = !!(team.dayOfWeek && team.startTime);
-  const readyToLaunch = hasCoach && hasFacility && hasDayTime && roster.meetsMinimum;
+  const readyToLaunch = hasCoach && hasFacility && hasDayTime && team.members.length > 0;
 
   // Team apparel orders (what to print, and the size tally for bulk ordering).
   const apparelItems = memberIds.length
@@ -175,7 +175,7 @@ export default async function TeamDetailPage({
           <ReadyChip ok={hasCoach} label="Coach" />
           <ReadyChip ok={hasFacility} label="Facility" />
           <ReadyChip ok={hasDayTime} label="Day / time" />
-          <ReadyChip ok={roster.meetsMinimum} label={roster.meetsMinimum ? `Roster ${roster.effective}` : `Roster · need ${roster.needed}`} />
+          <ReadyChip ok={team.members.length > 0} label={`Roster ${roster.effective}`} />
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -296,7 +296,7 @@ export default async function TeamDetailPage({
               </Link>
             )}
             <div className="mb-3 h-2 overflow-hidden rounded-full bg-slate-100">
-              <div className={`h-full ${roster.meetsMinimum ? "bg-emerald-500" : "bg-amber-400"}`}
+              <div className={`h-full ${team.members.length > 0 ? "bg-emerald-500" : "bg-slate-300"}`}
                 style={{ width: `${Math.min(100, (roster.effective / TEAM_CAP) * 100)}%` }} />
             </div>
             {team.members.length === 0 ? (
@@ -330,9 +330,6 @@ export default async function TeamDetailPage({
                   </li>
                 ))}
               </ul>
-            )}
-            {!roster.meetsMinimum && (
-              <p className="mt-2 text-xs text-amber-600">Below minimum — need {roster.needed} more to launch.</p>
             )}
           </div>
 

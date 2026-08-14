@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { teamMissingFields, rosterStatus } from "@/lib/domain/teams";
-import { TEAM_MIN } from "@/lib/enums";
+import { teamMissingFields } from "@/lib/domain/teams";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getSession } from "@/lib/auth";
 import { CoachDashboard } from "./CoachDashboard";
@@ -47,17 +46,11 @@ export default async function ConsoleDashboard() {
   const bgChecksBad = coaches.filter(
     (c) => c.backgroundCheckExpiry && c.backgroundCheckExpiry < soon
   ).length;
-  // Every team whose roster is under the minimum (of any completion state).
-  const teamsBelowMin = teams.filter(
-    (t) => !rosterStatus(t._count.members, t.coachPlays).meetsMinimum
-  ).length;
-
   // "Needs attention today" — the prioritized cross-cutting to-do, most urgent
   // first. Each label states exactly what the number counts.
   const attention = [
     { n: failedPayments, label: `failed payment${failedPayments === 1 ? "" : "s"} to follow up on`, href: "/console/payments", tone: "rose" as const },
     { n: waiversOutstanding, label: `registered player${waiversOutstanding === 1 ? "" : "s"} without a signed waiver`, href: "/console/compliance", tone: "amber" as const },
-    { n: teamsBelowMin, label: `team${teamsBelowMin === 1 ? "" : "s"} below the roster minimum of ${TEAM_MIN}`, href: "/console/board", tone: "amber" as const },
     { n: bgChecksBad, label: `coach background check${bgChecksBad === 1 ? "" : "s"} expired or expiring within 30 days`, href: "/console/coaches", tone: "amber" as const },
   ].filter((a) => a.n > 0);
 
