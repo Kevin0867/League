@@ -218,66 +218,72 @@ export default async function TeamDetailPage({
 
         <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">Or send individually (backup)</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-slate-200 p-3">
+          <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">1 · Welcome</div>
             <p className="mb-2 mt-0.5 text-xs text-slate-500">Placement email: team, coach, location, day &amp; time.</p>
-            {team.members.length === 0 ? (
-              <span className="text-xs text-slate-400">No players yet.</span>
-            ) : (
-              <ConfirmSubmit
-                action="/api/console/teams"
-                fields={{ ticket, op: "sendTeamWelcome", teamId: team.id }}
-                confirm={`Send the welcome / placement email to all ${team.members.length} player${team.members.length > 1 ? "s" : ""} on "${team.name}"?`}
-                label="Send welcome"
-                className="btn-secondary w-full text-sm"
-              />
-            )}
+            <div className="mt-auto">
+              {team.members.length === 0 ? (
+                <span className="text-xs text-slate-400">No players yet.</span>
+              ) : (
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "sendTeamWelcome", teamId: team.id }}
+                  confirm={`Send the welcome / placement email to all ${team.members.length} player${team.members.length > 1 ? "s" : ""} on "${team.name}"?`}
+                  label="Send welcome"
+                  className="btn-secondary w-full text-sm"
+                />
+              )}
+            </div>
           </div>
-          <div className="rounded-lg border border-slate-200 p-3">
+          <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">2 · Season fee + apparel</div>
             <p className="mb-2 mt-0.5 text-xs text-slate-500">{feesToRequest === 0 ? "✓ All players billed." : `${feesToRequest} not yet billed.`}</p>
-            {team.members.length === 0 ? (
-              <span className="text-xs text-slate-400">No players yet.</span>
-            ) : feesToRequest > 0 ? (
-              <ConfirmSubmit
-                action="/api/console/teams"
-                fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
-                confirm={`Email the season fee + apparel request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}? They'll pick their apparel on the pay page.`}
-                label={`Request fee + apparel (${feesToRequest})`}
-                className="btn-secondary w-full text-sm"
-              />
-            ) : (
-              <ConfirmSubmit
-                action="/api/console/registrations"
-                fields={{ ticket, op: "resendAllFees", teamId: team.id }}
-                confirm={`Resend the season fee + apparel request to everyone on "${team.name}" who hasn't paid?`}
-                label="Resend fee + apparel"
-                className="btn-secondary w-full text-sm"
-              />
-            )}
+            <div className="mt-auto">
+              {team.members.length === 0 ? (
+                <span className="text-xs text-slate-400">No players yet.</span>
+              ) : feesToRequest > 0 ? (
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
+                  confirm={`Email the season fee + apparel request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}? They'll pick their apparel on the pay page.`}
+                  label={`Request fee + apparel (${feesToRequest})`}
+                  className="btn-secondary w-full text-sm"
+                />
+              ) : (
+                <ConfirmSubmit
+                  action="/api/console/registrations"
+                  fields={{ ticket, op: "resendAllFees", teamId: team.id }}
+                  confirm={`Resend the season fee + apparel request to everyone on "${team.name}" who hasn't paid?`}
+                  label="Resend fee + apparel"
+                  className="btn-secondary w-full text-sm"
+                />
+              )}
+            </div>
           </div>
-          <div className="rounded-lg border border-slate-200 p-3">
+          <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">3 · Waiver</div>
             <p className="mb-2 mt-0.5 text-xs text-slate-500">{waiversNeeded === 0 ? "✓ All players signed." : `${waiversNeeded} not signed.`}</p>
-            {team.members.length === 0 ? (
-              <span className="text-xs text-slate-400">No players yet.</span>
-            ) : waiversNeeded > 0 ? (
-              <ConfirmSubmit
-                action="/api/console/teams"
-                fields={{ ticket, op: "sendTeamWaivers", teamId: team.id }}
-                confirm={`Send a waiver request to ${waiversNeeded} player${waiversNeeded > 1 ? "s" : ""} who haven't signed yet?`}
-                label={`Send waiver (${waiversNeeded})`}
-                className="btn-secondary w-full text-sm"
-              />
-            ) : (
-              <ConfirmSubmit
-                action="/api/console/teams"
-                fields={{ ticket, op: "sendTeamWaivers", teamId: team.id, all: "1" }}
-                confirm={`Resend the waiver to everyone on "${team.name}"?`}
-                label="Resend waiver"
-                className="btn-secondary w-full text-sm"
-              />
-            )}
+            <div className="mt-auto">
+              {team.members.length === 0 ? (
+                <span className="text-xs text-slate-400">No players yet.</span>
+              ) : waiversNeeded > 0 ? (
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "sendTeamWaivers", teamId: team.id }}
+                  confirm={`Send a waiver request to ${waiversNeeded} player${waiversNeeded > 1 ? "s" : ""} who haven't signed yet?`}
+                  label={`Send waiver (${waiversNeeded})`}
+                  className="btn-secondary w-full text-sm"
+                />
+              ) : (
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "sendTeamWaivers", teamId: team.id, all: "1" }}
+                  confirm={`Resend the waiver to everyone on "${team.name}"?`}
+                  label="Resend waiver"
+                  className="btn-secondary w-full text-sm"
+                />
+              )}
+            </div>
           </div>
         </div>
         <p className="mt-3 text-xs text-slate-400">Publishing the team to families is in the Publication panel below.</p>

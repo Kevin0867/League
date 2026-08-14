@@ -29,6 +29,8 @@ const OK: Record<string, string> = {
   fee: "Season fee requested.",
   refund: "Refund started.",
   waiverSent: "Waiver request emailed.",
+  sentall: "Sent — welcome, season fee + apparel, and waiver, in one combined email to the family.",
+  feeexists: "This family's season fee was already invoiced — nothing new sent.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -123,6 +125,90 @@ export default async function RegistrationDetail({
           <p className="mt-1 text-sm text-slate-700">“{reg.partnerRequests.trim()}”</p>
         </div>
       )}
+
+      {/* Send to family — the per-registration mirror of the team launch panel:
+          one combined "Send all" plus a backup button for each piece. */}
+      <div className="card">
+        <div className="rounded-lg border border-brand-200 bg-brand-50/50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Send all — one combined email</div>
+              <p className="mt-0.5 text-xs text-slate-500">Welcome + pick apparel &amp; pay the season fee + complete the waiver, to {p.firstName}&apos;s family.</p>
+            </div>
+            {membership ? (
+              <ConfirmSubmit
+                action="/api/console/registrations"
+                fields={{ ticket, op: "launchRegistration", personId: p.id, registrationId: reg.id }}
+                confirm={`Send everything (welcome + apparel & fee + waiver) to ${p.firstName}'s family in one email?`}
+                label="Send all"
+                className="btn-primary text-sm"
+              />
+            ) : (
+              <span className="text-xs text-slate-400">Assign to a team first.</span>
+            )}
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">Or send individually (backup)</p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+          <div className="flex flex-col rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">1 · Welcome</div>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">{membership ? `Placement email — ${membership.team.name}.` : "Assign to a team first."}</p>
+            <div className="mt-auto">
+              {membership ? (
+                <ConfirmSubmit
+                  action="/api/console/registrations"
+                  fields={{ ticket, op: "resendAssignment", personId: p.id, registrationId: reg.id }}
+                  confirm={`Send the welcome / placement email to ${p.firstName}'s family?`}
+                  label="Send welcome"
+                  className="btn-secondary w-full text-sm"
+                />
+              ) : (
+                <span className="text-xs text-slate-400">Not assigned.</span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">2 · Season fee + apparel</div>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">{paid ? "✓ Paid." : outstanding ? `${outstanding.status.toLowerCase()} — not yet paid.` : "Not requested yet."}</p>
+            <div className="mt-auto">
+              {paid ? (
+                <span className="text-xs text-emerald-600">Paid — nothing to send.</span>
+              ) : outstanding ? (
+                <ConfirmSubmit
+                  action="/api/console/registrations"
+                  fields={{ ticket, op: "resendPayment", personId: p.id, registrationId: reg.id }}
+                  confirm={`Resend the season fee + apparel request to ${p.firstName}'s family?`}
+                  label="Resend fee + apparel"
+                  className="btn-secondary w-full text-sm"
+                />
+              ) : (
+                <ConfirmSubmit
+                  action="/api/console/registrations"
+                  fields={{ ticket, op: "requestFee", personId: p.id, registrationId: reg.id }}
+                  confirm={`Email the season fee + apparel request to ${p.firstName}'s family? They pick apparel on the pay page.`}
+                  label="Request fee + apparel"
+                  className="btn-secondary w-full text-sm"
+                />
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">3 · Waiver</div>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">{p.waiverSignedAt ? `✓ Signed ${formatDate(p.waiverSignedAt)}.` : "Not signed."}</p>
+            <div className="mt-auto">
+              <ConfirmSubmit
+                action="/api/console/registrations"
+                fields={{ ticket, op: "sendWaiver", personId: p.id, registrationId: reg.id }}
+                confirm={p.waiverSignedAt ? `Resend the waiver link to ${p.firstName}'s family?` : `Send the waiver request to ${p.firstName}'s family?`}
+                label={p.waiverSignedAt ? "Resend waiver" : "Send waiver"}
+                className="btn-secondary w-full text-sm"
+              />
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-400">One waiver covers the whole household — signing for a child signs for the parent and every sibling at once.</p>
+      </div>
 
       {/* Team & fee actions */}
       <div className="card space-y-4">
