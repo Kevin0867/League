@@ -183,13 +183,17 @@ export async function POST(req: Request) {
     case "autoAssignColors": {
       if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
       const teams = await prisma.team.findMany({
-        where: { divisionCode: { not: null } },
-        select: { id: true, divisionCode: true, market: true, name: true, color: true },
-        orderBy: [{ divisionCode: "asc" }, { market: "asc" }, { name: "asc" }],
+        select: { id: true, divisionCode: true, divisionId: true, market: true, name: true, color: true, division: { select: { name: true } } },
+        orderBy: [{ market: "asc" }, { name: "asc" }],
       });
+      // Group by gender+level identity: divisionCode, else the linked division's
+      // name, else levelBand-free fallback. Teams with no division at all are
+      // skipped (nothing to group them by).
+      const groupKey = (t: (typeof teams)[number]) => t.divisionCode ?? t.division?.name ?? (t.divisionId ? `id:${t.divisionId}` : null);
       const byCode = new Map<string, typeof teams>();
       for (const t of teams) {
-        const k = t.divisionCode as string;
+        const k = groupKey(t);
+        if (!k) continue;
         if (!byCode.has(k)) byCode.set(k, []);
         byCode.get(k)!.push(t);
       }

@@ -68,6 +68,28 @@ export default async function TeamBuildBoard({
   ];
   const nextStep = steps.find((s) => !s.done);
 
+  // Color audit — group teams by gender+level (divisionCode, else division name)
+  // and flag any group where two teams share a color or a team has none. Only
+  // multi-team groups can collide, so single-team groups are never "issues".
+  const colorGroups = new Map<string, { label: string; teams: { name: string; color: string | null }[] }>();
+  for (const t of teams) {
+    const key = t.divisionCode ?? t.division?.name ?? (t.divisionId ? `id:${t.divisionId}` : null);
+    if (!key) continue;
+    const label = t.divisionCode ?? t.division?.name ?? "Division";
+    if (!colorGroups.has(key)) colorGroups.set(key, { label, teams: [] });
+    colorGroups.get(key)!.teams.push({ name: t.name, color: t.color });
+  }
+  const colorAudit = [...colorGroups.values()]
+    .filter((g) => g.teams.length > 1)
+    .map((g) => {
+      const named = g.teams.map((t) => (t.color ?? "").toLowerCase()).filter(Boolean);
+      const hasDup = named.length !== new Set(named).size;
+      const hasBlank = g.teams.some((t) => !t.color);
+      return { ...g, ok: !hasDup && !hasBlank };
+    })
+    .sort((a, b) => Number(a.ok) - Number(b.ok) || a.label.localeCompare(b.label));
+  const colorIssues = colorAudit.filter((g) => !g.ok).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -137,19 +159,50 @@ export default async function TeamBuildBoard({
       )}
 
       {teams.length > 0 && (
-        <div className="card flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-slate-900">Team colors</h2>
-            <p className="text-sm text-slate-500">
-              Give every team a distinct color within its gender+level group (e.g. one Women&apos;s 3.0 Red, one
-              Blue). Assigns Red, Blue, Green, White, Black… in order per group and clears duplicates.
-            </p>
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">Team colors</h2>
+              <p className="text-sm text-slate-500">
+                Every team needs a distinct color within its gender+level group (e.g. one Women&apos;s 3.0 Red, one
+                Blue). Assigns Red, Blue, Green, White, Black… in order per group and clears duplicates.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {colorIssues > 0 ? (
+                <span className="badge bg-amber-100 text-amber-800">{colorIssues} group{colorIssues === 1 ? "" : "s"} to fix</span>
+              ) : (
+                <span className="badge bg-emerald-100 text-emerald-800">all distinct</span>
+              )}
+              <form method="POST" action="/api/console/teams">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="autoAssignColors" />
+                <button className="btn-secondary text-sm">Auto-assign colors</button>
+              </form>
+            </div>
           </div>
-          <form method="POST" action="/api/console/teams">
-            <input type="hidden" name="ticket" value={ticket} />
-            <input type="hidden" name="op" value="autoAssignColors" />
-            <button className="btn-secondary text-sm">Auto-assign colors</button>
-          </form>
+
+          {colorAudit.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {colorAudit.map((g) => (
+                <div key={g.label} className={`rounded-lg border p-2.5 text-sm ${g.ok ? "border-slate-200" : "border-amber-300 bg-amber-50"}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={g.ok ? "text-emerald-600" : "text-amber-600"}>{g.ok ? "✓" : "!"}</span>
+                    <span className="font-medium text-slate-800">{g.label}</span>
+                    <span className="text-xs text-slate-400">{g.teams.length} teams</span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {g.teams.map((t, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200">
+                        <span className="h-2.5 w-2.5 rounded-full ring-1 ring-slate-300" style={{ backgroundColor: cssColor(t.color) }} />
+                        {t.color ?? "no color"} <span className="text-slate-400">· {t.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -263,6 +316,14 @@ export default async function TeamBuildBoard({
       )}
     </div>
   );
+}
+
+function cssColor(name: string | null): string {
+  const map: Record<string, string> = {
+    red: "#ef4444", blue: "#3b82f6", green: "#22c55e", white: "#f8fafc",
+    black: "#1e293b", yellow: "#eab308", orange: "#f97316", purple: "#a855f7",
+  };
+  return map[(name ?? "").toLowerCase()] ?? "#e2e8f0";
 }
 
 function Field({ label, value }: { label: string; value?: string | null }) {
