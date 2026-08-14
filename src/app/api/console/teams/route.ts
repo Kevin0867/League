@@ -105,6 +105,22 @@ export async function POST(req: Request) {
         }
       }
 
+      // Practice day/time must fall within the chosen facility's availability
+      // windows, if that facility defines any. A facility with no windows accepts
+      // any day/time (backward compatible).
+      {
+        const facId = g("facilityId");
+        const dow = g("dayOfWeek");
+        const startT = g("startTime");
+        if (facId && dow && startT) {
+          const blocks = await prisma.courtBlock.findMany({ where: { facilityId: facId } });
+          if (blocks.length) {
+            const ok = blocks.some((b) => b.dayOfWeek === dow && startT >= b.startTime && startT <= b.endTime);
+            if (!ok) return back("?err=slot");
+          }
+        }
+      }
+
       // Color must be unique within the team's gender+level group (divisionCode)
       // — no two Women's 3.0 teams share a color.
       const color = g("color");
