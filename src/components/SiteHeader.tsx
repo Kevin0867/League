@@ -6,11 +6,12 @@
 
 const SITE = "https://purepickleball.com";
 
-// Marketing links. `academy: true` is the current app — kept on this domain and
-// marked active; everything else navigates back to the parent site.
-const LINKS: { label: string; href: string; academy?: boolean }[] = [
+// Marketing links — all navigate back to the parent site, matching the
+// purepickleball.com nav exactly (PURE Academy → its parent-site landing page,
+// keeping the two navs identical no matter which site the visitor is on).
+const LINKS: { label: string; href: string }[] = [
   { label: "Home", href: `${SITE}/` },
-  { label: "PURE Academy", href: "/", academy: true },
+  { label: "PURE Academy", href: `${SITE}/academy` },
   { label: "Arizona High School Pickleball", href: `${SITE}/highschool` },
   { label: "News", href: `${SITE}/news` },
   { label: "Pro Shop", href: `${SITE}/shop/` },
@@ -36,7 +37,7 @@ export function SiteHeader() {
       <ul className="hidden items-center gap-5 lg:flex">
         {LINKS.map((l) => (
           <li key={l.label}>
-            <a href={l.href} className={`${linkCls} ${l.academy ? "text-[#0a1628]" : ""}`} aria-current={l.academy ? "page" : undefined}>
+            <a href={l.href} className={linkCls}>
               {l.label}
             </a>
           </li>
