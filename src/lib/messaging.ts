@@ -21,6 +21,10 @@ export type DispatchInput = {
   body: string;
   /** Optional branded HTML for the EMAIL channel; `body` remains the text fallback. */
   html?: string;
+  /** Optional short text for the SMS channel. When omitted, SMS falls back to
+   *  the subject + body (fine for already-short messages; set this when `body`
+   *  is a long email). */
+  smsBody?: string;
   /** Optional email attachments (e.g. an .ics calendar invite). */
   attachments?: EmailAttachment[];
   triggerType?: string | null;
@@ -96,7 +100,8 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
       // (assignment, payment, reminders — each has a triggerType) rely on Twilio's
       // built-in STOP handling and stay concise.
       const optOut = input.triggerType ? "" : "\nReply STOP to opt out.";
-      const res = await sendSms(r.phone, `${subject}\n${input.body}${optOut}`);
+      const smsText = input.smsBody ?? `${subject}\n${input.body}`;
+      const res = await sendSms(r.phone, `${smsText}${optOut}`);
       smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
       if (!res.ok) failureReasons.push(`sms: ${res.error}`);
       if (res.ok && res.simulated) wasSimulated = true;
