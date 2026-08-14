@@ -8,6 +8,7 @@ import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
 import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
 import { TeamColorDot } from "@/components/TeamColorDot";
+import { TeamScheduleFields } from "./TeamScheduleFields";
 import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -38,6 +39,7 @@ const ERR_MSG: Record<string, string> = {
   coachishead: "That coach is already the head coach of this team.",
   coachclash: "That coach already coaches another team at this day/time. Pick a non-overlapping slot or use “add anyway.”",
   colorclash: "Another team in this division already uses that color. Every team in a division needs a distinct color.",
+  slot: "That day/time isn't available at the selected facility. Pick one of the facility's available times.",
   player: "Missing player.",
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",
@@ -69,8 +71,17 @@ export default async function TeamDetailPage({
 
   const [coaches, facilities] = await Promise.all([
     prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } }),
-    prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" } }),
+    prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, include: { courtBlocks: true } }),
   ]);
+
+  // Facility availability windows, keyed by facility, for the schedule picker.
+  const slotsByFacility: Record<string, { day: string; start: string; end: string }[]> = {};
+  for (const f of facilities) {
+    const blocks = [...f.courtBlocks]
+      .map((b) => ({ day: b.dayOfWeek, start: b.startTime, end: b.endTime }))
+      .sort((a, b) => (WEEKDAYS as readonly string[]).indexOf(a.day) - (WEEKDAYS as readonly string[]).indexOf(b.day) || a.start.localeCompare(b.start));
+    if (blocks.length) slotsByFacility[f.id] = blocks;
+  }
 
   const roster = rosterStatus(team.members.length, team.coachPlays);
   const publish = canPublishTeam(team, team.facility, team.members.length);
@@ -503,11 +514,13 @@ export default async function TeamDetailPage({
                 </select>
               </div>
 
-              <Select label="Facility" name="facilityId" defaultValue={team.facilityId ?? ""}
-                options={[{ value: "", label: "—" }, ...facilities.map((f) => ({ value: f.id, label: `${f.name}${f.agreementStatus !== "EXECUTED" ? " (agreement pending)" : ""}` }))]} />
-              <Select label="Day" name="dayOfWeek" defaultValue={team.dayOfWeek ?? ""}
-                options={[{ value: "", label: "—" }, ...WEEKDAYS.map((d) => ({ value: d, label: d }))]} />
-              <Field label="Start time" name="startTime" type="time" defaultValue={team.startTime ?? ""} />
+              <TeamScheduleFields
+                facilities={facilities.map((f) => ({ id: f.id, name: f.name }))}
+                slotsByFacility={slotsByFacility}
+                initialFacilityId={team.facilityId ?? ""}
+                initialDay={team.dayOfWeek ?? ""}
+                initialStart={team.startTime ?? ""}
+              />
             </div>
 
             <label className="flex items-center gap-2 text-sm text-slate-700">
