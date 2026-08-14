@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo, PadelLogo } from "./Brand";
+import { SiteHeader } from "./SiteHeader";
 import { getSession } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
 
@@ -19,7 +20,11 @@ export async function PublicNav() {
   const home = session ? (isStaff(session.role) ? "/console" : "/portal") : null;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-brand-100 bg-white/90 backdrop-blur">
+    <div className="sticky top-0 z-30">
+      {/* Parent-site bar (purepickleball.com) sits above the academy nav so the
+          two pin together and the app reads as one site. */}
+      <SiteHeader />
+      <header className="border-b border-brand-100 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
         {/* Logo → academy homepage when signed out, or the user's dashboard when signed in. */}
         <Logo href={home ?? "/"} />
@@ -67,6 +72,7 @@ export async function PublicNav() {
           </details>
         </div>
       </div>
-    </header>
+      </header>
+    </div>
   );
 }
