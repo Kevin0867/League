@@ -130,9 +130,9 @@ export default async function FacilitiesPage({
                   />
                 </dl>
 
-                {f.courtBlocks.length > 0 && (
-                  <div className="border-t border-slate-100 pt-3">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</div>
+                <div className="border-t border-slate-100 pt-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</div>
+                  {f.courtBlocks.length > 0 ? (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {f.courtBlocks.map((b) => (
                         <span key={b.id} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
@@ -141,8 +141,13 @@ export default async function FacilitiesPage({
                         </span>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="mt-1.5 text-xs text-amber-600">
+                      No open times set — teams can be scheduled here any day/time. Add windows via Edit to limit team
+                      scheduling to when this court is actually open.
+                    </p>
+                  )}
+                </div>
 
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                   <FacilityForm

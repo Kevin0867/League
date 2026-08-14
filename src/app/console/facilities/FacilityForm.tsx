@@ -108,9 +108,9 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
             </div>
           </Section>
 
-          <Section title="Court availability" hint="Which days and times courts are available here. Add as many blocks as you need — these feed scheduling and coach matching.">
+          <Section title="Court availability" hint="Which days and times courts are open here. These windows now limit team scheduling — a team can only practice here on a day/time you list below (leave empty to allow any day/time).">
             <div className="space-y-2">
-              {blocks.length === 0 && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">No availability set yet. Add a day and time below.</p>}
+              {blocks.length === 0 && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">No open times set yet — teams could be scheduled here any day/time. Add a day and time below to limit it.</p>}
               {blocks.map((b, i) => (
                 <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg ring-1 ring-slate-100 p-2">
                   <div>
