@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Logo, PadelLogo } from "./Brand";
+import { Logo } from "./Brand";
 import { SiteHeader } from "./SiteHeader";
 import { getSession } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
@@ -48,7 +48,6 @@ export async function PublicNav() {
               <Link href="/register" className="btn-accent whitespace-nowrap text-xs uppercase tracking-wide">Register</Link>
             </>
           )}
-          <PadelLogo className="hidden h-8 sm:block" />
 
           {/* Compact menu below xl — no-JS <details> disclosure. */}
           <details className="relative xl:hidden">

@@ -28,9 +28,9 @@ export function SiteHeader() {
       style={{ background: "rgba(244,245,247,0.97)", backdropFilter: "blur(12px)", borderBottom: "1px solid #d8dde8" }}
     >
       <a href={`${SITE}/`} className="flex-shrink-0">
-        {/* Served from the parent site; the academy app doesn't host this asset. */}
+        {/* Hosted in the app so it can't break on the parent site's asset paths. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`${SITE}/assets/nav-logo.png`} alt="PURE Pickleball & Padel" className="h-8 w-auto" />
+        <img src="/brand/pure-pickleball-padel.png" alt="PURE Pickleball & Padel" className="h-9 w-auto" />
       </a>
 
       {/* Desktop nav */}
