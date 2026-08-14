@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import { can } from "@/lib/rbac";
 import { formatCents } from "@/lib/money";
 import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 import { SeasonFeePayForm } from "./SeasonFeePayForm";
@@ -13,10 +15,15 @@ export default async function PublicPayPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ plan?: string; canceled?: string; err?: string }>;
+  searchParams: Promise<{ plan?: string; canceled?: string; err?: string; test?: string }>;
 }) {
   const { id } = await params;
-  const { plan, canceled, err } = await searchParams;
+  const { plan, canceled, err, test } = await searchParams;
+
+  // Admin test mode (?test=1): an admin can click all the way through with no
+  // real charge. Never available to a public payer.
+  const session = await getSession();
+  const testMode = test === "1" && !!session && can((session.roles ?? [session.role]) as never, "manageTeams");
 
   const payment = await prisma.payment.findUnique({
     where: { id },
@@ -76,7 +83,7 @@ export default async function PublicPayPage({
         ) : payment!.category === "CUSTOM" || payment!.category === "ACP_ENTRY" ? (
           <OneOffPayCard payment={payment!} title="Complete your payment" fallbackDesc="PURE Academy payment" canceled={canceled} err={err} />
         ) : (
-          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} />
+          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} testMode={testMode} />
         )}
 
         <p className="mt-6 text-center text-xs text-slate-400">
@@ -158,6 +165,7 @@ function PayCard({
   shirtCents,
   tankCents,
   players,
+  testMode,
 }: {
   payment: { id: string; amountCents: number; description: string | null; party: { firstName: string } | null };
   plan?: string;
@@ -166,6 +174,7 @@ function PayCard({
   shirtCents: number;
   tankCents: number;
   players: { id: string; name: string }[];
+  testMode: boolean;
 }) {
   const recommendInstall = plan === "installments";
   const forWho = payment.party?.firstName ? ` for ${payment.party.firstName}` : "";
@@ -174,6 +183,13 @@ function PayCard({
     <div className="card">
       <h1 className="text-2xl font-bold text-slate-900">Pay your season fee{forWho}</h1>
       <p className="mt-1 text-sm text-slate-500">{payment.description ?? "PURE Academy season fee"}</p>
+
+      {testMode && (
+        <p className="mt-3 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+          <strong>Admin test mode.</strong> Completing checkout here marks the fee paid and records the apparel
+          order <em>without any real charge</em>, so you can see the whole flow.
+        </p>
+      )}
 
       {canceled && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -212,6 +228,7 @@ function PayCard({
           perInstallmentCents={splitInstallments(payment.amountCents)[1]}
           installmentCount={INSTALLMENT_COUNT}
           players={players}
+          extraFields={testMode ? { test: "1" } : undefined}
         />
       </div>
     </div>

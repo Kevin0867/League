@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import { can } from "@/lib/rbac";
 import { createCheckoutRedirect } from "@/lib/payments/checkout";
 import { saveApparelForPayment, apparelRequiredFor } from "@/lib/payments/apparel";
 import { normalizeCart } from "@/lib/domain/apparel";
@@ -32,7 +34,15 @@ export async function POST(req: Request) {
     await saveApparelForPayment(paymentId, lines, { personId: payment.partyId, allowedPersonIds: allowed });
   }
 
-  const result = await createCheckoutRedirect({ paymentId, plan });
+  // Admin test: complete without charging. Only honored for a signed-in admin —
+  // a public payer can never trigger it.
+  let simulate = false;
+  if (String(form.get("test") ?? "") === "1") {
+    const session = await getSession();
+    simulate = !!session && can((session.roles ?? [session.role]) as never, "manageTeams");
+  }
+
+  const result = await createCheckoutRedirect({ paymentId, plan, simulate });
   if (!result.ok) {
     if (result.error === "paid") return NextResponse.redirect(new URL(`/pay/${paymentId}`, origin), 303);
     const code = result.error === "stripe" ? "stripe" : "notfound";

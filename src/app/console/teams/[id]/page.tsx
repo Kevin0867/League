@@ -85,6 +85,16 @@ export default async function TeamDetailPage({
   const paidOrRequested = new Set(existingFees.map((p) => p.partyId));
   const feesToRequest = memberIds.filter((id) => !paidOrRequested.has(id)).length;
 
+  // Season-fee payments for this team's players — used to offer a "preview / test
+  // the pay page" link (admins can walk the apparel + checkout flow, no charge).
+  const feePayments = memberIds.length
+    ? await prisma.payment.findMany({
+        where: { partyId: { in: memberIds }, seasonId: team.seasonId, category: "PLAYER_FEE" },
+        select: { id: true, partyId: true, status: true },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+
   // Colors used by OTHER teams in this team's gender+level group (divisionCode) —
   // shown as taken in the picker so every team in a division stays a distinct color.
   const usedColors = team.divisionCode
@@ -386,6 +396,22 @@ export default async function TeamDetailPage({
                   <input type="hidden" name="teamId" value={team.id} />
                   <button className="text-xs font-semibold text-brand-700 hover:underline">Resend reminders to unpaid players</button>
                 </form>
+
+                {/* Preview / test the pay page (apparel + checkout) with no charge. */}
+                {feePayments.length > 0 && (
+                  <div className="border-t border-slate-100 pt-3">
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Preview / test pay page</p>
+                    <ul className="space-y-1">
+                      {feePayments.map((fp) => (
+                        <li key={fp.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="text-slate-600">{nameById.get(fp.partyId ?? "") ?? "Player"}{fp.status === "PAID" ? <span className="ml-1 text-xs text-emerald-600">paid</span> : null}</span>
+                          <a href={`/pay/${fp.id}?test=1`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700 hover:underline">Open pay page ↗</a>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-xs text-slate-400">Opens as admin test mode — no real charge.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
