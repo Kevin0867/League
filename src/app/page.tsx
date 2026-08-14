@@ -61,6 +61,7 @@ export default async function HomePage() {
               >
                 <span className="text-base font-extrabold uppercase tracking-wide">Fall 2026 Season — Now Enrolling</span>
                 <span className="mt-0.5 text-xs font-medium uppercase tracking-wide text-brand-900/70">All ages &amp; skill levels</span>
+                <span className="mt-1.5 text-sm font-bold text-brand-900 underline underline-offset-2">Click here to register →</span>
               </Link>
             </div>
 
