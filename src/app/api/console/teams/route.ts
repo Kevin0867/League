@@ -13,13 +13,14 @@ import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { formatTime12 } from "@/lib/time";
-import { nextColor } from "@/lib/domain/teamName";
+import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
 
-/** Colors already used by OTHER teams in a division — the set a new/edited team
- *  must avoid, since every team in a division needs a distinct color. */
-async function divisionColorsUsed(divisionId: string, excludeTeamId?: string): Promise<string[]> {
+/** Colors used by OTHER teams in the same gender+level group (divisionCode) —
+ *  the set a new/edited team must avoid, since every team in a division (e.g.
+ *  Women's 3.0) needs a distinct color. */
+async function divisionColorsUsed(divisionCode: string, excludeTeamId?: string): Promise<string[]> {
   const rows = await prisma.team.findMany({
-    where: { divisionId, ...(excludeTeamId ? { id: { not: excludeTeamId } } : {}) },
+    where: { divisionCode, ...(excludeTeamId ? { id: { not: excludeTeamId } } : {}) },
     select: { color: true },
   });
   return rows.map((r) => r.color).filter(Boolean) as string[];
@@ -58,19 +59,10 @@ export async function POST(req: Request) {
       const startTime = String(formData.get("startTime") ?? "").trim() || null;
       const facility = facilityId ? await prisma.facility.findUnique({ where: { id: facilityId } }) : null;
 
-      // Team color: unique within the division. If one is supplied, reject a
-      // duplicate; if none is, auto-assign the next free color in the division so
-      // same-division teams are always distinguishable.
-      let color = String(formData.get("color") ?? "").trim() || null;
-      if (divisionId) {
-        const used = await divisionColorsUsed(divisionId);
-        if (color) {
-          if (used.some((c) => c.toLowerCase() === color!.toLowerCase()))
-            return NextResponse.redirect(new URL("/console/teams?err=colorclash", origin), 303);
-        } else {
-          color = nextColor(used);
-        }
-      }
+      // Optional color at create; uniqueness is enforced on edit and via the
+      // bulk "Auto-assign colors" action (grouped by gender+level / divisionCode,
+      // which a brand-new team doesn't have yet).
+      const color = String(formData.get("color") ?? "").trim() || null;
 
       const team = await prisma.team.create({
         data: {
@@ -112,13 +104,15 @@ export async function POST(req: Request) {
         }
       }
 
-      // Color must be unique within the (submitted) division — no two teams in a
-      // division share a color.
+      // Color must be unique within the team's gender+level group (divisionCode)
+      // — no two Women's 3.0 teams share a color.
       const color = g("color");
-      const divId = g("divisionId");
-      if (color && divId) {
-        const used = await divisionColorsUsed(divId, teamId);
-        if (used.some((c) => c.toLowerCase() === color.toLowerCase())) return back("?err=colorclash");
+      if (color) {
+        const cur = await prisma.team.findUnique({ where: { id: teamId }, select: { divisionCode: true } });
+        if (cur?.divisionCode) {
+          const used = await divisionColorsUsed(cur.divisionCode, teamId);
+          if (used.some((c) => c.toLowerCase() === color.toLowerCase())) return back("?err=colorclash");
+        }
       }
 
       await prisma.team.update({
@@ -180,6 +174,36 @@ export async function POST(req: Request) {
         summary: `Bulk-set day/time/facility for ${updated} team(s)`,
       });
       return back(`?ok=schedule&n=${updated}`);
+    }
+
+    // Deterministically give every team a distinct color within its gender+level
+    // group (divisionCode): the first team in Women's 3.0 gets Red, the next Blue,
+    // and so on down the palette. Fixes duplicate/blank colors across the board in
+    // one click. Teams with no gender+level are left untouched.
+    case "autoAssignColors": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const teams = await prisma.team.findMany({
+        where: { divisionCode: { not: null } },
+        select: { id: true, divisionCode: true, market: true, name: true, color: true },
+        orderBy: [{ divisionCode: "asc" }, { market: "asc" }, { name: "asc" }],
+      });
+      const byCode = new Map<string, typeof teams>();
+      for (const t of teams) {
+        const k = t.divisionCode as string;
+        if (!byCode.has(k)) byCode.set(k, []);
+        byCode.get(k)!.push(t);
+      }
+      let changed = 0;
+      for (const group of byCode.values()) {
+        for (let i = 0; i < group.length; i++) {
+          const color = TEAM_COLOR_PALETTE[i % TEAM_COLOR_PALETTE.length];
+          if (group[i].color === color) continue;
+          await prisma.team.update({ where: { id: group[i].id }, data: { color } });
+          changed++;
+        }
+      }
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: "bulk", action: "UPDATE", summary: `Auto-assigned distinct colors to ${changed} team(s) by gender+level` });
+      return back(`?ok=colors&n=${changed}`);
     }
 
     // Assign / move / clear a team's coach from the matching board. A partial

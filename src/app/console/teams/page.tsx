@@ -16,7 +16,7 @@ import { TableFilter } from "@/components/TableFilter";
 
 export const dynamic = "force-dynamic";
 
-const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool.", schedule: "Day, time, and facility saved. Generate practices on the Schedule page." };
+const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool.", schedule: "Day, time, and facility saved. Generate practices on the Schedule page.", colors: "Team colors assigned — one distinct color per gender+level group." };
 const ERRORS: Record<string, string> = {
   fields: "Team name and season are required.",
   auth: "You don't have permission to manage teams.",
@@ -134,6 +134,23 @@ export default async function TeamBuildBoard({
             facilityId: t.facilityId,
           }))}
         />
+      )}
+
+      {teams.length > 0 && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Team colors</h2>
+            <p className="text-sm text-slate-500">
+              Give every team a distinct color within its gender+level group (e.g. one Women&apos;s 3.0 Red, one
+              Blue). Assigns Red, Blue, Green, White, Black… in order per group and clears duplicates.
+            </p>
+          </div>
+          <form method="POST" action="/api/console/teams">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="autoAssignColors" />
+            <button className="btn-secondary text-sm">Auto-assign colors</button>
+          </form>
+        </div>
       )}
 
       {teams.length === 0 ? (
