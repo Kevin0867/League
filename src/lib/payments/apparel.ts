@@ -21,16 +21,17 @@ export function apparelRequiredFor(category: string): boolean {
 export async function saveApparelForPayment(
   paymentId: string,
   rawCart: unknown,
-  opts: { personId?: string | null } = {}
+  opts: { personId?: string | null; allowedPersonIds?: string[] } = {}
 ): Promise<CartLine[]> {
-  const lines = normalizeCart(rawCart);
+  const lines = normalizeCart(rawCart, opts.allowedPersonIds);
   const { shirtCents, tankCents } = await apparelPrices();
   await prisma.apparelOrderItem.deleteMany({ where: { paymentId } });
   if (lines.length) {
     await prisma.apparelOrderItem.createMany({
       data: lines.map((l) => ({
         paymentId,
-        personId: opts.personId ?? null,
+        // Per-line player if tagged, else the payer (single-player invoices).
+        personId: l.personId ?? opts.personId ?? null,
         garment: l.garment,
         size: l.size,
         quantity: l.quantity,

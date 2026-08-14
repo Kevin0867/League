@@ -40,16 +40,18 @@ export function unitPriceCents(garment: string, shirtCents: number, tankCents: n
   return garment === "TANK" ? tankCents : shirtCents;
 }
 
-export type CartLine = { garment: Garment; size: SizeKey; quantity: number };
+export type CartLine = { garment: Garment; size: SizeKey; quantity: number; personId?: string | null };
 
 const MAX_QTY_PER_LINE = 20;
 
 /**
  * Validate an untrusted cart (from the pay form) into clean lines. Drops any
  * line with an unknown garment/size or a non-positive quantity, and clamps
- * quantity to a sane ceiling. Never trusts a client-sent price.
+ * quantity to a sane ceiling. Never trusts a client-sent price. An optional
+ * `allowedPersonIds` restricts the per-line player tag to the invoice's players
+ * (anything else becomes null).
  */
-export function normalizeCart(raw: unknown): CartLine[] {
+export function normalizeCart(raw: unknown, allowedPersonIds?: string[]): CartLine[] {
   let arr: unknown = raw;
   if (typeof raw === "string") {
     try {
@@ -59,15 +61,19 @@ export function normalizeCart(raw: unknown): CartLine[] {
     }
   }
   if (!Array.isArray(arr)) return [];
+  const allow = allowedPersonIds ? new Set(allowedPersonIds) : null;
   const out: CartLine[] = [];
   for (const item of arr) {
     if (!item || typeof item !== "object") continue;
-    const g = String((item as Record<string, unknown>).garment ?? "");
-    const s = String((item as Record<string, unknown>).size ?? "");
-    const q = Math.floor(Number((item as Record<string, unknown>).quantity ?? 0));
+    const rec = item as Record<string, unknown>;
+    const g = String(rec.garment ?? "");
+    const s = String(rec.size ?? "");
+    const q = Math.floor(Number(rec.quantity ?? 0));
     if (!GARMENT_KEYS.has(g as Garment) || !SIZE_KEYS.has(s as SizeKey)) continue;
     if (!Number.isFinite(q) || q < 1) continue;
-    out.push({ garment: g as Garment, size: s as SizeKey, quantity: Math.min(q, MAX_QTY_PER_LINE) });
+    const pidRaw = rec.personId == null ? null : String(rec.personId);
+    const personId = pidRaw && (!allow || allow.has(pidRaw)) ? pidRaw : null;
+    out.push({ garment: g as Garment, size: s as SizeKey, quantity: Math.min(q, MAX_QTY_PER_LINE), personId });
   }
   return out;
 }

@@ -4,6 +4,7 @@ import { appUrl } from "@/lib/stripe";
 import { formatCents } from "@/lib/money";
 import { sendEmail } from "@/lib/notify";
 import { coveredIds } from "@/lib/payments/familyFee";
+import { garmentLabel as apparelGarmentLabel, sizeLabel as apparelSizeLabel } from "@/lib/domain/apparel";
 
 // Shared payment-confirmation content for the thank-you page and the emailed
 // receipt, so the two never drift. Support contact and the second logo are
@@ -62,6 +63,8 @@ export type Receipt = {
   plan: "UPFRONT" | "INSTALLMENTS_3";
   paidNow: boolean;
   installments: { amountCents: number; date: string }[];
+  apparel: { label: string; qty: number; amountCents: number }[];
+  apparelTotalCents: number;
   supportEmail: string;
   supportPhone: string;
 };
@@ -94,6 +97,15 @@ export async function loadReceipt(paymentId: string): Promise<Receipt | null> {
     program: r.season?.program === "ACP" ? "Arizona Club Pickleball" : "PURE Academy",
   }));
 
+  // Team apparel bought with this payment (empty for non-fee payments).
+  const apparelRows = await prisma.apparelOrderItem.findMany({ where: { paymentId: payment.id }, orderBy: { createdAt: "asc" } });
+  const apparel = apparelRows.map((a) => ({
+    label: `${a.quantity} × ${apparelGarmentLabel(a.garment)} — ${apparelSizeLabel(a.size)}`,
+    qty: a.quantity,
+    amountCents: a.unitPriceCents * a.quantity,
+  }));
+  const apparelTotalCents = apparel.reduce((s, a) => s + a.amountCents, 0);
+
   const plan = payment.installmentPlan ? "INSTALLMENTS_3" : "UPFRONT";
   // Installments are anchored at registration (the payment record's creation),
   // charging on that day, +30 days, and +60 days.
@@ -115,6 +127,8 @@ export async function loadReceipt(paymentId: string): Promise<Receipt | null> {
     plan,
     paidNow: plan === "UPFRONT",
     installments,
+    apparel,
+    apparelTotalCents,
     supportEmail: SUPPORT_ADDRESS,
     supportPhone: SUPPORT_PHONE,
   };
@@ -167,7 +181,20 @@ export function receiptEmailHtml(r: Receipt): string {
         <table style="width:100%;border-collapse:collapse">${rows}</table>
       </div>
     </td></tr>
+    ${r.apparel.length
+      ? `<tr><td style="padding:0 22px 8px">
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px">
+        <p style="margin:0 0 6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8">Team apparel</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px">${r.apparel
+          .map((a) => `<tr><td style="padding:3px 0;color:#0f172a">${a.label}</td><td style="padding:3px 0;color:#64748b;text-align:right">${formatCents(a.amountCents)}</td></tr>`)
+          .join("")}</table>
+      </div>
+    </td></tr>`
+      : ""}
     <tr><td style="padding:14px 22px">${money}</td></tr>
+    ${r.apparel.length
+      ? `<tr><td style="padding:0 22px 8px"><p style="margin:0;font-size:13px;color:#475569">Team apparel (${formatCents(r.apparelTotalCents)}) is charged with today&rsquo;s payment. <strong>Grand total: ${formatCents(r.amountCents + r.apparelTotalCents)}</strong>.</p></td></tr>`
+      : ""}
     <tr><td style="padding:8px 22px 26px">
       <p style="margin:0;color:#64748b;font-size:13px">Any issues, please contact us at
         <a href="mailto:${r.supportEmail}" style="color:#4338ca">${r.supportEmail}</a>${phone}.</p>
@@ -189,6 +216,7 @@ export function receiptEmailText(r: Receipt): string {
     `${r.seasonName}`,
     ...r.items.map((it) => `  - ${it.division} (${it.program})`),
     ``,
+    ...(r.apparel.length ? ["Team apparel:", ...r.apparel.map((a) => `  - ${a.label} — ${formatCents(a.amountCents)}`), ""] : []),
     r.plan === "UPFRONT"
       ? `Paid in full: ${formatCents(r.amountCents)}`
       : `Total: ${formatCents(r.amountCents)} in 3 payments — the first today, then 30 and 60 days later (charged automatically):\n` +

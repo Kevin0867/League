@@ -12,7 +12,8 @@ import {
   type SizeKey,
 } from "@/lib/domain/apparel";
 
-type Line = { garment: Garment; size: SizeKey; quantity: number };
+type Line = { garment: Garment; size: SizeKey; quantity: number; personId: string | null };
+type Player = { id: string; name: string };
 
 /**
  * Season-fee checkout with the REQUIRED team-apparel picker. Players pick a
@@ -31,6 +32,7 @@ export function SeasonFeePayForm({
   installmentCount,
   action = "/api/pay",
   extraFields,
+  players = [],
 }: {
   paymentId: string;
   seasonFeeCents: number;
@@ -41,25 +43,30 @@ export function SeasonFeePayForm({
   installmentCount: number;
   action?: string;
   extraFields?: Record<string, string>;
+  players?: Player[];
 }) {
+  const multiPlayer = players.length > 1;
   const [lines, setLines] = useState<Line[]>([]);
   const [garment, setGarment] = useState<Garment>("SHIRT");
   const [size, setSize] = useState<SizeKey>("AM");
   const [qty, setQty] = useState(1);
+  const [forPlayer, setForPlayer] = useState<string>(players[0]?.id ?? "");
+  const playerName = (id: string | null) => players.find((p) => p.id === id)?.name ?? "";
 
   const apparelCents = lines.reduce((s, l) => s + unitPriceCents(l.garment, shirtCents, tankCents) * l.quantity, 0);
   const totalCents = seasonFeeCents + apparelCents;
   const hasItems = lines.length > 0;
 
   function addItem() {
+    const pid = players.length ? (forPlayer || players[0].id) : null;
     setLines((prev) => {
-      const i = prev.findIndex((l) => l.garment === garment && l.size === size);
+      const i = prev.findIndex((l) => l.garment === garment && l.size === size && l.personId === pid);
       if (i >= 0) {
         const copy = [...prev];
         copy[i] = { ...copy[i], quantity: copy[i].quantity + qty };
         return copy;
       }
-      return [...prev, { garment, size, quantity: qty }];
+      return [...prev, { garment, size, quantity: qty, personId: pid }];
     });
     setQty(1);
   }
@@ -82,7 +89,17 @@ export function SeasonFeePayForm({
           order. You can add more than one.
         </p>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:items-end">
+        <div className={`mt-3 grid grid-cols-2 gap-2 sm:items-end ${multiPlayer ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+          {multiPlayer && (
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-xs font-medium text-slate-500">For</label>
+              <select value={forPlayer} onChange={(e) => setForPlayer(e.target.value)} className="input py-1.5 text-sm">
+                {players.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-500">Item</label>
             <select value={garment} onChange={(e) => setGarment(e.target.value as Garment)} className="input py-1.5 text-sm">
@@ -121,6 +138,7 @@ export function SeasonFeePayForm({
                 <li key={`${l.garment}-${l.size}-${i}`} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                   <span className="text-slate-700">
                     {l.quantity} × {garmentLabel(l.garment)} <span className="text-slate-400">·</span> {sizeLabel(l.size)}
+                    {multiPlayer && l.personId && <span className="text-slate-400"> · {playerName(l.personId)}</span>}
                   </span>
                   <span className="flex items-center gap-3">
                     <span className="text-slate-600">{formatCents(priceOf(l.garment) * l.quantity)}</span>
