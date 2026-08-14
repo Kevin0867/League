@@ -531,16 +531,18 @@ export async function POST(req: Request) {
           feeCents,
           waiverUrl,
         });
+        const smsBody = `PURE Academy — welcome to ${team.name}! Pick your team apparel & pay the season fee here: ${appUrl()}/pay/${payment.id} Full team details${waiverUrl ? " + your waiver" : ""} are in your email.`;
         await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
           audienceRef: payerId,
-          channels: ["IN_APP", "EMAIL"],
+          channels: ["IN_APP", "EMAIL", "SMS"],
           triggerType: "TEAM_LAUNCH",
           subject: email.subject,
           body: email.text,
           html: email.html,
+          smsBody,
         });
         sent++;
       }
