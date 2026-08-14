@@ -9,6 +9,8 @@
 // the newsletter posts to the parent site's endpoint. Brand tokens: navy
 // #0a1628, green #8ab800, dark-green accent #5f7d00.
 
+import { ZohoNewsletter } from "./ZohoNewsletter";
+
 const SITE = "https://purepickleball.com";
 
 // Partner logos hosted in /public/brand. The bar renders when this is non-empty.
@@ -90,41 +92,20 @@ export function SiteFooter() {
         </section>
       )}
 
-      {/* ===== Newsletter bar (dark navy) ===== */}
+      {/* ===== Newsletter bar (dark navy) — official Zoho Campaigns opt-in ===== */}
       <section className="px-6 py-12 md:px-14" style={{ background: "#0a1628" }}>
-        <div className="mx-auto flex max-w-[1300px] flex-col items-start gap-10 md:flex-row">
-          <div className="flex-shrink-0">
+        <div className="mx-auto flex max-w-[1300px] flex-col items-start gap-10 md:flex-row md:items-center">
+          <div className="flex-shrink-0 md:max-w-xs">
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8ab800]">Stay in the Loop</div>
-            <h3 className="mb-1 mt-2 font-serif text-2xl leading-tight text-white">
+            <h3 className="mb-2 mt-2 font-serif text-2xl leading-tight text-white">
               Join Our<br /><em className="text-[#8ab800]">Newsletter</em>
             </h3>
+            <p className="text-sm text-white/60">News, events, and updates from PURE Pickleball &amp; Padel — straight to your inbox.</p>
           </div>
           <div className="flex-1">
-            {/* Posts to the parent site's handler. Note: the parent's reCAPTCHA is
-                domain-bound, so submissions from the academy may be rejected until
-                a token/site-key is wired up here. */}
-            <form method="post" action={`${SITE}/api/newsletter`} className="w-full">
-              <div className="mb-2 flex flex-col gap-2 sm:flex-row">
-                <input name="firstName" placeholder="First Name *" required className="w-full rounded-none border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-[#8ab800] focus:outline-none" />
-                <input name="lastName" placeholder="Last Name *" required className="w-full rounded-none border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-[#8ab800] focus:outline-none" />
-              </div>
-              <div className="mb-2 flex flex-col gap-2 sm:flex-row">
-                <input type="email" name="email" placeholder="Email Address *" required className="w-full rounded-none border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-[#8ab800] focus:outline-none" />
-                <input type="tel" name="mobile" placeholder="Mobile *" required className="w-full rounded-none border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-[#8ab800] focus:outline-none" />
-                <button type="submit" className="whitespace-nowrap bg-[#8ab800] px-6 py-2 text-[0.75rem] font-semibold uppercase tracking-widest text-white transition-colors hover:bg-[#729a00]">
-                  Subscribe
-                </button>
-              </div>
-              <label className="flex items-start gap-2 text-[0.65rem] text-white/50">
-                <input type="checkbox" name="privacyConsent" required className="mt-0.5" />
-                <span>
-                  I agree to the{" "}
-                  <a href={`${SITE}/privacy-policy`} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/80">Privacy Policy</a>{" "}&amp;{" "}
-                  <a href={`${SITE}/terms-of-service`} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/80">Terms of Use</a>{" "}
-                  and to receive email and SMS communications from PURE Pickleball and Padel. *Required
-                </span>
-              </label>
-            </form>
+            {/* Zoho-hosted form: posts directly to Zoho Campaigns, so signups land
+                in the same list as the main site. */}
+            <ZohoNewsletter />
           </div>
         </div>
       </section>
