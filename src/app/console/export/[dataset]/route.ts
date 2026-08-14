@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { isStaff } from "@/lib/rbac";
+import { isStaff, isAdmin } from "@/lib/rbac";
 import { toCsv, csvResponse } from "@/lib/csv";
 import { formatCents } from "@/lib/money";
 import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
+import { computeEnrollmentBreakdown } from "@/lib/domain/enrollmentBreakdown";
 
 // CSV export for the key registers (§18). Staff only.
 export async function GET(_req: Request, { params }: { params: Promise<{ dataset: string }> }) {
@@ -92,6 +93,25 @@ export async function GET(_req: Request, { params }: { params: Promise<{ dataset
         coach: `${c.person.firstName} ${c.person.lastName}`,
         totalPaid: formatCents(c.payouts.reduce((s, l) => s + l.totalCents, 0)),
       }))));
+    }
+    case "enrollment-breakdown": {
+      // Admins only — same audience as the dashboard section it exports.
+      if (!isAdmin(session.roles ?? session.role)) return new Response("Unauthorized", { status: 401 });
+      const regs = await prisma.registration.findMany({
+        select: {
+          status: true,
+          programInterest: true,
+          skillLevel: true,
+          division: { select: { name: true } },
+          locationPrefs: { select: { marketName: true, facility: { select: { name: true, market: true } } } },
+        },
+      });
+      const b = computeEnrollmentBreakdown(regs);
+      const rows = [
+        ...b.byLocation.map((r) => ({ category: "Location", label: r.label, active: r.active, waitlist: r.waitlist, total: r.total })),
+        ...b.byProgram.map((r) => ({ category: "Program / skill level", label: r.label, active: r.active, waitlist: r.waitlist, total: r.total })),
+      ];
+      return csvResponse("enrollment-breakdown.csv", toCsv(rows, ["category", "label", "active", "waitlist", "total"]));
     }
     default:
       return new Response("Unknown dataset", { status: 404 });
