@@ -21,8 +21,11 @@ export async function createCheckoutRedirect(opts: {
   paymentId: string;
   plan: "full" | "installments";
   actorId?: string | null;
+  /** Admin test: complete the payment WITHOUT charging (same path used when
+   *  Stripe isn't configured) so staff can exercise the full flow safely. */
+  simulate?: boolean;
 }): Promise<CheckoutResult> {
-  const { paymentId, plan, actorId = null } = opts;
+  const { paymentId, plan, actorId = null, simulate = false } = opts;
   const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
   if (!payment || payment.direction !== "IN") return { ok: false, error: "notfound" };
   if (payment.status === "PAID") return { ok: false, error: "paid" };
@@ -43,8 +46,9 @@ export async function createCheckoutRedirect(opts: {
     ? "Payment to PURE Academy / Arizona Club Pickleball."
     : "Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.";
 
-  // Dev / unconfigured Stripe — simulate a successful charge, clearly flagged.
-  if (!isStripeConfigured()) {
+  // Dev / unconfigured Stripe, or an explicit admin test — simulate a successful
+  // charge, clearly flagged, with no money moved.
+  if (simulate || !isStripeConfigured()) {
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
