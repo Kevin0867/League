@@ -109,6 +109,8 @@ export async function POST(req: Request) {
           coachPerSessionCents: latest?.coachPerSessionCents ?? 10000,
           assistantPct: latest?.assistantPct ?? 0.5,
           proCoachPerSessionCents: latest?.proCoachPerSessionCents ?? null,
+          shirtPriceCents: latest?.shirtPriceCents ?? 2500,
+          tankPriceCents: latest?.tankPriceCents ?? 2500,
           alaCoachSharePct: latest?.alaCoachSharePct ?? 0.5,
           alaDirectorSharePct: latest?.alaDirectorSharePct ?? 0.1,
           alaPurePct: latest?.alaPurePct ?? 0.4,
@@ -119,6 +121,32 @@ export async function POST(req: Request) {
       });
       await audit({ actorId: actor.userId, entityType: "RateConfig", entityId: "seasonFee", action: "rate.setSeasonFee", summary: `Season fee → $${dollars.toFixed(0)}` });
       return back("?ok=setFee");
+    }
+
+    // Team apparel prices (T-shirt / tank top). Carries every other rate forward.
+    case "setApparelPrices": {
+      const shirt = parseFloat(String(formData.get("shirtPrice") ?? "").trim());
+      const tank = parseFloat(String(formData.get("tankPrice") ?? "").trim());
+      if (isNaN(shirt) || shirt < 0 || isNaN(tank) || tank < 0) return back("?err=fields");
+      const latest = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      await prisma.rateConfig.create({
+        data: {
+          seasonFeeCents: latest?.seasonFeeCents ?? 49500,
+          coachPerSessionCents: latest?.coachPerSessionCents ?? 10000,
+          assistantPct: latest?.assistantPct ?? 0.5,
+          proCoachPerSessionCents: latest?.proCoachPerSessionCents ?? null,
+          shirtPriceCents: Math.round(shirt * 100),
+          tankPriceCents: Math.round(tank * 100),
+          alaCoachSharePct: latest?.alaCoachSharePct ?? 0.5,
+          alaDirectorSharePct: latest?.alaDirectorSharePct ?? 0.1,
+          alaPurePct: latest?.alaPurePct ?? 0.4,
+          alaDirCoachSharePct: latest?.alaDirCoachSharePct ?? 0.6,
+          alaDirDirectorSharePct: latest?.alaDirDirectorSharePct ?? 0.1,
+          alaDirPurePct: latest?.alaDirPurePct ?? 0.3,
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "RateConfig", entityId: "apparel", action: "rate.setApparelPrices", summary: `Apparel → shirt $${shirt.toFixed(0)}, tank $${tank.toFixed(0)}` });
+      return back("?ok=setApparel");
     }
 
     case "editDivision": {

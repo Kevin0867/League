@@ -67,6 +67,7 @@ export default async function ReportsPage() {
     ["registrations", "Registrations"],
     ["teams", "Teams"],
     ["payments", "Payments"],
+    ["apparel", "Apparel orders"],
     ["payouts", "Coach payouts"],
     ["statements", "Facility statements"],
     ["1099", "Coach 1099 totals"],

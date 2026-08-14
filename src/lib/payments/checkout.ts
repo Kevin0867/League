@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
 import { INSTALLMENT_COUNT, INSTALLMENT_INTERVAL_DAYS, sendPaymentConfirmation } from "@/lib/payments/receipt";
+import { apparelLineItems } from "@/lib/payments/apparel";
 import { audit } from "@/lib/audit";
 
 // Shared season-fee checkout. Used by both the authenticated portal (which adds
@@ -62,6 +63,10 @@ export async function createCheckoutRedirect(opts: {
     return { ok: true, redirectUrl: `${base}/pay/success?sim=1&payment=${payment.id}` };
   }
 
+  // Team apparel bought with this fee — one-time line items charged once, added
+  // to both the pay-in-full checkout and the FIRST invoice of the payment plan.
+  const apparel = await apparelLineItems(payment.id);
+
   try {
     if (installments) {
       // 3-payment plan anchored at registration: the FIRST charge is taken now at
@@ -81,6 +86,7 @@ export async function createCheckoutRedirect(opts: {
               product_data: { name: `${productName} — 3-payment plan` },
             },
           },
+          ...apparel,
         ],
         subscription_data: { metadata: { paymentId: payment.id }, description: productBlurb },
         metadata: { paymentId: payment.id },
@@ -107,6 +113,7 @@ export async function createCheckoutRedirect(opts: {
             product_data: { name: productName, description: productBlurb },
           },
         },
+        ...apparel,
       ],
       metadata: { paymentId: payment.id },
       success_url: success,
