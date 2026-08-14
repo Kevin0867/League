@@ -260,6 +260,18 @@ export async function POST(req: Request) {
     const facilityId = String(formData.get("facilityId") ?? "").trim() || team.facilityId || null;
     const notify = String(formData.get("notify") ?? "") === "1";
 
+    // If the chosen facility publishes availability windows, the practice's
+    // weekday + start time must land inside one — you can't book a court when
+    // it isn't open. Facilities with no windows are unconstrained.
+    if (facilityId) {
+      const blocks = await prisma.courtBlock.findMany({ where: { facilityId } });
+      if (blocks.length) {
+        const dow = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][parsed.getUTCDay()];
+        const ok = blocks.some((b) => b.dayOfWeek === dow && startTime >= b.startTime && startTime <= b.endTime);
+        if (!ok) return back("?err=addslot");
+      }
+    }
+
     const created = await prisma.session.create({
       data: {
         seasonId: team.seasonId,
