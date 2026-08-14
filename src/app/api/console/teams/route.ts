@@ -13,7 +13,7 @@ import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { formatTime12 } from "@/lib/time";
-import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
+import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
 
 /** Colors used by OTHER teams in the same gender+level group (divisionCode) —
  *  the set a new/edited team must avoid, since every team in a division (e.g.
@@ -186,10 +186,12 @@ export async function POST(req: Request) {
         select: { id: true, divisionCode: true, divisionId: true, market: true, name: true, color: true, division: { select: { name: true } } },
         orderBy: [{ market: "asc" }, { name: "asc" }],
       });
-      // Group by gender+level identity: divisionCode, else the linked division's
-      // name, else levelBand-free fallback. Teams with no division at all are
-      // skipped (nothing to group them by).
-      const groupKey = (t: (typeof teams)[number]) => t.divisionCode ?? t.division?.name ?? (t.divisionId ? `id:${t.divisionId}` : null);
+      // Group by a CANONICAL gender+level code so a coded team (divisionCode
+      // "W3.0") and an uncoded one whose division name derives to the same code
+      // ("Women's Elite 3.0") land in one group. Teams with no division at all
+      // are skipped (nothing to group them by).
+      const groupKey = (t: (typeof teams)[number]) =>
+        t.divisionCode ?? deriveDivisionCode(t.division?.name) ?? t.division?.name ?? (t.divisionId ? `id:${t.divisionId}` : null);
       const byCode = new Map<string, typeof teams>();
       for (const t of teams) {
         const k = groupKey(t);

@@ -11,6 +11,7 @@ import {
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
 import { TeamCreateForm } from "./TeamCreateForm";
 import { BulkScheduleEditor } from "./BulkScheduleEditor";
+import { deriveDivisionCode } from "@/lib/domain/teamName";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TableFilter } from "@/components/TableFilter";
 
@@ -73,9 +74,9 @@ export default async function TeamBuildBoard({
   // multi-team groups can collide, so single-team groups are never "issues".
   const colorGroups = new Map<string, { label: string; teams: { name: string; color: string | null }[] }>();
   for (const t of teams) {
-    const key = t.divisionCode ?? t.division?.name ?? (t.divisionId ? `id:${t.divisionId}` : null);
+    const key = t.divisionCode ?? deriveDivisionCode(t.division?.name) ?? t.division?.name ?? (t.divisionId ? `id:${t.divisionId}` : null);
     if (!key) continue;
-    const label = t.divisionCode ?? t.division?.name ?? "Division";
+    const label = t.divisionCode ?? deriveDivisionCode(t.division?.name) ?? t.division?.name ?? "Division";
     if (!colorGroups.has(key)) colorGroups.set(key, { label, teams: [] });
     colorGroups.get(key)!.teams.push({ name: t.name, color: t.color });
   }
