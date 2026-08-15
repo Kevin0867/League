@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendEmail } from "@/lib/notify";
+import { brandedEmailHtml } from "@/lib/email/branded";
+
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 // Phase-A ACP interest capture (build-list item 1). Public, no auth — an outside
 // club registers interest before entries open on September 14.
@@ -42,17 +47,33 @@ export async function POST(req: Request) {
       `See all entries: ${origin}/console/acp`,
   );
 
-  // Confirmation stating the dates plainly.
-  await sendEmail(
-    email,
-    "Arizona Club Pickleball — you're on the list",
+  // Branded HTML confirmation (PURE Academy logo top-left, PURE Pickleball &
+  // Padel top-right) with a plain-text fallback for non-HTML clients.
+  const text =
     `Thanks, ${contactName} — ${clubName} is on the Arizona Club Pickleball interest list.\n\n` +
-      `Here are the dates:\n` +
-      `• Entries open: September 14, 2026\n` +
-      `• Entries close: October 12, 2026\n` +
-      `• League begins: the week of October 26, 2026\n\n` +
-      `We'll email you the moment entries open so you can enter your team. Questions? Just reply to this email.\n\n— PURE Academy / Arizona Club Pickleball`,
-  );
+    `Here are the dates:\n` +
+    `• Entries open: September 14, 2026\n` +
+    `• Entries close: October 12, 2026\n` +
+    `• League begins: the week of October 26, 2026\n\n` +
+    `We'll email you the moment entries open so you can enter your team. Questions? Just reply to this email.\n\n— PURE Academy / Arizona Club Pickleball`;
+
+  const dateRow = (label: string, value: string) =>
+    `<tr><td style="padding:6px 0;color:#64748b;font-size:14px;width:130px">${label}</td>` +
+    `<td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600">${value}</td></tr>`;
+  const html = brandedEmailHtml({
+    heading: "You're on the list!",
+    intro: `Thanks, ${esc(contactName)} — ${esc(clubName)} is on the Arizona Club Pickleball interest list.`,
+    contentHtml:
+      `<p style="margin:0 0 12px;color:#334155;font-size:15px">Here are the key dates:</p>` +
+      `<table style="width:100%;border-collapse:collapse;margin:0 0 16px">` +
+      dateRow("Entries open", "September 14, 2026") +
+      dateRow("Entries close", "October 12, 2026") +
+      dateRow("League begins", "the week of October 26, 2026") +
+      `</table>` +
+      `<p style="margin:0;color:#475569;font-size:14px">We'll email you the moment entries open so you can enter your team. Questions? Just reply to this email.</p>`,
+  });
+
+  await sendEmail(email, "Arizona Club Pickleball — you're on the list", text, html);
 
   return back("?ok=1");
 }
