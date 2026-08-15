@@ -153,10 +153,19 @@ export async function POST(req: Request) {
     const dob = String(fd.get("dob") ?? "").trim() || null;
     const divisionId = String(fd.get("divisionId") ?? "").trim() || null;
     const seasonId = String(fd.get("seasonId") ?? "").trim() || null;
+    // Optional intake details — program interest, ranked location markets,
+    // practice-time preference, and free-text notes.
+    const programInterest = String(fd.get("programInterest") ?? "").trim() || null;
+    const practiceTimePref = String(fd.get("practiceTimePref") ?? "").trim() || null;
+    const partnerRequests = String(fd.get("notes") ?? "").trim() || null;
+    const locationPrefs = [String(fd.get("locationPref1") ?? ""), String(fd.get("locationPref2") ?? ""), String(fd.get("locationPref3") ?? "")]
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .map((marketName, i) => ({ marketName, rank: i + 1 }));
     if (!firstName || !lastName) return back("?err=name");
     if (!email && !phone) return back("?err=contact");
     try {
-      await ingestRegistration({ firstName, lastName, email, phone, dob, divisionId, seasonId, source: "console" });
+      await ingestRegistration({ firstName, lastName, email, phone, dob, divisionId, seasonId, programInterest, practiceTimePref, partnerRequests, locationPrefs, source: "console" });
     } catch {
       return back("?err=failed");
     }
