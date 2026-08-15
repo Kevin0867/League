@@ -19,6 +19,7 @@ export type IntakeInput = {
   duprId?: string | null;
   duprRating?: number | null;
   practiceTimePref?: string | null;
+  programInterest?: string | null;
   daysThatDontWork?: string | null;
   partnerRequests?: string | null;
   medicalDisclosures?: string | null;
@@ -291,6 +292,7 @@ export async function ingestRegistration(
       skillLevel: input.skillLevel ?? null,
       duprRatingAtReg: input.duprRating ?? null,
       practiceTimePref: input.practiceTimePref ?? null,
+      programInterest: input.programInterest ?? null,
       daysThatDontWork: input.daysThatDontWork ?? null,
       partnerRequests: input.partnerRequests ?? null,
       medicalDisclosures: input.medicalDisclosures ?? null,
