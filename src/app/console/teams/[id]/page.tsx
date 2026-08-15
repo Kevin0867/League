@@ -470,6 +470,49 @@ export default async function TeamDetailPage({
               </div>
             )}
           </div>
+
+          {/* Waivers — parallel to Season fees, so the roster's outstanding
+              waivers can be sent right here (not only from the Launch panel). */}
+          <div className="card">
+            <h2 className="mb-2 font-semibold text-slate-900">Waivers</h2>
+            {team.members.length === 0 ? (
+              <p className="text-sm text-slate-400">No players to request waivers from yet.</p>
+            ) : waiversNeeded === 0 ? (
+              <div className="space-y-3">
+                <p className="text-sm text-emerald-700">All rostered players have a signed waiver.</p>
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "sendTeamWaivers", teamId: team.id, all: "1" }}
+                  confirm={`Resend the waiver link to everyone on "${team.name}"?`}
+                  label="Resend waiver to everyone"
+                  className="btn-secondary text-sm"
+                />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-600">
+                  {waiversNeeded} player{waiversNeeded > 1 ? "s" : ""} without a signed waiver. Sending emails a no-login
+                  signing link to each player (or a minor&apos;s parent).
+                </p>
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "sendTeamWaivers", teamId: team.id }}
+                  confirm={`Send a waiver request to ${waiversNeeded} player${waiversNeeded > 1 ? "s" : ""} who haven't signed yet?`}
+                  label={`Send waiver request (${waiversNeeded})`}
+                  className="btn-primary text-sm"
+                />
+                <div>
+                  <ConfirmSubmit
+                    action="/api/console/teams"
+                    fields={{ ticket, op: "sendTeamWaivers", teamId: team.id, all: "1" }}
+                    confirm={`Resend the waiver link to everyone on "${team.name}", including those who've signed?`}
+                    label="Resend to everyone"
+                    className="text-xs font-semibold text-brand-700 hover:underline"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Six fields editor */}
