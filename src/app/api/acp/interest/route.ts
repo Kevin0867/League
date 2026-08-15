@@ -26,6 +26,22 @@ export async function POST(req: Request) {
     data: { clubName, contactName, email, phone, market, likelyTeams: Number.isFinite(likelyTeams as number) ? likelyTeams : null, likelyDivisions },
   });
 
+  // Notify the team so a new interest lands in the inbox, not just the console.
+  const opsEmail = process.env.OPS_EMAIL ?? "team@purepickleball.com";
+  await sendEmail(
+    opsEmail,
+    `New ACP interest — ${clubName}`,
+    `A new Arizona Club Pickleball interest was submitted:\n\n` +
+      `• Club: ${clubName}\n` +
+      `• Contact: ${contactName}\n` +
+      `• Email: ${email}\n` +
+      `• Phone: ${phone ?? "—"}\n` +
+      `• Market/city: ${market ?? "—"}\n` +
+      `• Likely # of teams: ${likelyTeams ?? "—"}\n` +
+      `• Division: ${likelyDivisions ?? "—"}\n\n` +
+      `See all entries: ${origin}/console/acp`,
+  );
+
   // Confirmation stating the dates plainly.
   await sendEmail(
     email,
