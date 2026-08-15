@@ -1,10 +1,10 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { formatDateTime12 } from "@/lib/time";
 import { acpEntryWindow } from "@/lib/domain/acpEntry";
 import { DIVISION_MIN_TEAMS } from "@/lib/domain/seasonCalendar";
 import { mintConsoleTicket } from "@/lib/auth";
-import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { requireAdmin } from "@/lib/rbac";
 
@@ -97,15 +97,17 @@ export default async function ConsoleAcpPage({
                   </div>
                   <ul className="mt-2 divide-y divide-slate-100 text-sm">
                     {list.map((e) => (
-                      <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                        <div>
-                          <span className="font-medium text-slate-800">{e.clubName}</span>
-                          <span className="text-slate-400"> · {e.playerCount} players · {formatCents(e.amountDueCents)}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-slate-500">
-                          <span>{e.contactName} · {e.contactEmail}</span>
-                          <StatusBadge status={e.status} />
-                        </div>
+                      <li key={e.id}>
+                        <Link href={`/console/acp/${e.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-2 -mx-2 hover:bg-slate-50">
+                          <div>
+                            <span className="font-medium text-brand-700">{e.clubName}</span>
+                            <span className="text-slate-400"> · {e.playerCount} players · {formatCents(e.amountDueCents)}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500">
+                            <span>{e.contactName} · {e.contactEmail}</span>
+                            <StatusBadge status={e.status} />
+                          </div>
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -116,59 +118,28 @@ export default async function ConsoleAcpPage({
         )}
       </div>
 
-      {/* Full entry detail with rosters */}
+      {/* All entries — click into any to edit, manage the roster, request the
+          fee, or convert it to a team. */}
       {entries.length > 0 && (
         <div className="card">
           <h2 className="mb-3 font-semibold text-slate-900">All entries</h2>
-          <div className="space-y-3">
+          <ul className="divide-y divide-slate-100">
             {entries.map((e) => (
-              <details key={e.id} className="rounded-lg border border-slate-200 p-3">
-                <summary className="cursor-pointer text-sm">
-                  <span className="font-medium text-slate-800">{e.clubName}</span>
-                  <span className="text-slate-400"> — {e.divisionName} · {e.playerCount} players · {formatCents(e.amountDueCents)}</span>
-                </summary>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="text-sm text-slate-600">
-                    <div><span className="text-slate-400">Contact:</span> {e.contactName}</div>
-                    <div><span className="text-slate-400">Email:</span> {e.contactEmail}</div>
-                    {e.contactPhone && <div><span className="text-slate-400">Phone:</span> {e.contactPhone}</div>}
-                    {e.market && <div><span className="text-slate-400">Market:</span> {e.market}</div>}
-                    <div><span className="text-slate-400">Submitted:</span> {formatDateTime12(e.createdAt)}</div>
-                  </div>
+              <li key={e.id}>
+                <Link href={`/console/acp/${e.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-2.5 -mx-2 hover:bg-slate-50">
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Roster</div>
-                    <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm text-slate-700">
-                      {e.players.map((p) => (
-                        <li key={p.id}>
-                          {p.name}
-                          {p.duprRating != null && <span className="text-slate-400"> · DUPR {p.duprRating.toFixed(2)}</span>}
-                        </li>
-                      ))}
-                    </ol>
+                    <span className="font-medium text-brand-700">{e.clubName}</span>
+                    <span className="text-slate-400"> — {e.divisionName} · {e.players.length} players · {formatCents(e.amountDueCents)}</span>
                   </div>
-                </div>
-
-                {/* Request a card payment for this entry — prefilled, discountable */}
-                <div className="mt-4 border-t border-slate-100 pt-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Request payment</div>
-                  <div className="mt-2">
-                    <CustomPaymentForm
-                      ticket={ticket}
-                      returnTo="/console/acp"
-                      category="ACP_ENTRY"
-                      compact
-                      defaults={{
-                        name: e.contactName,
-                        email: e.contactEmail,
-                        description: `${e.clubName} — 3 league matches and entry into the Championships`,
-                        amount: "195.00",
-                      }}
-                    />
+                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <span>{e.contactName}</span>
+                    <StatusBadge status={e.status} />
+                    <span className="text-brand-600">Manage →</span>
                   </div>
-                </div>
-              </details>
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 
@@ -188,6 +159,7 @@ export default async function ConsoleAcpPage({
                   <th className="py-2 pr-4">Market</th>
                   <th className="py-2 pr-4">Teams</th>
                   <th className="py-2 pr-4">Divisions</th>
+                  <th className="py-2 pr-4" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -199,6 +171,14 @@ export default async function ConsoleAcpPage({
                     <td className="py-2 pr-4 text-slate-500">{i.market ?? "—"}</td>
                     <td className="py-2 pr-4 text-slate-500">{i.likelyTeams ?? "—"}</td>
                     <td className="py-2 pr-4 text-slate-500">{i.likelyDivisions ?? "—"}</td>
+                    <td className="py-2 pr-4 text-right">
+                      <form method="POST" action="/api/console/acp">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="interestToEntry" />
+                        <input type="hidden" name="interestId" value={i.id} />
+                        <button className="whitespace-nowrap text-xs font-semibold text-brand-700 hover:underline">Create entry →</button>
+                      </form>
+                    </td>
                   </tr>
                 ))}
               </tbody>
