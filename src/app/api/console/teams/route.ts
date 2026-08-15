@@ -628,6 +628,52 @@ export async function POST(req: Request) {
       return NextResponse.redirect(new URL("/console/teams?ok=deleteTeam", origin), 303);
     }
 
+    // Merge duplicate teams into one: move every other team's players onto the
+    // kept team (deduped), then delete the emptied duplicates. Cleans up the
+    // duplicate-teams the board showed, in one click, with no player stranded.
+    case "mergeTeams": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const keepId = String(formData.get("keepId") ?? "").trim();
+      const removeIds = String(formData.get("removeIds") ?? "")
+        .split(",").map((s) => s.trim()).filter(Boolean).filter((id) => id && id !== keepId);
+      const keep = await prisma.team.findUnique({ where: { id: keepId } });
+      if (!keep || removeIds.length === 0) return back("?err=notfound");
+
+      let movedTeams = 0;
+      for (const rid of removeIds) {
+        const rt = await prisma.team.findUnique({ where: { id: rid }, include: { members: true } });
+        if (!rt || rt.seasonId !== keep.seasonId) continue; // only within the same season
+        for (const m of rt.members) {
+          await prisma.teamMember.upsert({
+            where: { teamId_personId: { teamId: keepId, personId: m.personId } },
+            create: { teamId: keepId, personId: m.personId, roleOnTeam: m.roleOnTeam ?? "PLAYER" },
+            update: {},
+          });
+        }
+        await prisma.teamMember.deleteMany({ where: { teamId: rid } });
+        const fx = await prisma.fixture.findMany({ where: { OR: [{ homeTeamId: rid }, { awayTeamId: rid }] }, select: { id: true } });
+        const fxIds = fx.map((f) => f.id);
+        if (fxIds.length) {
+          await prisma.availabilityConfirmation.deleteMany({ where: { fixtureId: { in: fxIds } } });
+          await prisma.fixture.deleteMany({ where: { id: { in: fxIds } } });
+        }
+        await prisma.team.delete({ where: { id: rid } });
+        movedTeams++;
+      }
+
+      // Every player now on the kept team is ASSIGNED (not stranded in the pool).
+      const keepMemberIds = (await prisma.teamMember.findMany({ where: { teamId: keepId }, select: { personId: true } })).map((m) => m.personId);
+      if (keepMemberIds.length) {
+        await prisma.registration.updateMany({
+          where: { personId: { in: keepMemberIds }, seasonId: keep.seasonId, status: { in: ["SUBMITTED", "WAITLISTED"] } },
+          data: { status: "ASSIGNED" },
+        });
+      }
+
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: keepId, action: "team.merge", summary: `Merged ${movedTeams} duplicate(s) into ${keep.name}` });
+      return NextResponse.redirect(new URL(`/console/teams?ok=merged&n=${movedTeams}`, origin), 303);
+    }
+
     default:
       return back("?err=op");
   }
