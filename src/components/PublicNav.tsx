@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Logo } from "./Brand";
 import { SiteHeader } from "./SiteHeader";
 import { getSession } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
@@ -26,10 +25,12 @@ export async function PublicNav() {
       <SiteHeader />
       <header className="border-b border-brand-100 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
-        {/* Logo → academy homepage when signed out, or the user's dashboard when signed in. */}
-        <Logo href={home ?? "/"} />
+        {/* Academy logo removed from the nav — the large PURE Academy logo on the
+            page (and the PURE Pickleball & Padel mark in the site bar above) cover
+            branding. A hidden home link keeps the app reachable for screen readers. */}
+        <Link href={home ?? "/"} className="sr-only">PURE Academy home</Link>
 
-        {/* Desktop nav — centered, takes the slack so it never butts the logo. */}
+        {/* Desktop nav — spans the row now that the logo is gone. */}
         <nav className="hidden flex-1 items-center justify-center gap-x-5 gap-y-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-500 xl:flex">
           {LINKS.map((l) => (
             <Link key={l.href} href={l.href} className="whitespace-nowrap hover:text-brand-900">
