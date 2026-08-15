@@ -20,6 +20,9 @@ const ZOHO_STYLE = `
 #${FORM_ID} input:focus{outline:none;border-color:#8ab800;}
 #${FORM_ID} #zcWebOptin:hover{background-color:#729a00!important;}
 #${FORM_ID} #captchaDiv img{max-height:40px;display:block;}
+/* Never take over the page with Zoho's own modal/overlay — we show an inline
+   thank-you instead so the visitor stays put and can keep browsing. */
+#zcOptinOverLay,#zcOptinSuccessPopup{display:none!important;}
 `;
 
 // Kept faithful to Zoho's markup for the parts its script reads; only the
@@ -98,8 +101,13 @@ const ZOHO_FORM_HTML = `
             <input type="hidden" id="zc_formIx" name="zc_formIx" value="3z12a20b64b5ec1699bf4e0fbe3bcd9e57382dae77754578f41829d00ebf9308c3">
           </div>
         </form>
+        <div id="academySignupThanks" style="display:none;padding:20px;background:rgba(138,184,0,0.12);border:1px solid rgba(138,184,0,0.4);border-radius:10px;color:#fff;">
+          <div style="font-size:16px;font-weight:700;">Thanks for subscribing! 🎉</div>
+          <p style="margin-top:6px;font-size:14px;color:rgba(255,255,255,0.72);line-height:1.5;">We&apos;ve sent a confirmation link to your email — click it to start receiving news and updates from PURE Pickleball &amp; Padel.</p>
+        </div>
       </div>
     </div>
+    <iframe name="_zcSignup" id="zcSignupFrame" title="signup" style="display:none;width:0;height:0;border:0;"></iframe>
     <input type="hidden" id="isCaptchaNeeded" value="true">
     <input type="hidden" id="superAdminCap" value="0">
     <img src="https://zwld-zgpm.maillist-manage.com/images/spacer.gif" id="refImage" onload="referenceSetter(this)" style="display:none;">
@@ -116,6 +124,7 @@ export function ZohoNewsletter() {
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
     w[`runOnFormSubmit_${FORM_ID}`] = function () {};
+
     const init = () => {
       const fn = w["setupSF"];
       if (typeof fn === "function") {
@@ -128,11 +137,51 @@ export function ZohoNewsletter() {
       }
       return false;
     };
-    if (init()) return;
-    const t = setInterval(() => {
-      if (init()) clearInterval(t);
-    }, 300);
-    return () => clearInterval(t);
+    let initTimer: ReturnType<typeof setInterval> | null = null;
+    if (!init()) {
+      initTimer = setInterval(() => {
+        if (init() && initTimer) clearInterval(initTimer);
+      }, 300);
+    }
+
+    // Keep the visitor on the page: on success, hide the form and show our own
+    // inline thank-you (Zoho's modal/overlay is suppressed via CSS). Success is
+    // detected from Zoho's inline success node, or — as a fallback — the hidden
+    // iframe loading Zoho's response after the visitor actually submits.
+    const isVisible = (id: string) => {
+      const el = document.getElementById(id);
+      return !!el && el.style.display !== "none" && getComputedStyle(el).display !== "none";
+    };
+    const showThanks = () => {
+      const body = document.getElementById("SIGNUP_BODY_ALL");
+      const thanks = document.getElementById("academySignupThanks");
+      if (body) body.style.display = "none";
+      if (thanks) thanks.style.display = "block";
+    };
+
+    const obs = new MutationObserver(() => {
+      if (isVisible("Zc_SignupSuccess")) showThanks();
+    });
+    const successEl = document.getElementById("Zc_SignupSuccess");
+    if (successEl) obs.observe(successEl, { attributes: true, attributeFilter: ["style"] });
+
+    let submitted = false;
+    const btn = document.getElementById("zcWebOptin");
+    const onClick = () => { submitted = true; };
+    btn?.addEventListener("click", onClick);
+    const iframe = document.getElementById("zcSignupFrame") as HTMLIFrameElement | null;
+    const onFrameLoad = () => {
+      if (!submitted) return; // ignore the initial blank load
+      window.setTimeout(() => { if (!isVisible("errorMsgDiv")) showThanks(); }, 500);
+    };
+    iframe?.addEventListener("load", onFrameLoad);
+
+    return () => {
+      if (initTimer) clearInterval(initTimer);
+      obs.disconnect();
+      btn?.removeEventListener("click", onClick);
+      iframe?.removeEventListener("load", onFrameLoad);
+    };
   }, []);
 
   return (
