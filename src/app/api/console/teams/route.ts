@@ -54,6 +54,12 @@ export async function POST(req: Request) {
       const name = String(formData.get("name") ?? "").trim();
       const seasonId = String(formData.get("seasonId") ?? "").trim();
       if (!name || !seasonId) return NextResponse.redirect(new URL("/console/teams?err=fields", origin), 303);
+      // Reject a duplicate name in the same season — one team per name, so the
+      // board never shows two identical teams. (Case-insensitive, done in JS so
+      // it's DB-portable.)
+      const seasonTeamsForName = await prisma.team.findMany({ where: { seasonId }, select: { id: true, name: true } });
+      const dup = seasonTeamsForName.find((t) => t.name.trim().toLowerCase() === name.toLowerCase());
+      if (dup) return NextResponse.redirect(new URL(`/console/teams/${dup.id}?err=dupname`, origin), 303);
       const divisionId = String(formData.get("divisionId") ?? "").trim() || null;
       const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
       const dayOfWeek = String(formData.get("dayOfWeek") ?? "").trim() || null;
