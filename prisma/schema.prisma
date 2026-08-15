@@ -971,6 +971,21 @@ model Fixture {
   /// DUPR (§12) — the submission pipeline excludes them by rule.
   forfeitedById String?
 
+  /// Match format: TEAM_3 (three counting lines + exhibition, default), TEAM_5
+  /// (five counting lines), or SINGLE_LINE (one line). Drives how many lines the
+  /// score sheet renders and which lines count toward standings.
+  matchType   String   @default("TEAM_3")
+
+  /// Score-acceptance workflow. NONE → a team PROPOSED scores → the opposing team
+  /// ACCEPTED (final) or DISPUTED (back to open). An admin can enter/override at
+  /// any time, which lands ACCEPTED directly. scoreProposedById is the team that
+  /// entered the pending scores; scoreNote carries a dispute reason.
+  scoreStatus       String    @default("NONE")
+  scoreProposedById String?
+  scoreProposedAt   DateTime?
+  scoreAcceptedAt   DateTime?
+  scoreNote         String?
+
   /// Optional link to the underlying Session (court booking moves with the
   /// fixture on an accepted reschedule).
   sessionId   String?  @unique
