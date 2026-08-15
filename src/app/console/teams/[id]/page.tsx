@@ -40,6 +40,7 @@ const ERR_MSG: Record<string, string> = {
   coachclash: "That coach already coaches another team at this day/time. Pick a non-overlapping slot or use “add anyway.”",
   colorclash: "Another team in this division already uses that color. Every team in a division needs a distinct color.",
   slot: "That day/time isn't available at the selected facility. Pick one of the facility's available times.",
+  dupname: "A team with that name already exists this season — here it is. Give the new team a distinct name (e.g. a different color).",
   player: "Missing player.",
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",

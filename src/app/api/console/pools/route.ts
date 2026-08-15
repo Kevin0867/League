@@ -93,8 +93,16 @@ export async function POST(req: Request) {
         include: { person: true },
       });
 
+      // One team per season: the other teams a player must be removed from when
+      // placed here, so assigning never leaves them on two rosters.
+      const otherTeamIds = (
+        await prisma.team.findMany({ where: { seasonId: team.seasonId, id: { not: teamId } }, select: { id: true } })
+      ).map((t) => t.id);
+
       for (const reg of regs) {
-        // Assign each person once (§4): idempotent membership, mark assigned.
+        // Assign each person once (§4): remove from other teams, then upsert
+        // idempotent membership here and mark assigned.
+        if (otherTeamIds.length) await prisma.teamMember.deleteMany({ where: { personId: reg.personId, teamId: { in: otherTeamIds } } });
         await prisma.teamMember.upsert({
           where: { teamId_personId: { teamId, personId: reg.personId } },
           create: { teamId, personId: reg.personId, roleOnTeam: "PLAYER" },
@@ -132,33 +140,46 @@ export async function POST(req: Request) {
       const name = String(formData.get("name") ?? "").trim();
 
       if (!seasonId || !name) return back("?err=fields");
-      if (regIds.length > TEAM_CAP) return back("?err=cap");
 
-      // Derive market from the facility for the team's six fields.
-      const facility = facilityId
-        ? await prisma.facility.findUnique({ where: { id: facilityId } })
-        : null;
-
-      const team = await prisma.team.create({
-        data: {
-          name,
-          seasonId,
-          divisionId,
-          facilityId,
-          market: facility?.market ?? null,
-          origin: "PURE_ACADEMY",
-          published: false,
-        },
+      // Reuse an existing same-name team in this season instead of creating a
+      // duplicate — the name encodes division + market + color, so the same name
+      // is the same intended team. This makes "Form team" idempotent, so a
+      // double-click or re-submit adds to the one team rather than spawning a
+      // second board with the same players.
+      const seasonTeams = await prisma.team.findMany({
+        where: { seasonId },
+        select: { id: true, name: true, coachPlays: true, _count: { select: { members: true } } },
       });
+      const existing = seasonTeams.find((t) => t.name.trim().toLowerCase() === name.toLowerCase());
 
+      // Cap guard against the target's current roster (0 for a brand-new team).
+      const base = existing ? existing._count.members + (existing.coachPlays ? 1 : 0) : 0;
+      if (base + regIds.length > TEAM_CAP) return back("?err=cap");
+
+      let teamId: string;
+      if (existing) {
+        teamId = existing.id;
+      } else {
+        // Derive market from the facility for the team's six fields.
+        const facility = facilityId ? await prisma.facility.findUnique({ where: { id: facilityId } }) : null;
+        const created = await prisma.team.create({
+          data: { name, seasonId, divisionId, facilityId, market: facility?.market ?? null, origin: "PURE_ACADEMY", published: false },
+        });
+        teamId = created.id;
+      }
+
+      // One team per season: drop each player from any OTHER team first, so a
+      // player is never left on two teams (the root of the duplicate rosters).
+      const otherTeamIds = seasonTeams.filter((t) => t.id !== teamId).map((t) => t.id);
       const regs = await prisma.registration.findMany({
         where: { id: { in: regIds } },
         include: { person: true },
       });
       for (const reg of regs) {
+        if (otherTeamIds.length) await prisma.teamMember.deleteMany({ where: { personId: reg.personId, teamId: { in: otherTeamIds } } });
         await prisma.teamMember.upsert({
-          where: { teamId_personId: { teamId: team.id, personId: reg.personId } },
-          create: { teamId: team.id, personId: reg.personId, roleOnTeam: "PLAYER" },
+          where: { teamId_personId: { teamId, personId: reg.personId } },
+          create: { teamId, personId: reg.personId, roleOnTeam: "PLAYER" },
           update: {},
         });
         await prisma.registration.update({ where: { id: reg.id }, data: { status: "ASSIGNED" } });
@@ -167,16 +188,16 @@ export async function POST(req: Request) {
       await audit({
         actorId: actor.userId,
         entityType: "Team",
-        entityId: team.id,
-        action: "CREATE",
-        summary: `Formed "${name}" from pool with ${regs.length} player(s)`,
+        entityId: teamId,
+        action: existing ? "ASSIGN" : "CREATE",
+        summary: `${existing ? "Added to" : "Formed"} "${name}" — ${regs.length} player(s)`,
       });
 
       // Silent by design: forming a team from the pool never auto-messages.
       if (String(formData.get("notify") ?? "") === "1")
-        await notifyAssignment(team.id, regs.map((r) => r.personId), seasonId);
+        await notifyAssignment(teamId, regs.map((r) => r.personId), seasonId);
 
-      return back("?ok=create");
+      return back(existing ? "?ok=assign" : "?ok=create");
     }
 
     default:
