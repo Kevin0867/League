@@ -46,8 +46,8 @@ export function PoolCard({
 
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-slate-900">{pool.facilityName ?? "No location preference"}</h3>
-          <p className="truncate text-[11px] text-slate-400">
+          <h3 className="text-sm font-semibold leading-snug text-slate-900">{pool.facilityName ?? "No location preference"}</h3>
+          <p className="mt-0.5 text-[11px] text-slate-400">
             {pool.divisionName ?? "Unplaced division"}
             {pool.timePref ? ` · ${pool.timePref}` : ""}
           </p>
@@ -113,10 +113,10 @@ export function PoolCard({
           </button>
         </div>
 
-        {/* Form a new team from the selection */}
-        <div className="flex gap-2">
+        {/* Form a new team from the selection — stacked so nothing is cramped. */}
+        <div className="space-y-1.5">
           <input
-            className="input text-sm"
+            className="input w-full text-sm"
             name="name"
             value={teamName}
             onChange={(e) => setTeamName(e.target.value)}
@@ -127,7 +127,7 @@ export function PoolCard({
             name="op"
             value="create"
             disabled={noSelection}
-            className="btn-primary whitespace-nowrap text-sm"
+            className="btn-primary w-full text-sm"
           >
             Form team
           </button>
@@ -135,9 +135,9 @@ export function PoolCard({
 
         {/* Assign to an existing team in this division */}
         {targets.length > 0 && (
-          <div className="flex gap-2">
+          <div className="space-y-1.5">
             <select
-              className="input text-sm"
+              className="input w-full text-sm"
               name="teamId"
               value={teamId || targets[0]?.id || ""}
               onChange={(e) => setTeamId(e.target.value)}
@@ -151,7 +151,7 @@ export function PoolCard({
               name="op"
               value="assign"
               disabled={noSelection}
-              className="btn-secondary whitespace-nowrap text-sm"
+              className="btn-secondary w-full text-sm"
             >
               Add to team
             </button>
