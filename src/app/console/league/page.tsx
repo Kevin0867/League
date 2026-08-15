@@ -8,6 +8,7 @@ import { EditableFixtureRow } from "@/components/EditableFixtureRow";
 import { leagueStandingsFlat } from "@/lib/domain/leagueStandings";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { CreateLeagueForm } from "./CreateLeagueForm";
+import { MATCH_TYPES, matchTypeShort } from "@/lib/domain/matchType";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,10 @@ const OK: Record<string, string> = {
   sendMatchNotice: "Match notice sent to both teams.",
   sendEscalationAlert: "48-hour alert sent.",
   createLeague: "New league created and set active.",
-  addMatch: "Match scheduled.",
+  addMatch: "Match scheduled — assign teams later by editing the row if you left them TBD.",
+  proposeScores: "Scores submitted for the other team to accept.",
+  acceptScores: "Scores accepted — result is final.",
+  disputeScores: "Scores disputed — enter the official result to resolve.",
   addLeagueTeam: "Team added to the league.",
   removeLeagueTeam: "Team removed from the league.",
 };
@@ -237,7 +241,7 @@ export default async function LeaguePage({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold text-slate-900"><span className="text-slate-400">Step 2 ·</span> Matches</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Schedule matches one at a time, or generate a full round-robin so every team plays every other team.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Lock in a date, time, and location — teams optional. Assign teams later by editing the row, or generate a full round-robin once every team is in.</p>
           </div>
           {fixtures.length > 0 && (
             <ConfirmSubmit
@@ -251,32 +255,28 @@ export default async function LeaguePage({
           )}
         </div>
 
-        {rosterTeams.length < 2 ? (
-          <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-            Add at least two teams above to start scheduling matches.
-          </p>
-        ) : (
+        {
           <>
             <div className="grid gap-4 lg:grid-cols-2">
-              {/* Schedule one match */}
+              {/* Schedule one match or slot — teams optional */}
               <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-100">
-                <h3 className="mb-2 text-sm font-semibold text-slate-800">Schedule a match</h3>
+                <h3 className="mb-2 text-sm font-semibold text-slate-800">Schedule a match or slot</h3>
                 <form method="POST" action="/api/console/league" className="grid gap-3">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="addMatch" />
                   <input type="hidden" name="seasonId" value={season.id} />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="label">Home team</label>
-                      <select name="homeTeamId" className="input" required>
-                        <option value="">—</option>
+                      <label className="label">Home team <span className="font-normal text-slate-400">(optional)</span></label>
+                      <select name="homeTeamId" className="input">
+                        <option value="">— TBD —</option>
                         {rosterTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="label">Away team</label>
-                      <select name="awayTeamId" className="input" required>
-                        <option value="">—</option>
+                      <label className="label">Away team <span className="font-normal text-slate-400">(optional)</span></label>
+                      <select name="awayTeamId" className="input">
+                        <option value="">— TBD —</option>
                         {rosterTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                     </div>
@@ -288,15 +288,26 @@ export default async function LeaguePage({
                       <label className="label">Time</label>
                       <input name="scheduledTime" type="time" className="input" defaultValue="18:00" />
                     </div>
-                    <div className="sm:col-span-2">
+                    <div>
                       <label className="label">Location</label>
                       <select name="facilityId" className="input">
                         <option value="">Hub TBD</option>
                         {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
                       </select>
                     </div>
+                    <div>
+                      <label className="label">Courts <span className="font-normal text-slate-400">(optional)</span></label>
+                      <input name="courtAllocation" className="input" placeholder="e.g. Courts 1–4" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="label">Match type</label>
+                      <select name="matchType" className="input" defaultValue="TEAM_3">
+                        {MATCH_TYPES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <button className="btn-primary w-full sm:w-auto">Schedule match</button>
+                  <button className="btn-primary w-full sm:w-auto">Schedule</button>
+                  <p className="text-xs text-slate-400">Leave the teams as TBD to secure a location and time now, then drop teams in from the table below.</p>
                 </form>
               </div>
 
@@ -307,7 +318,9 @@ export default async function LeaguePage({
                   Auto-schedule every pairing across the league weeks from {formatDate(season.startDate)}, skipping blackout dates.
                   Best as a starting point — you can edit any match afterward.
                 </p>
-                {fixtures.length > 0 ? (
+                {rosterTeams.length < 2 ? (
+                  <p className="text-sm text-slate-500">Add at least two teams above to generate the round-robin.</p>
+                ) : fixtures.length > 0 ? (
                   <p className="text-sm text-slate-500">
                     Matches already scheduled. <span className="text-slate-400">Clear all matches to regenerate.</span>
                   </p>
@@ -326,7 +339,7 @@ export default async function LeaguePage({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-                  <tr><th className="py-2">Wk</th><th className="hidden sm:table-cell">Date</th><th>Home</th><th>Away</th><th className="hidden md:table-cell">Location</th><th>Status</th><th></th></tr>
+                  <tr><th className="py-2">Wk</th><th className="hidden sm:table-cell">Date</th><th>Home</th><th>Away</th><th className="hidden lg:table-cell">Type</th><th className="hidden md:table-cell">Location</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {fixtures.map((f) => (
@@ -347,12 +360,16 @@ export default async function LeaguePage({
                         awayTeamId: f.awayTeamId ?? null,
                         facilityId: f.facilityId ?? null,
                         facilityName: f.facility?.name ?? "—",
+                        matchType: f.matchType,
+                        matchTypeShort: matchTypeShort(f.matchType),
+                        courtAllocation: f.courtAllocation ?? null,
+                        scoreStatus: f.scoreStatus,
                         status: f.status,
                       }}
                     />
                   ))}
                   {fixtures.length === 0 && (
-                    <tr><td colSpan={7} className="py-8 text-center text-slate-400">No matches yet — schedule one or generate the round-robin above.</td></tr>
+                    <tr><td colSpan={8} className="py-8 text-center text-slate-400">No matches yet — schedule a slot or generate the round-robin above.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -361,7 +378,7 @@ export default async function LeaguePage({
               Enter scores on a match&apos;s own page (open it from the Status column) — the leaderboard below updates automatically.
             </p>
           </>
-        )}
+        }
       </div>
 
       {/* Confirmation dashboard — availability risk for upcoming matches */}

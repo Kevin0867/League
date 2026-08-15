@@ -10,6 +10,7 @@ import { roundRobin, leagueWeekDates, LEAGUE_WEEKS } from "@/lib/domain/fixtures
 import { leagueStartDate, FIRST_LEAGUE_WEEK } from "@/lib/domain/seasonCalendar";
 import { teamConfirmation, shouldEscalate } from "@/lib/domain/availability";
 import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
+import { matchTypeConfig, isCountingLine } from "@/lib/domain/matchType";
 
 // League mutations as a native-form-POST route handler with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -18,7 +19,7 @@ import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
 export const dynamic = "force-dynamic";
 
 // [id] ops redirect back to the fixture page; top-level ops to the league index.
-const FIXTURE_OPS = new Set(["submitLineup", "submitLineups", "enterScores", "recordForfeit", "submitToDupr"]);
+const FIXTURE_OPS = new Set(["submitLineup", "submitLineups", "enterScores", "acceptScores", "disputeScores", "recordForfeit", "submitToDupr"]);
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
@@ -46,6 +47,8 @@ export async function POST(req: Request) {
       const status = String(formData.get("status") ?? "").trim();
       const homeTeamId = String(formData.get("homeTeamId") ?? "").trim() || null;
       const awayTeamId = String(formData.get("awayTeamId") ?? "").trim() || null;
+      const matchType = String(formData.get("matchType") ?? "").trim();
+      const courts = String(formData.get("courtAllocation") ?? "").trim();
       const scheduledAt = dateStr ? new Date(`${dateStr}T${timeStr}`) : null;
       await prisma.fixture.update({
         where: { id },
@@ -54,6 +57,8 @@ export async function POST(req: Request) {
           facilityId,
           homeTeamId,
           awayTeamId,
+          ...(matchType ? { matchType } : {}),
+          ...(courts ? { courtAllocation: courts } : {}),
           ...(status ? { status } : {}),
         },
       });
@@ -80,29 +85,32 @@ export async function POST(req: Request) {
       return back("?ok=createLeague");
     }
 
-    // Manually schedule a single match between two teams (location + time),
-    // outside the round-robin generator. Feeds the same fixtures/leaderboard.
+    // Schedule a single match slot: lock in a date, time, and location now, with
+    // teams optional — assign them here later by editing the row. Teams and the
+    // match type default to TBD/standard so a location + time can be secured
+    // before the pairing is known. Feeds the same fixtures/leaderboard.
     case "addMatch": {
       const seasonId = String(formData.get("seasonId") ?? "");
       if (!seasonId) return back("?err=noseason");
-      const homeTeamId = String(formData.get("homeTeamId") ?? "").trim();
-      const awayTeamId = String(formData.get("awayTeamId") ?? "").trim();
-      if (!homeTeamId || !awayTeamId) return back("?err=matchteams");
-      if (homeTeamId === awayTeamId) return back("?err=matchsame");
+      const homeTeamId = String(formData.get("homeTeamId") ?? "").trim() || null;
+      const awayTeamId = String(formData.get("awayTeamId") ?? "").trim() || null;
+      if (homeTeamId && awayTeamId && homeTeamId === awayTeamId) return back("?err=matchsame");
       const dateStr = String(formData.get("scheduledAt") ?? "").trim();
       const timeStr = String(formData.get("scheduledTime") ?? "").trim() || "18:00";
       if (!dateStr) return back("?err=matchdate");
       const scheduledAt = new Date(`${dateStr}T${timeStr}`);
       if (isNaN(scheduledAt.getTime())) return back("?err=matchdate");
       const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
+      const matchType = String(formData.get("matchType") ?? "TEAM_3").trim() || "TEAM_3";
+      const courts = String(formData.get("courtAllocation") ?? "").trim() || null;
 
       const agg = await prisma.fixture.aggregate({ where: { seasonId }, _max: { weekNumber: true } });
       const weekNumber = (agg._max.weekNumber ?? 0) + 1;
 
       const fixture = await prisma.fixture.create({
-        data: { seasonId, weekNumber, scheduledAt, facilityId, homeTeamId, awayTeamId, status: "SCHEDULED" },
+        data: { seasonId, weekNumber, scheduledAt, facilityId, homeTeamId, awayTeamId, matchType, courtAllocation: courts, status: "SCHEDULED" },
       });
-      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixture.id, action: "fixture.add", summary: "Scheduled a match" });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixture.id, action: "fixture.add", summary: homeTeamId && awayTeamId ? "Scheduled a match" : "Reserved a match slot (teams TBD)" });
       return back("?ok=addMatch");
     }
 
@@ -432,15 +440,26 @@ export async function POST(req: Request) {
       return back("?ok=submitLineup");
     }
 
+    // Enter line-by-line scores. Who is entering decides what happens:
+    //   • "OFFICIAL" (admin authority) → scores are final: match COMPLETED,
+    //     scoreStatus ACCEPTED, DUPR queued. Admins can enter or overwrite any
+    //     time, which is how a dispute gets resolved.
+    //   • a team id → the scores are a PROPOSAL awaiting the OTHER team's
+    //     acceptance. The match stays SCHEDULED (out of the standings) until the
+    //     opponent accepts. The opponent is notified to accept or dispute.
     case "enterScores": {
       const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, include: { homeTeam: true, awayTeam: true } });
       if (!fixture) return back("?err=nofixture");
+      const cfg = matchTypeConfig(fixture.matchType);
+      const enteredBy = String(formData.get("enteredBy") ?? "OFFICIAL").trim();
+      const proposal = enteredBy !== "OFFICIAL" && (enteredBy === fixture.homeTeamId || enteredBy === fixture.awayTeamId);
 
-      // Rebuild all lines for this fixture.
+      // Rebuild all lines for this fixture, honouring the match format's line
+      // count and which line (if any) is the non-counting exhibition.
       await prisma.lineMatchup.deleteMany({ where: { fixtureId } });
 
-      for (let line = 1; line <= 4; line++) {
-        const isCounting = line <= 3;
+      for (let line = 1; line <= cfg.lines; line++) {
+        const counting = isCountingLine(line, cfg);
         const games: { g: number; h: number; a: number }[] = [];
         for (let g = 1; g <= 3; g++) {
           const hRaw = formData.get(`l${line}_g${g}_h`);
@@ -459,14 +478,41 @@ export async function POST(req: Request) {
         const lineWinner = hWon > aWon ? "HOME" : aWon > hWon ? "AWAY" : null;
 
         const lm = await prisma.lineMatchup.create({
-          data: { fixtureId, lineNumber: line, isCounting, lineWinner },
+          data: { fixtureId, lineNumber: line, isCounting: counting, lineWinner },
         });
         for (const gm of games) {
           await prisma.gameScore.create({ data: { lineId: lm.id, gameNumber: gm.g, homeScore: gm.h, awayScore: gm.a } });
         }
       }
 
-      await prisma.fixture.update({ where: { id: fixtureId }, data: { status: "COMPLETED" } });
+      if (proposal) {
+        const proposingName = enteredBy === fixture.homeTeamId ? fixture.homeTeam?.name : fixture.awayTeam?.name;
+        const opponentId = enteredBy === fixture.homeTeamId ? fixture.awayTeamId : fixture.homeTeamId;
+        await prisma.fixture.update({
+          where: { id: fixtureId },
+          data: { status: "SCHEDULED", scoreStatus: "PROPOSED", scoreProposedById: enteredBy, scoreProposedAt: new Date(), scoreAcceptedAt: null, scoreNote: null },
+        });
+        // Ask the opposing team to accept or dispute the entered scores.
+        if (opponentId) {
+          await dispatchMessage({
+            senderId: actor.userId, seasonId: fixture.seasonId,
+            audienceType: "TEAM", audienceRef: opponentId,
+            channels: ["IN_APP", "EMAIL"], triggerType: "MATCH_NOTICE",
+            subject: "Scores submitted — please review",
+            body: `${proposingName ?? "The other team"} submitted scores for your match on ${formatDate(fixture.scheduledAt)}. Please review and accept, or flag a dispute.`,
+          });
+        }
+        await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "SCORE_PROPOSED", summary: `Scores proposed by ${proposingName ?? "a team"} — awaiting acceptance` });
+        revalidatePath(`/console/league/${fixtureId}`);
+        revalidatePath("/console/league");
+        return back("?ok=proposeScores");
+      }
+
+      // Official entry → final.
+      await prisma.fixture.update({
+        where: { id: fixtureId },
+        data: { status: "COMPLETED", scoreStatus: "ACCEPTED", scoreProposedById: null, scoreAcceptedAt: new Date(), scoreNote: null },
+      });
 
       // Queue DUPR submission (§12) — pending, unless already excluded by forfeit.
       await prisma.duprSubmission.upsert({
@@ -475,11 +521,75 @@ export async function POST(req: Request) {
         update: { status: "PENDING", lastError: null },
       });
 
-      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "SCORE", summary: "Scores entered; match completed" });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "SCORE", summary: "Scores entered (official); match completed" });
       revalidatePath(`/console/league/${fixtureId}`);
       revalidatePath("/standings");
       revalidatePath("/console/league");
       return back("?ok=enterScores");
+    }
+
+    // The opposing team (or an admin on their behalf) accepts proposed scores.
+    // The match becomes final and enters the standings; DUPR is queued.
+    case "acceptScores": {
+      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, include: { homeTeam: true, awayTeam: true } });
+      if (!fixture) return back("?err=nofixture");
+      if (fixture.scoreStatus !== "PROPOSED") return back("?err=noproposal");
+      await prisma.fixture.update({
+        where: { id: fixtureId },
+        data: { status: "COMPLETED", scoreStatus: "ACCEPTED", scoreAcceptedAt: new Date(), scoreNote: null },
+      });
+      await prisma.duprSubmission.upsert({
+        where: { fixtureId },
+        create: { fixtureId, status: "PENDING" },
+        update: { status: "PENDING", lastError: null },
+      });
+      // Confirm to both teams that the result is final.
+      for (const teamId of [fixture.homeTeamId, fixture.awayTeamId].filter(Boolean) as string[]) {
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: fixture.seasonId,
+          audienceType: "TEAM", audienceRef: teamId,
+          channels: ["IN_APP"], triggerType: "MATCH_NOTICE",
+          subject: "Match result confirmed",
+          body: `Both teams have agreed the scores for the match on ${formatDate(fixture.scheduledAt)}. The result is now final and on the leaderboard.`,
+        });
+      }
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "SCORE_ACCEPTED", summary: "Proposed scores accepted; match completed" });
+      revalidatePath(`/console/league/${fixtureId}`);
+      revalidatePath("/standings");
+      revalidatePath("/console/league");
+      return back("?ok=acceptScores");
+    }
+
+    // The opposing team flags the proposed scores as wrong. The match reopens
+    // (out of the standings) with the dispute note; an admin resolves it by
+    // entering official scores.
+    case "disputeScores": {
+      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, include: { homeTeam: true, awayTeam: true } });
+      if (!fixture) return back("?err=nofixture");
+      if (fixture.scoreStatus !== "PROPOSED") return back("?err=noproposal");
+      const note = String(formData.get("scoreNote") ?? "").trim() || null;
+      await prisma.fixture.update({
+        where: { id: fixtureId },
+        data: { status: "SCHEDULED", scoreStatus: "DISPUTED", scoreNote: note },
+      });
+      // Notify the proposing team + admins that the scores are contested.
+      if (fixture.scoreProposedById) {
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: fixture.seasonId,
+          audienceType: "TEAM", audienceRef: fixture.scoreProposedById,
+          channels: ["IN_APP", "EMAIL"], triggerType: "MATCH_NOTICE",
+          subject: "Scores disputed",
+          body: `The submitted scores for the match on ${formatDate(fixture.scheduledAt)} were disputed${note ? `: “${note}”` : ""}. An admin will confirm the official result.`,
+        });
+      }
+      const admins = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "DIRECTOR", "COO"] }, personId: { not: null } }, select: { personId: true } });
+      for (const a of admins) {
+        if (a.personId) await dispatchMessage({ senderId: actor.userId, seasonId: fixture.seasonId, audienceType: "SINGLE_PERSON", audienceRef: a.personId, channels: ["IN_APP"], triggerType: "MATCH_NOTICE", subject: "Score dispute to resolve", body: `A score dispute needs an official result for the match on ${formatDate(fixture.scheduledAt)}.` });
+      }
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "SCORE_DISPUTED", summary: `Proposed scores disputed${note ? `: ${note}` : ""}` });
+      revalidatePath(`/console/league/${fixtureId}`);
+      revalidatePath("/console/league");
+      return back("?ok=disputeScores");
     }
 
     case "recordForfeit": {
