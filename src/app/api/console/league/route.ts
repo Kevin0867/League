@@ -120,16 +120,16 @@ export async function POST(req: Request) {
       return back("?ok=clearFixtures");
     }
 
-    // Add a published team to the active league's roster (LeagueTeam). Any
-    // published team can join, regardless of the season it was built in.
+    // Add a team to the active league's roster (LeagueTeam). Any team can join —
+    // it does NOT need to be published or fully set up; day/time/facility can be
+    // arranged here or on the team afterward.
     case "addLeagueTeam": {
       const seasonId = String(formData.get("seasonId") ?? "");
       const teamId = String(formData.get("teamId") ?? "").trim();
       if (!seasonId) return back("?err=noseason");
       if (!teamId) return back("?err=noteam");
-      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, published: true, name: true } });
+      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, name: true } });
       if (!team) return back("?err=noteam");
-      if (!team.published) return back("?err=notpublished");
       await prisma.leagueTeam.upsert({
         where: { seasonId_teamId: { seasonId, teamId } },
         create: { seasonId, teamId },
@@ -138,6 +138,23 @@ export async function POST(req: Request) {
       await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "league.addTeam", summary: `Added ${team.name} to the league` });
       revalidatePath("/console/league");
       return back("?ok=addLeagueTeam");
+    }
+
+    // Add every team not already in the league — the one-click "pull them all in".
+    case "addAllLeagueTeams": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      if (!seasonId) return back("?err=noseason");
+      const inLeague = (await prisma.leagueTeam.findMany({ where: { seasonId }, select: { teamId: true } })).map((r) => r.teamId);
+      const teams = await prisma.team.findMany({
+        where: inLeague.length ? { id: { notIn: inLeague } } : {},
+        select: { id: true },
+      });
+      if (teams.length) {
+        await prisma.leagueTeam.createMany({ data: teams.map((t) => ({ seasonId, teamId: t.id })), skipDuplicates: true });
+      }
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "league.addAllTeams", summary: `Added ${teams.length} team(s) to the league` });
+      revalidatePath("/console/league");
+      return back(`?ok=addLeagueTeam&n=${teams.length}`);
     }
 
     // Remove a team from the league roster. Its fixtures stay for the record;
