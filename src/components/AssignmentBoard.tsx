@@ -134,7 +134,13 @@ export function AssignmentBoard({
       <div className="flex items-start justify-between gap-2">
         <h3 className="flex items-start gap-1.5 text-sm font-semibold leading-tight text-slate-800">
           {col.kind === "team" && <TeamColorDot color={col.color} className="mt-0.5" />}
-          <span>{col.title}</span>
+          {col.kind === "team" ? (
+            <Link href={`/console/teams/${col.id}`} draggable={false} className="hover:text-brand-700 hover:underline">
+              {col.title}
+            </Link>
+          ) : (
+            <span>{col.title}</span>
+          )}
         </h3>
         <span className={`shrink-0 text-xs ${isFull(col) ? "font-semibold text-rose-600" : "text-slate-400"}`}>
           {col.cap != null ? `${col.cards.length}/${col.cap}` : col.cards.length}
@@ -183,6 +189,16 @@ export function AssignmentBoard({
       )}
       {over === col.id && col.cards.length === 0 && (
         <p className="mt-2 rounded-md border border-dashed border-brand-300 py-2 text-center text-[11px] text-brand-400">Drop here</p>
+      )}
+
+      {col.kind === "team" && (
+        <Link
+          href={`/console/teams/${col.id}`}
+          draggable={false}
+          className="mt-2 block border-t border-slate-100 pt-2 text-right text-[11px] font-medium text-brand-600 hover:underline"
+        >
+          Manage team →
+        </Link>
       )}
     </div>
   );
