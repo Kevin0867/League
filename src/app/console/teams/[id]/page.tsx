@@ -420,99 +420,37 @@ export default async function TeamDetailPage({
             )}
           </div>
 
-          {/* Payment request — the assignment → payment-request sequence (§8) */}
-          <div className="card">
-            <h2 className="mb-2 font-semibold text-slate-900">Season fees</h2>
-            {team.members.length === 0 ? (
-              <p className="text-sm text-slate-400">No players to bill yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {feesToRequest === 0 ? (
-                  <p className="text-sm text-emerald-700">All rostered players have a fee request or payment.</p>
-                ) : (
-                  <div>
-                    <p className="mb-3 text-sm text-slate-600">
-                      {feesToRequest} player{feesToRequest > 1 ? "s" : ""} not yet billed. Requesting
-                      sends the season fee to their portal to pay.
-                    </p>
-                    <ConfirmSubmit
-                      action="/api/console/teams"
-                      fields={{ ticket, op: "requestSeasonFees", teamId: team.id }}
-                      confirm={`Email the season fee + apparel request to ${feesToRequest} player${feesToRequest > 1 ? "s" : ""}? They'll pick their apparel on the pay page.`}
-                      label={`Request season fee + apparel (${feesToRequest})`}
-                      className="btn-primary text-sm"
-                    />
-                  </div>
-                )}
-                {/* Resend to anyone already requested-but-unpaid. */}
-                <form method="POST" action="/api/console/registrations">
-                  <input type="hidden" name="ticket" value={ticket} />
-                  <input type="hidden" name="op" value="resendAllFees" />
-                  <input type="hidden" name="teamId" value={team.id} />
-                  <button className="text-xs font-semibold text-brand-700 hover:underline">Resend reminders to unpaid players</button>
-                </form>
-
-                {/* Preview / test the pay page (apparel + checkout) with no charge. */}
-                {feePayments.length > 0 && (
-                  <div className="border-t border-slate-100 pt-3">
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Preview / test pay page</p>
-                    <ul className="space-y-1">
-                      {feePayments.map((fp) => (
-                        <li key={fp.id} className="flex items-center justify-between gap-2 text-sm">
-                          <span className="text-slate-600">{nameById.get(fp.partyId ?? "") ?? "Player"}{fp.status === "PAID" ? <span className="ml-1 text-xs text-emerald-600">paid</span> : null}</span>
-                          <a href={`/pay/${fp.id}?test=1`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700 hover:underline">Open pay page ↗</a>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-1 text-xs text-slate-400">Opens as admin test mode — no real charge.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Waivers — parallel to Season fees, so the roster's outstanding
-              waivers can be sent right here (not only from the Launch panel). */}
-          <div className="card">
-            <h2 className="mb-2 font-semibold text-slate-900">Waivers</h2>
-            {team.members.length === 0 ? (
-              <p className="text-sm text-slate-400">No players to request waivers from yet.</p>
-            ) : waiversNeeded === 0 ? (
-              <div className="space-y-3">
-                <p className="text-sm text-emerald-700">All rostered players have a signed waiver.</p>
-                <ConfirmSubmit
-                  action="/api/console/teams"
-                  fields={{ ticket, op: "sendTeamWaivers", teamId: team.id, all: "1" }}
-                  confirm={`Resend the waiver link to everyone on "${team.name}"?`}
-                  label="Resend waiver to everyone"
-                  className="btn-secondary text-sm"
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-slate-600">
-                  {waiversNeeded} player{waiversNeeded > 1 ? "s" : ""} without a signed waiver. Sending emails a no-login
-                  signing link to each player (or a minor&apos;s parent).
-                </p>
-                <ConfirmSubmit
-                  action="/api/console/teams"
-                  fields={{ ticket, op: "sendTeamWaivers", teamId: team.id }}
-                  confirm={`Send a waiver request to ${waiversNeeded} player${waiversNeeded > 1 ? "s" : ""} who haven't signed yet?`}
-                  label={`Send waiver request (${waiversNeeded})`}
-                  className="btn-primary text-sm"
-                />
-                <div>
-                  <ConfirmSubmit
-                    action="/api/console/teams"
-                    fields={{ ticket, op: "sendTeamWaivers", teamId: team.id, all: "1" }}
-                    confirm={`Resend the waiver link to everyone on "${team.name}", including those who've signed?`}
-                    label="Resend to everyone"
-                    className="text-xs font-semibold text-brand-700 hover:underline"
-                  />
+          {/* Payment utilities only — the SEND actions (welcome, season fee +
+              apparel, waiver, and Send all) live in the unified panel at the top
+              of the page, matching the registration layout. This keeps just the
+              admin extras: a blanket unpaid-reminder resend and no-charge pay-page
+              previews. */}
+          {team.members.length > 0 && (
+            <div className="card">
+              <h2 className="mb-2 font-semibold text-slate-900">Payments — reminders &amp; previews</h2>
+              <p className="mb-2 text-xs text-slate-400">Send fee, waiver, and welcome from the panel at the top of this page.</p>
+              <form method="POST" action="/api/console/registrations">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="resendAllFees" />
+                <input type="hidden" name="teamId" value={team.id} />
+                <button className="text-sm font-semibold text-brand-700 hover:underline">Resend reminders to unpaid players</button>
+              </form>
+              {feePayments.length > 0 && (
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Preview / test pay page</p>
+                  <ul className="space-y-1">
+                    {feePayments.map((fp) => (
+                      <li key={fp.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-slate-600">{nameById.get(fp.partyId ?? "") ?? "Player"}{fp.status === "PAID" ? <span className="ml-1 text-xs text-emerald-600">paid</span> : null}</span>
+                        <a href={`/pay/${fp.id}?test=1`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700 hover:underline">Open pay page ↗</a>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs text-slate-400">Opens as admin test mode — no real charge.</p>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Six fields editor */}
