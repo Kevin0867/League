@@ -113,6 +113,7 @@ export default async function BoardPage() {
     title: t.name,
     level: t.division?.name ?? t.levelBand ?? "",
     location: t.facility?.name ?? t.market ?? "TBD",
+    color: t.color,
     subtitle: t.coach ? `${t.coach.person.firstName} ${t.coach.person.lastName}` : undefined,
     cap: TEAM_CAP - (t.coachPlays ? 1 : 0),
     min: TEAM_MIN - (t.coachPlays ? 1 : 0),
