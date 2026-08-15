@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { TeamColorDot } from "./TeamColorDot";
 
 type Card = {
   registrationId: string;
@@ -23,6 +24,8 @@ export type BoardColumn = {
   cap: number | null;
   /** Players needed to be launch-ready (teams only). */
   min?: number | null;
+  /** Team's assigned color (teams only) — shown as a swatch. */
+  color?: string | null;
   divisionId?: string | null;
   market?: string | null;
   cards: Card[];
@@ -124,14 +127,14 @@ export function AssignmentBoard({
       onDragOver={(e) => { e.preventDefault(); setOver(col.id); }}
       onDragLeave={() => setOver((o) => (o === col.id ? null : o))}
       onDrop={() => onDrop(col.id)}
-      className={`flex w-56 flex-col self-start rounded-xl border p-3 transition-colors ${
+      className={`flex w-full flex-col self-start rounded-xl border p-3 transition-colors sm:w-56 ${
         over === col.id ? "border-brand-400 bg-brand-50" : col.kind === "team" ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold leading-tight text-slate-800">
-          {col.kind === "team" && <span className="mr-1 text-brand-500">▦</span>}
-          {col.title}
+        <h3 className="flex items-start gap-1.5 text-sm font-semibold leading-tight text-slate-800">
+          {col.kind === "team" && <TeamColorDot color={col.color} className="mt-0.5" />}
+          <span>{col.title}</span>
         </h3>
         <span className={`shrink-0 text-xs ${isFull(col) ? "font-semibold text-rose-600" : "text-slate-400"}`}>
           {col.cap != null ? `${col.cards.length}/${col.cap}` : col.cards.length}
