@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { acpEntryWindow } from "@/lib/domain/acpEntry";
+import { AcpDivisionPicker } from "./AcpDivisionPicker";
 
 export const dynamic = "force-dynamic";
 
@@ -124,8 +125,8 @@ export default async function AcpPage({
                 <input name="likelyTeams" type="number" min={1} className="input" />
               </div>
               <div className="sm:col-span-2">
-                <label className="label">Which divisions might you enter?</label>
-                <input name="likelyDivisions" className="input" placeholder="e.g. Women's 3.5, Men's 4.0" />
+                <label className="label">Which division might you enter?</label>
+                <AcpDivisionPicker />
               </div>
               <div className="sm:col-span-2">
                 <button className="btn-primary w-full sm:w-auto">Tell us you&apos;re interested</button>
