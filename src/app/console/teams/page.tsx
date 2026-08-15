@@ -18,7 +18,7 @@ import { TableFilter } from "@/components/TableFilter";
 
 export const dynamic = "force-dynamic";
 
-const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool.", schedule: "Day, time, and facility saved. Generate practices on the Schedule page.", colors: "Team colors assigned — one distinct color per gender+level group." };
+const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool.", schedule: "Day, time, and facility saved. Generate practices on the Schedule page.", colors: "Team colors assigned — one distinct color per gender+level group.", merged: "Duplicate teams merged — players consolidated onto the kept team." };
 const ERRORS: Record<string, string> = {
   fields: "Team name and season are required.",
   auth: "You don't have permission to manage teams.",
@@ -179,6 +179,13 @@ export default async function TeamBuildBoard({
                       </span>
                       <span className="flex items-center gap-3">
                         <Link href={`/console/teams/${t.id}`} className="text-xs font-medium text-brand-600 hover:underline">Manage</Link>
+                        <ConfirmSubmit
+                          action="/api/console/teams"
+                          fields={{ ticket, op: "mergeTeams", keepId: t.id, removeIds: group.filter((o) => o.id !== t.id).map((o) => o.id).join(",") }}
+                          confirm={`Keep this "${t.name}" and merge the other ${group.length - 1} duplicate(s) into it? Their players move onto this team and the duplicates are deleted. This can't be undone.`}
+                          label="Keep & merge others"
+                          className="text-xs font-medium text-emerald-700 hover:underline"
+                        />
                         <ConfirmSubmit
                           action="/api/console/teams"
                           fields={{ ticket, op: "deleteTeam", teamId: t.id }}
