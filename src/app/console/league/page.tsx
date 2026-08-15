@@ -94,10 +94,11 @@ export default async function LeaguePage({
 
   const rosterTeams = leagueEntries.map((e) => e.team);
   const rosterIds = rosterTeams.map((t) => t.id);
-  // Published teams not yet in the league — the pool an admin adds from.
+  // Any team not yet in the league — the pool to add from. No publish
+  // requirement: teams can join before they're fully set up.
   const availableTeams = await prisma.team.findMany({
-    where: { published: true, id: { notIn: rosterIds.length ? rosterIds : ["__none__"] } },
-    select: { id: true, name: true, facility: { select: { name: true } } },
+    where: { id: { notIn: rosterIds.length ? rosterIds : ["__none__"] } },
+    select: { id: true, name: true, published: true, origin: true, division: { select: { name: true } }, facility: { select: { name: true } } },
     orderBy: { name: "asc" },
   });
 
@@ -158,14 +159,14 @@ export default async function LeaguePage({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold text-slate-900"><span className="text-slate-400">Step 1 ·</span> Teams in the league</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Add any published team. Every team you add plays in the round-robin and appears on the leaderboard.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Add any team — it doesn&apos;t need to be published or fully set up. Every team you add plays in the round-robin and appears on the leaderboard.</p>
           </div>
           <span className="text-xs text-slate-400">{rosterTeams.length} team{rosterTeams.length === 1 ? "" : "s"}</span>
         </div>
 
         {rosterTeams.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-            No teams in the league yet. Add published teams from the list below.
+            No teams in the league yet. Add teams from the list below.
           </p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-lg ring-1 ring-slate-100">
@@ -187,34 +188,46 @@ export default async function LeaguePage({
           </ul>
         )}
 
-        {/* Add from the published pool */}
+        {/* Add teams — any team, published or not */}
         <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-100">
-          <h3 className="mb-2 text-sm font-semibold text-slate-800">Add a published team</h3>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-800">Add a team</h3>
+            {availableTeams.length > 0 && (
+              <form method="POST" action="/api/console/league">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="addAllLeagueTeams" />
+                <input type="hidden" name="seasonId" value={season.id} />
+                <button className="btn-secondary text-xs">Add all {availableTeams.length} teams</button>
+              </form>
+            )}
+          </div>
           {availableTeams.length === 0 ? (
             <p className="text-sm text-slate-500">
               {rosterTeams.length > 0
-                ? "Every published team is already in the league. "
-                : "No published teams yet. "}
-              Publish teams in <Link href="/console/teams" className="text-accent-700 underline">Team Build</Link> to add them here.
+                ? "Every team is already in the league."
+                : <>No teams exist yet. Build teams in <Link href="/console/teams" className="text-accent-700 underline">Team Build</Link>, or convert an <Link href="/console/acp" className="text-accent-700 underline">ACP entry</Link> into a team, then add them here.</>}
             </p>
           ) : (
-            <div className="flex flex-wrap items-end gap-2">
-              <form method="POST" action="/api/console/league" className="flex flex-wrap items-end gap-2">
-                <input type="hidden" name="ticket" value={ticket} />
-                <input type="hidden" name="op" value="addLeagueTeam" />
-                <input type="hidden" name="seasonId" value={season.id} />
-                <div>
-                  <label className="label">Team</label>
-                  <select name="teamId" className="input min-w-[14rem]" required>
-                    <option value="">Choose a published team…</option>
-                    {availableTeams.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}{t.facility?.name ? ` · ${t.facility.name}` : ""}</option>
-                    ))}
-                  </select>
-                </div>
-                <button className="btn-primary">Add to league</button>
-              </form>
-            </div>
+            <form method="POST" action="/api/console/league" className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="addLeagueTeam" />
+              <input type="hidden" name="seasonId" value={season.id} />
+              <div>
+                <label className="label">Team</label>
+                <select name="teamId" className="input min-w-[16rem]" required>
+                  <option value="">Choose a team…</option>
+                  {availableTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.division?.name ? ` · ${t.division.name}` : ""}
+                      {t.facility?.name ? ` · ${t.facility.name}` : ""}
+                      {t.published ? "" : " · draft"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button className="btn-primary">Add to league</button>
+            </form>
           )}
         </div>
       </div>
