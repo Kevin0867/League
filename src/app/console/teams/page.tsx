@@ -112,6 +112,19 @@ export default async function TeamBuildBoard({
     .sort((a, b) => Number(a.ok) - Number(b.ok) || a.label.localeCompare(b.label));
   const colorIssues = colorAudit.filter((g) => !g.ok).length;
 
+  // Duplicate-team detector — two teams with the same name in this season almost
+  // always means a duplicate record (the board then shows the same team twice).
+  // Group by normalized name; flag any group with more than one team.
+  const nameGroups = new Map<string, typeof teams>();
+  for (const t of teams) {
+    const key = t.name.trim().toLowerCase();
+    if (!nameGroups.has(key)) nameGroups.set(key, []);
+    nameGroups.get(key)!.push(t);
+  }
+  const duplicateGroups = [...nameGroups.values()]
+    .filter((g) => g.length > 1)
+    .sort((a, b) => a[0].name.localeCompare(b[0].name));
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -138,6 +151,49 @@ export default async function TeamBuildBoard({
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {ERRORS[sp.err] ?? "Something went wrong."}
         </p>
+      )}
+
+      {/* Duplicate-team detector — same name = almost always a duplicate record,
+          which shows twice on the board. Review each and delete the extra. */}
+      {duplicateGroups.length > 0 && (
+        <div className="card border-l-4 border-rose-400">
+          <h2 className="font-semibold text-rose-700">
+            {duplicateGroups.length} duplicate team name{duplicateGroups.length === 1 ? "" : "s"}
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-600">
+            These names each belong to more than one team, so the board shows them twice. Open each to compare rosters,
+            then delete the extra — deleting returns its players to the assignment pool, so re-check the kept team&apos;s
+            roster afterward.
+          </p>
+          <div className="mt-3 space-y-3">
+            {duplicateGroups.map((group) => (
+              <div key={group[0].name} className="rounded-lg border border-rose-200 bg-rose-50/40 p-3">
+                <div className="text-sm font-semibold text-slate-800">{group[0].name} <span className="text-xs font-normal text-slate-400">· {group.length} teams</span></div>
+                <div className="mt-2 space-y-1.5">
+                  {group.map((t) => (
+                    <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+                      <span className="flex items-center gap-1.5">
+                        <TeamColorDot color={t.color} />
+                        <span className="text-slate-700">{t.division?.name ?? "no division"}</span>
+                        <span className="text-slate-400">· {t._count.members} player{t._count.members === 1 ? "" : "s"}{t.published ? " · published" : ""}</span>
+                      </span>
+                      <span className="flex items-center gap-3">
+                        <Link href={`/console/teams/${t.id}`} className="text-xs font-medium text-brand-600 hover:underline">Manage</Link>
+                        <ConfirmSubmit
+                          action="/api/console/teams"
+                          fields={{ ticket, op: "deleteTeam", teamId: t.id }}
+                          confirm={`Delete this "${t.name}" team? Its ${t._count.members} player(s) return to the assignment pool. This can't be undone.`}
+                          label="Delete"
+                          className="text-xs font-medium text-rose-600 hover:underline"
+                        />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Guided next steps */}
