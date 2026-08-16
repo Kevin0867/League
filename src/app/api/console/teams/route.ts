@@ -596,6 +596,16 @@ export async function POST(req: Request) {
     }
 
     // Delete a team: return its players to the pool, drop its fixtures, remove it.
+    // Flag a team as non-production (or clear it). Test teams stay out of
+    // pickers, counts, and public pages.
+    case "toggleTeamTest": {
+      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, isTest: true, name: true } });
+      if (!team) return back("?err=notfound");
+      await prisma.team.update({ where: { id: teamId }, data: { isTest: !team.isTest } });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "team.toggleTest", summary: `${!team.isTest ? "Flagged" : "Unflagged"} ${team.name} as test` });
+      return back("?ok=toggleTeamTest");
+    }
+
     case "deleteTeam": {
       const team = await prisma.team.findUnique({ where: { id: teamId }, include: { members: true } });
       if (!team) return back("?err=notfound");

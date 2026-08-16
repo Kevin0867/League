@@ -38,7 +38,7 @@ export default async function RegisterPage({
   const effectiveLocation = preferredFacility?.market ?? preselectedLocation ?? null;
 
   const season = await prisma.season.findFirst({
-    where: { active: true, program: "PURE_ACADEMY" },
+    where: { active: true, isTest: false, program: "PURE_ACADEMY" },
     orderBy: { startDate: "desc" },
     include: { divisions: { orderBy: { name: "asc" } } },
   });

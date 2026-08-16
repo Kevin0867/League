@@ -21,6 +21,7 @@ const OK_MESSAGE: Record<string, string> = {
   editSeason: "Season updated.",
   deleteSeason: "Season deleted.",
   activateSeason: "Season activated.",
+  toggleSeasonTest: "Season test flag updated.",
   addDivision: "Division added.",
   editDivision: "Division updated.",
   deleteDivision: "Division removed.",
@@ -163,6 +164,7 @@ export default async function SetupPage({
                 {s.active
                   ? <span className="badge bg-accent-100 text-accent-800">Active</span>
                   : <span className="badge bg-slate-100 text-slate-500">Inactive</span>}
+                {s.isTest && <span className="ml-1 badge bg-amber-100 text-amber-800">Test — hidden from public</span>}
               </h2>
               <p className="text-xs text-slate-500">
                 {s.program} · {formatDateRange(s.startDate, s.endDate)} · {s._count.registrations} registrations
@@ -174,6 +176,12 @@ export default async function SetupPage({
             </div>
             <div className="flex items-center gap-3">
               {!s.active && <ActivateButton seasonId={s.id} ticket={ticket} />}
+              <form method="POST" action="/api/console/setup">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="toggleSeasonTest" />
+                <input type="hidden" name="seasonId" value={s.id} />
+                <button className="text-xs font-medium text-slate-500 hover:underline">{s.isTest ? "Unmark test" : "Mark as test"}</button>
+              </form>
               <EditSeasonForm ticket={ticket} season={{ id: s.id, name: s.name, program: s.program, startDate: iso(s.startDate), endDate: iso(s.endDate), opensOn: iso(s.opensOn), closesOn: iso(s.closesOn) }} />
               <DeleteSeasonButton seasonId={s.id} ticket={ticket} disabled={s._count.registrations > 0} />
             </div>

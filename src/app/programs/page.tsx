@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 export default async function ProgramsPage() {
   const seasons = await prisma.season.findMany({
-    where: { active: true },
+    where: { active: true, isTest: false },
     // Lessons are not competitive divisions — never list them here. Ordered so
     // school levels read youngest→oldest, then DUPR bands.
     include: { divisions: { where: { divisionType: { not: "LESSON" } }, orderBy: { name: "asc" } } },

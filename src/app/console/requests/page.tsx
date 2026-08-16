@@ -79,7 +79,7 @@ export default async function RequestsPage({
     include: { team: { include: { coach: { include: { person: true } }, _count: { select: { members: true } } } } },
   });
   const teamByPerson = new Map(memberships.map((m) => [m.personId, m.team]));
-  const teams = await prisma.team.findMany({ where: { seasonId: season.id }, include: { coach: { include: { person: true } }, _count: { select: { members: true } } } });
+  const teams = await prisma.team.findMany({ where: { seasonId: season.id, isTest: false }, include: { coach: { include: { person: true } }, _count: { select: { members: true } } } });
   const coaches = await prisma.coach.findMany({ include: { person: true } });
   const teamOptions = teams
     .map((t) => ({ id: t.id, name: t.name, full: t._count.members + (t.coachPlays ? 1 : 0) + 1 > TEAM_CAP }))

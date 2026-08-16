@@ -122,7 +122,7 @@ export default async function LeaguePage({
   // Any team not yet in the league — the pool to add from. No publish
   // requirement: teams can join before they're fully set up.
   const availableTeams = await prisma.team.findMany({
-    where: { id: { notIn: rosterIds.length ? rosterIds : ["__none__"] } },
+    where: { isTest: false, id: { notIn: rosterIds.length ? rosterIds : ["__none__"] } },
     select: { id: true, name: true, published: true, origin: true, division: { select: { name: true } }, facility: { select: { name: true } } },
     orderBy: { name: "asc" },
   });

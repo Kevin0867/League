@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default async function StandingsPage() {
   // The public leaderboard is the active ACP league's flat roster — the same
   // ladder the console shows. Line 4 is an exhibition and counts toward nothing.
-  const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
+  const season = await prisma.season.findFirst({ where: { active: true, isTest: false, program: "ACP" } });
   const standings = season ? await leagueStandingsFlat(season.id) : [];
 
   return (
