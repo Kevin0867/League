@@ -51,6 +51,7 @@ const SECTIONS: NavSection[] = [
       { href: "/console/schedule", label: "Schedule", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/league", label: "League", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/championship", label: "Championship", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/ladder", label: "Ladder", roles: ["COO", "DIRECTOR"] },
       { href: "/console/acp", label: "ACP Entries", roles: ["COO", "DIRECTOR"] },
       { href: "/console/alacarte", label: "Private Lessons", roles: ["COO", "DIRECTOR"] },
     ],
