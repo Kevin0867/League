@@ -26,6 +26,10 @@ export default async function ClinicsPage() {
           <p className="mt-5 max-w-xl text-lg text-brand-100">
             Drop into a focused session with a PURE coach. Reserve your spot online — pay to confirm, no account required.
           </p>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Link href="/clinics/request" className="btn-accent">Request a lesson or clinic</Link>
+            <span className="text-sm text-brand-100">Don&apos;t see a fit? Tell us what you need and we&apos;ll set it up.</span>
+          </div>
         </div>
       </section>
 
@@ -34,7 +38,7 @@ export default async function ClinicsPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
             <p className="text-lg font-semibold text-slate-800">No clinics on the calendar right now</p>
             <p className="mt-2 text-slate-500">
-              Check back soon, or <Link href="/register" className="text-brand-600 underline">register for the season</Link> to join a team.
+              <Link href="/clinics/request" className="text-brand-600 underline">Request a lesson or clinic</Link> and we&apos;ll set one up, or <Link href="/register" className="text-brand-600 underline">register for the season</Link> to join a team.
             </p>
           </div>
         ) : (
