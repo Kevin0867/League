@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
 import { formatTimeRange12, formatDate } from "@/lib/time";
-import { PendingSubmit } from "@/components/ConfirmSubmit";
+import { PendingSubmit, ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
@@ -273,6 +273,20 @@ export default async function SessionDetail({
             </label>
             <button className="btn-ghost mt-3 w-full">Relocate session</button>
           </form>
+
+          {/* Delete — for a session created by mistake. Cancel (above) notifies
+              the team; delete just removes it quietly. */}
+          <div className="card border border-rose-200">
+            <h2 className="mb-1 font-semibold text-rose-700">Delete session</h2>
+            <p className="mb-3 text-xs text-slate-500">Removes this {s.type.toLowerCase()} entirely — no notice to the team. Use Cancel instead if the team should be told. This can&apos;t be undone.</p>
+            <ConfirmSubmit
+              action="/api/console/schedule"
+              fields={{ ticket, op: "deleteSession", sessionId: s.id, returnTo: "/console/schedule" }}
+              label="Delete session"
+              confirm={`Delete this ${s.type.toLowerCase()} on ${formatDate(s.date)}? The team is not notified. This can't be undone.`}
+              className="w-full rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+            />
+          </div>
         </div>
       </div>
     </div>
