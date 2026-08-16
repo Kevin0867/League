@@ -909,6 +909,26 @@ model AcpInterest {
   @@index([createdAt])
 }
 
+/// Public request for a private lesson, semi-private, or clinic (no account
+/// needed). Captured from /clinics/request, emailed to the ops inbox, and worked
+/// from the console. requestType: PRIVATE | SEMI_PRIVATE | CLINIC | UNSURE.
+model LessonRequest {
+  id             String   @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  requestType    String   @default("UNSURE")
+  skillLevel     String?
+  locations      String?
+  preferredTimes String?
+  notes          String?
+  /// NEW | CONTACTED | SCHEDULED | CLOSED
+  status         String   @default("NEW")
+  createdAt      DateTime @default(now())
+
+  @@index([status, createdAt])
+}
+
 /// Explicit league membership — which teams play in a season's league. Decouples
 /// the league roster from a team's own season/division so any published team can
 /// be added to the active ACP league, regardless of the season it was built in.
