@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { TimeSelect } from "@/components/TimeSelect";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -216,7 +217,7 @@ export default async function SessionDetail({
             <div className="space-y-3">
               <div>
                 <label className="label">Date</label>
-                <input name="date" type="date" className="input" defaultValue={s.date.toISOString().slice(0, 10)} />
+                <DateField name="date" className="input" defaultValue={s.date.toISOString().slice(0, 10)} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div><label className="label">Start</label><TimeSelect name="startTime" className="input" defaultValue={s.startTime} /></div>
