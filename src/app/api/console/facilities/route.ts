@@ -84,6 +84,8 @@ export async function POST(req: Request) {
     isPrivate,
     generalArea: String(formData.get("generalArea") ?? "").trim() || null,
     exactAddress: String(formData.get("exactAddress") ?? "").trim() || null,
+    lights: String(formData.get("lights") ?? "").trim() || null,
+    notes: String(formData.get("notes") ?? "").trim() || null,
     alaCarteAllowed: formData.get("alaCarteAllowed") === "on",
     acpLeagueOption: formData.get("acpLeagueOption") === "on",
   };
@@ -93,14 +95,31 @@ export async function POST(req: Request) {
   const starts = formData.getAll("availStart").map(String);
   const ends = formData.getAll("availEnd").map(String);
   const courts = formData.getAll("availCourts").map(String);
-  const courtBlocks = days
+  const availBlocks = days
     .map((d, i) => ({
       dayOfWeek: d.trim(),
       startTime: (starts[i] ?? "").trim(),
       endTime: (ends[i] ?? "").trim(),
       courtCount: parseInt(courts[i] ?? "1", 10) || 1,
+      kind: "AVAILABLE",
     }))
     .filter((b) => b.dayOfWeek && b.startTime && b.endTime);
+
+  // Blocked (recurring unavailable) windows.
+  const bDays = formData.getAll("blockDay").map(String);
+  const bStarts = formData.getAll("blockStart").map(String);
+  const bEnds = formData.getAll("blockEnd").map(String);
+  const blockedBlocks = bDays
+    .map((d, i) => ({
+      dayOfWeek: d.trim(),
+      startTime: (bStarts[i] ?? "").trim(),
+      endTime: (bEnds[i] ?? "").trim(),
+      courtCount: 0,
+      kind: "BLOCKED",
+    }))
+    .filter((b) => b.dayOfWeek && b.startTime && b.endTime);
+
+  const courtBlocks = [...availBlocks, ...blockedBlocks];
 
   if (op === "edit") {
     const facilityId = String(formData.get("facilityId") ?? "");

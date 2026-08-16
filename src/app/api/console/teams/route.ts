@@ -8,6 +8,7 @@ import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { accruePlayerSeasonFee } from "@/lib/payments/familyFee";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
+import { isBookable } from "@/lib/domain/facilityWindows";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
@@ -120,10 +121,7 @@ export async function POST(req: Request) {
         const startT = g("startTime");
         if (facId && dow && startT) {
           const blocks = await prisma.courtBlock.findMany({ where: { facilityId: facId } });
-          if (blocks.length) {
-            const ok = blocks.some((b) => b.dayOfWeek === dow && startT >= b.startTime && startT <= b.endTime);
-            if (!ok) return back("?err=slot");
-          }
+          if (blocks.length && !isBookable(blocks, dow, startT).ok) return back("?err=slot");
         }
       }
 
@@ -205,7 +203,7 @@ export async function POST(req: Request) {
         // slot. (Facilities with no windows keep free day/time entry.)
         if (facilityId && day && time) {
           const fb = blocksByFacility.get(facilityId);
-          if (fb && fb.length && !fb.some((b) => b.dayOfWeek === day && time >= b.startTime && time <= b.endTime)) {
+          if (fb && fb.length && !isBookable(fb, day, time).ok) {
             skipped++;
             continue;
           }
