@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeSelect } from "@/components/TimeSelect";
 import { useMemo, useState } from "react";
 import { formatTime12 } from "@/lib/time";
 
@@ -74,11 +75,11 @@ export function AddPracticeForm({
         </div>
         <div>
           <label className="label">Start</label>
-          <input name="startTime" type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input" />
+          <TimeSelect name="startTime" value={start} onChange={(e) => setStart(e.target.value)} className="input" />
         </div>
         <div>
           <label className="label">End</label>
-          <input name="endTime" type="time" className="input" />
+          <TimeSelect name="endTime" className="input" />
         </div>
         <div className="sm:col-span-3">
           <label className="label">Facility</label>

@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeSelect } from "@/components/TimeSelect";
 import { useMemo, useState } from "react";
 import { formatTime12 } from "@/lib/time";
 
@@ -99,7 +100,7 @@ export function TeamScheduleFields({
             </div>
             <div>
               <label className="label" htmlFor="startInp">Start</label>
-              <input id="startInp" type="time" value={start} onChange={(e) => setStart(e.target.value)} className="input" />
+              <TimeSelect id="startInp" value={start} onChange={(e) => setStart(e.target.value)} className="input" />
             </div>
           </div>
         )}

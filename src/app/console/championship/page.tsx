@@ -1,3 +1,4 @@
+import { TimeSelect } from "@/components/TimeSelect";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
@@ -82,7 +83,7 @@ export default async function ChampionshipPage({
               </div>
               <div>
                 <label className="label text-xs">Time</label>
-                <input name="time" type="time" className="input py-1.5" defaultValue={hhmm(s.championshipStartsAt)} />
+                <TimeSelect name="time" className="input py-1.5" defaultValue={hhmm(s.championshipStartsAt)} />
               </div>
               <button className="btn-secondary py-1.5 text-sm">Save</button>
             </form>

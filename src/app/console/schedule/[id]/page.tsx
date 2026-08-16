@@ -1,3 +1,4 @@
+import { TimeSelect } from "@/components/TimeSelect";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
@@ -218,8 +219,8 @@ export default async function SessionDetail({
                 <input name="date" type="date" className="input" defaultValue={s.date.toISOString().slice(0, 10)} />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <div><label className="label">Start</label><input name="startTime" type="time" className="input" defaultValue={s.startTime} /></div>
-                <div><label className="label">End</label><input name="endTime" type="time" className="input" defaultValue={s.endTime} /></div>
+                <div><label className="label">Start</label><TimeSelect name="startTime" className="input" defaultValue={s.startTime} /></div>
+                <div><label className="label">End</label><TimeSelect name="endTime" className="input" defaultValue={s.endTime} /></div>
               </div>
               <div>
                 <label className="label">Facility</label>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { TimeSelect } from "@/components/TimeSelect";
 import { MATCH_TYPES } from "@/lib/domain/matchType";
 
 const STATUSES = ["SCHEDULED", "CONFIRMED", "RESCHEDULED", "COMPLETED", "FORFEITED", "CANCELLED"];
@@ -101,7 +102,7 @@ export function EditableFixtureRow({
           </div>
           <div>
             <label className="label text-xs">Time</label>
-            <input name="scheduledTime" type="time" defaultValue={fixture.timeHHMM} className="input py-1" />
+            <TimeSelect name="scheduledTime" defaultValue={fixture.timeHHMM} className="input py-1" />
           </div>
           <div>
             <label className="label text-xs">Hub</label>
