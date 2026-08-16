@@ -13,6 +13,7 @@ import {
   DeleteSeasonButton,
   EditableDivision,
 } from "./SetupForms";
+import { getSeasonStats } from "@/lib/domain/seasonStats";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export default async function SetupPage({
   const okMsg = sp.ok ? OK_MESSAGE[sp.ok] : undefined;
   const errMsg = sp.err ? ERR_MESSAGE[sp.err] : undefined;
 
-  const [seasons, facilityCount, teamCount, rate] = await Promise.all([
+  const [seasons, rate, stats] = await Promise.all([
     prisma.season.findMany({
       orderBy: [{ active: "desc" }, { startDate: "desc" }],
       include: {
@@ -86,9 +87,10 @@ export default async function SetupPage({
         _count: { select: { registrations: true } },
       },
     }),
-    prisma.facility.count(),
-    prisma.team.count(),
     prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } }),
+    // Milestone booleans come from the one counting service, so this checklist
+    // can never disagree with the dashboard's getting-started sequence.
+    getSeasonStats(),
   ]);
 
   const activeSeason = seasons.find((s) => s.active && s.program === "PURE_ACADEMY");
@@ -96,13 +98,14 @@ export default async function SetupPage({
   const shirtCents = rate?.shirtPriceCents ?? 2500;
   const tankCents = rate?.tankPriceCents ?? 2500;
 
-  // Guided next step — the first incomplete milestone drives the CTA.
+  // Guided next step — the first incomplete milestone drives the CTA. Every
+  // "done" flag is read from getSeasonStats (same source as the dashboard).
   const steps = [
-    { done: !!activeSeason, label: "Create & activate a PURE Academy season", href: null, cta: "Create a season below" },
-    { done: !!activeSeason && activeSeason.divisions.length > 0, label: "Add divisions to the active season", href: null, cta: "Add divisions below" },
-    { done: facilityCount > 0, label: "Set up at least one facility", href: "/console/facilities", cta: "Go to Facilities" },
-    { done: teamCount > 0, label: "Build your first team", href: "/console/teams", cta: "Go to Team Build" },
-    { done: (activeSeason?._count.registrations ?? 0) > 0, label: "Open registration & collect signups", href: "/register", cta: "View the registration form" },
+    { done: !!stats.season, label: "Create & activate a PURE Academy season", href: null, cta: "Create a season below" },
+    { done: stats.divisions > 0, label: "Add divisions to the active season", href: null, cta: "Add divisions below" },
+    { done: stats.facilities.total > 0, label: "Set up at least one facility", href: "/console/facilities", cta: "Go to Facilities" },
+    { done: stats.teams.total > 0, label: "Build your first team", href: "/console/teams", cta: "Go to Team Build" },
+    { done: stats.registrations.live > 0, label: "Open registration & collect signups", href: "/register", cta: "View the registration form" },
   ];
   const nextStep = steps.find((s) => !s.done);
 
