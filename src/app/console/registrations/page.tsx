@@ -150,6 +150,34 @@ export default async function RegistrationsPage({
   }));
   const dupGroups = findDuplicateGroups(people);
 
+  // Real per-record counts for the merge confirm, so it lists exactly what moves
+  // (N registrations, team spots, payments/$, waivers) instead of a vague warning.
+  const loserIds = dupGroups.flatMap((g) => g.slice(1)).map((p) => p.id);
+  const mergeImpact = new Map<string, { regs: number; teams: number; pays: number; cents: number; waivers: number }>();
+  if (loserIds.length) {
+    const [regG, teamG, payG, waiverG] = await Promise.all([
+      prisma.registration.groupBy({ by: ["personId"], where: { personId: { in: loserIds } }, _count: true }),
+      prisma.teamMember.groupBy({ by: ["personId"], where: { personId: { in: loserIds } }, _count: true }),
+      prisma.payment.groupBy({ by: ["partyId"], where: { partyId: { in: loserIds } }, _count: true, _sum: { amountCents: true } }),
+      prisma.waiver.groupBy({ by: ["personId"], where: { personId: { in: loserIds } }, _count: true }),
+    ]);
+    for (const id of loserIds) mergeImpact.set(id, { regs: 0, teams: 0, pays: 0, cents: 0, waivers: 0 });
+    for (const r of regG) { const m = mergeImpact.get(r.personId); if (m) m.regs = r._count; }
+    for (const r of teamG) { const m = mergeImpact.get(r.personId); if (m) m.teams = r._count; }
+    for (const r of payG) { const m = r.partyId ? mergeImpact.get(r.partyId) : null; if (m) { m.pays = r._count; m.cents = r._sum.amountCents ?? 0; } }
+    for (const r of waiverG) { const m = mergeImpact.get(r.personId); if (m) m.waivers = r._count; }
+  }
+  const mergeSummary = (id: string, firstName: string, keepName: string): string => {
+    const m = mergeImpact.get(id) ?? { regs: 0, teams: 0, pays: 0, cents: 0, waivers: 0 };
+    const parts: string[] = [];
+    if (m.regs) parts.push(`${m.regs} registration${m.regs === 1 ? "" : "s"}`);
+    if (m.teams) parts.push(`${m.teams} team spot${m.teams === 1 ? "" : "s"}`);
+    if (m.pays) parts.push(`${m.pays} payment${m.pays === 1 ? "" : "s"} ($${(m.cents / 100).toFixed(2)})`);
+    if (m.waivers) parts.push(`${m.waivers} waiver${m.waivers === 1 ? "" : "s"}`);
+    const moves = parts.length ? parts.join(", ") : "no attached records";
+    return `Move ${firstName}'s ${moves} onto ${keepName}, then delete the duplicate ${firstName} record. This can't be undone — verify it's really the same person first.`;
+  };
+
   // Header counts come straight from the counting service, so this page's totals
   // are identical to the dashboard's (active season, live registrations).
   const counts = {
@@ -254,21 +282,37 @@ export default async function RegistrationsPage({
                     <span className="text-xs text-slate-500">{keep.email ?? keep.phone ?? "—"}</span>
                   </div>
                   <div className="mt-1 space-y-1">
-                    {g.slice(1).map((p) => (
-                      <div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-slate-600">
-                          {p.firstName} {p.lastName}
-                          <span className="ml-2 text-xs text-slate-400">{p.email ?? p.phone ?? "—"}</span>
-                        </span>
-                        <ConfirmSubmit
-                          action="/api/console/people"
-                          fields={{ ticket, op: "mergePeople", survivorId: keep.id, loserId: p.id, returnTo: "/console/registrations" }}
-                          label={`Merge into ${keep.firstName}`}
-                          confirm={`Merge "${p.firstName} ${p.lastName}" into "${keep.firstName} ${keep.lastName}"? All of ${p.firstName}'s registrations, teams, payments, waivers, and messages move onto ${keep.firstName}, and the duplicate record is deleted. This can't be undone.`}
-                          className="btn-secondary text-xs"
-                        />
-                      </div>
-                    ))}
+                    {g.slice(1).map((p) => {
+                      const m = mergeImpact.get(p.id);
+                      return (
+                        <div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-slate-600">
+                            {p.firstName} {p.lastName}
+                            <span className="ml-2 text-xs text-slate-400">{p.email ?? p.phone ?? "—"}</span>
+                            {m && (m.regs + m.teams + m.pays + m.waivers > 0) && (
+                              <span className="ml-2 text-xs text-slate-500">
+                                (moves {[
+                                  m.regs && `${m.regs} reg`,
+                                  m.teams && `${m.teams} team`,
+                                  m.pays && `$${(m.cents / 100).toFixed(0)}`,
+                                  m.waivers && `${m.waivers} waiver`,
+                                ].filter(Boolean).join(" · ")})
+                              </span>
+                            )}
+                          </span>
+                          <ConfirmSubmit
+                            action="/api/console/people"
+                            fields={{ ticket, op: "mergePeople", survivorId: keep.id, loserId: p.id, returnTo: "/console/registrations" }}
+                            label={`Merge into ${keep.firstName}`}
+                            confirm={mergeSummary(p.id, p.firstName, `${keep.firstName} ${keep.lastName}`)}
+                            confirmTitle="Merge duplicate records?"
+                            confirmLabel="Merge & delete duplicate"
+                            danger
+                            className="rounded-lg border border-rose-200 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </li>
               );

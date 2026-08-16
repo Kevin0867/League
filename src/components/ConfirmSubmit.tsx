@@ -74,6 +74,7 @@ export function ConfirmSubmit({
   fields,
   confirm,
   confirmTitle = "Please confirm",
+  confirmLabel,
   label,
   className = "btn-primary",
   disabled,
@@ -83,6 +84,7 @@ export function ConfirmSubmit({
   fields: Record<string, string>;
   confirm: string;
   confirmTitle?: string;
+  confirmLabel?: string;
   label: string;
   className?: string;
   disabled?: boolean;
@@ -113,6 +115,7 @@ export function ConfirmSubmit({
         open={asking}
         title={confirmTitle}
         message={confirm}
+        confirmLabel={confirmLabel}
         danger={danger}
         onCancel={() => setAsking(false)}
         onConfirm={() => {
