@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { TimeSelect } from "@/components/TimeSelect";
 import Link from "next/link";
 import { formatDate } from "@/lib/time";
@@ -304,7 +305,7 @@ export default async function LeaguePage({
                     </div>
                     <div>
                       <label className="label">Date</label>
-                      <input name="scheduledAt" type="date" className="input" required />
+                      <DateField name="scheduledAt" className="input" required />
                     </div>
                     <div>
                       <label className="label">Time</label>

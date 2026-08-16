@@ -1,5 +1,6 @@
 "use client";
 
+import { DateField } from "@/components/DateField";
 import Link from "next/link";
 import { useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -98,7 +99,7 @@ export function EditableFixtureRow({
           </div>
           <div>
             <label className="label text-xs">Date</label>
-            <input name="scheduledAt" type="date" defaultValue={fixture.dateISO} className="input py-1" />
+            <DateField name="scheduledAt" defaultValue={fixture.dateISO} className="input py-1" />
           </div>
           <div>
             <label className="label text-xs">Time</label>

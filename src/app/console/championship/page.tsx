@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField";
 import { TimeSelect } from "@/components/TimeSelect";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
@@ -79,7 +80,7 @@ export default async function ChampionshipPage({
               <input type="hidden" name="seasonId" value={s.id} />
               <div>
                 <label className="label text-xs">Date</label>
-                <input name="date" type="date" className="input py-1.5" defaultValue={iso(s.championshipStartsAt)} />
+                <DateField name="date" className="input py-1.5" defaultValue={iso(s.championshipStartsAt)} />
               </div>
               <div>
                 <label className="label text-xs">Time</label>

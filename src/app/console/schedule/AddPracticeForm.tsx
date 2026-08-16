@@ -1,5 +1,6 @@
 "use client";
 
+import { DateField } from "@/components/DateField";
 import { TimeSelect } from "@/components/TimeSelect";
 import { useMemo, useState } from "react";
 import { formatTime12 } from "@/lib/time";
@@ -71,7 +72,7 @@ export function AddPracticeForm({
         </div>
         <div>
           <label className="label">Date</label>
-          <input name="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" required />
+          <DateField name="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" required />
         </div>
         <div>
           <label className="label">Start</label>
