@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { prisma } from "@/lib/db";
 import { actorFromForm, hashPassword } from "@/lib/auth";
 import { can, isStaff } from "@/lib/rbac";
@@ -129,7 +130,6 @@ export async function POST(req: Request) {
       const lastName = String(formData.get("lastName") ?? "").trim();
       const email = String(formData.get("email") ?? "").toLowerCase().trim();
       const role = String(formData.get("role") ?? "COACH") as Role;
-      const password = String(formData.get("password") ?? "");
 
       if (!CREATABLE_ROLES.includes(role)) return back("?err=role");
 
@@ -166,10 +166,10 @@ export async function POST(req: Request) {
         return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${inviteQuery({ ok: "account" }, inv)}`, origin), 303);
       }
 
-      // New account path: password required.
-      if (!firstName || !lastName || !email || !password) return back("?err=fields");
-      if (password.length < 8) return back("?err=short");
-      if (password !== String(formData.get("passwordConfirm") ?? "")) return back("?err=mismatch");
+      // New account path — no admin-typed password. The person sets their own
+      // via the emailed invite link (same as the Access invite flow), so we
+      // create the account with an unusable random hash until they do.
+      if (!firstName || !lastName || !email) return back("?err=fields");
 
       // Reuse a Person with this email (e.g. a coach who also registered) if present.
       const person =
@@ -177,7 +177,7 @@ export async function POST(req: Request) {
         (await prisma.person.create({ data: { firstName, lastName, email } }));
 
       const user = await prisma.user.create({
-        data: { email, passwordHash: await hashPassword(password), role, personId: person.id },
+        data: { email, passwordHash: await hashPassword(crypto.randomBytes(24).toString("hex")), role, personId: person.id },
       });
 
       // A coach account needs a Coach profile row so they appear on the Coaches
