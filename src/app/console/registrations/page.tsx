@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { findDuplicateGroups } from "@/lib/domain/registrations";
 import { AddPlayerForm } from "./AddPlayerForm";
 import { RowActions } from "@/components/RowActions";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,13 @@ const OK: Record<string, string> = {
   refund: "Refund started.",
   resent: "Fee request resent.",
   regDeleted: "Registration removed — the player was pulled from any team in that season.",
+  merged: "Records merged into one.",
 };
 const ERRORS: Record<string, string> = {
+  pickpair: "Pick two different records to merge.",
+  coachmerge: "One of these is a coach — merge coach records from the Coaches page.",
+  mergefail: "The merge couldn't complete and was rolled back — nothing changed.",
+  notfound: "Record not found.",
   name: "First and last name are required.",
   contact: "An email or phone number is required.",
   auth: "You don't have permission to do that.",
@@ -119,7 +125,10 @@ export default async function RegistrationsPage({
     prisma.registration.count(),
     prisma.registration.count({ where: { status: "ASSIGNED" } }),
     prisma.registration.count({ where: { status: "WAITLISTED" } }),
-    prisma.registration.count({ where: { person: { waiverSignedAt: null } } }),
+    // A waiver is per-person, so count PEOPLE without one (matching the
+    // Dashboard and Compliance definitions) rather than registration rows —
+    // otherwise someone with two registrations counts twice.
+    prisma.person.count({ where: { waiverSignedAt: null, registrations: { some: {} } } }),
   ]);
   const counts = { total, assigned, waitlisted, noWaiver };
 
@@ -130,7 +139,7 @@ export default async function RegistrationsPage({
           <h1 className="text-2xl font-bold text-slate-900">Registrations</h1>
           <p className="text-slate-500">
             {counts.total} total · {counts.assigned} assigned · {counts.waitlisted} waitlisted ·{" "}
-            <span className={counts.noWaiver ? "text-amber-600 font-medium" : ""}>{counts.noWaiver} without waiver</span>
+            <span className={counts.noWaiver ? "text-amber-600 font-medium" : ""}>{counts.noWaiver} player{counts.noWaiver === 1 ? "" : "s"} without waiver</span>
           </p>
         </div>
         <AddPlayerForm ticket={ticket} seasons={seasons} defaultSeasonId={defaultSeasonId} />
@@ -169,18 +178,40 @@ export default async function RegistrationsPage({
             Possible duplicates ({dupGroups.length} group{dupGroups.length > 1 ? "s" : ""})
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Match on name plus email or phone. Merge to the highest band registered
-            while preserving all location and time preferences (§3).
+            Matched on last name + a shared email or phone, allowing for first-name variants (Dave/David). The first
+            record is kept; merging moves the other&apos;s registrations, teams, payments, waivers, messages, and notes
+            onto it and deletes the duplicate. It runs in one transaction — if anything can&apos;t move, nothing changes.
           </p>
           <ul className="mt-3 space-y-2 text-sm">
-            {dupGroups.map((g, i) => (
-              <li key={i} className="rounded-lg bg-amber-50 px-3 py-2">
-                {g.map((p) => `${p.firstName} ${p.lastName}`).join("  ·  ")}
-                <span className="ml-2 text-xs text-slate-500">
-                  ({g.map((p) => p.email ?? p.phone ?? "—").join(", ")})
-                </span>
-              </li>
-            ))}
+            {dupGroups.map((g, i) => {
+              const keep = g[0];
+              return (
+                <li key={i} className="rounded-lg bg-amber-50 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-medium text-slate-800">{keep.firstName} {keep.lastName}</span>
+                    <span className="badge bg-emerald-100 text-emerald-800">keep</span>
+                    <span className="text-xs text-slate-500">{keep.email ?? keep.phone ?? "—"}</span>
+                  </div>
+                  <div className="mt-1 space-y-1">
+                    {g.slice(1).map((p) => (
+                      <div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-slate-600">
+                          {p.firstName} {p.lastName}
+                          <span className="ml-2 text-xs text-slate-400">{p.email ?? p.phone ?? "—"}</span>
+                        </span>
+                        <ConfirmSubmit
+                          action="/api/console/people"
+                          fields={{ ticket, op: "mergePeople", survivorId: keep.id, loserId: p.id, returnTo: "/console/registrations" }}
+                          label={`Merge into ${keep.firstName}`}
+                          confirm={`Merge "${p.firstName} ${p.lastName}" into "${keep.firstName} ${keep.lastName}"? All of ${p.firstName}'s registrations, teams, payments, waivers, and messages move onto ${keep.firstName}, and the duplicate record is deleted. This can't be undone.`}
+                          className="btn-secondary text-xs"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
