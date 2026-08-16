@@ -3,7 +3,7 @@
 // pair per side. Categories and rank order live here so the setup UI, the score
 // sheet, and any roll-up agree on labels and ordering.
 
-export type LineCategoryKey = "MENS" | "WOMENS" | "MIXED" | "YOUTH_BOYS" | "YOUTH_GIRLS" | "OPEN";
+export type LineCategoryKey = "MENS" | "WOMENS" | "MIXED" | "YOUTH_BOYS" | "YOUTH_GIRLS" | "OPEN" | "DREAM_BREAKER";
 
 export const LINE_CATEGORIES: { key: LineCategoryKey; label: string; short: string }[] = [
   { key: "MENS", label: "Men's", short: "M" },
@@ -12,7 +12,30 @@ export const LINE_CATEGORIES: { key: LineCategoryKey; label: string; short: stri
   { key: "YOUTH_BOYS", label: "Youth Boys", short: "YB" },
   { key: "YOUTH_GIRLS", label: "Youth Girls", short: "YG" },
   { key: "OPEN", label: "Open", short: "O" },
+  { key: "DREAM_BREAKER", label: "Dream Breaker", short: "DB" },
 ];
+
+/// A Dream Breaker is the MLP singles tiebreaker — only played when the doubles
+/// lines end tied. It's a counting line, so an unplayed one (no games) simply
+/// doesn't affect the result.
+export function isDreamBreaker(category: string | null | undefined): boolean {
+  return category === "DREAM_BREAKER";
+}
+
+/// Whether the non-Dream-Breaker counting lines are level (so the Dream Breaker
+/// decides the match). Fed the fixture's lines with their computed winners.
+export function doublesAreTied(
+  lines: { category: string; lineWinner: string | null; isCounting: boolean }[],
+): boolean {
+  let home = 0;
+  let away = 0;
+  for (const l of lines) {
+    if (!l.isCounting || isDreamBreaker(l.category)) continue;
+    if (l.lineWinner === "HOME") home++;
+    else if (l.lineWinner === "AWAY") away++;
+  }
+  return home > 0 && home === away;
+}
 
 export function categoryLabel(key: string | null | undefined): string {
   return LINE_CATEGORIES.find((c) => c.key === key)?.label ?? "Open";
@@ -44,12 +67,13 @@ export const LINE_TEMPLATES: { key: string; label: string; note: string; lines: 
   {
     key: "MLP",
     label: "MLP style",
-    note: "Women's doubles, Men's doubles, two Mixed",
+    note: "Women's doubles, Men's doubles, two Mixed, + Dream Breaker",
     lines: [
       { category: "WOMENS", rank: 1, label: "Women's doubles" },
       { category: "MENS", rank: 1, label: "Men's doubles" },
       { category: "MIXED", rank: 1, label: "Mixed 1" },
       { category: "MIXED", rank: 2, label: "Mixed 2" },
+      { category: "DREAM_BREAKER", rank: 1, label: "Dream Breaker (if 2–2)" },
     ],
   },
   {

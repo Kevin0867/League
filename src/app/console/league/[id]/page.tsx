@@ -8,7 +8,7 @@ import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 import { matchTypeConfig, lineLabel, isCountingLine } from "@/lib/domain/matchType";
 import { scoringFormatOf, maxGames, describeScoring } from "@/lib/domain/scoringFormat";
 import { ScoringFormatFields } from "@/components/ScoringFormatFields";
-import { LINE_CATEGORIES, LINE_TEMPLATES, lineTitle } from "@/lib/domain/lineCategory";
+import { LINE_CATEGORIES, LINE_TEMPLATES, lineTitle, isDreamBreaker, doublesAreTied } from "@/lib/domain/lineCategory";
 
 export const dynamic = "force-dynamic";
 
@@ -114,10 +114,12 @@ export default async function FixtureDetail({
   // The lines the score sheet renders: the categorized lines once set up, else
   // generic lines from the match type (legacy path).
   const hasLines = fixture.lines.length > 0;
+  const dbTied = doublesAreTied(fixture.lines);
   const scoreLines = hasLines
     ? fixture.lines.map((l) => ({
         lineNumber: l.lineNumber,
         title: lineTitle(l),
+        category: l.category,
         isCounting: l.isCounting,
         games: l.games,
         homePair: [nameOf(l.homePlayer1Id), nameOf(l.homePlayer2Id)].filter(Boolean).join(" & ") || null,
@@ -126,6 +128,7 @@ export default async function FixtureDetail({
     : lineNums.map((n) => ({
         lineNumber: n,
         title: lineLabel(n, cfg),
+        category: "OPEN",
         isCounting: isCountingLine(n, cfg),
         games: [] as typeof fixture.lines[number]["games"],
         homePair: pairFor(homeId, n),
@@ -308,6 +311,11 @@ export default async function FixtureDetail({
                       {sl.homePair ?? homeName} <span className="text-slate-400">vs</span> {sl.awayPair ?? awayName}
                     </span>
                     {!sl.isCounting && <span className="text-xs text-slate-400">(non-counting)</span>}
+                    {isDreamBreaker(sl.category) && (
+                      dbTied
+                        ? <span className="badge bg-amber-100 text-amber-800">tied 2–2 — play the Dream Breaker</span>
+                        : <span className="text-xs text-slate-400">singles tiebreaker — only if the doubles finish tied</span>
+                    )}
                     {winnerLabel && <span className="badge bg-emerald-100 text-emerald-800">{winnerLabel} won</span>}
                   </div>
                   <div className="flex flex-wrap gap-3">
