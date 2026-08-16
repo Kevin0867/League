@@ -1,5 +1,6 @@
 export type BracketMatch = {
   id: string;
+  bracket?: string; // "W" | "L" | "GF" — absent/"W" for single-elimination
   round: number;
   slot: number;
   homeTeamId: string | null;
@@ -20,6 +21,38 @@ function roundLabel(round: number, totalRounds: number): string {
   return `Round ${round}`;
 }
 
+// One set of rounds laid out as columns.
+function Lane({
+  matches, teamNames, editable, ticket, fancyLabels,
+}: {
+  matches: BracketMatch[];
+  teamNames: Record<string, string>;
+  editable: boolean;
+  ticket?: string;
+  fancyLabels: boolean;
+}) {
+  const rounds = Math.max(...matches.map((m) => m.round));
+  const byRound: Record<number, BracketMatch[]> = {};
+  for (const m of matches) (byRound[m.round] ??= []).push(m);
+  for (const r of Object.keys(byRound)) byRound[+r].sort((a, b) => a.slot - b.slot);
+  return (
+    <div className="flex gap-6 overflow-x-auto pb-2">
+      {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => (
+        <div key={round} className="min-w-[220px] flex-1">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {fancyLabels ? roundLabel(round, rounds) : `Round ${round}`}
+          </h3>
+          <div className="flex h-full flex-col justify-around gap-3">
+            {(byRound[round] ?? []).map((m) => (
+              <MatchCard key={m.id} m={m} teamNames={teamNames} editable={editable} ticket={ticket} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Bracket({
   matches,
   teamNames,
@@ -34,25 +67,37 @@ export function Bracket({
   if (matches.length === 0) {
     return <p className="text-sm text-slate-400">No bracket drawn yet.</p>;
   }
-  const rounds = Math.max(...matches.map((m) => m.round));
-  const byRound: Record<number, BracketMatch[]> = {};
-  for (const m of matches) (byRound[m.round] ??= []).push(m);
-  for (const r of Object.keys(byRound)) byRound[+r].sort((a, b) => a.slot - b.slot);
 
+  const isDouble = matches.some((m) => m.bracket === "L" || m.bracket === "GF");
+  if (!isDouble) {
+    return <Lane matches={matches} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels />;
+  }
+
+  const winners = matches.filter((m) => (m.bracket ?? "W") === "W");
+  const losers = matches.filter((m) => m.bracket === "L");
+  const grandFinal = matches.filter((m) => m.bracket === "GF");
   return (
-    <div className="flex gap-6 overflow-x-auto pb-2">
-      {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => (
-        <div key={round} className="min-w-[220px] flex-1">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            {roundLabel(round, rounds)}
-          </h3>
-          <div className="flex h-full flex-col justify-around gap-3">
-            {(byRound[round] ?? []).map((m) => (
+    <div className="space-y-6">
+      <div>
+        <p className="mb-1 text-sm font-semibold text-slate-700">Winners bracket</p>
+        <Lane matches={winners} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels={false} />
+      </div>
+      {losers.length > 0 && (
+        <div>
+          <p className="mb-1 text-sm font-semibold text-slate-700">Losers bracket <span className="font-normal text-slate-400">— a second loss is out</span></p>
+          <Lane matches={losers} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels={false} />
+        </div>
+      )}
+      {grandFinal.length > 0 && (
+        <div>
+          <p className="mb-1 text-sm font-semibold text-slate-700">Grand Final</p>
+          <div className="max-w-[240px]">
+            {grandFinal.map((m) => (
               <MatchCard key={m.id} m={m} teamNames={teamNames} editable={editable} ticket={ticket} />
             ))}
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

@@ -109,10 +109,17 @@ export default async function ChampionshipPage({
                     {eligible < d.teams.length ? ` (${d.teams.length - eligible} ineligible)` : ""}
                   </p>
                 </div>
-                <form method="POST" action="/api/console/championship">
+                <form method="POST" action="/api/console/championship" className="flex flex-wrap items-end gap-2">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="generateBracket" />
                   <input type="hidden" name="divisionId" value={d.id} />
+                  <div>
+                    <label className="label text-xs">Format</label>
+                    <select name="format" className="input py-1.5 text-sm" defaultValue="single">
+                      <option value="single">Single elimination</option>
+                      <option value="double">Double elimination</option>
+                    </select>
+                  </div>
                   <button className="btn-secondary text-sm" disabled={eligible < 2}>
                     {matches.length > 0 ? "Redraw bracket" : "Draw bracket"}
                   </button>
