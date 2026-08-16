@@ -35,7 +35,7 @@ export default async function TeamImportPage({
       </div>
 
       {committed && (
-        <div className="rounded-lg bg-accent-50 px-4 py-3 text-sm text-accent-900">
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           <p className="font-semibold">Import complete.</p>
           <p className="mt-0.5">
             Teams created: {sp.created} · reused: {sp.reused} · players placed: {sp.assigned}

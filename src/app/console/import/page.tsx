@@ -93,8 +93,8 @@ export default async function ImportPage({
           </div>
           <p className="mt-4 text-sm text-slate-600">
             Imported into <span className="font-medium">{sp.season}</span>. Head to{" "}
-            <a href="/console/registrations" className="text-accent-700 underline">Registrations</a> or{" "}
-            <a href="/console/pools" className="text-accent-700 underline">Assignment</a> to start placing players.
+            <a href="/console/registrations" className="text-brand-700 underline">Registrations</a> or{" "}
+            <a href="/console/pools" className="text-brand-700 underline">Assignment</a> to start placing players.
           </p>
         </div>
       )}

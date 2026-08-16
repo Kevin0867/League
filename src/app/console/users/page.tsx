@@ -63,7 +63,7 @@ export default async function UsersPage({
   return (
     <div className="space-y-6">
       <PageHeader title="Access" subtitle="Invite people and assign roles. Admins can do anything; coaches are scoped to their own teams; players and parents use the family portal." />
-      {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OKS[sp.ok] ?? "Done."}</p>}
+      {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OKS[sp.ok] ?? "Done."}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
       {/* A freshly generated set-password link, shown once for the admin to copy

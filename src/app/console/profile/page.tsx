@@ -40,8 +40,8 @@ export default async function CoachProfilePage({
   return (
     <div className="space-y-6">
       <PageHeader title="My account" subtitle="Your sign-in, password, and profile details." />
-      {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile saved.</p>}
-      {sp.imgok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile photo updated.</p>}
+      {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Profile saved.</p>}
+      {sp.imgok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Profile photo updated.</p>}
       {sp.imgerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{sp.imgerr}</p>}
       {sp.err === "noperson" && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Your login isn&apos;t linked to a person record — contact an administrator.</p>
@@ -50,7 +50,7 @@ export default async function CoachProfilePage({
       <div className="card">
         <h2 className="mb-1 font-semibold text-slate-900">Change password</h2>
         <p className="mb-3 text-sm text-slate-500">Update the password you use to sign in.</p>
-        {sp.pwok && <p className="mb-3 rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Password updated.</p>}
+        {sp.pwok && <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Password updated.</p>}
         {sp.pwerr && (
           <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {sp.pwerr === "current"

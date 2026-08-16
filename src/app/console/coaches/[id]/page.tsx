@@ -73,7 +73,7 @@ export default async function EditCoachPage({
         subtitle="Update certification, availability, and contact on this coach's behalf."
       />
 
-      {imgok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Profile photo updated.</p>}
+      {imgok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Profile photo updated.</p>}
       {imgerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{imgerr}</p>}
 
       <div className="card">
@@ -128,7 +128,7 @@ export default async function EditCoachPage({
           because email delivery may not be configured, we always surface the
           link so the admin can copy and share it directly. */}
       {(ok === "account" || invitetoken) && (
-        <div className="rounded-lg border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-accent-900">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           {ok === "account" && <p className="font-medium">Coach account ready. Complete their profile below, then save.</p>}
           {invitetoken ? (
             <div className="mt-1 space-y-2">
@@ -148,7 +148,7 @@ export default async function EditCoachPage({
                 <code className="max-w-full overflow-x-auto rounded bg-white px-2 py-1 text-xs text-slate-700 ring-1 ring-slate-200">/reset?token=…&amp;invite=1</code>
                 <CopyLinkButton path={`/reset?token=${invitetoken}&invite=1`} label="Copy invite link" />
               </div>
-              <p className="text-xs text-accent-700">This link expires in 7 days and can only be used once.</p>
+              <p className="text-xs text-emerald-700">This link expires in 7 days and can only be used once.</p>
             </div>
           ) : (
             <p className="mt-1">Use “Send invite” below to email them a set-password link (or to copy one to share).</p>

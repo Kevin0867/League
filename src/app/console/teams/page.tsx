@@ -149,7 +149,7 @@ export default async function TeamBuildBoard({
       </div>
 
       {sp.ok && OK[sp.ok] && (
-        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {OK[sp.ok]}
           {sp.ok === "schedule" && sp.skipped ? ` (${sp.skipped} skipped — day/time was outside the facility's available hours.)` : ""}
         </p>
@@ -230,7 +230,7 @@ export default async function TeamBuildBoard({
             <li key={i} className="flex items-center gap-2">
               <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${s.done ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>{s.done ? "✓" : i + 1}</span>
               <span className={s.done ? "text-slate-500 line-through" : "text-slate-700"}>{s.label}</span>
-              {!s.done && s.href && <Link href={s.href} className="text-xs text-accent-700 underline">{s.cta}</Link>}
+              {!s.done && s.href && <Link href={s.href} className="text-xs text-brand-700 underline">{s.cta}</Link>}
             </li>
           ))}
         </ol>
@@ -306,7 +306,7 @@ export default async function TeamBuildBoard({
         <div className="card">
           <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
             No teams yet. Create one above, then fill its roster by dragging players from the pools on the{" "}
-            <Link href="/console/board" className="text-accent-700 underline">Assignment board</Link>.
+            <Link href="/console/board" className="text-brand-700 underline">Assignment board</Link>.
           </p>
         </div>
       ) : (

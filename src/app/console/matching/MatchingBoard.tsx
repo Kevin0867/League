@@ -35,7 +35,7 @@ export function MatchingBoard({ ticket, teams }: { ticket: string; teams: MatchT
           const chosen = sel[team.id];
           const changed = chosen !== initial[team.id];
           return (
-            <div key={team.id} className={`card space-y-3 ${changed ? "ring-2 ring-accent-400" : ""}`}>
+            <div key={team.id} className={`card space-y-3 ${changed ? "ring-2 ring-amber-400" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="font-semibold text-slate-900">{team.name}</div>

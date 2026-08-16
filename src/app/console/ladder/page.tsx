@@ -42,7 +42,7 @@ export default async function LadderPage({
     <div className="space-y-6">
       <PageHeader title="Ladder" subtitle="A running ladder — beat someone ranked above you and you take their spot. Record challenge results and the order updates itself." />
 
-      {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>}
+      {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok] ?? "Done."}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>}
 
       {!ladder ? (

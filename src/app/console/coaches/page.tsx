@@ -94,7 +94,7 @@ export default async function CoachesPage({
     <div className="space-y-6">
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
       {sp.ok && (
-        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {sp.ok === "profile" ? "Coach profile updated." : sp.ok === "publish" ? "Public site visibility updated." : sp.ok === "waiverSent" ? "Waiver request sent to the coach." : "Account created."}
         </p>
       )}

@@ -138,7 +138,7 @@ export default async function FixtureDetail({
   return (
     <div className="space-y-6">
       {sp.ok && (
-        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok] ?? "Done."}</p>
       )}
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">

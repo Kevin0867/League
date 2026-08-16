@@ -49,7 +49,7 @@ export default async function FacilitiesPage({
   return (
     <div className="space-y-6">
       {(sp.ok === "edited" || sp.ok === "deleted" || sp.ok === "archived" || sp.ok === "unarchived" || sp.added) && (
-        <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800">
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
           {sp.ok === "edited" ? "Facility updated." : sp.ok === "deleted" ? "Facility removed." : sp.ok === "archived" ? "Facility archived — hidden from scheduling." : sp.ok === "unarchived" ? "Facility restored." : "Facility added."}
         </div>
       )}

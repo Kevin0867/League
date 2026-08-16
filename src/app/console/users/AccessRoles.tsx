@@ -76,7 +76,7 @@ export function RoleCell({ userId, assignable }: { userId: string; assignable: R
   const dirty = ctx ? !sameSet(ctx.state[userId] ?? [], ctx.initial[userId] ?? []) : false;
   if (!ctx) return null;
   return (
-    <div className={`flex flex-wrap items-center gap-2 rounded-lg ${dirty ? "ring-2 ring-accent-400" : ""} p-0.5`}>
+    <div className={`flex flex-wrap items-center gap-2 rounded-lg ${dirty ? "ring-2 ring-amber-400" : ""} p-0.5`}>
       {assignable.map((r) => {
         const on = chosen.has(r);
         return (
@@ -91,7 +91,7 @@ export function RoleCell({ userId, assignable }: { userId: string; assignable: R
           </label>
         );
       })}
-      {dirty && <span className="text-[11px] font-medium text-accent-700">unsaved</span>}
+      {dirty && <span className="text-[11px] font-medium text-amber-700">unsaved</span>}
     </div>
   );
 }

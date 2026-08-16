@@ -114,7 +114,7 @@ export default async function RegistrationDetail({
           <p className="text-sm text-slate-500">{reg.season?.name} · <StatusBadge status={reg.status} /></p>
         </div>
       </div>
-      {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>}
+      {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok]}</p>}
       {sp.ok === "requested" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <p className="font-medium">Custom payment request created.</p>

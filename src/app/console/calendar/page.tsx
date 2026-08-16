@@ -78,7 +78,7 @@ export default async function SeasonCalendarPage({
     <div className="space-y-6">
       <PageHeader title="Season calendar" subtitle="The twelve-week arc: six practice weeks, five ACP league weeks, and championship week — with the two dark weeks built in." />
 
-      {sp.ok && <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800 ring-1 ring-accent-200">{OK_MSG[sp.ok] ?? "Done."}</div>}
+      {sp.ok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200">{OK_MSG[sp.ok] ?? "Done."}</div>}
       {sp.err && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800 ring-1 ring-rose-200">{ERR_MSG[sp.err] ?? "Something went wrong."}</div>}
 
       {/* Where we are */}
