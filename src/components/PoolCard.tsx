@@ -127,10 +127,14 @@ export function PoolCard({
             name="op"
             value="create"
             disabled={noSelection}
+            title={noSelection ? "Select at least one player above first" : undefined}
             className="btn-primary w-full text-sm"
           >
             Form team
           </button>
+          {noSelection && (
+            <p className="text-center text-[11px] text-slate-400">Tick one or more players above to enable.</p>
+          )}
         </div>
 
         {/* Assign to an existing team in this division */}
@@ -151,6 +155,7 @@ export function PoolCard({
               name="op"
               value="assign"
               disabled={noSelection}
+              title={noSelection ? "Select at least one player above first" : undefined}
               className="btn-secondary w-full text-sm"
             >
               Add to team
