@@ -9,6 +9,8 @@ import { leagueStandingsFlat } from "@/lib/domain/leagueStandings";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { CreateLeagueForm } from "./CreateLeagueForm";
 import { MATCH_TYPES, matchTypeShort } from "@/lib/domain/matchType";
+import { ScoringFormatFields } from "@/components/ScoringFormatFields";
+import { DEFAULT_SCORING, scoringFormatOf, scoringShort } from "@/lib/domain/scoringFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -306,6 +308,12 @@ export default async function LeaguePage({
                       </select>
                     </div>
                   </div>
+                  <details className="rounded-lg border border-slate-200 bg-white p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-slate-700">Scoring format <span className="font-normal text-slate-400">(default: best 2 of 3 to 11, win by 2)</span></summary>
+                    <div className="mt-3">
+                      <ScoringFormatFields value={DEFAULT_SCORING} />
+                    </div>
+                  </details>
                   <button className="btn-primary w-full sm:w-auto">Schedule</button>
                   <p className="text-xs text-slate-400">Leave the teams as TBD to secure a location and time now, then drop teams in from the table below.</p>
                 </form>
@@ -362,6 +370,7 @@ export default async function LeaguePage({
                         facilityName: f.facility?.name ?? "—",
                         matchType: f.matchType,
                         matchTypeShort: matchTypeShort(f.matchType),
+                        scoringShort: scoringShort(scoringFormatOf(f)),
                         courtAllocation: f.courtAllocation ?? null,
                         scoreStatus: f.scoreStatus,
                         status: f.status,
