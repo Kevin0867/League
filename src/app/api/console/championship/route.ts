@@ -6,8 +6,11 @@ import { audit } from "@/lib/audit";
 import { buildFirstRound, advanceTarget } from "@/lib/domain/bracket";
 import {
   buildDoubleElim, computeLiveness, winnersWinnerTarget, winnersLoserTarget,
-  losersWinnerTarget, losersAdvanceSlot, type Slot,
+  losersWinnerTarget, losersAdvanceSlot,
 } from "@/lib/domain/bracketDouble";
+import {
+  buildWaterfall, computeLiveness as wfLiveness, goldWinnerTarget, goldLoserTarget, flightWinnerTarget,
+} from "@/lib/domain/bracketWaterfall";
 import { computeStandings, type FixtureResult } from "@/lib/domain/standings";
 
 // Championship mutations as native-form-POST route handlers with ticket auth.
@@ -88,8 +91,13 @@ async function deSizeAndN(seasonId: string, divisionId: string): Promise<{ size:
   return { size, n };
 }
 
-/** Put a team into a target slot (double-elim). Missing/dead targets are ignored. */
-async function placeInto(seasonId: string, divisionId: string, t: Slot, teamId: string, seed: number | null) {
+/** Put a team into a target slot. Missing/dead targets are ignored. Accepts any
+ *  bracket string so both the double-elim and waterfall engines can use it. */
+async function placeInto(
+  seasonId: string, divisionId: string,
+  t: { bracket: string; round: number; slot: number; asHome: boolean },
+  teamId: string, seed: number | null,
+) {
   const target = await prisma.championshipMatch.findUnique({
     where: { seasonId_divisionId_bracket_round_slot: { seasonId, divisionId, bracket: t.bracket, round: t.round, slot: t.slot } },
   });
@@ -151,6 +159,71 @@ async function resolveDouble(seasonId: string, divisionId: string, size: number,
   }
 }
 
+// ---- Waterfall helpers -----------------------------------------------------
+
+/** A waterfall draw exists iff this division has GOLD-bracket matches. */
+async function isWaterfall(seasonId: string, divisionId: string): Promise<boolean> {
+  const n = await prisma.championshipMatch.count({ where: { seasonId, divisionId, bracket: "GOLD" } });
+  return n > 0;
+}
+
+async function wfSizeAndN(seasonId: string, divisionId: string): Promise<{ size: number; n: number }> {
+  const first = await prisma.championshipMatch.findMany({ where: { seasonId, divisionId, bracket: "GOLD", round: 1 } });
+  const size = Math.max(2, first.length * 2);
+  let n = 0;
+  for (const m of first) { if (m.homeTeamId) n++; if (m.awayTeamId) n++; }
+  return { size, n };
+}
+
+/** Route a completed waterfall match: Gold winners advance in Gold and drop
+ *  their loser into the matching flight; flight winners advance in their flight. */
+async function advanceWaterfall(
+  seasonId: string, divisionId: string, size: number,
+  match: { bracket: string; round: number; slot: number; homeTeamId: string | null; awayTeamId: string | null; homeSeed: number | null; awaySeed: number | null },
+  winnerTeamId: string, loserTeamId: string | null,
+) {
+  const winnerSeed = winnerTeamId === match.homeTeamId ? match.homeSeed : match.awaySeed;
+  const loserSeed = loserTeamId && loserTeamId === match.homeTeamId ? match.homeSeed : match.awaySeed;
+  if (match.bracket === "GOLD") {
+    const wt = goldWinnerTarget(size, match.round, match.slot);
+    if (wt) await placeInto(seasonId, divisionId, wt, winnerTeamId, winnerSeed);
+    if (loserTeamId) {
+      const lt = goldLoserTarget(size, match.round, match.slot);
+      if (lt) await placeInto(seasonId, divisionId, lt, loserTeamId, loserSeed);
+    }
+  } else {
+    const fr = parseInt(match.bracket.slice(1), 10);
+    const wt = flightWinnerTarget(size, fr, match.round, match.slot);
+    if (wt) await placeInto(seasonId, divisionId, wt, winnerTeamId, winnerSeed);
+    // Flight loser is eliminated.
+  }
+}
+
+async function resolveWaterfall(seasonId: string, divisionId: string, size: number, n: number) {
+  const live = wfLiveness(size, n);
+  for (let guard = 0; guard < 200; guard++) {
+    const matches = await prisma.championshipMatch.findMany({ where: { seasonId, divisionId } });
+    let changed = false;
+    for (const m of matches) {
+      if (m.status === "COMPLETED" || m.status === "BYE") continue;
+      const lv = live.get(`${m.bracket}-${m.round}-${m.slot}`) ?? { home: true, away: true };
+      const hasHome = !!m.homeTeamId, hasAway = !!m.awayTeamId;
+      if (hasHome && hasAway) {
+        if (m.status === "PENDING") { await prisma.championshipMatch.update({ where: { id: m.id }, data: { status: "READY" } }); changed = true; }
+        continue;
+      }
+      let winner: string | null = null;
+      if (hasHome && !lv.away) winner = m.homeTeamId;
+      else if (hasAway && !lv.home) winner = m.awayTeamId;
+      if (!winner) continue;
+      await prisma.championshipMatch.update({ where: { id: m.id }, data: { status: "BYE", winnerTeamId: winner } });
+      await advanceWaterfall(seasonId, divisionId, size, m, winner, null);
+      changed = true;
+    }
+    if (!changed) break;
+  }
+}
+
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const back = (qs: string) =>
@@ -196,10 +269,31 @@ async function generateBracket(
   const seeded = await seedTeams(seasonId, divisionId);
   if (seeded.length < 2) return back("?err=eligible");
 
-  const format = String(formData.get("format") ?? "single").trim() === "double" ? "double" : "single";
+  const formatRaw = String(formData.get("format") ?? "single").trim();
+  const format = formatRaw === "double" || formatRaw === "waterfall" ? formatRaw : "single";
 
   // Fresh draw.
   await prisma.championshipMatch.deleteMany({ where: { seasonId, divisionId } });
+
+  if (format === "waterfall") {
+    const { size, matches } = buildWaterfall(seeded);
+    const n = seeded.length;
+    const live = wfLiveness(size, n);
+    for (const m of matches) {
+      const lv = live.get(`${m.bracket}-${m.round}-${m.slot}`);
+      if (lv && !lv.home && !lv.away) continue;
+      await prisma.championshipMatch.create({
+        data: {
+          seasonId, divisionId, bracket: m.bracket, round: m.round, slot: m.slot,
+          homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId, homeSeed: m.homeSeed, awaySeed: m.awaySeed,
+          status: "PENDING", scheduledAt: roundDate(m.round),
+        },
+      });
+    }
+    await resolveWaterfall(seasonId, divisionId, size, n);
+    await audit({ actorId: actor.userId, entityType: "ChampionshipMatch", entityId: divisionId, action: "GENERATE_BRACKET", summary: `Drew a ${size}-team waterfall bracket from ${seeded.length} seeds` });
+    return back("?ok=bracket");
+  }
 
   if (format === "double") {
     const { size, matches } = buildDoubleElim(seeded);
@@ -284,10 +378,15 @@ async function recordChampResult(
     data: { winnerTeamId, homeScore, awayScore, status: "COMPLETED" },
   });
 
-  if (await isDoubleElim(match.seasonId, match.divisionId)) {
+  const loserTeamId = winnerTeamId === match.homeTeamId ? match.awayTeamId : match.homeTeamId;
+  if (await isWaterfall(match.seasonId, match.divisionId)) {
+    // Waterfall: advance the winner; a Gold loser drops into its flight.
+    const { size, n } = await wfSizeAndN(match.seasonId, match.divisionId);
+    await advanceWaterfall(match.seasonId, match.divisionId, size, match, winnerTeamId, match.bracket === "GOLD" ? loserTeamId : null);
+    await resolveWaterfall(match.seasonId, match.divisionId, size, n);
+  } else if (await isDoubleElim(match.seasonId, match.divisionId)) {
     // Double-elimination: route the winner onward and drop a Winners loser into
     // the Losers bracket, then settle any resulting walkovers.
-    const loserTeamId = winnerTeamId === match.homeTeamId ? match.awayTeamId : match.homeTeamId;
     const { size, n } = await deSizeAndN(match.seasonId, match.divisionId);
     await advanceDouble(match.seasonId, match.divisionId, size, match, winnerTeamId, match.bracket === "W" ? loserTeamId : null);
     await resolveDouble(match.seasonId, match.divisionId, size, n);

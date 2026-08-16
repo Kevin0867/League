@@ -68,36 +68,49 @@ export function Bracket({
     return <p className="text-sm text-slate-400">No bracket drawn yet.</p>;
   }
 
-  const isDouble = matches.some((m) => m.bracket === "L" || m.bracket === "GF");
-  if (!isDouble) {
+  const grouped = matches.some((m) => m.bracket && m.bracket !== "W");
+  if (!grouped) {
     return <Lane matches={matches} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels />;
   }
 
-  const winners = matches.filter((m) => (m.bracket ?? "W") === "W");
-  const losers = matches.filter((m) => m.bracket === "L");
-  const grandFinal = matches.filter((m) => m.bracket === "GF");
+  // Order and label the lanes: main draw first, then losers, then flights, GF last.
+  const laneOrder = (b: string): number => {
+    if (b === "W" || b === "GOLD") return 0;
+    if (b === "L") return 1;
+    if (b === "GF") return 99;
+    if (b.startsWith("F")) return 10 + (parseInt(b.slice(1), 10) || 0);
+    return 50;
+  };
+  const laneLabel = (b: string): { title: string; note?: string } => {
+    if (b === "W") return { title: "Winners bracket" };
+    if (b === "GOLD") return { title: "Gold bracket" };
+    if (b === "L") return { title: "Losers bracket", note: "a second loss is out" };
+    if (b === "GF") return { title: "Grand Final" };
+    if (b === "F1") return { title: "Silver flight", note: "1st-round losers" };
+    if (b === "F2") return { title: "Bronze flight", note: "2nd-round losers" };
+    if (b.startsWith("F")) return { title: `Flight ${(parseInt(b.slice(1), 10) || 0) + 1}` };
+    return { title: b };
+  };
+  const brackets = [...new Set(matches.map((m) => m.bracket ?? "W"))].sort((a, b) => laneOrder(a) - laneOrder(b));
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className="mb-1 text-sm font-semibold text-slate-700">Winners bracket</p>
-        <Lane matches={winners} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels={false} />
-      </div>
-      {losers.length > 0 && (
-        <div>
-          <p className="mb-1 text-sm font-semibold text-slate-700">Losers bracket <span className="font-normal text-slate-400">— a second loss is out</span></p>
-          <Lane matches={losers} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels={false} />
-        </div>
-      )}
-      {grandFinal.length > 0 && (
-        <div>
-          <p className="mb-1 text-sm font-semibold text-slate-700">Grand Final</p>
-          <div className="max-w-[240px]">
-            {grandFinal.map((m) => (
-              <MatchCard key={m.id} m={m} teamNames={teamNames} editable={editable} ticket={ticket} />
-            ))}
+      {brackets.map((b) => {
+        const lane = matches.filter((m) => (m.bracket ?? "W") === b);
+        const { title, note } = laneLabel(b);
+        return (
+          <div key={b}>
+            <p className="mb-1 text-sm font-semibold text-slate-700">{title}{note && <span className="font-normal text-slate-400"> — {note}</span>}</p>
+            {b === "GF" ? (
+              <div className="max-w-[240px]">
+                {lane.map((m) => <MatchCard key={m.id} m={m} teamNames={teamNames} editable={editable} ticket={ticket} />)}
+              </div>
+            ) : (
+              <Lane matches={lane} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels={false} />
+            )}
           </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
