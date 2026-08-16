@@ -2,7 +2,9 @@ import Link from "next/link";
 import { formatDate } from "@/lib/time";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
-import { mintConsoleTicket } from "@/lib/auth";
+import { mintConsoleTicket, getSession } from "@/lib/auth";
+import { can } from "@/lib/rbac";
+import { CoachLeagueMatches } from "./CoachLeagueMatches";
 import { teamConfirmation, shouldEscalate, MIN_CONFIRMED_PLAYERS } from "@/lib/domain/availability";
 import { EditableFixtureRow } from "@/components/EditableFixtureRow";
 import { leagueStandingsFlat } from "@/lib/domain/leagueStandings";
@@ -30,6 +32,7 @@ const OK: Record<string, string> = {
   disputeScores: "Scores disputed — enter the official result to resolve.",
   addLeagueTeam: "Team added to the league.",
   removeLeagueTeam: "Team removed from the league.",
+  setScoringFormat: "Scoring format updated.",
 };
 
 const ERRORS: Record<string, string> = {
@@ -44,6 +47,7 @@ const ERRORS: Record<string, string> = {
   matchteams: "Pick both teams for the match.",
   matchsame: "A team can't play itself — pick two different teams.",
   matchdate: "Pick a date for the match.",
+  notyours: "You can only enter or confirm scores for your own team's matches.",
   fewteams: "Add at least two teams to the league before generating matches.",
   hasfixtures: "Matches already exist — clear them first to regenerate.",
   op: "Unknown operation.",
@@ -56,6 +60,21 @@ export default async function LeaguePage({
 }) {
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
+
+  // Coaches see a focused view of only their teams' matches (enter scores,
+  // accept/dispute the opponent's). Scheduling admins get the full hub below.
+  const session = await getSession();
+  const roles = session?.roles ?? (session?.role ? [session.role] : []);
+  if (!can(roles, "manageScheduling")) {
+    return (
+      <div className="space-y-6">
+        {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>}
+        {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
+        <CoachLeagueMatches personId={session?.personId ?? ""} ticket={ticket} />
+      </div>
+    );
+  }
+
   const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
 
   if (!season) {
