@@ -28,12 +28,42 @@ export async function POST(req: Request) {
   const op = String(formData.get("op") ?? "");
   const fixtureId = String(formData.get("fixtureId") ?? "");
 
-  const basePath = FIXTURE_OPS.has(op) ? `/console/league/${fixtureId}` : "/console/league";
+  // Coaches submit from /console/league (the role-branched coach view) and pass
+  // returnTo so their redirects land back there instead of the admin match page.
+  const returnToRaw = String(formData.get("returnTo") ?? "").trim();
+  const returnTo = returnToRaw.startsWith("/") && !returnToRaw.startsWith("//") ? returnToRaw : "";
+  const basePath = returnTo || (FIXTURE_OPS.has(op) ? `/console/league/${fixtureId}` : "/console/league");
   const back = (qs: string) => NextResponse.redirect(new URL(`${basePath}${qs}`, origin), 303);
 
-  // Preserves requireLeagueManager(): manageScheduling gate on the actor.
   const actor = await actorFromForm(formData);
-  if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+  if (!actor) return back("?err=auth");
+  const schedulingAdmin = can(actor.roles, "manageScheduling");
+
+  // A coach may enter their OWN team's scores (as a proposal) and accept or
+  // dispute the OPPONENT'S proposal — nothing else. Everything else stays behind
+  // the scheduling-admin gate (requireLeagueManager).
+  const COACH_OPS = new Set(["enterScores", "acceptScores", "disputeScores"]);
+  if (!schedulingAdmin) {
+    if (!COACH_OPS.has(op) || !fixtureId) return back("?err=auth");
+    const user = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
+    const coach = user?.personId ? await prisma.coach.findUnique({ where: { personId: user.personId }, select: { id: true } }) : null;
+    if (!coach) return back("?err=auth");
+    const myTeams = await prisma.team.findMany({
+      where: { OR: [{ coachId: coach.id }, { assistantCoaches: { some: { coachId: coach.id } } }] },
+      select: { id: true },
+    });
+    const myTeamIds = new Set(myTeams.map((t) => t.id));
+    const fx = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { homeTeamId: true, awayTeamId: true, scoreProposedById: true } });
+    if (!fx) return back("?err=nofixture");
+    const myTeamId = [fx.homeTeamId, fx.awayTeamId].find((id) => id && myTeamIds.has(id)) ?? null;
+    if (!myTeamId) return back("?err=notyours");
+    if (op === "enterScores") {
+      formData.set("enteredBy", myTeamId); // coaches always propose as their own team
+    } else {
+      // accept/dispute only the opponent's pending proposal
+      if (!fx.scoreProposedById || fx.scoreProposedById === myTeamId) return back("?err=notyours");
+    }
+  }
 
   switch (op) {
     // ---- Top-level ops (src/app/console/league/actions.ts) --------------------
