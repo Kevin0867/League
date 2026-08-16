@@ -921,6 +921,31 @@ model AcpInterest {
   @@index([createdAt])
 }
 
+/// A ladder competition (§14, event types). Entries are ranked by position;
+/// winning a challenge against a higher-ranked entry swaps the two positions.
+model Ladder {
+  id        String        @id @default(cuid())
+  name      String
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  entries   LadderEntry[]
+}
+
+model LadderEntry {
+  id        String   @id @default(cuid())
+  ladderId  String
+  ladder    Ladder   @relation(fields: [ladderId], references: [id], onDelete: Cascade)
+  /// Optional link to a Team; otherwise a free-text name (a player or pair).
+  teamId    String?
+  name      String
+  position  Int
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([ladderId, position])
+}
+
 /// Public request for a private lesson, semi-private, or clinic (no account
 /// needed). Captured from /clinics/request, emailed to the ops inbox, and worked
 /// from the console. requestType: PRIVATE | SEMI_PRIVATE | CLINIC | UNSURE.
