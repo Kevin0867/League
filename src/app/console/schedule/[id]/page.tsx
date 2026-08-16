@@ -94,6 +94,21 @@ export default async function SessionDetail({
         {s.cancelReason && (
           <p className="mt-1 text-sm text-rose-600">Reason: {s.cancelReason.toLowerCase().replace(/_/g, " ")}</p>
         )}
+        {/* Everything a coach does around a class in one place: check players in
+            below, and jump to notes + a team message (homework) per team. */}
+        {s.teams.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {s.teams.map((t) => (
+              <Link
+                key={t.teamId}
+                href={`/console/teams/${t.teamId}/progress`}
+                className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-slate-50"
+              >
+                Notes &amp; team message · {t.team.name} →
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       {ok && (
