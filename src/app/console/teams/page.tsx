@@ -9,6 +9,7 @@ import {
   canPublishTeam,
 } from "@/lib/domain/teams";
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
+import { getSeasonStats } from "@/lib/domain/seasonStats";
 import { TeamCreateForm } from "./TeamCreateForm";
 import { BulkScheduleEditor } from "./BulkScheduleEditor";
 import { deriveDivisionCode } from "@/lib/domain/teamName";
@@ -32,7 +33,11 @@ export default async function TeamBuildBoard({
 }) {
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
+  // Headline counts + checklist come from the one counting service (same source
+  // as the dashboard); the build board below shows this season's real teams.
+  const stats = await getSeasonStats();
   const teams = await prisma.team.findMany({
+    where: stats.season ? { seasonId: stats.season.id, isTest: false } : { id: "__none__" },
     include: {
       _count: { select: { members: true } },
       coach: { include: { person: true } },
@@ -73,20 +78,20 @@ export default async function TeamBuildBoard({
     if (blocks.length) slotsByFacility[f.id] = blocks;
   }
 
-  const ready = teams.filter((t) => teamMissingFields(t).length === 0).length;
-  const published = teams.filter((t) => t.published).length;
-  const buildingCount = teams.filter((t) => teamMissingFields(t).length > 0).length;
-  const withoutPlayers = teams.filter((t) => t._count.members === 0).length;
-  const readyToPublish = teams.filter((t) => canPublishTeam(t, t.facility).ok && !t.published).length;
-  const allPublished = teams.length > 0 && teams.every((t) => t.published);
+  // All summary numbers come from the counting service so the pills here match
+  // the dashboard's "Teams complete" tile exactly.
+  const ready = stats.teams.ready;
+  const published = stats.teams.published;
+  const readyToPublish = stats.teams.eligibleToPublish;
 
-  // Steps use "every" semantics so the checklist reflects the true state of ALL
-  // teams — not just whether at least one team reached each milestone.
+  // Checklist milestones read from the shared readiness sequence — the same
+  // checkmarks the dashboard shows, so the two can't contradict.
+  const doneOf = (key: string) => stats.readiness.find((s) => s.key === key)?.done ?? false;
   const steps = [
-    { done: teams.length > 0, label: "Create your first team", href: null, cta: "Create a team below" },
-    { done: teams.length > 0 && buildingCount === 0, label: "Complete each team (division, coach, facility, day/time)", href: null, cta: "" },
-    { done: teams.length > 0 && withoutPlayers === 0, label: "Add players to each team", href: "/console/board", cta: "Assignment board" },
-    { done: allPublished, label: "Publish ready teams to families", href: null, cta: "" },
+    { done: stats.teams.total > 0, label: "Create your first team", href: null, cta: "Create a team below" },
+    { done: doneOf("teamsComplete"), label: "Complete each team (division, coach, facility, day/time)", href: null, cta: "" },
+    { done: stats.teams.total > 0 && stats.teams.withoutPlayers === 0, label: "Add players to each team", href: "/console/board", cta: "Assignment board" },
+    { done: doneOf("published"), label: "Publish ready teams to families", href: null, cta: "" },
   ];
   const nextStep = steps.find((s) => !s.done);
 

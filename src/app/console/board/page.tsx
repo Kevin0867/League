@@ -4,10 +4,12 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { AssignmentBoard, type BoardColumn } from "@/components/AssignmentBoard";
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
 import { requireAdmin } from "@/lib/rbac";
+import { UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 
 export const dynamic = "force-dynamic";
 
-const UNASSIGNED = ["SUBMITTED", "WAITLISTED"];
+// Shared pool definition — same as pools + the Registrations "unassigned" filter.
+const UNASSIGNED = [...UNASSIGNED_STATUS];
 
 function bandOf(d: { minRating: number | null; maxRating: number | null }): string {
   if (d.minRating != null && d.maxRating != null) return `${d.minRating}–${d.maxRating}`;

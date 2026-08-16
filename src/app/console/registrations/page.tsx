@@ -8,6 +8,7 @@ import { RowActions } from "@/components/RowActions";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { RegistrationsBulkBar } from "@/components/RegistrationsBulkBar";
 import { requireAdmin } from "@/lib/rbac";
+import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 
 export const dynamic = "force-dynamic";
 
@@ -63,11 +64,20 @@ export default async function RegistrationsPage({
     seasonRows[0]?.id ??
     "";
 
+  // The one counting service — so the header counts here equal the dashboard's.
+  const stats = await getSeasonStats();
+  const scopeSeasonId = stats.season?.id ?? defaultSeasonId;
+
   const q = (sp.q ?? "").trim();
   // Faceted filters — division, location, waiver, payment, assignment. Each is a
   // server-side Prisma condition, ANDed together, so "everyone in Mesa without a
-  // waiver" is one query, not a scroll.
-  const filters: Record<string, unknown>[] = [];
+  // waiver" is one query, not a scroll. Base scope: the active season's live
+  // registrations (withdrawn / duplicate / merged excluded), matching every
+  // other console count.
+  const filters: Record<string, unknown>[] = [
+    { seasonId: scopeSeasonId },
+    { status: { notIn: [...DEAD_REG_STATUS] } },
+  ];
   if (q) filters.push({ person: { OR: [
     { firstName: { contains: q, mode: "insensitive" as const } },
     { lastName: { contains: q, mode: "insensitive" as const } },
@@ -79,7 +89,9 @@ export default async function RegistrationsPage({
   if (sp.waiver === "no") filters.push({ person: { waiverSignedAt: null } });
   if (sp.waiver === "yes") filters.push({ person: { waiverSignedAt: { not: null } } });
   if (sp.assign === "assigned") filters.push({ status: "ASSIGNED" });
-  if (sp.assign === "unassigned") filters.push({ status: "SUBMITTED" });
+  // "Unassigned" = the placement pool, same as the Assignment board/pools count
+  // (awaiting placement = SUBMITTED ∪ WAITLISTED), not SUBMITTED alone.
+  if (sp.assign === "unassigned") filters.push({ status: { in: [...UNASSIGNED_STATUS] } });
   if (sp.assign === "waitlisted") filters.push({ status: "WAITLISTED" });
   if (sp.pay === "unpaid") filters.push({ person: { paymentsMade: { none: { category: "PLAYER_FEE", status: "PAID" } } } });
   if (sp.pay === "paid") filters.push({ person: { paymentsMade: { some: { category: "PLAYER_FEE", status: "PAID" } } } });
@@ -138,17 +150,14 @@ export default async function RegistrationsPage({
   }));
   const dupGroups = findDuplicateGroups(people);
 
-  // Header counts are global, independent of any active search filter.
-  const [total, assigned, waitlisted, noWaiver] = await Promise.all([
-    prisma.registration.count(),
-    prisma.registration.count({ where: { status: "ASSIGNED" } }),
-    prisma.registration.count({ where: { status: "WAITLISTED" } }),
-    // A waiver is per-person, so count PEOPLE without one (matching the
-    // Dashboard and Compliance definitions) rather than registration rows —
-    // otherwise someone with two registrations counts twice.
-    prisma.person.count({ where: { waiverSignedAt: null, registrations: { some: {} } } }),
-  ]);
-  const counts = { total, assigned, waitlisted, noWaiver };
+  // Header counts come straight from the counting service, so this page's totals
+  // are identical to the dashboard's (active season, live registrations).
+  const counts = {
+    total: stats.registrations.live,
+    assigned: stats.registrations.assigned,
+    waitlisted: stats.registrations.waitlisted,
+    noWaiver: stats.waiversOutstanding,
+  };
 
   return (
     <div className="space-y-6">

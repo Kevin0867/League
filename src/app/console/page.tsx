@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { teamMissingFields } from "@/lib/domain/teams";
+import { getSeasonStats } from "@/lib/domain/seasonStats";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getSession } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
@@ -15,29 +16,28 @@ export default async function ConsoleDashboard() {
     return <CoachDashboard personId={session.personId} firstName={session.name.split(" ")[0]} />;
   }
 
-  const [
-    regCount,
-    assignedCount,
-    waitlistCount,
-    teams,
-    facilities,
-    waiversOutstanding,
-    coaches,
-    activeSeason,
-    sessionCount,
-  ] = await Promise.all([
-    prisma.registration.count(),
-    prisma.registration.count({ where: { status: "ASSIGNED" } }),
-    prisma.registration.count({ where: { status: "WAITLISTED" } }),
-    prisma.team.findMany({ include: { _count: { select: { members: true } }, facility: true } }),
-    prisma.facility.findMany({ where: { archived: false } }),
-    prisma.person.count({ where: { waiverSignedAt: null, registrations: { some: {} } } }),
+  // One counting service feeds every headline number and the getting-started
+  // checklist, so the dashboard can never disagree with Setup / Teams / Schedule.
+  const stats = await getSeasonStats();
+  const [teams, coaches, failedPayments] = await Promise.all([
+    // Team board preview + compliance snapshot need the rows; scope matches the
+    // service (active season, real teams).
+    stats.season
+      ? prisma.team.findMany({
+          where: { seasonId: stats.season.id, isTest: false },
+          include: { _count: { select: { members: true } }, facility: true },
+        })
+      : Promise.resolve([]),
     prisma.coach.findMany(),
-    prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, include: { _count: { select: { divisions: true } } } }),
-    prisma.session.count(),
+    prisma.payment.count({ where: { direction: "IN", status: "FAILED" } }),
   ]);
 
-  const failedPayments = await prisma.payment.count({ where: { direction: "IN", status: "FAILED" } });
+  const regCount = stats.registrations.live;
+  const assignedCount = stats.registrations.assigned;
+  const waitlistCount = stats.registrations.waitlisted;
+  const waiversOutstanding = stats.waiversOutstanding;
+  const executed = stats.facilities.executed;
+  const facilitiesTotal = stats.facilities.total;
 
   // Enrollment breakdown — admins only. Splits live signups by chosen location
   // and by program/skill level (Active vs. Waitlist). Only queried for admins so
@@ -57,9 +57,8 @@ export default async function ConsoleDashboard() {
       )
     : null;
 
-  const completeTeams = teams.filter((t) => teamMissingFields(t).length === 0).length;
-  const publishedTeams = teams.filter((t) => t.published).length;
-  const executed = facilities.filter((f) => f.agreementStatus === "EXECUTED").length;
+  const completeTeams = stats.teams.ready;
+  const publishedTeams = stats.teams.published;
   const soon = new Date();
   soon.setDate(soon.getDate() + 30);
   // Expired counts as urgent too — the label reflects both.
@@ -74,19 +73,9 @@ export default async function ConsoleDashboard() {
     { n: bgChecksBad, label: `coach background check${bgChecksBad === 1 ? "" : "s"} expired or expiring within 30 days`, href: "/console/coaches", tone: "amber" as const },
   ].filter((a) => a.n > 0);
 
-  // Whole-season getting-started sequence. Each step links to where it's done;
-  // the first unfinished step is highlighted as "you are here".
-  const setup = [
-    { done: !!activeSeason, label: "Create & activate your season", href: "/console/setup", hint: "Season Setup" },
-    { done: (activeSeason?._count.divisions ?? 0) > 0, label: "Add divisions (skill bands / levels)", href: "/console/setup", hint: "Season Setup" },
-    { done: regCount > 0, label: "Bring in registrations — import or add players", href: "/console/registrations", hint: "Registrations" },
-    { done: coaches.length > 0, label: "Add your coaches", href: "/console/coaches", hint: "Coaches" },
-    { done: executed > 0, label: "Add facilities & execute agreements", href: "/console/facilities", hint: "Facilities" },
-    { done: assignedCount > 0, label: "Assign players into teams", href: "/console/board", hint: "Boards" },
-    { done: completeTeams > 0, label: "Complete each team's six fields", href: "/console/teams", hint: "Team Build" },
-    { done: sessionCount > 0, label: "Generate the practice schedule", href: "/console/schedule", hint: "Schedule" },
-    { done: publishedTeams > 0, label: "Publish teams to families", href: "/console/teams", hint: "Team Build" },
-  ];
+  // The one getting-started sequence, computed in getSeasonStats so Setup, Teams
+  // and Schedule show the exact same checkmarks the dashboard does.
+  const setup = stats.readiness;
   const doneCount = setup.filter((s) => s.done).length;
   const nextIdx = setup.findIndex((s) => !s.done);
 
@@ -147,7 +136,7 @@ export default async function ConsoleDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Registrations" value={regCount} href="/console/registrations" hint={`${assignedCount} assigned · ${waitlistCount} waitlisted`} />
         <Stat label="Teams complete" value={`${completeTeams}/${teams.length}`} href="/console/teams" hint={`${publishedTeams} published`} />
-        <Stat label="Facilities executed" value={`${executed}/${facilities.length}`} href="/console/facilities" hint="agreements signed" tone={executed === 0 ? "warn" : "ok"} />
+        <Stat label="Facilities executed" value={`${executed}/${facilitiesTotal}`} href="/console/facilities" hint="agreements signed" tone={executed === 0 ? "warn" : "ok"} />
         <Stat label="Waivers outstanding" value={waiversOutstanding} href="/console/compliance" hint="no court-ready roster without one" tone={waiversOutstanding > 0 ? "warn" : "ok"} />
       </div>
 
@@ -217,7 +206,7 @@ export default async function ConsoleDashboard() {
           <ul className="space-y-3 text-sm">
             <ComplianceRow label="Waivers outstanding" value={waiversOutstanding} warn={waiversOutstanding > 0} />
             <ComplianceRow label="Background checks expired / expiring (30d)" value={bgChecksBad} warn={bgChecksBad > 0} />
-            <ComplianceRow label="Facility agreements pending" value={facilities.length - executed} warn={facilities.length - executed > 0} />
+            <ComplianceRow label="Facility agreements pending" value={stats.facilities.pending} warn={stats.facilities.pending > 0} />
           </ul>
           <Link href="/console/compliance" className="mt-4 inline-block text-sm font-medium text-brand-700">
             Compliance dashboard →

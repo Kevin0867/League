@@ -5,11 +5,13 @@ import { buildPools, type PoolRegistration } from "@/lib/domain/pools";
 import { TEAM_CAP } from "@/lib/enums";
 import { mintConsoleTicket } from "@/lib/auth";
 import { requireAdmin } from "@/lib/rbac";
+import { UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 
 export const dynamic = "force-dynamic";
 
-// Registrations still in the assignment pool — everything not yet placed.
-const UNASSIGNED = ["SUBMITTED", "WAITLISTED"];
+// Registrations still in the assignment pool — everything not yet placed. Shared
+// with the board and the Registrations "unassigned" filter so all three agree.
+const UNASSIGNED = [...UNASSIGNED_STATUS];
 
 const ERRORS: Record<string, string> = {
   auth: "Not authorized to assign players.",
