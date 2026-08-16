@@ -188,6 +188,17 @@ export async function POST(req: Request) {
       return back("?ok=activateSeason");
     }
 
+    // Flag a season as non-production (or clear the flag). Test seasons are kept
+    // out of public pages and the live-season pickers.
+    case "toggleSeasonTest": {
+      const id = String(formData.get("seasonId") ?? "");
+      const season = await prisma.season.findUnique({ where: { id } });
+      if (!season) return back("?err=notfound");
+      await prisma.season.update({ where: { id }, data: { isTest: !season.isTest } });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: id, action: "season.toggleTest", summary: `${!season.isTest ? "Flagged" : "Unflagged"} ${season.name} as test` });
+      return back("?ok=toggleSeasonTest");
+    }
+
     case "addDivision": {
       const seasonId = String(formData.get("seasonId") ?? "");
       const name = String(formData.get("name") ?? "").trim();

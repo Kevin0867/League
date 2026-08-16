@@ -54,7 +54,7 @@ export default async function SchedulePage({
       take: 200,
     }),
     prisma.team.findMany({
-      where: { origin: "PURE_ACADEMY" },
+      where: { origin: "PURE_ACADEMY", isTest: false },
       include: { _count: { select: { sessions: true } } },
       orderBy: { name: "asc" },
     }),

@@ -254,6 +254,11 @@ model Team {
   seasonId      String
   season        Season    @relation(fields: [seasonId], references: [id])
 
+  /// Non-production / test team. Kept out of pickers, counts, and public pages
+  /// so a rehearsal team can't be mis-selected in production. Marked from the
+  /// Teams page; the season it lives in may also be flagged test.
+  isTest        Boolean   @default(false)
+
   divisionId    String?
   division      Division? @relation(fields: [divisionId], references: [id])
   levelBand     String?
@@ -818,6 +823,10 @@ model Season {
   /// bracket matches aren't separately scheduled).
   championshipStartsAt DateTime?
   active     Boolean  @default(true)
+  /// Non-production / test season. Excluded from public pages (standings,
+  /// league, championship) and from being picked as the live season, but still
+  /// visible and usable in the console so staff can rehearse a setup safely.
+  isTest     Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   /// Editable season arc. Auto-filled from the standard 12-week template the

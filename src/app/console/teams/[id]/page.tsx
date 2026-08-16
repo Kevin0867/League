@@ -155,8 +155,15 @@ export default async function TeamDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {team.isTest && <span className="badge bg-amber-100 text-amber-800">Test</span>}
           <PrintButton label="Print roster" />
           {team.published ? <StatusBadge status="PUBLISHED" /> : missing.length === 0 ? <StatusBadge status="READY" /> : <StatusBadge status="BUILDING" />}
+          <form method="POST" action="/api/console/teams">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="toggleTeamTest" />
+            <input type="hidden" name="teamId" value={team.id} />
+            <button className="text-xs font-medium text-slate-400 hover:underline">{team.isTest ? "Unmark test" : "Mark test"}</button>
+          </form>
         </div>
       </div>
 

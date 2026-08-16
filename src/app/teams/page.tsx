@@ -32,7 +32,7 @@ export default async function TeamsPage() {
   // one team.
   const markets = new Set(teams.map((t) => t.market).filter(Boolean));
   const players = teams.reduce((n, t) => n + t._count.members, 0);
-  const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
+  const season = await prisma.season.findFirst({ where: { active: true, isTest: false, program: "ACP" } });
   const teamIdentity = { club: true, market: true, divisionCode: true, color: true } as const;
   const [gamesPlayed, ratedPlayers, gamesToDupr, fixtures] = await Promise.all([
     prisma.fixture.count({ where: { status: "COMPLETED" } }),

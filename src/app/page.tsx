@@ -7,7 +7,7 @@ import { listPublicClinics, formatClinicWhen } from "@/lib/domain/clinics";
 
 export default async function HomePage() {
   const season = await prisma.season
-    .findFirst({ where: { active: true, program: "PURE_ACADEMY" }, orderBy: { startDate: "desc" } })
+    .findFirst({ where: { active: true, isTest: false, program: "PURE_ACADEMY" }, orderBy: { startDate: "desc" } })
     .catch(() => null);
   const clinics = (await listPublicClinics().catch(() => [])).slice(0, 3);
   const director = await prisma.person
