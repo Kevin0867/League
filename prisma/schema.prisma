@@ -494,6 +494,14 @@ model Facility {
   exactAddress     String?   // behind login, released to assigned players only
   accessInstructions String?
 
+  /// Court lighting: "" / null = unspecified, LIGHTS = playable after dark,
+  /// NO_LIGHTS = daylight only. Drives evening scheduling decisions.
+  lights           String?
+
+  /// Free-form operational notes about the venue — where to park, how to get in,
+  /// gate codes context, house rules, anything staff and coaches should know.
+  notes            String?
+
   /// À la carte eligibility must be negotiated per agreement, not assumed (§11)
   alaCarteAllowed  Boolean   @default(false)
 
@@ -535,6 +543,10 @@ model CourtBlock {
   endTime      String
   courtCount   Int      @default(1)
   overrideNonExecuted Boolean @default(false)
+  /// AVAILABLE (open for booking, default) or BLOCKED (recurring unavailable
+  /// window — the courts are dark/committed then). A BLOCKED window excludes a
+  /// day/time even if it also falls inside an AVAILABLE one.
+  kind         String   @default("AVAILABLE")
 
   @@index([facilityId])
 }

@@ -10,6 +10,7 @@ import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { icsInvite, phoenixWallTimeToUtc, type IcsEvent } from "@/lib/domain/ics";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
+import { isBookable, DOW } from "@/lib/domain/facilityWindows";
 
 // Schedule mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -266,9 +267,8 @@ export async function POST(req: Request) {
     if (facilityId) {
       const blocks = await prisma.courtBlock.findMany({ where: { facilityId } });
       if (blocks.length) {
-        const dow = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][parsed.getUTCDay()];
-        const ok = blocks.some((b) => b.dayOfWeek === dow && startTime >= b.startTime && startTime <= b.endTime);
-        if (!ok) return back("?err=addslot");
+        const dow = DOW[parsed.getUTCDay()];
+        if (!isBookable(blocks, dow, startTime).ok) return back("?err=addslot");
       }
     }
 

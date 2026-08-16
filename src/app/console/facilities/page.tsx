@@ -131,20 +131,47 @@ export default async function FacilitiesPage({
                 </dl>
 
                 <div className="border-t border-slate-100 pt-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</div>
-                  {f.courtBlocks.length > 0 ? (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {f.courtBlocks.map((b) => (
-                        <span key={b.id} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                          {DAY_LABEL[b.dayOfWeek] ?? b.dayOfWeek} {formatTime12(b.startTime)}–{formatTime12(b.endTime)}
-                          {b.courtCount > 1 ? ` · ${b.courtCount} courts` : ""}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-1.5 text-xs text-amber-600">
-                      No open times set — teams can be scheduled here any day/time. Add windows via Edit to limit team
-                      scheduling to when this court is actually open.
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</div>
+                    {f.lights === "LIGHTS" && <span className="badge bg-amber-100 text-amber-800">Lights</span>}
+                    {f.lights === "NO_LIGHTS" && <span className="badge bg-slate-200 text-slate-600">No lights</span>}
+                  </div>
+                  {(() => {
+                    const open = f.courtBlocks.filter((b) => (b.kind ?? "AVAILABLE") === "AVAILABLE");
+                    const blocked = f.courtBlocks.filter((b) => b.kind === "BLOCKED");
+                    return (
+                      <>
+                        {open.length > 0 ? (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {open.map((b) => (
+                              <span key={b.id} className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                                {DAY_LABEL[b.dayOfWeek] ?? b.dayOfWeek} {formatTime12(b.startTime)}–{formatTime12(b.endTime)}
+                                {b.courtCount > 1 ? ` · ${b.courtCount} courts` : ""}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-1.5 text-xs text-amber-600">
+                            No open times set — teams can be scheduled here any day/time. Add windows via Edit to limit team
+                            scheduling to when this court is actually open.
+                          </p>
+                        )}
+                        {blocked.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                            <span className="text-xs text-rose-500">Blocked:</span>
+                            {blocked.map((b) => (
+                              <span key={b.id} className="rounded bg-rose-50 px-2 py-0.5 text-xs text-rose-700 ring-1 ring-rose-100">
+                                {DAY_LABEL[b.dayOfWeek] ?? b.dayOfWeek} {formatTime12(b.startTime)}–{formatTime12(b.endTime)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                  {f.notes && (
+                    <p className="mt-2 whitespace-pre-line rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      <span className="font-medium text-slate-500">Notes: </span>{f.notes}
                     </p>
                   )}
                 </div>
@@ -159,8 +186,9 @@ export default async function FacilitiesPage({
                       percentageRate: f.percentageRate, primaryContact: f.primaryContact,
                       contactEmail: f.contactEmail, contactPhone: f.contactPhone, isPrivate: f.isPrivate,
                       generalArea: f.generalArea, exactAddress: f.exactAddress,
+                      lights: f.lights, notes: f.notes,
                       alaCarteAllowed: f.alaCarteAllowed, acpLeagueOption: f.acpLeagueOption,
-                      courtBlocks: f.courtBlocks.map((b) => ({ dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime, courtCount: b.courtCount })),
+                      courtBlocks: f.courtBlocks.map((b) => ({ dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime, courtCount: b.courtCount, kind: b.kind })),
                     }}
                   />
                   <div className="flex items-center gap-3">

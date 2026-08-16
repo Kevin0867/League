@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-type CourtBlockInit = { dayOfWeek: string; startTime: string; endTime: string; courtCount: number };
+type CourtBlockInit = { dayOfWeek: string; startTime: string; endTime: string; courtCount: number; kind?: string };
+type BlockedInit = { dayOfWeek: string; startTime: string; endTime: string };
 
 export type FacilityInitial = {
   id: string;
@@ -20,6 +21,8 @@ export type FacilityInitial = {
   isPrivate: boolean;
   generalArea: string | null;
   exactAddress: string | null;
+  lights: string | null;
+  notes: string | null;
   alaCarteAllowed: boolean;
   acpLeagueOption: boolean;
   courtBlocks: CourtBlockInit[];
@@ -49,7 +52,10 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
   const [open, setOpen] = useState(false);
   const [feeBasis, setFeeBasis] = useState(facility?.feeBasis ?? "NONE");
   const [isPrivate, setIsPrivate] = useState(facility?.isPrivate ?? false);
-  const [blocks, setBlocks] = useState<CourtBlockInit[]>(facility?.courtBlocks ?? []);
+  const [blocks, setBlocks] = useState<CourtBlockInit[]>((facility?.courtBlocks ?? []).filter((b) => (b.kind ?? "AVAILABLE") === "AVAILABLE"));
+  const [blocked, setBlocked] = useState<BlockedInit[]>(
+    (facility?.courtBlocks ?? []).filter((b) => b.kind === "BLOCKED").map((b) => ({ dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime })),
+  );
 
   if (!open) {
     return editing ? (
@@ -62,6 +68,8 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
   const perRate = feeBasis === "PER_COURT" || feeBasis === "PER_HOUR" || feeBasis === "PER_SESSION";
   const addBlock = () => setBlocks((b) => [...b, { dayOfWeek: "MON", startTime: "", endTime: "", courtCount: facility?.courtCount || 1 }]);
   const removeBlock = (i: number) => setBlocks((b) => b.filter((_, j) => j !== i));
+  const addBlocked = () => setBlocked((b) => [...b, { dayOfWeek: "MON", startTime: "", endTime: "" }]);
+  const removeBlocked = (i: number) => setBlocked((b) => b.filter((_, j) => j !== i));
 
   return (
     <div
@@ -103,6 +111,14 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                   <option value="VERBAL">Verbal</option>
                   <option value="AGREEMENT_SENT">Agreement sent</option>
                   <option value="EXECUTED">Executed</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Lights</label>
+                <select name="lights" className="input" defaultValue={facility?.lights ?? ""}>
+                  <option value="">Not specified</option>
+                  <option value="LIGHTS">Has lights (evening play OK)</option>
+                  <option value="NO_LIGHTS">No lights (daylight only)</option>
                 </select>
               </div>
             </div>
@@ -150,6 +166,43 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
               ))}
             </div>
             <button type="button" onClick={addBlock} className="btn-secondary mt-2 text-sm">+ Add day / time</button>
+          </Section>
+
+          <Section title="Unavailable / blocked times" hint="Recurring day/time windows the courts are NOT available (leagues, HOA use, dark hours). A blocked window overrides availability — nothing can be scheduled here then.">
+            <div className="space-y-2">
+              {blocked.length === 0 && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">No blocked times. Add a window below to mark the courts unavailable then.</p>}
+              {blocked.map((b, i) => (
+                <div key={i} className="flex flex-wrap items-end gap-2 rounded-lg ring-1 ring-rose-100 bg-rose-50/40 p-2">
+                  <div>
+                    <label className="label">Day</label>
+                    <select
+                      name="blockDay"
+                      value={b.dayOfWeek}
+                      onChange={(e) => setBlocked((bs) => bs.map((x, j) => (j === i ? { ...x, dayOfWeek: e.target.value } : x)))}
+                      className="input py-1.5"
+                    >
+                      {DAYS.map((d) => <option key={d} value={d}>{DAY_LABEL[d]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">From</label>
+                    <input
+                      name="blockStart" type="time" className="input py-1.5" value={b.startTime}
+                      onChange={(e) => setBlocked((bs) => bs.map((x, j) => (j === i ? { ...x, startTime: e.target.value } : x)))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">To</label>
+                    <input
+                      name="blockEnd" type="time" className="input py-1.5" value={b.endTime}
+                      onChange={(e) => setBlocked((bs) => bs.map((x, j) => (j === i ? { ...x, endTime: e.target.value } : x)))}
+                    />
+                  </div>
+                  <button type="button" onClick={() => removeBlocked(i)} className="mb-1.5 text-xs text-rose-600 hover:underline">Remove</button>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={addBlocked} className="btn-secondary mt-2 text-sm">+ Add blocked window</button>
           </Section>
 
           <Section title="Fee" hint="How this venue charges, if at all.">
@@ -248,6 +301,16 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                 <input name="exactAddress" className="input" defaultValue={facility?.exactAddress ?? ""} />
               </div>
             )}
+          </Section>
+
+          <Section title="Notes & access" hint="Details about the venue — where to park, how to get in, gate/door codes context, house rules, anything staff and coaches should know.">
+            <textarea
+              name="notes"
+              rows={4}
+              className="input"
+              placeholder={"Park in the north lot off Elm. Enter through the side gate — code on the day-of text. Dogs on the property. Bring your own water; no vending on site."}
+              defaultValue={facility?.notes ?? ""}
+            />
           </Section>
         </div>
 
