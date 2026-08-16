@@ -7,6 +7,7 @@ import { formatTime12, formatTimeRange12, formatDate } from "@/lib/time";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { PrintButton } from "@/components/PrintButton";
 import { AddPracticeForm } from "./AddPracticeForm";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ const TYPE_LABEL: Record<string, string> = {
 const OK_LABEL: Record<string, string> = {
   generate: "Practice schedule generated.",
   added: "Practice added — the team has been notified.",
+  deleted: "Session deleted.",
+  cleared: "Practices cleared — you can regenerate them below.",
 };
 
 const ERR_LABEL: Record<string, string> = {
@@ -29,6 +32,8 @@ const ERR_LABEL: Record<string, string> = {
   exists: "This team already has a practice schedule.",
   adddate: "Pick a valid date for the practice.",
   addslot: "That date and time is outside the facility's available hours — pick a day/time the facility is open.",
+  session: "Session not found.",
+  sessionlinked: "That session has linked records and couldn't be deleted — cancel it instead.",
   op: "Unknown action.",
 };
 
@@ -37,7 +42,7 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { ok, err, view, month, team } = await searchParams;
+  const { ok, err, view, month, team, n } = await searchParams;
   const ticket = await mintConsoleTicket();
   const isCalendar = view === "calendar";
   const teamFilter = team && team !== "all" ? team : null;
@@ -82,6 +87,17 @@ export default async function SchedulePage({
     (t) => t._count.sessions === 0 && (!t.dayOfWeek || !t.startTime || !t.facilityId)
   ).length;
 
+  // Practice count per team — so a wrongly-generated set can be cleared and
+  // redone. Counted from the loaded sessions (PRACTICE only).
+  const practiceCounts = new Map<string, number>();
+  for (const s of sessions) {
+    if (s.type !== "PRACTICE") continue;
+    for (const st of s.teams) practiceCounts.set(st.teamId, (practiceCounts.get(st.teamId) ?? 0) + 1);
+  }
+  const teamsWithPractices = teams
+    .filter((t) => (practiceCounts.get(t.id) ?? 0) > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   // Team filter — clicking a team shows only that team's sessions.
   const teamsWithSessions = teams
     .filter((t) => t._count.sessions > 0)
@@ -113,7 +129,9 @@ export default async function SchedulePage({
       </div>
 
       {ok && (
-        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OK_LABEL[ok] ?? "Done."}</div>
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {ok === "cleared" && n ? `${n} practice${n === "1" ? "" : "s"} cleared — you can regenerate them below.` : OK_LABEL[ok] ?? "Done."}
+        </div>
       )}
       {err && (
         <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{ERR_LABEL[err] ?? "Something went wrong — please try again, and contact us if it persists."}</div>
@@ -164,6 +182,41 @@ export default async function SchedulePage({
           facilities={facilities.map((f) => ({ id: f.id, name: f.name }))}
           facilitySlots={facilitySlots}
         />
+      )}
+
+      {/* Clear & regenerate — once a team's practices are generated it drops off
+          the Generate list. If the day/time/facility was wrong, clear the set
+          here (quiet — no team notice) and regenerate above with the fix. */}
+      {teamsWithPractices.length > 0 && (
+        <details className="card">
+          <summary className="cursor-pointer font-semibold text-slate-900">Clear a team&apos;s practices</summary>
+          <p className="mt-1 text-sm text-slate-500">
+            Generated the wrong day, time, or facility? Clear a team&apos;s practices and regenerate them above after fixing the
+            team&apos;s setup. This deletes the practices outright and does <span className="font-medium">not</span> notify the team —
+            to call off a single session families should hear about, open it and use Cancel instead.
+          </p>
+          <div className="mt-3 divide-y divide-slate-100">
+            {teamsWithPractices.map((t) => {
+              const count = practiceCounts.get(t.id) ?? 0;
+              return (
+                <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="text-sm text-slate-700">
+                    <span className="font-medium">{t.name}</span>
+                    <span className="ml-2 text-slate-400">{count} practice{count === 1 ? "" : "s"}</span>
+                  </span>
+                  <ConfirmSubmit
+                    action="/api/console/schedule"
+                    fields={{ ticket, op: "clearPractices", teamId: t.id, returnTo: "/console/schedule" }}
+                    label="Clear practices"
+                    confirm={`Delete all ${count} practice${count === 1 ? "" : "s"} for ${t.name}? The team is not notified. This can't be undone.`}
+                    danger
+                    className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </details>
       )}
 
       {/* Team filter — view one team's schedule, or all */}

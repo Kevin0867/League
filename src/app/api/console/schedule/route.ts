@@ -213,6 +213,45 @@ export async function POST(req: Request) {
     return back("?ok=cancel");
   }
 
+  // Hard-delete a single session — for one created by mistake. Quiet: no team
+  // notification (use Cancel for that). Join rows (teams, coaches, attendance)
+  // cascade away.
+  if (op === "deleteSession") {
+    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    const sessionId = String(formData.get("sessionId") ?? "");
+    const s = await prisma.session.findUnique({ where: { id: sessionId }, select: { id: true, type: true, date: true } });
+    if (!s) return back("?err=session");
+    try {
+      await prisma.session.delete({ where: { id: sessionId } });
+    } catch {
+      return back("?err=sessionlinked");
+    }
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "DELETE", summary: `Deleted ${s.type} on ${formatDate(s.date)}` });
+    return back("?ok=deleted");
+  }
+
+  // Clear a team's practices so they can be regenerated (e.g. after fixing the
+  // team's day/time/facility). Deletes only PRACTICE sessions for that team.
+  if (op === "clearPractices") {
+    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    const teamId = String(formData.get("teamId") ?? "");
+    if (!teamId) return back("?err=team");
+    const sessions = await prisma.session.findMany({
+      where: { type: "PRACTICE", teams: { some: { teamId } } },
+      select: { id: true },
+    });
+    const ids = sessions.map((x) => x.id);
+    if (ids.length) {
+      try {
+        await prisma.session.deleteMany({ where: { id: { in: ids } } });
+      } catch {
+        return back("?err=sessionlinked");
+      }
+    }
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "CLEAR_PRACTICES", summary: `Cleared ${ids.length} practice(s)` });
+    return back(`?ok=cleared&n=${ids.length}`);
+  }
+
   // relocateSession — manageScheduling (§7). Notifies the team(s) of the new venue.
   if (op === "relocate") {
     if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
