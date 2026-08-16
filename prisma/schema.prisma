@@ -1347,6 +1347,10 @@ model ChampionshipMatch {
   id           String   @id @default(cuid())
   seasonId     String
   divisionId   String
+  /// Which bracket this match belongs to: W (winners / single-elim default), L
+  /// (losers, double-elim only), or GF (grand final). Single-elimination draws
+  /// use only W, so existing brackets are unaffected.
+  bracket      String   @default("W")
   round        Int      // 1 = first round; increases toward the final
   slot         Int      // position within the round (0-indexed)
   homeTeamId   String?
@@ -1362,7 +1366,7 @@ model ChampionshipMatch {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([seasonId, divisionId, round, slot])
+  @@unique([seasonId, divisionId, bracket, round, slot])
   @@index([seasonId, divisionId])
 }
 
