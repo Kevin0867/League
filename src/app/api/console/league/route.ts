@@ -12,6 +12,7 @@ import { teamConfirmation, shouldEscalate } from "@/lib/domain/availability";
 import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
 import { matchTypeConfig, isCountingLine } from "@/lib/domain/matchType";
 import { scoringFromForm, scoringFormatOf, maxGames } from "@/lib/domain/scoringFormat";
+import { lineTemplate } from "@/lib/domain/lineCategory";
 
 // League mutations as a native-form-POST route handler with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -20,7 +21,32 @@ import { scoringFromForm, scoringFormatOf, maxGames } from "@/lib/domain/scoring
 export const dynamic = "force-dynamic";
 
 // [id] ops redirect back to the fixture page; top-level ops to the league index.
-const FIXTURE_OPS = new Set(["submitLineup", "submitLineups", "enterScores", "acceptScores", "disputeScores", "setScoringFormat", "recordForfeit", "submitToDupr"]);
+const FIXTURE_OPS = new Set(["submitLineup", "submitLineups", "enterScores", "acceptScores", "disputeScores", "setScoringFormat", "applyLineTemplate", "addLine", "removeLine", "setLinePairs", "recordForfeit", "submitToDupr"]);
+
+// Most-recent pair a team fielded at a category+rank this season — used to carry
+// a pairing forward to the next match (they stay together for the tournament,
+// but a player can be swapped by editing the line).
+async function lastPairFor(
+  teamId: string | null,
+  seasonId: string | null,
+  category: string,
+  rank: number
+): Promise<[string | null, string | null]> {
+  if (!teamId || !seasonId) return [null, null];
+  const line = await prisma.lineMatchup.findFirst({
+    where: {
+      category,
+      rank,
+      fixture: { seasonId, OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }] },
+    },
+    include: { fixture: { select: { homeTeamId: true } } },
+    orderBy: { fixture: { scheduledAt: "desc" } },
+  });
+  if (!line) return [null, null];
+  return line.fixture.homeTeamId === teamId
+    ? [line.homePlayer1Id, line.homePlayer2Id]
+    : [line.awayPlayer1Id, line.awayPlayer2Id];
+}
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
@@ -490,20 +516,29 @@ export async function POST(req: Request) {
       const enteredBy = String(formData.get("enteredBy") ?? "OFFICIAL").trim();
       const proposal = enteredBy !== "OFFICIAL" && (enteredBy === fixture.homeTeamId || enteredBy === fixture.awayTeamId);
 
-      // Rebuild all lines for this fixture, honouring the match format's line
-      // count and which line (if any) is the non-counting exhibition.
-      await prisma.lineMatchup.deleteMany({ where: { fixtureId } });
+      // Score into the fixture's set of lines. When lines have been set up
+      // (categorized: Men's #1, Women's #1 …) we update their games in place so
+      // category + pairs are preserved. When none exist yet, we materialize
+      // generic lines from the match type — the legacy path — so older or
+      // quickly-scheduled fixtures still work.
+      let lines = await prisma.lineMatchup.findMany({ where: { fixtureId }, select: { id: true, lineNumber: true, isCounting: true } });
+      if (lines.length === 0) {
+        for (let line = 1; line <= cfg.lines; line++) {
+          const created = await prisma.lineMatchup.create({
+            data: { fixtureId, lineNumber: line, isCounting: isCountingLine(line, cfg), category: "OPEN", rank: line },
+          });
+          lines.push({ id: created.id, lineNumber: created.lineNumber, isCounting: created.isCounting });
+        }
+      }
 
-      for (let line = 1; line <= cfg.lines; line++) {
-        const counting = isCountingLine(line, cfg);
+      for (const line of lines) {
         const games: { g: number; h: number; a: number }[] = [];
         for (let g = 1; g <= gameCount; g++) {
-          const hRaw = formData.get(`l${line}_g${g}_h`);
-          const aRaw = formData.get(`l${line}_g${g}_a`);
+          const hRaw = formData.get(`l${line.lineNumber}_g${g}_h`);
+          const aRaw = formData.get(`l${line.lineNumber}_g${g}_a`);
           if (hRaw === null || aRaw === null || String(hRaw) === "" || String(aRaw) === "") continue;
           games.push({ g, h: Number(hRaw), a: Number(aRaw) });
         }
-        if (games.length === 0) continue;
 
         let hWon = 0;
         let aWon = 0;
@@ -511,13 +546,13 @@ export async function POST(req: Request) {
           if (gm.h > gm.a) hWon++;
           else if (gm.a > gm.h) aWon++;
         }
-        const lineWinner = hWon > aWon ? "HOME" : aWon > hWon ? "AWAY" : null;
+        const lineWinner = games.length === 0 ? null : hWon > aWon ? "HOME" : aWon > hWon ? "AWAY" : null;
 
-        const lm = await prisma.lineMatchup.create({
-          data: { fixtureId, lineNumber: line, isCounting: counting, lineWinner },
-        });
+        // Replace this line's games; keep the line row (category + pairs intact).
+        await prisma.gameScore.deleteMany({ where: { lineId: line.id } });
+        await prisma.lineMatchup.update({ where: { id: line.id }, data: { lineWinner } });
         for (const gm of games) {
-          await prisma.gameScore.create({ data: { lineId: lm.id, gameNumber: gm.g, homeScore: gm.h, awayScore: gm.a } });
+          await prisma.gameScore.create({ data: { lineId: line.id, gameNumber: gm.g, homeScore: gm.h, awayScore: gm.a } });
         }
       }
 
@@ -641,6 +676,88 @@ export async function POST(req: Request) {
       await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "fixture.scoringFormat", summary: "Updated scoring format" });
       revalidatePath(`/console/league/${fixtureId}`);
       return back("?ok=setScoringFormat");
+    }
+
+    // Create a set of categorized lines from a template (Club standard, MLP …),
+    // carrying each team's last pairing forward where one exists. Skips any
+    // category+rank already present so it's safe to re-apply.
+    case "applyLineTemplate": {
+      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { id: true, seasonId: true, homeTeamId: true, awayTeamId: true } });
+      if (!fixture) return back("?err=nofixture");
+      const items = lineTemplate(String(formData.get("templateKey") ?? ""));
+      if (!items.length) return back("?err=notemplate");
+      const existing = await prisma.lineMatchup.findMany({ where: { fixtureId }, select: { lineNumber: true, category: true, rank: true } });
+      const have = new Set(existing.map((l) => `${l.category}#${l.rank}`));
+      let nextLine = existing.reduce((m, l) => Math.max(m, l.lineNumber), 0);
+      let created = 0;
+      for (const it of items) {
+        if (have.has(`${it.category}#${it.rank}`)) continue;
+        const [h1, h2] = await lastPairFor(fixture.homeTeamId, fixture.seasonId, it.category, it.rank);
+        const [a1, a2] = await lastPairFor(fixture.awayTeamId, fixture.seasonId, it.category, it.rank);
+        nextLine += 1;
+        await prisma.lineMatchup.create({
+          data: {
+            fixtureId, lineNumber: nextLine, isCounting: it.isCounting ?? true,
+            category: it.category, rank: it.rank, label: it.label ?? null,
+            homePlayer1Id: h1, homePlayer2Id: h2, awayPlayer1Id: a1, awayPlayer2Id: a2,
+          },
+        });
+        created += 1;
+      }
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "line.template", summary: `Applied line template (+${created})` });
+      revalidatePath(`/console/league/${fixtureId}`);
+      return back("?ok=applyLineTemplate");
+    }
+
+    // Add one categorized line (carrying forward each team's last pairing).
+    case "addLine": {
+      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { id: true, seasonId: true, homeTeamId: true, awayTeamId: true } });
+      if (!fixture) return back("?err=nofixture");
+      const category = String(formData.get("category") ?? "OPEN").trim() || "OPEN";
+      const rank = Math.max(1, parseInt(String(formData.get("rank") ?? "1"), 10) || 1);
+      const label = String(formData.get("label") ?? "").trim() || null;
+      const dupe = await prisma.lineMatchup.findFirst({ where: { fixtureId, category, rank }, select: { id: true } });
+      if (dupe) return back("?err=dupline");
+      const agg = await prisma.lineMatchup.aggregate({ where: { fixtureId }, _max: { lineNumber: true } });
+      const [h1, h2] = await lastPairFor(fixture.homeTeamId, fixture.seasonId, category, rank);
+      const [a1, a2] = await lastPairFor(fixture.awayTeamId, fixture.seasonId, category, rank);
+      await prisma.lineMatchup.create({
+        data: {
+          fixtureId, lineNumber: (agg._max.lineNumber ?? 0) + 1, isCounting: true,
+          category, rank, label,
+          homePlayer1Id: h1, homePlayer2Id: h2, awayPlayer1Id: a1, awayPlayer2Id: a2,
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "line.add", summary: `Added line ${category} #${rank}` });
+      revalidatePath(`/console/league/${fixtureId}`);
+      return back("?ok=addLine");
+    }
+
+    case "removeLine": {
+      const lineId = String(formData.get("lineId") ?? "");
+      await prisma.lineMatchup.deleteMany({ where: { id: lineId, fixtureId } });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "line.remove", summary: "Removed a line" });
+      revalidatePath(`/console/league/${fixtureId}`);
+      return back("?ok=removeLine");
+    }
+
+    // Assign the two players each side fields for a line. A blank clears that
+    // slot; swapping a player out is just re-picking one dropdown.
+    case "setLinePairs": {
+      const lineId = String(formData.get("lineId") ?? "");
+      const line = await prisma.lineMatchup.findFirst({ where: { id: lineId, fixtureId }, select: { id: true } });
+      if (!line) return back("?err=noline");
+      const pick = (k: string) => String(formData.get(k) ?? "").trim() || null;
+      await prisma.lineMatchup.update({
+        where: { id: lineId },
+        data: {
+          homePlayer1Id: pick("homePlayer1Id"), homePlayer2Id: pick("homePlayer2Id"),
+          awayPlayer1Id: pick("awayPlayer1Id"), awayPlayer2Id: pick("awayPlayer2Id"),
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "line.pairs", summary: "Set line pairs" });
+      revalidatePath(`/console/league/${fixtureId}`);
+      return back("?ok=setLinePairs");
     }
 
     case "recordForfeit": {
