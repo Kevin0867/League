@@ -1,16 +1,15 @@
 "use client";
 
 import type { Role } from "@/lib/enums";
-import { PasswordField } from "@/components/PasswordField";
 
 export function StaffForm({ role, ticket }: { role: Role; ticket: string }) {
   void role;
   return (
-    <div className="card">
-      <h2 className="font-semibold text-brand-900">Add a staff or coach login</h2>
+    <details className="card">
+      <summary className="cursor-pointer font-semibold text-brand-900">Invite a coach</summary>
       <p className="mt-1 text-sm text-slate-500">
-        Creates a console account. Share the password securely — the person can change
-        it after signing in.
+        Creates their console account and emails a secure link to set their own password —
+        no shared passwords. You&apos;ll land on their profile to fill in the rest.
       </p>
       <form method="POST" action="/api/console/coaches" className="mt-4 grid gap-3 sm:grid-cols-2">
         <input type="hidden" name="ticket" value={ticket} />
@@ -35,14 +34,11 @@ export function StaffForm({ role, ticket }: { role: Role; ticket: string }) {
           </select>
         </div>
         <div className="sm:col-span-2">
-          <PasswordField name="password" label="Initial password" confirm confirmLabel="Confirm initial password" hint="At least 8 characters. Share it securely." />
-        </div>
-        <div className="sm:col-span-2">
           <button type="submit" className="btn-primary w-full sm:w-auto">
-            Create account
+            Send invite
           </button>
         </div>
       </form>
-    </div>
+    </details>
   );
 }
