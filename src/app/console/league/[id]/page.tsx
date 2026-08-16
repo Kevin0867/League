@@ -6,6 +6,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { mintConsoleTicket } from "@/lib/auth";
 import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 import { matchTypeConfig, lineLabel, isCountingLine } from "@/lib/domain/matchType";
+import { scoringFormatOf, maxGames, describeScoring } from "@/lib/domain/scoringFormat";
+import { ScoringFormatFields } from "@/components/ScoringFormatFields";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,7 @@ const OK: Record<string, string> = {
   proposeScores: "Scores submitted — the other team was asked to accept.",
   acceptScores: "Scores accepted — the result is final.",
   disputeScores: "Scores disputed — an admin can enter the official result.",
+  setScoringFormat: "Scoring format updated.",
   recordForfeit: "Forfeit recorded.",
   submitToDupr: "DUPR submission processed.",
 };
@@ -72,6 +75,8 @@ export default async function FixtureDetail({
   const forfeited = fixture.status === "FORFEITED";
   const cfg = matchTypeConfig(fixture.matchType);
   const lineNums = Array.from({ length: cfg.lines }, (_, i) => i + 1);
+  const fmt = scoringFormatOf(fixture);
+  const gameNums = Array.from({ length: maxGames(fmt) }, (_, i) => i + 1);
 
   const homeId = fixture.homeTeamId;
   const awayId = fixture.awayTeamId;
@@ -112,8 +117,25 @@ export default async function FixtureDetail({
         <p className="text-sm text-slate-500">
           Week {leagueWeekLabel(fixture.weekNumber)} · {formatDate(fixture.scheduledAt)} · {fixture.facility?.name ?? "hub TBD"} · {fixture.courtAllocation ?? "courts TBD"}
           <span className="ml-2 badge bg-slate-100 text-slate-600">{cfg.label}</span>
+          <span className="ml-2 badge bg-slate-100 text-slate-600">{describeScoring(fmt)}</span>
         </p>
       </div>
+
+      {/* Scoring format — round-robin vs playoff rules live here */}
+      <details className="card">
+        <summary className="flex cursor-pointer items-center justify-between gap-3">
+          <span className="font-semibold text-slate-900">Scoring format</span>
+          <span className="text-sm text-slate-500">{describeScoring(fmt)}</span>
+        </summary>
+        <form method="POST" action="/api/console/league" className="mt-3 space-y-3">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="op" value="setScoringFormat" />
+          <input type="hidden" name="fixtureId" value={fixture.id} />
+          <ScoringFormatFields value={fmt} />
+          <button className="btn-primary text-sm">Save format</button>
+          <p className="text-xs text-slate-400">Changing the length rebuilds the score sheet below (up to {maxGames(fmt)} game{maxGames(fmt) === 1 ? "" : "s"} per line). Re-enter scores after a change.</p>
+        </form>
+      </details>
 
       {/* Score-acceptance status — teams propose, the opponent accepts/disputes,
           an admin can always enter the official result below. */}
@@ -202,7 +224,7 @@ export default async function FixtureDetail({
           <h2 className="mb-1 font-semibold text-slate-900">Line-by-line scores</h2>
           <p className="mb-3 text-sm text-slate-500">
             <span className="font-medium text-slate-700">{homeName}</span> <span className="text-slate-400">(home)</span> vs{" "}
-            <span className="font-medium text-slate-700">{awayName}</span>. Each game to 11, win by 2 — the home team&apos;s
+            <span className="font-medium text-slate-700">{awayName}</span>. Format: <span className="font-medium text-slate-700">{describeScoring(fmt)}</span> — the home team&apos;s
             score is entered first (left). {cfg.exhibitionLine ? `Lines 1–${cfg.exhibitionLine - 1} count; line ${cfg.exhibitionLine} is the exhibition line (recorded, non-counting).` : `All ${cfg.lines} line${cfg.lines === 1 ? "" : "s"} count.`} Leave a
             game blank if unplayed.
           </p>
@@ -233,8 +255,8 @@ export default async function FixtureDetail({
                     {!counting && <span className="text-xs text-slate-400">(non-counting)</span>}
                     {winnerLabel && <span className="badge bg-emerald-100 text-emerald-800">{winnerLabel} won</span>}
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[1, 2, 3].map((g) => {
+                  <div className="flex flex-wrap gap-3">
+                    {gameNums.map((g) => {
                       const game = existing?.games.find((x) => x.gameNumber === g);
                       return (
                         <div key={g} className="flex items-center gap-1">

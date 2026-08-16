@@ -37,6 +37,7 @@ export function EditableFixtureRow({
     facilityName: string;
     matchType: string;
     matchTypeShort: string;
+    scoringShort: string;
     courtAllocation: string | null;
     scoreStatus: string;
     status: string;
@@ -51,7 +52,12 @@ export function EditableFixtureRow({
         <td className="hidden text-slate-700 sm:table-cell">{fixture.dateLabel}</td>
         <td className="text-slate-700">{fixture.home}</td>
         <td className="text-slate-700">{fixture.away}</td>
-        <td className="hidden text-slate-500 lg:table-cell"><span className="badge bg-slate-100 text-slate-600">{fixture.matchTypeShort}</span></td>
+        <td className="hidden text-slate-500 lg:table-cell">
+          <span className="flex flex-col gap-0.5">
+            <span className="badge bg-slate-100 text-slate-600 w-fit">{fixture.matchTypeShort}</span>
+            <span className="text-[11px] text-slate-400">{fixture.scoringShort}</span>
+          </span>
+        </td>
         <td className="hidden text-slate-600 md:table-cell">{fixture.facilityName}</td>
         <td>
           <span className="flex flex-wrap items-center gap-1">

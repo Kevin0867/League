@@ -976,6 +976,17 @@ model Fixture {
   /// score sheet renders and which lines count toward standings.
   matchType   String   @default("TEAM_3")
 
+  /// Scoring rules for each line's games — a composable format so round-robin
+  /// matches (e.g. one game to 11) and playoff matches (best 2 of 3 to 11) can
+  /// differ per fixture. serveType: SIDE_OUT | RALLY. gamesToWin: 1 (single
+  /// game), 2 (best 2 of 3), 3 (best 3 of 5). freezeAt: rally-scoring freeze
+  /// threshold (null = none).
+  serveType   String   @default("SIDE_OUT")
+  pointsTo    Int      @default(11)
+  winByTwo    Boolean  @default(true)
+  freezeAt    Int?
+  gamesToWin  Int      @default(2)
+
   /// Score-acceptance workflow. NONE → a team PROPOSED scores → the opposing team
   /// ACCEPTED (final) or DISPUTED (back to open). An admin can enter/override at
   /// any time, which lands ACCEPTED directly. scoreProposedById is the team that

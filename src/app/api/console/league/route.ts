@@ -11,6 +11,7 @@ import { leagueStartDate, FIRST_LEAGUE_WEEK } from "@/lib/domain/seasonCalendar"
 import { teamConfirmation, shouldEscalate } from "@/lib/domain/availability";
 import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
 import { matchTypeConfig, isCountingLine } from "@/lib/domain/matchType";
+import { scoringFromForm, scoringFormatOf, maxGames } from "@/lib/domain/scoringFormat";
 
 // League mutations as a native-form-POST route handler with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -19,7 +20,7 @@ import { matchTypeConfig, isCountingLine } from "@/lib/domain/matchType";
 export const dynamic = "force-dynamic";
 
 // [id] ops redirect back to the fixture page; top-level ops to the league index.
-const FIXTURE_OPS = new Set(["submitLineup", "submitLineups", "enterScores", "acceptScores", "disputeScores", "recordForfeit", "submitToDupr"]);
+const FIXTURE_OPS = new Set(["submitLineup", "submitLineups", "enterScores", "acceptScores", "disputeScores", "setScoringFormat", "recordForfeit", "submitToDupr"]);
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
@@ -103,12 +104,16 @@ export async function POST(req: Request) {
       const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
       const matchType = String(formData.get("matchType") ?? "TEAM_3").trim() || "TEAM_3";
       const courts = String(formData.get("courtAllocation") ?? "").trim() || null;
+      const fmt = scoringFromForm((k) => (formData.get(k) as string | null));
 
       const agg = await prisma.fixture.aggregate({ where: { seasonId }, _max: { weekNumber: true } });
       const weekNumber = (agg._max.weekNumber ?? 0) + 1;
 
       const fixture = await prisma.fixture.create({
-        data: { seasonId, weekNumber, scheduledAt, facilityId, homeTeamId, awayTeamId, matchType, courtAllocation: courts, status: "SCHEDULED" },
+        data: {
+          seasonId, weekNumber, scheduledAt, facilityId, homeTeamId, awayTeamId, matchType, courtAllocation: courts, status: "SCHEDULED",
+          serveType: fmt.serveType, pointsTo: fmt.pointsTo, winByTwo: fmt.winByTwo, freezeAt: fmt.freezeAt, gamesToWin: fmt.gamesToWin,
+        },
       });
       await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixture.id, action: "fixture.add", summary: homeTeamId && awayTeamId ? "Scheduled a match" : "Reserved a match slot (teams TBD)" });
       return back("?ok=addMatch");
@@ -451,6 +456,7 @@ export async function POST(req: Request) {
       const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, include: { homeTeam: true, awayTeam: true } });
       if (!fixture) return back("?err=nofixture");
       const cfg = matchTypeConfig(fixture.matchType);
+      const gameCount = maxGames(scoringFormatOf(fixture));
       const enteredBy = String(formData.get("enteredBy") ?? "OFFICIAL").trim();
       const proposal = enteredBy !== "OFFICIAL" && (enteredBy === fixture.homeTeamId || enteredBy === fixture.awayTeamId);
 
@@ -461,7 +467,7 @@ export async function POST(req: Request) {
       for (let line = 1; line <= cfg.lines; line++) {
         const counting = isCountingLine(line, cfg);
         const games: { g: number; h: number; a: number }[] = [];
-        for (let g = 1; g <= 3; g++) {
+        for (let g = 1; g <= gameCount; g++) {
           const hRaw = formData.get(`l${line}_g${g}_h`);
           const aRaw = formData.get(`l${line}_g${g}_a`);
           if (hRaw === null || aRaw === null || String(hRaw) === "" || String(aRaw) === "") continue;
@@ -590,6 +596,21 @@ export async function POST(req: Request) {
       revalidatePath(`/console/league/${fixtureId}`);
       revalidatePath("/console/league");
       return back("?ok=disputeScores");
+    }
+
+    // Set the scoring format for a fixture (serve type, points-to, win-by-2,
+    // rally freeze, games-to-win) from the match page.
+    case "setScoringFormat": {
+      const fixture = await prisma.fixture.findUnique({ where: { id: fixtureId }, select: { id: true } });
+      if (!fixture) return back("?err=nofixture");
+      const fmt = scoringFromForm((k) => (formData.get(k) as string | null));
+      await prisma.fixture.update({
+        where: { id: fixtureId },
+        data: { serveType: fmt.serveType, pointsTo: fmt.pointsTo, winByTwo: fmt.winByTwo, freezeAt: fmt.freezeAt, gamesToWin: fmt.gamesToWin },
+      });
+      await audit({ actorId: actor.userId, entityType: "Fixture", entityId: fixtureId, action: "fixture.scoringFormat", summary: "Updated scoring format" });
+      revalidatePath(`/console/league/${fixtureId}`);
+      return back("?ok=setScoringFormat");
     }
 
     case "recordForfeit": {
