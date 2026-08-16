@@ -5,6 +5,7 @@ import { AssignmentBoard, type BoardColumn } from "@/components/AssignmentBoard"
 import { TEAM_CAP, TEAM_MIN } from "@/lib/enums";
 import { requireAdmin } from "@/lib/rbac";
 import { UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
+import { RosteringTabs } from "@/components/RosteringTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +125,7 @@ export default async function BoardPage() {
 
   return (
     <div className="space-y-5">
+      <RosteringTabs active="board" />
       <PageHeader
         title="Assignment board"
         subtitle="Each pool and team is a tile. Drag a player onto a team to assign, onto a pool to unassign, or between pools to change division/location. Click a name to open and edit the full record."

@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/teams";
 import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
 import { getSeasonStats } from "@/lib/domain/seasonStats";
+import { RosteringTabs } from "@/components/RosteringTabs";
 import { TeamCreateForm } from "./TeamCreateForm";
 import { BulkScheduleEditor } from "./BulkScheduleEditor";
 import { deriveDivisionCode } from "@/lib/domain/teamName";
@@ -132,9 +133,10 @@ export default async function TeamBuildBoard({
 
   return (
     <div className="space-y-6">
+      <RosteringTabs active="teams" />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Team build board</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Teams</h1>
           <p className="text-slate-500">
             Every team&apos;s six fields and completion status. Cap {TEAM_CAP} per team.
           </p>

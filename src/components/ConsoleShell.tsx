@@ -8,7 +8,7 @@ import { CommandPalette, CommandPaletteButton } from "@/components/CommandPalett
 import type { Role } from "@/lib/enums";
 import { ROLE_LABELS } from "@/lib/enums";
 
-type NavItem = { href: string; label: string; roles?: Role[] };
+type NavItem = { href: string; label: string; roles?: Role[]; match?: string[] };
 type NavSection = { title: string; items: NavItem[] };
 
 const DASHBOARD: NavItem = { href: "/console", label: "Dashboard" };
@@ -26,13 +26,13 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Rostering",
+    title: "Players & teams",
     items: [
-      { href: "/console/pools", label: "Assignment", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/board", label: "Boards", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/teams", label: "Teams", roles: ["COO", "DIRECTOR", "COACH"] },
+      // One Rostering destination with Pools / Board / Teams views inside it,
+      // instead of three near-identically-named "board" routes in the sidebar.
+      { href: "/console/teams", label: "Rostering", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/pools", "/console/board", "/console/teams"] },
       { href: "/console/team-import", label: "Team import", roles: ["COO", "DIRECTOR"] },
-      { href: "/console/requests", label: "Requests", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/requests", label: "Placement requests", roles: ["COO", "DIRECTOR"] },
     ],
   },
   {
@@ -94,6 +94,9 @@ export function ConsoleShell({
   );
 
   const isActive = (href: string) => (href === "/console" ? pathname === "/console" : pathname.startsWith(href));
+  // An item is active on its own href or any of its extra `match` paths (so the
+  // single Rostering entry lights up on /pools, /board and /teams alike).
+  const isActiveItem = (item: NavItem) => isActive(item.href) || (item.match?.some((p) => pathname.startsWith(p)) ?? false);
   // Every item renders as a squared button block. The active section is
   // illuminated with the lime fill; inactive items are quiet outlined buttons on
   // the navy rail. No icons — the label carries it.
@@ -147,7 +150,7 @@ export function ConsoleShell({
                 </div>
                 <div className="space-y-1.5">
                   {section.items.map((item) => (
-                    <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={linkClass(isActive(item.href))}>
+                    <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={linkClass(isActiveItem(item))}>
                       {item.label}
                     </Link>
                   ))}
