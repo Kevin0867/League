@@ -6,6 +6,7 @@ import { TEAM_CAP } from "@/lib/enums";
 import { mintConsoleTicket } from "@/lib/auth";
 import { requireAdmin } from "@/lib/rbac";
 import { UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
+import { RosteringTabs } from "@/components/RosteringTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,7 @@ export default async function PoolsPage({
 
   return (
     <div className="space-y-6">
+      <RosteringTabs active="pools" />
       {sp.ok && OKS[sp.ok] && (
         <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OKS[sp.ok]}</p>
       )}
