@@ -289,6 +289,46 @@ export async function POST(req: Request) {
       return go(`?ok=${coachId ? "assignedCoach" : "clearedCoach"}`);
     }
 
+    // Bulk coach assignment from Coach matching — the whole dirty set in one
+    // POST, so an admin edits every team's coach dropdown and saves once.
+    // Applied sequentially so an intra-batch time clash (two teams, same slot,
+    // same coach) is caught by the DB state the previous change just committed.
+    case "assignCoachBulk": {
+      const go = (qs: string) => NextResponse.redirect(new URL(`/console/matching${qs}`, origin), 303);
+      let changes: { teamId: string; coachId: string | null }[] = [];
+      try {
+        const parsed = JSON.parse(String(formData.get("changes") ?? "[]"));
+        if (Array.isArray(parsed)) {
+          changes = parsed
+            .map((c) => ({ teamId: String(c?.teamId ?? ""), coachId: (String(c?.coachId ?? "").trim() || null) }))
+            .filter((c) => c.teamId);
+        }
+      } catch {
+        return go("?err=bulk");
+      }
+      const force = String(formData.get("force") ?? "") === "1";
+      let applied = 0;
+      const skipped: string[] = [];
+      for (const ch of changes) {
+        const team = await prisma.team.findUnique({ where: { id: ch.teamId }, select: { name: true, dayOfWeek: true, startTime: true } });
+        if (!team) { skipped.push(ch.teamId); continue; }
+        if (ch.coachId) {
+          const coach = await prisma.coach.findUnique({ where: { id: ch.coachId } });
+          if (!coach || !coachAssignmentGate(coach).ok) { skipped.push(team.name); continue; }
+          if (!force) {
+            const clashes = await coachTeamConflicts({ coachId: ch.coachId, dayOfWeek: team.dayOfWeek, startTime: team.startTime, excludeTeamId: ch.teamId });
+            if (clashes.length) { skipped.push(team.name); continue; }
+          }
+        }
+        await prisma.team.update({ where: { id: ch.teamId }, data: { coachId: ch.coachId } });
+        await audit({ actorId: actor.userId, entityType: "Team", entityId: ch.teamId, action: "ASSIGN_COACH", summary: ch.coachId ? `Assigned coach ${ch.coachId} (bulk)` : "Cleared coach (bulk)" });
+        applied++;
+      }
+      const qs = new URLSearchParams({ ok: "bulkCoaches", n: String(applied) });
+      if (skipped.length) qs.set("skipped", skipped.slice(0, 6).join(", "));
+      return go(`?${qs.toString()}`);
+    }
+
     // Add an assistant / additional coach to a team (beyond the head coach).
     case "addTeamCoach": {
       if (!teamId) return back("?err=team");

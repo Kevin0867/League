@@ -67,6 +67,51 @@ export async function POST(req: Request) {
     return back("?ok=invited");
   }
 
+  // Bulk role assignment from the Access page — every changed row's role set in
+  // one POST, so an admin edits several people's roles and saves once. Applied
+  // sequentially with a per-change last-admin guard against current DB state.
+  if (op === "setRolesBulk") {
+    let changes: { userId: string; roles: string[] }[] = [];
+    try {
+      const parsed = JSON.parse(String(fd.get("changes") ?? "[]"));
+      if (Array.isArray(parsed)) {
+        changes = parsed
+          .map((c) => ({ userId: String(c?.userId ?? ""), roles: Array.isArray(c?.roles) ? c.roles.map(String) : [] }))
+          .filter((c) => c.userId);
+      }
+    } catch {
+      return back("?err=fields");
+    }
+    let applied = 0;
+    const skipped: string[] = [];
+    for (const ch of changes) {
+      const chosen = ch.roles.filter((r) => ASSIGNABLE.includes(r)) as Role[];
+      if (chosen.length === 0) { skipped.push(ch.userId); continue; }
+      const t = await prisma.user.findUnique({ where: { id: ch.userId }, select: { id: true, role: true, extraRoles: true, personId: true } });
+      if (!t) { skipped.push(ch.userId); continue; }
+      // Don't let a batch strip the last admin.
+      if (!chosen.includes("ADMIN" as Role)) {
+        const targetIsAdmin = [t.role, ...t.extraRoles].some((r) => ADMIN_ROLES.includes(r as never));
+        if (targetIsAdmin) {
+          const all = await prisma.user.findMany({ where: { active: true }, select: { id: true, role: true, extraRoles: true } });
+          const admins = all.filter((a) => [a.role, ...a.extraRoles].some((r) => ADMIN_ROLES.includes(r as never)));
+          if (admins.length <= 1) { skipped.push(ch.userId); continue; }
+        }
+      }
+      const { role, extraRoles } = splitRoles(chosen);
+      await prisma.user.update({ where: { id: ch.userId }, data: { role, extraRoles } });
+      if (chosen.includes("COACH") && t.personId) {
+        const existing = await prisma.coach.findUnique({ where: { personId: t.personId } });
+        if (!existing) await prisma.coach.create({ data: { personId: t.personId } });
+      }
+      await audit({ actorId: actor.userId, entityType: "User", entityId: ch.userId, action: "user.setRoles", summary: `Roles → ${chosen.join(", ")} (bulk)` });
+      applied++;
+    }
+    const qs = new URLSearchParams({ ok: "rolesBulk", n: String(applied) });
+    if (skipped.length) qs.set("skipped", String(skipped.length));
+    return back(`?${qs.toString()}`);
+  }
+
   const userId = String(fd.get("userId") ?? "");
   if (!userId) return back("?err=fields");
 

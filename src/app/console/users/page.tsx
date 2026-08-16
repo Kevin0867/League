@@ -5,6 +5,7 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, effectiveRoles, type Role } from "@/lib/enums";
 import { LoginStatus } from "@/components/LoginStatus";
 import { requireAdmin } from "@/lib/rbac";
+import { AccessRolesProvider, RoleCell } from "./AccessRoles";
 
 // De-duplicated, human labels for a role set (legacy COO/CEO/DIRECTOR all show
 // as "Admin", so collapse duplicates).
@@ -27,6 +28,7 @@ const ERRORS: Record<string, string> = {
 };
 const OKS: Record<string, string> = {
   role: "Role updated.",
+  rolesBulk: "Role changes saved.",
   active: "Access updated.",
   edited: "User updated.",
   deleted: "Login deleted. The person's records were kept.",
@@ -52,6 +54,11 @@ export default async function UsersPage({
   });
 
   const assignableRoles = ASSIGNABLE_ROLES;
+  // Starting role selection per user for the shared dirty-set editor: the
+  // assignable roles they currently hold.
+  const initialRoles: Record<string, string[]> = Object.fromEntries(
+    users.map((u) => [u.id, assignableRoles.filter((r) => effectiveRoles(u).includes(r))]),
+  );
 
   return (
     <div className="space-y-6">
@@ -97,6 +104,7 @@ export default async function UsersPage({
         <TableFilter targetId="users-table" placeholder="Search by name or email…" />
       </div>
 
+      <AccessRolesProvider initial={initialRoles} ticket={ticket}>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table id="users-table" className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -131,23 +139,7 @@ export default async function UsersPage({
                         ))}
                       </div>
                     ) : (
-                      <form method="POST" action="/api/console/users" className="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="ticket" value={ticket} />
-                        <input type="hidden" name="op" value="setRoles" />
-                        <input type="hidden" name="userId" value={u.id} />
-                        <div className="flex flex-wrap gap-2">
-                          {assignable.map((r) => {
-                            const checked = effectiveRoles(u).includes(r);
-                            return (
-                              <label key={r} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs">
-                                <input type="checkbox" name="roles" value={r} defaultChecked={checked} className="h-3.5 w-3.5" />
-                                {ROLE_LABELS[r]}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <button className="btn-secondary text-xs">Save</button>
-                      </form>
+                      <RoleCell userId={u.id} assignable={assignable} />
                     )}
                   </td>
                   <td className="hidden px-4 py-3 sm:table-cell">
@@ -232,6 +224,7 @@ export default async function UsersPage({
           </tbody>
         </table>
       </div>
+      </AccessRolesProvider>
 
       <p className="text-xs text-slate-400">
         Need to create a new coach or staff login? Use <span className="font-medium">Coaches → Add account</span>.

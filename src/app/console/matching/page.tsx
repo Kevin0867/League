@@ -4,12 +4,14 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { formatTime12, formatTimeRange12 } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
+import { MatchingBoard, type MatchTeam } from "./MatchingBoard";
 
 export const dynamic = "force-dynamic";
 
 const OK: Record<string, string> = {
   assignedCoach: "Coach assigned to the program.",
   clearedCoach: "Coach removed from the program.",
+  bulkCoaches: "Coach assignments saved.",
 };
 const ERR: Record<string, string> = {
   auth: "Not authorized.",
@@ -79,6 +81,32 @@ export default async function MatchingPage({
     return { marketMatch, dayMatch, teamMarket };
   }
 
+  // Serializable shape for the client bulk-save board: each team with its
+  // ranked coach options (cleared first, then location, then day) and top
+  // suggestions.
+  const matchTeams: MatchTeam[] = teams.map((team) => {
+    const teamMarket = team.facility?.market ?? team.market ?? null;
+    const ranked = [...coaches]
+      .map((c) => ({ c, m: matchFor(c, team) }))
+      .sort((a, b) =>
+        Number(b.c.cleared) - Number(a.c.cleared) ||
+        Number(b.m.marketMatch) - Number(a.m.marketMatch) ||
+        Number(b.m.dayMatch) - Number(a.m.dayMatch) ||
+        a.c.name.localeCompare(b.c.name)
+      );
+    return {
+      id: team.id,
+      name: team.name,
+      meta: `${team.division?.name ?? team.levelBand ?? "Level TBD"} · ${team.facility?.name ?? teamMarket ?? "Location TBD"}${team.dayOfWeek ? ` · ${team.dayOfWeek}${team.startTime ? ` ${formatTime12(team.startTime)}` : ""}` : ""}`,
+      coachId: team.coachId ?? null,
+      options: ranked.map(({ c, m }) => ({ id: c.id, name: c.name, cleared: c.cleared, marketMatch: m.marketMatch, dayMatch: m.dayMatch })),
+      suggestions: ranked
+        .filter((r) => r.c.cleared && r.m.marketMatch && r.m.dayMatch && r.c.id !== team.coachId)
+        .slice(0, 3)
+        .map((r) => ({ id: r.c.id, name: r.c.name })),
+    };
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -86,87 +114,21 @@ export default async function MatchingPage({
         subtitle="See each coach's availability, and assign or move a coach to a program and location. Suggestions flag coaches whose location and day fit the program."
       />
 
-      {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>}
+      {sp.ok && OK[sp.ok] && (
+        <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">
+          {sp.ok === "bulkCoaches" && sp.n ? `Saved ${sp.n} coach change${sp.n === "1" ? "" : "s"}.` : OK[sp.ok]}
+          {sp.skipped ? <span className="text-rose-700"> Skipped (not cleared or a day/time clash): {sp.skipped}.</span> : null}
+        </p>
+      )}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>}
 
-      {/* Assign coaches to programs */}
+      {/* Assign coaches to programs — one dirty set, one Save (MatchingBoard). */}
       <section className="space-y-3">
         <h2 className="h-sport text-lg">Programs</h2>
         {teams.length === 0 ? (
           <div className="card text-sm text-slate-500">No active-season teams yet. Build teams first, then assign coaches here.</div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {teams.map((team) => {
-              const teamMarket = team.facility?.market ?? team.market ?? null;
-              // Rank coaches: cleared first, then location match, then day match.
-              const ranked = [...coaches]
-                .map((c) => ({ c, m: matchFor(c, team) }))
-                .sort((a, b) =>
-                  Number(b.c.cleared) - Number(a.c.cleared) ||
-                  Number(b.m.marketMatch) - Number(a.m.marketMatch) ||
-                  Number(b.m.dayMatch) - Number(a.m.dayMatch) ||
-                  a.c.name.localeCompare(b.c.name)
-                );
-              const suggestions = ranked.filter((r) => r.c.cleared && r.m.marketMatch && r.m.dayMatch && r.c.id !== team.coachId);
-
-              return (
-                <div key={team.id} className="card space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-slate-900">{team.name}</div>
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {team.division?.name ?? team.levelBand ?? "Level TBD"} · {team.facility?.name ?? teamMarket ?? "Location TBD"}
-                        {team.dayOfWeek ? ` · ${team.dayOfWeek}${team.startTime ? ` ${formatTime12(team.startTime)}` : ""}` : ""}
-                      </div>
-                    </div>
-                    {team.coach ? (
-                      <span className="badge bg-emerald-100 text-emerald-800">{team.coach.person.firstName} {team.coach.person.lastName}</span>
-                    ) : (
-                      <span className="badge bg-amber-100 text-amber-800">Unassigned</span>
-                    )}
-                  </div>
-
-                  {/* Suggested matches */}
-                  {suggestions.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-slate-400">Suggested:</span>
-                      {suggestions.slice(0, 3).map(({ c }) => (
-                        <form key={c.id} method="POST" action="/api/console/teams">
-                          <input type="hidden" name="ticket" value={ticket} />
-                          <input type="hidden" name="op" value="assignCoach" />
-                          <input type="hidden" name="teamId" value={team.id} />
-                          <input type="hidden" name="coachId" value={c.id} />
-                          <button className="rounded-full bg-accent-500 px-3 py-1 text-xs font-semibold text-brand-900 hover:bg-accent-400">
-                            + {c.name}
-                          </button>
-                        </form>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Manual assign / move / clear */}
-                  <form method="POST" action="/api/console/teams" className="flex items-end gap-2">
-                    <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="assignCoach" />
-                    <input type="hidden" name="teamId" value={team.id} />
-                    <div className="flex-1">
-                      <label className="label text-xs">Assign / move coach</label>
-                      <select name="coachId" defaultValue={team.coachId ?? ""} className="input py-1.5 text-sm">
-                        <option value="">— Unassigned —</option>
-                        {ranked.map(({ c, m }) => (
-                          <option key={c.id} value={c.id} disabled={!c.cleared}>
-                            {c.name}
-                            {!c.cleared ? " (not cleared)" : `${m.marketMatch ? " · ✓location" : ""}${m.dayMatch ? " · ✓day" : ""}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <button className="btn-primary py-1.5 text-sm">Save</button>
-                  </form>
-                </div>
-              );
-            })}
-          </div>
+          <MatchingBoard ticket={ticket} teams={matchTeams} />
         )}
       </section>
 
