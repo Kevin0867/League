@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeSelect } from "@/components/TimeSelect";
 import { useState } from "react";
 import { ACADEMY_MARKETS } from "@/lib/enums";
 import { COACH_PUBLIC_FIELDS as PUBLIC_FIELDS } from "@/lib/domain/coachPublic";
@@ -260,11 +261,11 @@ export function CoachProfileForm({
               </div>
               <div>
                 <label className="label">From</label>
-                <input name="availStart" type="time" defaultValue={b.startTime} className="input py-1" />
+                <TimeSelect name="availStart" defaultValue={b.startTime} className="input py-1" />
               </div>
               <div>
                 <label className="label">To</label>
-                <input name="availEnd" type="time" defaultValue={b.endTime} className="input py-1" />
+                <TimeSelect name="availEnd" defaultValue={b.endTime} className="input py-1" />
               </div>
               {blocks.length > 1 && (
                 <button type="button" onClick={() => setBlocks((bs) => bs.filter((_, j) => j !== i))}

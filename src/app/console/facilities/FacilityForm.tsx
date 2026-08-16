@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeSelect } from "@/components/TimeSelect";
 import { useState } from "react";
 
 type CourtBlockInit = { dayOfWeek: string; startTime: string; endTime: string; courtCount: number; kind?: string };
@@ -142,15 +143,15 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                   </div>
                   <div>
                     <label className="label">From</label>
-                    <input
-                      name="availStart" type="time" className="input py-1.5" value={b.startTime}
+                    <TimeSelect
+                      name="availStart" className="input py-1.5" value={b.startTime}
                       onChange={(e) => setBlocks((bs) => bs.map((x, j) => (j === i ? { ...x, startTime: e.target.value } : x)))}
                     />
                   </div>
                   <div>
                     <label className="label">To</label>
-                    <input
-                      name="availEnd" type="time" className="input py-1.5" value={b.endTime}
+                    <TimeSelect
+                      name="availEnd" className="input py-1.5" value={b.endTime}
                       onChange={(e) => setBlocks((bs) => bs.map((x, j) => (j === i ? { ...x, endTime: e.target.value } : x)))}
                     />
                   </div>
@@ -186,15 +187,15 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                   </div>
                   <div>
                     <label className="label">From</label>
-                    <input
-                      name="blockStart" type="time" className="input py-1.5" value={b.startTime}
+                    <TimeSelect
+                      name="blockStart" className="input py-1.5" value={b.startTime}
                       onChange={(e) => setBlocked((bs) => bs.map((x, j) => (j === i ? { ...x, startTime: e.target.value } : x)))}
                     />
                   </div>
                   <div>
                     <label className="label">To</label>
-                    <input
-                      name="blockEnd" type="time" className="input py-1.5" value={b.endTime}
+                    <TimeSelect
+                      name="blockEnd" className="input py-1.5" value={b.endTime}
                       onChange={(e) => setBlocked((bs) => bs.map((x, j) => (j === i ? { ...x, endTime: e.target.value } : x)))}
                     />
                   </div>

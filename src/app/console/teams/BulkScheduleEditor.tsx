@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeSelect } from "@/components/TimeSelect";
 import { useState } from "react";
 import { formatTime12 } from "@/lib/time";
 
@@ -170,7 +171,7 @@ export function BulkScheduleEditor({
                               <option key={d} value={d}>{d}</option>
                             ))}
                           </select>
-                          <input type="time" value={r.start} onChange={(e) => update(t.id, { start: e.target.value })} className="input py-1.5 text-sm" />
+                          <TimeSelect value={r.start} onChange={(e) => update(t.id, { start: e.target.value })} className="input py-1.5 text-sm" />
                         </div>
                       )}
                     </td>

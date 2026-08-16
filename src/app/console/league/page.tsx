@@ -1,3 +1,4 @@
+import { TimeSelect } from "@/components/TimeSelect";
 import Link from "next/link";
 import { formatDate } from "@/lib/time";
 import { prisma } from "@/lib/db";
@@ -307,7 +308,7 @@ export default async function LeaguePage({
                     </div>
                     <div>
                       <label className="label">Time</label>
-                      <input name="scheduledTime" type="time" className="input" defaultValue="18:00" />
+                      <TimeSelect name="scheduledTime" className="input" defaultValue="18:00" />
                     </div>
                     <div>
                       <label className="label">Location</label>

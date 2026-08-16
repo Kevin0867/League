@@ -1,5 +1,6 @@
 "use client";
 
+import { TimeSelect } from "@/components/TimeSelect";
 import { useState } from "react";
 
 export type SeasonOpt = { id: string; name: string; program?: string; divisions: { id: string; name: string }[] };
@@ -74,7 +75,7 @@ export function TeamCreateForm({
         </div>
         <div>
           <label className="label">Start time (optional)</label>
-          <input name="startTime" type="time" className="input" />
+          <TimeSelect name="startTime" className="input" />
         </div>
       </div>
       <div className="flex gap-2">
