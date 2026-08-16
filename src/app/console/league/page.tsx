@@ -70,7 +70,7 @@ export default async function LeaguePage({
   if (!can(roles, "manageScheduling")) {
     return (
       <div className="space-y-6">
-        {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>}
+        {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok] ?? "Done."}</p>}
         {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
         <CoachLeagueMatches personId={session?.personId ?? ""} ticket={ticket} />
       </div>
@@ -161,7 +161,7 @@ export default async function LeaguePage({
     <div className="space-y-6">
       <PageHeader title={season.name} subtitle="Add your published teams, schedule matches, enter scores — the leaderboard builds itself." />
 
-      {sp.ok && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok] ?? "Done."}</p>}
+      {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok] ?? "Done."}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
       {/* Three-step guide — exactly the flow: add teams → set matches → enter scores */}
@@ -232,7 +232,7 @@ export default async function LeaguePage({
             <p className="text-sm text-slate-500">
               {rosterTeams.length > 0
                 ? "Every team is already in the league."
-                : <>No teams exist yet. Build teams in <Link href="/console/teams" className="text-accent-700 underline">Team Build</Link>, or convert an <Link href="/console/acp" className="text-accent-700 underline">ACP entry</Link> into a team, then add them here.</>}
+                : <>No teams exist yet. Build teams in <Link href="/console/teams" className="text-brand-700 underline">Team Build</Link>, or convert an <Link href="/console/acp" className="text-brand-700 underline">ACP entry</Link> into a team, then add them here.</>}
             </p>
           ) : (
             <form method="POST" action="/api/console/league" className="flex flex-wrap items-end gap-2">

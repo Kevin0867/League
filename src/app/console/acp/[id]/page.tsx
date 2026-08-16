@@ -68,7 +68,7 @@ export default async function AcpEntryDetail({
         <p className="text-sm text-slate-500">{entry.divisionName} · {entry.players.length} players · submitted {formatDateTime12(entry.createdAt)}</p>
       </div>
 
-      {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">{OK[sp.ok]}</p>}
+      {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok]}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>}
 
       {/* Convert to team — the handoff into league setup */}

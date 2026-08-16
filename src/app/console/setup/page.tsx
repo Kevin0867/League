@@ -119,7 +119,7 @@ export default async function SetupPage({
         </p>
       </div>
 
-      {okMsg && <div className="rounded-lg bg-accent-50 px-4 py-2 text-sm text-accent-800 ring-1 ring-accent-200">{okMsg}</div>}
+      {okMsg && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200">{okMsg}</div>}
       {errMsg && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800 ring-1 ring-rose-200">{errMsg}</div>}
 
       {/* Guided next steps */}
@@ -147,7 +147,7 @@ export default async function SetupPage({
               </span>
               <span className={s.done ? "text-slate-500 line-through" : "text-slate-700"}>{s.label}</span>
               {!s.done && s.href && (
-                <Link href={s.href} className="text-xs text-accent-700 underline">{s.cta}</Link>
+                <Link href={s.href} className="text-xs text-brand-700 underline">{s.cta}</Link>
               )}
             </li>
           ))}

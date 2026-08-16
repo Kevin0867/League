@@ -139,7 +139,7 @@ export default async function RequestsPage({
         </p>
       </div>
 
-      {sp.ok === "assign" && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm text-accent-800">Player placed.</p>}
+      {sp.ok === "assign" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Player placed.</p>}
       {sp.ok === "override" && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Player placed above the team cap (admin override).</p>}
       {sp.err === "cap" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">That team is full — use “Place anyway” to override the cap.</p>}
 
