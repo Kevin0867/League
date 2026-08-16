@@ -6,6 +6,7 @@ import { findDuplicateGroups } from "@/lib/domain/registrations";
 import { AddPlayerForm } from "./AddPlayerForm";
 import { RowActions } from "@/components/RowActions";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { RegistrationsBulkBar } from "@/components/RegistrationsBulkBar";
 import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ const OK: Record<string, string> = {
   resent: "Fee request resent.",
   regDeleted: "Registration removed — the player was pulled from any team in that season.",
   merged: "Records merged into one.",
+  bulkWaiver: "Waiver sent to the selected players.",
+  bulkFee: "Season fee requested for the selected players.",
 };
 const ERRORS: Record<string, string> = {
   pickpair: "Pick two different records to merge.",
@@ -61,23 +64,38 @@ export default async function RegistrationsPage({
     "";
 
   const q = (sp.q ?? "").trim();
-  const searchWhere = q
-    ? {
-        person: {
-          OR: [
-            { firstName: { contains: q, mode: "insensitive" as const } },
-            { lastName: { contains: q, mode: "insensitive" as const } },
-            { email: { contains: q, mode: "insensitive" as const } },
-            { phone: { contains: q, mode: "insensitive" as const } },
-          ],
-        },
-      }
-    : {};
-  const registrations = await prisma.registration.findMany({
-    where: searchWhere,
-    include: { person: true, division: true, locationPrefs: { orderBy: { rank: "asc" }, include: { facility: true } } },
-    orderBy: { submittedAt: "desc" },
-  });
+  // Faceted filters — division, location, waiver, payment, assignment. Each is a
+  // server-side Prisma condition, ANDed together, so "everyone in Mesa without a
+  // waiver" is one query, not a scroll.
+  const filters: Record<string, unknown>[] = [];
+  if (q) filters.push({ person: { OR: [
+    { firstName: { contains: q, mode: "insensitive" as const } },
+    { lastName: { contains: q, mode: "insensitive" as const } },
+    { email: { contains: q, mode: "insensitive" as const } },
+    { phone: { contains: q, mode: "insensitive" as const } },
+  ] } });
+  if (sp.div) filters.push({ divisionId: sp.div });
+  if (sp.loc) filters.push({ locationPrefs: { some: { facility: { market: sp.loc } } } });
+  if (sp.waiver === "no") filters.push({ person: { waiverSignedAt: null } });
+  if (sp.waiver === "yes") filters.push({ person: { waiverSignedAt: { not: null } } });
+  if (sp.assign === "assigned") filters.push({ status: "ASSIGNED" });
+  if (sp.assign === "unassigned") filters.push({ status: "SUBMITTED" });
+  if (sp.assign === "waitlisted") filters.push({ status: "WAITLISTED" });
+  if (sp.pay === "unpaid") filters.push({ person: { paymentsMade: { none: { category: "PLAYER_FEE", status: "PAID" } } } });
+  if (sp.pay === "paid") filters.push({ person: { paymentsMade: { some: { category: "PLAYER_FEE", status: "PAID" } } } });
+  const where = filters.length ? { AND: filters } : {};
+
+  const [registrations, divisionOpts, marketRows] = await Promise.all([
+    prisma.registration.findMany({
+      where,
+      include: { person: true, division: true, locationPrefs: { orderBy: { rank: "asc" }, include: { facility: true } } },
+      orderBy: { submittedAt: "desc" },
+    }),
+    prisma.division.findMany({ where: { divisionType: { not: "LESSON" } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.facility.findMany({ where: { archived: false, market: { not: null } }, select: { market: true } }),
+  ]);
+  const markets = [...new Set(marketRows.map((m) => m.market).filter(Boolean) as string[])].sort();
+  const filtered = filters.length > 0;
 
   // Roster quick-action context: teams per season, each player's current team,
   // and their fee status — so each row can assign/move/request/refund.
@@ -145,22 +163,56 @@ export default async function RegistrationsPage({
         <AddPlayerForm ticket={ticket} seasons={seasons} defaultSeasonId={defaultSeasonId} />
       </div>
 
-      {/* Search by name, email, or phone */}
-      <form method="GET" className="flex items-center gap-2">
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="Search players by name, email, or phone…"
-          className="input max-w-md"
-          type="search"
-        />
-        <button className="btn-secondary">Search</button>
-        {q && <a href="/console/registrations" className="text-sm text-slate-500 hover:underline">Clear</a>}
+      {/* Search + faceted filters — division, location, waiver, payment, assignment */}
+      <form method="GET" className="flex flex-wrap items-end gap-2">
+        <div>
+          <label className="label text-xs">Search</label>
+          <input name="q" defaultValue={q} placeholder="Name, email, or phone…" className="input max-w-xs" type="search" />
+        </div>
+        <div>
+          <label className="label text-xs">Division</label>
+          <select name="div" defaultValue={sp.div ?? ""} className="input py-1.5 text-sm">
+            <option value="">All</option>
+            {divisionOpts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label text-xs">Location</label>
+          <select name="loc" defaultValue={sp.loc ?? ""} className="input py-1.5 text-sm">
+            <option value="">All</option>
+            {markets.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label text-xs">Waiver</label>
+          <select name="waiver" defaultValue={sp.waiver ?? ""} className="input py-1.5 text-sm">
+            <option value="">Any</option>
+            <option value="no">No waiver</option>
+            <option value="yes">Signed</option>
+          </select>
+        </div>
+        <div>
+          <label className="label text-xs">Payment</label>
+          <select name="pay" defaultValue={sp.pay ?? ""} className="input py-1.5 text-sm">
+            <option value="">Any</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+        <div>
+          <label className="label text-xs">Assignment</label>
+          <select name="assign" defaultValue={sp.assign ?? ""} className="input py-1.5 text-sm">
+            <option value="">Any</option>
+            <option value="unassigned">Unassigned</option>
+            <option value="assigned">Assigned</option>
+            <option value="waitlisted">Waitlisted</option>
+          </select>
+        </div>
+        <button className="btn-secondary">Apply</button>
+        {filtered && <a href="/console/registrations" className="btn-ghost text-sm text-slate-500">Clear</a>}
       </form>
-      {q && (
-        <p className="text-sm text-slate-500">
-          {registrations.length} result{registrations.length === 1 ? "" : "s"} for &ldquo;{q}&rdquo;
-        </p>
+      {filtered && (
+        <p className="text-sm text-slate-500">{registrations.length} matching registration{registrations.length === 1 ? "" : "s"}.</p>
       )}
 
       {sp.ok && OK[sp.ok] && (
@@ -216,10 +268,15 @@ export default async function RegistrationsPage({
         </div>
       )}
 
+      {/* The hidden form the row checkboxes and the bulk bar post through. */}
+      <form id="regbulk" method="POST" action="/api/console/registrations" className="hidden" />
+      <RegistrationsBulkBar ticket={ticket} />
+
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
+              <th className="w-8 py-2"></th>
               <th className="py-2">Player</th>
               <th className="hidden sm:table-cell">Division</th>
               <th className="hidden md:table-cell">Location prefs</th>
@@ -231,6 +288,9 @@ export default async function RegistrationsPage({
           <tbody className="divide-y divide-slate-100">
             {registrations.map((r) => (
               <tr key={r.id}>
+                <td className="py-2 align-top">
+                  <input type="checkbox" name="ids" value={r.id} data-regbox form="regbulk" className="mt-1 h-4 w-4" aria-label={`Select ${r.person.firstName} ${r.person.lastName}`} />
+                </td>
                 <td className="py-2">
                   <Link href={`/console/registrations/${r.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">
                     {r.person.firstName} {r.person.lastName}
@@ -264,7 +324,7 @@ export default async function RegistrationsPage({
               </tr>
             ))}
             {registrations.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-slate-400">No registrations yet.</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-slate-400">{filtered ? "No registrations match these filters." : "No registrations yet."}</td></tr>
             )}
           </tbody>
         </table>

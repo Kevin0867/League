@@ -265,6 +265,61 @@ export async function POST(req: Request) {
     return NextResponse.redirect(new URL(`/console/payments?${reminderResultQuery(tally)}`, origin), 303);
   }
 
+  // Bulk-send the waiver to everyone in the selected registrations — the
+  // "127 clicks → 1" action from the registrations grid. ids = registrationIds
+  // (deduped to one waiver per person).
+  if (op === "bulkSendWaiver") {
+    const regIds = fd.getAll("ids").map((v) => String(v)).filter(Boolean);
+    const regs = await prisma.registration.findMany({ where: { id: { in: regIds } }, select: { personId: true, seasonId: true } });
+    const seenPerson = new Set<string>();
+    let sent = 0;
+    for (const r of regs) {
+      if (seenPerson.has(r.personId)) continue;
+      seenPerson.add(r.personId);
+      const person = await prisma.person.findUnique({ where: { id: r.personId } });
+      if (!person) continue;
+      const { contacts } = await pickedRecipients(r.personId, []);
+      if (contacts === 0) continue;
+      const token = await signWaiverToken(person.id);
+      const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
+      const email = waiverRequestEmail({ name: person.firstName, link, isMinor: person.isMinor });
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: r.seasonId, audienceType: "SINGLE_PERSON", audienceRef: person.id,
+        channels: ["IN_APP", "EMAIL"], triggerType: "WAIVER_REQUEST", subject: email.subject, body: email.text, html: email.html,
+      });
+      sent++;
+    }
+    await audit({ actorId: actor.userId, entityType: "Person", entityId: "bulk", action: "WAIVER_REQUESTED_BULK", summary: `Sent waiver to ${sent} player(s)` });
+    return back(`?ok=bulkWaiver&n=${sent}`);
+  }
+
+  // Bulk-request the season fee for every selected registration.
+  if (op === "bulkRequestFee") {
+    const ids = fd.getAll("ids").map((v) => String(v)).filter(Boolean);
+    const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+    const feeCents = rate?.seasonFeeCents ?? 49500;
+    let sent = 0;
+    for (const rid of ids) {
+      const r = await prisma.registration.findUnique({ where: { id: rid }, include: { person: true, season: true } });
+      if (!r) continue;
+      const res = await accruePlayerSeasonFee({ playerId: r.personId, seasonId: r.seasonId, feeCents, seasonName: r.season?.name ?? "Season" });
+      const [payer, payment] = await Promise.all([
+        prisma.person.findUnique({ where: { id: res.payerId } }),
+        prisma.payment.findUnique({ where: { id: res.paymentId } }),
+      ]);
+      if (payer && payment) {
+        const email = paymentRequestEmail({ name: payer.firstName, amountCents: payment.amountCents, description: payment.description ?? `${r.season?.name ?? "Season"} season fee`, paymentId: payment.id });
+        await dispatchMessage({
+          senderId: actor.userId, seasonId: r.seasonId, audienceType: "SINGLE_PERSON", audienceRef: res.payerId,
+          channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        });
+      }
+      sent++;
+    }
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "bulk", action: "REQUESTED_BULK", summary: `Requested fee for ${sent} player(s)` });
+    return back(`?ok=bulkFee&n=${sent}`);
+  }
+
   // Send a sample fee-request email to the signed-in admin, so staff can preview
   // exactly what families receive (independent of the BCC setting).
   if (op === "sendTestPayment") {
