@@ -1020,13 +1020,27 @@ model LineMatchup {
   id          String   @id @default(cuid())
   fixtureId   String
   fixture     Fixture  @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
-  lineNumber  Int      // 1..4
-  /// The 4th line does not count toward the match result (§12)
+  lineNumber  Int      // order within the fixture (1..N)
+  /// A line flagged non-counting (e.g. an exhibition) is recorded but excluded
+  /// from the match result and standings.
   isCounting  Boolean  @default(true)
   homePairingId String?
   awayPairingId String?
   /// HOME | AWAY | null — computed from games (2 of 3)
   lineWinner  String?
+
+  /// A club match is a stack of categorized lines: Men's #1, Women's #1, Youth
+  /// Boys #1, etc. category is MENS | WOMENS | MIXED | YOUTH_BOYS | YOUTH_GIRLS
+  /// | OPEN; rank is the #1/#2 within that category; label is an optional
+  /// override. The two players each side fields are stored by id and resolved to
+  /// names from the team rosters.
+  category    String   @default("OPEN")
+  rank        Int      @default(1)
+  label       String?
+  homePlayer1Id String?
+  homePlayer2Id String?
+  awayPlayer1Id String?
+  awayPlayer2Id String?
 
   games       GameScore[]
 

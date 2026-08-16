@@ -8,6 +8,7 @@ import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 import { matchTypeConfig, lineLabel, isCountingLine } from "@/lib/domain/matchType";
 import { scoringFormatOf, maxGames, describeScoring } from "@/lib/domain/scoringFormat";
 import { ScoringFormatFields } from "@/components/ScoringFormatFields";
+import { LINE_CATEGORIES, LINE_TEMPLATES, lineTitle } from "@/lib/domain/lineCategory";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ const OK: Record<string, string> = {
   acceptScores: "Scores accepted — the result is final.",
   disputeScores: "Scores disputed — an admin can enter the official result.",
   setScoringFormat: "Scoring format updated.",
+  applyLineTemplate: "Lines added from the template.",
+  addLine: "Line added.",
+  removeLine: "Line removed.",
+  setLinePairs: "Line pairs saved.",
   recordForfeit: "Forfeit recorded.",
   submitToDupr: "DUPR submission processed.",
 };
@@ -27,6 +32,9 @@ const ERRORS: Record<string, string> = {
   notfound: "Fixture or team not found.",
   nofixture: "Fixture not found.",
   noproposal: "There are no pending scores to accept or dispute.",
+  notemplate: "Pick a template.",
+  dupline: "That category and rank already has a line.",
+  noline: "Line not found.",
   selfpair: "A player can't be paired with themselves.",
   minlines: "Submit at least three lines.",
   dupplayer: "A player appears on more than one line.",
@@ -95,6 +103,34 @@ export default async function FixtureDetail({
     const p = pairings.find((x) => x.teamId === teamId && x.rank === line);
     return p ? `${p.playerA.firstName} & ${p.playerB.firstName}` : null;
   };
+
+  // Roster name lookup for the categorized-line pairs (stored by id).
+  const rosterName = new Map<string, string>();
+  for (const t of teams) for (const m of t.members) rosterName.set(m.personId, `${m.person.firstName} ${m.person.lastName}`);
+  const nameOf = (pid: string | null | undefined) => (pid ? rosterName.get(pid) ?? null : null);
+  const homeRoster = (fixture.homeTeam?.members ?? []).map((m) => ({ id: m.personId, label: `${m.person.firstName} ${m.person.lastName}` }));
+  const awayRoster = (fixture.awayTeam?.members ?? []).map((m) => ({ id: m.personId, label: `${m.person.firstName} ${m.person.lastName}` }));
+
+  // The lines the score sheet renders: the categorized lines once set up, else
+  // generic lines from the match type (legacy path).
+  const hasLines = fixture.lines.length > 0;
+  const scoreLines = hasLines
+    ? fixture.lines.map((l) => ({
+        lineNumber: l.lineNumber,
+        title: lineTitle(l),
+        isCounting: l.isCounting,
+        games: l.games,
+        homePair: [nameOf(l.homePlayer1Id), nameOf(l.homePlayer2Id)].filter(Boolean).join(" & ") || null,
+        awayPair: [nameOf(l.awayPlayer1Id), nameOf(l.awayPlayer2Id)].filter(Boolean).join(" & ") || null,
+      }))
+    : lineNums.map((n) => ({
+        lineNumber: n,
+        title: lineLabel(n, cfg),
+        isCounting: isCountingLine(n, cfg),
+        games: [] as typeof fixture.lines[number]["games"],
+        homePair: pairFor(homeId, n),
+        awayPair: pairFor(awayId, n),
+      }));
 
   return (
     <div className="space-y-6">
@@ -215,6 +251,25 @@ export default async function FixtureDetail({
         </div>
       </form>
 
+      {/* Match lines — the categorized lines (Men's #1, Women's #1, Youth …),
+          two names per side. Set these up so the score sheet and standings read
+          them; pairs carry forward from the club's last match. */}
+      {!forfeited && (homeId || awayId) && (
+        <MatchLinesSetup
+          ticket={ticket}
+          fixtureId={fixture.id}
+          lines={fixture.lines.map((l) => ({
+            id: l.id, lineNumber: l.lineNumber, category: l.category, rank: l.rank, label: l.label,
+            homePlayer1Id: l.homePlayer1Id, homePlayer2Id: l.homePlayer2Id,
+            awayPlayer1Id: l.awayPlayer1Id, awayPlayer2Id: l.awayPlayer2Id,
+          }))}
+          homeRoster={homeRoster}
+          awayRoster={awayRoster}
+          homeName={homeName}
+          awayName={awayName}
+        />
+      )}
+
       {/* Score entry — each line shows who played, home pair first */}
       {!forfeited && (
         <form method="POST" action="/api/console/league" className="card">
@@ -239,31 +294,31 @@ export default async function FixtureDetail({
             </div>
           )}
           <div className="space-y-3">
-            {lineNums.map((line) => {
-              const existing = fixture.lines.find((l) => l.lineNumber === line);
-              const homePair = pairFor(homeId, line);
-              const awayPair = pairFor(awayId, line);
-              const counting = isCountingLine(line, cfg);
-              const winnerLabel = existing?.lineWinner === "HOME" ? (homePair ?? homeName) : existing?.lineWinner === "AWAY" ? (awayPair ?? awayName) : null;
+            {scoreLines.map((sl) => {
+              const winnerLabel = fixture.lines.find((l) => l.lineNumber === sl.lineNumber)?.lineWinner === "HOME"
+                ? (sl.homePair ?? homeName)
+                : fixture.lines.find((l) => l.lineNumber === sl.lineNumber)?.lineWinner === "AWAY"
+                ? (sl.awayPair ?? awayName)
+                : null;
               return (
-                <div key={line} className="rounded-lg border border-slate-200 p-3">
+                <div key={sl.lineNumber} className="rounded-lg border border-slate-200 p-3">
                   <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                    <span className="font-medium text-slate-700">{lineLabel(line, cfg)}</span>
+                    <span className="font-medium text-slate-700">{sl.title}</span>
                     <span className="text-slate-600">
-                      {homePair ?? homeName} <span className="text-slate-400">vs</span> {awayPair ?? awayName}
+                      {sl.homePair ?? homeName} <span className="text-slate-400">vs</span> {sl.awayPair ?? awayName}
                     </span>
-                    {!counting && <span className="text-xs text-slate-400">(non-counting)</span>}
+                    {!sl.isCounting && <span className="text-xs text-slate-400">(non-counting)</span>}
                     {winnerLabel && <span className="badge bg-emerald-100 text-emerald-800">{winnerLabel} won</span>}
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {gameNums.map((g) => {
-                      const game = existing?.games.find((x) => x.gameNumber === g);
+                      const game = sl.games.find((x) => x.gameNumber === g);
                       return (
                         <div key={g} className="flex items-center gap-1">
                           <span className="w-8 text-xs text-slate-400">G{g}</span>
-                          <input name={`l${line}_g${g}_h`} type="number" min={0} defaultValue={game?.homeScore ?? ""} className="input px-2 py-1 text-center" placeholder="H" aria-label={`${homeName} game ${g}`} />
+                          <input name={`l${sl.lineNumber}_g${g}_h`} type="number" min={0} defaultValue={game?.homeScore ?? ""} className="input px-2 py-1 text-center" placeholder="H" aria-label={`${homeName} game ${g}`} />
                           <span className="text-slate-300">–</span>
-                          <input name={`l${line}_g${g}_a`} type="number" min={0} defaultValue={game?.awayScore ?? ""} className="input px-2 py-1 text-center" placeholder="A" aria-label={`${awayName} game ${g}`} />
+                          <input name={`l${sl.lineNumber}_g${g}_a`} type="number" min={0} defaultValue={game?.awayScore ?? ""} className="input px-2 py-1 text-center" placeholder="A" aria-label={`${awayName} game ${g}`} />
                         </div>
                       );
                     })}
@@ -393,6 +448,133 @@ function LineupFields({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+type SetupLine = {
+  id: string;
+  lineNumber: number;
+  category: string;
+  rank: number;
+  label: string | null;
+  homePlayer1Id: string | null;
+  homePlayer2Id: string | null;
+  awayPlayer1Id: string | null;
+  awayPlayer2Id: string | null;
+};
+type RosterOpt = { id: string; label: string };
+
+// The categorized-line editor: apply a template, add/remove lines, and set each
+// line's two names per side. Pairs carry forward from the club's last match, so
+// this is mostly confirming — swap a player by re-picking one dropdown.
+function MatchLinesSetup({
+  ticket, fixtureId, lines, homeRoster, awayRoster, homeName, awayName,
+}: {
+  ticket: string;
+  fixtureId: string;
+  lines: SetupLine[];
+  homeRoster: RosterOpt[];
+  awayRoster: RosterOpt[];
+  homeName: string;
+  awayName: string;
+}) {
+  const hidden = (
+    <>
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="fixtureId" value={fixtureId} />
+    </>
+  );
+  const PairSelect = ({ name, value, roster }: { name: string; value: string | null; roster: RosterOpt[] }) => (
+    <select name={name} defaultValue={value ?? ""} className="input py-1 text-sm">
+      <option value="">—</option>
+      {roster.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+    </select>
+  );
+
+  return (
+    <div className="card space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="font-semibold text-slate-900">Match lines</h2>
+          <p className="mt-0.5 text-sm text-slate-500">The categorized lines for this match — Men&apos;s #1, Women&apos;s #1, Youth Boys/Girls, etc. Two names per side; scores enter into these below.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {LINE_TEMPLATES.map((t) => (
+            <form key={t.key} method="POST" action="/api/console/league">
+              {hidden}
+              <input type="hidden" name="op" value="applyLineTemplate" />
+              <input type="hidden" name="templateKey" value={t.key} />
+              <button className="btn-secondary text-xs" title={t.note}>{lines.length ? `+ ${t.label}` : t.label}</button>
+            </form>
+          ))}
+        </div>
+      </div>
+
+      {lines.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+          No lines yet. Apply a template above, or add lines one at a time below. (Without lines, the score sheet falls back to simple numbered lines.)
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {lines.map((l) => (
+            <li key={l.id} className="rounded-lg border border-slate-200 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-800">{lineTitle(l)}</span>
+                <form method="POST" action="/api/console/league">
+                  {hidden}
+                  <input type="hidden" name="op" value="removeLine" />
+                  <input type="hidden" name="lineId" value={l.id} />
+                  <button className="text-xs text-rose-600 hover:underline">remove</button>
+                </form>
+              </div>
+              <form method="POST" action="/api/console/league" className="grid gap-2 sm:grid-cols-2">
+                {hidden}
+                <input type="hidden" name="op" value="setLinePairs" />
+                <input type="hidden" name="lineId" value={l.id} />
+                <div>
+                  <label className="label text-xs">{homeName} <span className="text-slate-400">(home)</span></label>
+                  <div className="flex gap-2">
+                    <PairSelect name="homePlayer1Id" value={l.homePlayer1Id} roster={homeRoster} />
+                    <PairSelect name="homePlayer2Id" value={l.homePlayer2Id} roster={homeRoster} />
+                  </div>
+                </div>
+                <div>
+                  <label className="label text-xs">{awayName} <span className="text-slate-400">(away)</span></label>
+                  <div className="flex gap-2">
+                    <PairSelect name="awayPlayer1Id" value={l.awayPlayer1Id} roster={awayRoster} />
+                    <PairSelect name="awayPlayer2Id" value={l.awayPlayer2Id} roster={awayRoster} />
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <button className="btn-secondary text-xs">Save {lineTitle(l)} pairs</button>
+                </div>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Add one line */}
+      <form method="POST" action="/api/console/league" className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+        {hidden}
+        <input type="hidden" name="op" value="addLine" />
+        <div>
+          <label className="label text-xs">Category</label>
+          <select name="category" className="input py-1 text-sm" defaultValue="MENS">
+            {LINE_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label text-xs">Rank #</label>
+          <input name="rank" type="number" min={1} max={20} defaultValue={1} className="input w-20 py-1 text-sm" />
+        </div>
+        <div>
+          <label className="label text-xs">Custom label <span className="text-slate-400">(optional)</span></label>
+          <input name="label" className="input py-1 text-sm" placeholder="e.g. Mixed 1" />
+        </div>
+        <button className="btn-secondary text-sm">Add line</button>
+      </form>
     </div>
   );
 }

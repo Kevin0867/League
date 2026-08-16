@@ -4,6 +4,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 import { matchTypeConfig, lineLabel, isCountingLine } from "@/lib/domain/matchType";
 import { scoringFormatOf, maxGames, describeScoring } from "@/lib/domain/scoringFormat";
+import { lineTitle } from "@/lib/domain/lineCategory";
+
+type ScoreLine = { lineNumber: number; title: string; isCounting: boolean; games: { gameNumber: number; homeScore: number; awayScore: number }[] };
 
 // The coach's own view of the League hub: only their teams' matches, with score
 // entry (submitted as a proposal for the other team to accept), and accept /
@@ -69,6 +72,9 @@ export async function CoachLeagueMatches({ personId, ticket }: { personId: strin
             const fmt = scoringFormatOf(f);
             const gameNums = Array.from({ length: maxGames(fmt) }, (_, i) => i + 1);
             const lineNums = Array.from({ length: cfg.lines }, (_, i) => i + 1);
+            const scoreLines: ScoreLine[] = f.lines.length
+              ? f.lines.map((l) => ({ lineNumber: l.lineNumber, title: lineTitle(l), isCounting: l.isCounting, games: l.games }))
+              : lineNums.map((n) => ({ lineNumber: n, title: lineLabel(n, cfg), isCounting: isCountingLine(n, cfg), games: [] }));
 
             const proposedByMe = f.scoreStatus === "PROPOSED" && f.scoreProposedById === myTeamId;
             const proposedByOpp = f.scoreStatus === "PROPOSED" && f.scoreProposedById && f.scoreProposedById !== myTeamId;
@@ -98,16 +104,16 @@ export async function CoachLeagueMatches({ personId, ticket }: { personId: strin
                 {forfeited ? (
                   <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">This match was recorded as a forfeit. Contact the office with any questions.</p>
                 ) : finalized ? (
-                  <ScoreReadout fixtureLines={f.lines} lineNums={lineNums} cfg={cfg} homeName={homeName} awayName={awayName} />
+                  <ScoreReadout scoreLines={scoreLines} homeName={homeName} awayName={awayName} />
                 ) : proposedByMe ? (
                   <div className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-900">
                     You submitted these scores — waiting for <span className="font-medium">{oppName}</span> to accept.
-                    <ScoreReadout fixtureLines={f.lines} lineNums={lineNums} cfg={cfg} homeName={homeName} awayName={awayName} className="mt-2" />
+                    <ScoreReadout scoreLines={scoreLines} homeName={homeName} awayName={awayName} className="mt-2" />
                   </div>
                 ) : proposedByOpp ? (
                   <div className="space-y-3">
                     <p className="text-sm text-slate-600"><span className="font-medium">{oppName}</span> entered these scores. Accept them to make the result final, or dispute if they&apos;re wrong.</p>
-                    <ScoreReadout fixtureLines={f.lines} lineNums={lineNums} cfg={cfg} homeName={homeName} awayName={awayName} />
+                    <ScoreReadout scoreLines={scoreLines} homeName={homeName} awayName={awayName} />
                     <div className="flex flex-wrap gap-2">
                       <form method="POST" action="/api/console/league">
                         <input type="hidden" name="ticket" value={ticket} />
@@ -134,12 +140,10 @@ export async function CoachLeagueMatches({ personId, ticket }: { personId: strin
                   <CoachScoreForm
                     fixtureId={f.id}
                     ticket={ticket}
-                    lineNums={lineNums}
+                    scoreLines={scoreLines}
                     gameNums={gameNums}
-                    cfg={cfg}
                     homeName={homeName}
                     awayName={awayName}
-                    existing={f.lines}
                     disputed={f.scoreStatus === "DISPUTED"}
                   />
                 )}
@@ -152,38 +156,31 @@ export async function CoachLeagueMatches({ personId, ticket }: { personId: strin
   );
 }
 
-type LineWithGames = { lineNumber: number; games: { gameNumber: number; homeScore: number; awayScore: number }[] };
-
 // Read-only line scores (home left, away right).
 function ScoreReadout({
-  fixtureLines, lineNums, cfg, homeName, awayName, className = "",
+  scoreLines, homeName, awayName, className = "",
 }: {
-  fixtureLines: LineWithGames[];
-  lineNums: number[];
-  cfg: ReturnType<typeof matchTypeConfig>;
+  scoreLines: ScoreLine[];
   homeName: string;
   awayName: string;
   className?: string;
 }) {
-  const played = fixtureLines.length > 0;
-  if (!played) return <p className={`text-sm text-slate-400 ${className}`}>No scores entered yet.</p>;
+  const anyPlayed = scoreLines.some((l) => l.games.length > 0);
+  if (!anyPlayed) return <p className={`text-sm text-slate-400 ${className}`}>No scores entered yet.</p>;
   return (
     <div className={`overflow-x-auto ${className}`}>
       <table className="text-sm">
         <tbody className="divide-y divide-slate-100">
-          {lineNums.map((line) => {
-            const l = fixtureLines.find((x) => x.lineNumber === line);
-            return (
-              <tr key={line}>
-                <td className="py-1 pr-3 text-slate-500">{lineLabel(line, cfg)}{!isCountingLine(line, cfg) && <span className="text-xs text-slate-400"> (exh)</span>}</td>
-                <td className="py-1 tabular-nums text-slate-700">
-                  {l && l.games.length > 0
-                    ? l.games.sort((a, b) => a.gameNumber - b.gameNumber).map((g) => `${g.homeScore}–${g.awayScore}`).join(", ")
-                    : <span className="text-slate-400">—</span>}
-                </td>
-              </tr>
-            );
-          })}
+          {scoreLines.map((l) => (
+            <tr key={l.lineNumber}>
+              <td className="py-1 pr-3 text-slate-500">{l.title}{!l.isCounting && <span className="text-xs text-slate-400"> (exh)</span>}</td>
+              <td className="py-1 tabular-nums text-slate-700">
+                {l.games.length > 0
+                  ? [...l.games].sort((a, b) => a.gameNumber - b.gameNumber).map((g) => `${g.homeScore}–${g.awayScore}`).join(", ")
+                  : <span className="text-slate-400">—</span>}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
       <p className="mt-1 text-xs text-slate-400">Left = {homeName} · Right = {awayName}</p>
@@ -194,16 +191,14 @@ function ScoreReadout({
 // Coach score-entry sheet — home score first (left). Submits as a proposal; the
 // server forces the acting team, so a coach can only report their own match.
 function CoachScoreForm({
-  fixtureId, ticket, lineNums, gameNums, cfg, homeName, awayName, existing, disputed,
+  fixtureId, ticket, scoreLines, gameNums, homeName, awayName, disputed,
 }: {
   fixtureId: string;
   ticket: string;
-  lineNums: number[];
+  scoreLines: ScoreLine[];
   gameNums: number[];
-  cfg: ReturnType<typeof matchTypeConfig>;
   homeName: string;
   awayName: string;
-  existing: LineWithGames[];
   disputed: boolean;
 }) {
   return (
@@ -215,30 +210,27 @@ function CoachScoreForm({
       {disputed && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">These scores were disputed — re-enter the correct result and resubmit.</p>}
       <p className="text-sm text-slate-500">Enter each game — <span className="font-medium text-slate-700">{homeName}</span> (home) score on the left, <span className="font-medium text-slate-700">{awayName}</span> on the right. Leave a game blank if unplayed.</p>
       <div className="space-y-2">
-        {lineNums.map((line) => {
-          const l = existing.find((x) => x.lineNumber === line);
-          return (
-            <div key={line} className="rounded-lg border border-slate-200 p-3">
-              <div className="mb-2 text-sm font-medium text-slate-700">
-                {lineLabel(line, cfg)}
-                {!isCountingLine(line, cfg) && <span className="ml-1 text-xs text-slate-400">(non-counting)</span>}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {gameNums.map((g) => {
-                  const game = l?.games.find((x) => x.gameNumber === g);
-                  return (
-                    <div key={g} className="flex items-center gap-1">
-                      <span className="w-8 text-xs text-slate-400">G{g}</span>
-                      <input name={`l${line}_g${g}_h`} type="number" min={0} defaultValue={game?.homeScore ?? ""} className="input w-14 px-2 py-1 text-center" placeholder="H" aria-label={`${homeName} game ${g}`} />
-                      <span className="text-slate-300">–</span>
-                      <input name={`l${line}_g${g}_a`} type="number" min={0} defaultValue={game?.awayScore ?? ""} className="input w-14 px-2 py-1 text-center" placeholder="A" aria-label={`${awayName} game ${g}`} />
-                    </div>
-                  );
-                })}
-              </div>
+        {scoreLines.map((l) => (
+          <div key={l.lineNumber} className="rounded-lg border border-slate-200 p-3">
+            <div className="mb-2 text-sm font-medium text-slate-700">
+              {l.title}
+              {!l.isCounting && <span className="ml-1 text-xs text-slate-400">(non-counting)</span>}
             </div>
-          );
-        })}
+            <div className="flex flex-wrap gap-3">
+              {gameNums.map((g) => {
+                const game = l.games.find((x) => x.gameNumber === g);
+                return (
+                  <div key={g} className="flex items-center gap-1">
+                    <span className="w-8 text-xs text-slate-400">G{g}</span>
+                    <input name={`l${l.lineNumber}_g${g}_h`} type="number" min={0} defaultValue={game?.homeScore ?? ""} className="input w-14 px-2 py-1 text-center" placeholder="H" aria-label={`${homeName} game ${g}`} />
+                    <span className="text-slate-300">–</span>
+                    <input name={`l${l.lineNumber}_g${g}_a`} type="number" min={0} defaultValue={game?.awayScore ?? ""} className="input w-14 px-2 py-1 text-center" placeholder="A" aria-label={`${awayName} game ${g}`} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
       <button className="btn-primary text-sm">Submit our scores</button>
     </form>
