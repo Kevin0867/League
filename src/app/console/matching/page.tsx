@@ -95,7 +95,7 @@ export default async function MatchingPage({
         {teams.length === 0 ? (
           <div className="card text-sm text-slate-500">No active-season teams yet. Build teams first, then assign coaches here.</div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {teams.map((team) => {
               const teamMarket = team.facility?.market ?? team.market ?? null;
               // Rank coaches: cleared first, then location match, then day match.

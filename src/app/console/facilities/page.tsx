@@ -82,7 +82,7 @@ export default async function FacilitiesPage({
         <div className="max-w-md">
           <TableFilter targetId="facilities-grid" placeholder="Search facilities by name or market…" />
         </div>
-        <div id="facilities-grid" className="grid gap-4 md:grid-cols-2">
+        <div id="facilities-grid" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {facilities.map((f) => {
             const rate =
               f.feeBasis === "PERCENTAGE"
