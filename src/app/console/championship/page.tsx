@@ -118,6 +118,7 @@ export default async function ChampionshipPage({
                     <select name="format" className="input py-1.5 text-sm" defaultValue="single">
                       <option value="single">Single elimination</option>
                       <option value="double">Double elimination</option>
+                      <option value="waterfall">Waterfall (Gold + flights)</option>
                     </select>
                   </div>
                   <button className="btn-secondary text-sm" disabled={eligible < 2}>
