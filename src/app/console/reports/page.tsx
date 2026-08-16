@@ -95,6 +95,14 @@ export default async function ReportsPage() {
       {/* Season P&L */}
       <div className="card overflow-x-auto">
         <h2 className="mb-3 font-semibold text-slate-900">Season P&amp;L by team</h2>
+        {pnls.length > 0 && totals.revenue === 0 && (
+          <p className="mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+            No season fees marked paid yet, so revenue reads $0 across the board. It fills in as
+            payments land — request fees from{" "}
+            <Link href="/console/payments" className="font-medium text-brand-700 hover:underline">Payments</Link>{" "}
+            or a registration row.
+          </p>
+        )}
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr><th className="py-2">Team</th><th className="text-right">Revenue</th><th className="text-right">Coach cost</th><th className="text-right">Court cost</th><th className="text-right">Contribution</th></tr>

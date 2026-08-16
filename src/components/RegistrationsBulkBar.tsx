@@ -47,12 +47,13 @@ export function RegistrationsBulkBar({ ticket }: { ticket: string }) {
       <span className="text-sm font-medium text-slate-700">{count} selected</span>
       <div className="ml-auto flex flex-wrap gap-2">
         <input type="hidden" name="ticket" value={ticket} form="regbulk" />
-        <button form="regbulk" name="op" value="bulkSendWaiver" onClick={confirmSend("Send the waiver to")} disabled={count === 0} className="btn-secondary text-sm disabled:opacity-40">
+        <button form="regbulk" name="op" value="bulkSendWaiver" onClick={confirmSend("Send the waiver to")} disabled={count === 0} title={count === 0 ? "Select one or more players first" : undefined} className="btn-secondary text-sm disabled:opacity-40">
           Send waiver{count ? ` to ${count}` : ""}
         </button>
-        <button form="regbulk" name="op" value="bulkRequestFee" onClick={confirmSend("Request the season fee from")} disabled={count === 0} className="btn-primary text-sm disabled:opacity-40">
+        <button form="regbulk" name="op" value="bulkRequestFee" onClick={confirmSend("Request the season fee from")} disabled={count === 0} title={count === 0 ? "Select one or more players first" : undefined} className="btn-primary text-sm disabled:opacity-40">
           Request fee{count ? ` from ${count}` : ""}
         </button>
+        {count === 0 && <span className="self-center text-xs text-slate-400">Tick players to enable</span>}
       </div>
     </div>
   );
