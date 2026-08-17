@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatStamp } from "@/lib/time";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } from "@/lib/domain/teams";
@@ -9,7 +9,9 @@ import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
 import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
 import { TeamColorDot } from "@/components/TeamColorDot";
 import { TeamScheduleFields } from "./TeamScheduleFields";
-import { mintConsoleTicket } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
+import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { AddPlayerToTeam } from "./AddPlayerToTeam";
@@ -69,6 +71,10 @@ export default async function TeamDetailPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  // A coach may open only teams they coach; admins see any. Everyone else out.
+  if (!(await canViewTeamNotes(id))) redirect("/console");
+  const viewer = await getSession();
+  const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
   const { ok, err, imgok, imgerr, n, failed, failedNames } = await searchParams;
   const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
@@ -220,12 +226,14 @@ export default async function TeamDetailPage({
           {team.isTest && <span className="badge bg-amber-100 text-amber-800">Test</span>}
           <PrintButton label="Print roster" />
           {team.published ? <StatusBadge status="PUBLISHED" /> : missing.length === 0 ? <StatusBadge status="READY" /> : <StatusBadge status="BUILDING" />}
-          <form method="POST" action="/api/console/teams">
-            <input type="hidden" name="ticket" value={ticket} />
-            <input type="hidden" name="op" value="toggleTeamTest" />
-            <input type="hidden" name="teamId" value={team.id} />
-            <button className="text-xs font-medium text-slate-400 hover:underline">{team.isTest ? "Unmark test" : "Mark test"}</button>
-          </form>
+          {admin && (
+            <form method="POST" action="/api/console/teams">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="toggleTeamTest" />
+              <input type="hidden" name="teamId" value={team.id} />
+              <button className="text-xs font-medium text-slate-400 hover:underline">{team.isTest ? "Unmark test" : "Mark test"}</button>
+            </form>
+          )}
         </div>
       </div>
 
@@ -255,7 +263,8 @@ export default async function TeamDetailPage({
       )}
 
       {/* LAUNCH — the deliberate go-live. Assigning players messages no one;
-          families hear from us only when an admin sends from here. */}
+          families hear from us only when an admin sends from here. Admin only. */}
+      {admin && (<>
       <div className="card border-l-4 border-brand-500">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-slate-900">Launch this team</h2>
@@ -422,6 +431,7 @@ export default async function TeamDetailPage({
         </p>
         <TeamPhotoUploadForm ticket={ticket} teamId={team.id} currentUrl={team.photoUrl} />
       </div>
+      </>)}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Roster */}
@@ -450,7 +460,7 @@ export default async function TeamDetailPage({
                 {team.members.map((m) => (
                   <li key={m.id} className="flex items-center justify-between py-2">
                     <div>
-                      <Link href={profileHref(m.personId)} className="text-sm font-medium text-slate-800 hover:text-brand-700 hover:underline">
+                      <Link href={admin ? profileHref(m.personId) : `/console/teams/${team.id}/progress/${m.personId}`} className="text-sm font-medium text-slate-800 hover:text-brand-700 hover:underline">
                         {m.person.firstName} {m.person.lastName}
                       </Link>
                       <div className="text-xs text-slate-400">
@@ -463,22 +473,25 @@ export default async function TeamDetailPage({
                       <Link href={`/console/teams/${team.id}/progress/${m.personId}`} className="text-xs font-semibold text-brand-600 hover:underline">
                         notes
                       </Link>
-                      <ConfirmSubmit
-                        action="/api/console/teams"
-                        fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
-                        confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
-                        label="remove"
-                        className="text-xs text-rose-600 hover:underline"
-                      />
+                      {admin && (
+                        <ConfirmSubmit
+                          action="/api/console/teams"
+                          fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
+                          confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
+                          label="remove"
+                          className="text-xs text-rose-600 hover:underline"
+                        />
+                      )}
                     </div>
                   </li>
                 ))}
               </ul>
             )}
-            <AddPlayerToTeam ticket={ticket} teamId={team.id} candidates={candidates} atCap={roster.atCap} />
+            {admin && <AddPlayerToTeam ticket={ticket} teamId={team.id} candidates={candidates} atCap={roster.atCap} />}
           </div>
 
-          {/* Publish gate */}
+          {/* Publish gate + payment tools — admin only */}
+          {admin && (<>
           <div className="card">
             <h2 className="mb-2 font-semibold text-slate-900">Publication</h2>
             {team.published ? (
@@ -548,9 +561,11 @@ export default async function TeamDetailPage({
               )}
             </div>
           )}
+          </>)}
         </div>
 
-        {/* Six fields editor */}
+        {/* Team fields, coaching staff, danger zone — admin only */}
+        {admin && (
         <div className="lg:col-span-2">
           <form method="POST" action="/api/console/teams" className="card space-y-4">
             <input type="hidden" name="ticket" value={ticket} />
@@ -702,6 +717,7 @@ export default async function TeamDetailPage({
             <DeleteTeamButton teamId={team.id} ticket={ticket} teamName={team.name} />
           </div>
         </div>
+        )}
       </div>
     </div>
   );
