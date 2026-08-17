@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { requireAdmin } from "@/lib/rbac";
-import { isZohoConfigured } from "@/lib/integrations/zoho";
+import { isZohoConfigured, isZohoAuthConfigured, configuredListKey, listZohoMailingLists } from "@/lib/integrations/zoho";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +16,11 @@ export default async function SystemPage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const zohoOn = isZohoConfigured();
+  const zohoAuthOn = isZohoAuthConfigured();
+  const currentListKey = configuredListKey();
+  // When the OAuth credentials are in but the list key isn't (or to double-check
+  // it), fetch the account's lists so the admin can copy the right key.
+  const zohoLists = zohoAuthOn ? await listZohoMailingLists() : null;
 
   return (
     <div className="space-y-6">
@@ -85,6 +90,49 @@ export default async function SystemPage({
             Set ZOHO_CAMPAIGNS_CLIENT_ID, ZOHO_CAMPAIGNS_CLIENT_SECRET, ZOHO_CAMPAIGNS_REFRESH_TOKEN, and
             ZOHO_CAMPAIGNS_LIST_KEY to connect.
           </p>
+        )}
+
+        {/* List-key finder — appears once the three OAuth vars are set. */}
+        {zohoAuthOn && zohoLists && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <h3 className="text-sm font-semibold text-slate-800">Your Zoho mailing lists</h3>
+            {zohoLists.ok ? (
+              zohoLists.lists.length === 0 ? (
+                <p className="mt-1 text-sm text-slate-500">No mailing lists found on this Zoho account.</p>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Copy the key of the list you want, then set it as <span className="font-mono">ZOHO_CAMPAIGNS_LIST_KEY</span> and redeploy.
+                  </p>
+                  <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                          <th className="px-3 py-2 font-semibold">List</th>
+                          <th className="px-3 py-2 font-semibold">Contacts</th>
+                          <th className="px-3 py-2 font-semibold">List key</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {zohoLists.lists.map((l) => (
+                          <tr key={l.listkey} className={`border-b border-slate-100 last:border-0 ${currentListKey === l.listkey ? "bg-emerald-50" : ""}`}>
+                            <td className="px-3 py-2 font-medium text-slate-800">
+                              {l.listname}
+                              {currentListKey === l.listkey && <span className="ml-2 badge bg-emerald-100 text-emerald-800">in use</span>}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums text-slate-500">{l.count}</td>
+                            <td className="px-3 py-2"><span className="select-all font-mono text-xs text-slate-700">{l.listkey}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )
+            ) : zohoLists.error !== "not-configured" ? (
+              <p className="mt-1 text-sm text-rose-700">Couldn&apos;t reach Zoho: {zohoLists.error}. Double-check the OAuth credentials.</p>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
