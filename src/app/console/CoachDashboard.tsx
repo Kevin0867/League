@@ -116,7 +116,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
             <QuickTile href={teamHref("#checkin")} label="Check-ins" icon={
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M9 5h6a1 1 0 0 1 1 1v0a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v0a1 1 0 0 1 1-1Z"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 14l2 2 4-4"/></svg>
             } />
-            <QuickTile href={teamHref("#message")} label="Messaging" icon={
+            <QuickTile href="/console/inbox" label="Messaging" icon={
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M4 5h16v11H8l-4 3V5Z"/></svg>
             } />
             <QuickTile href={teamHref("#notes")} label="Team notes" icon={

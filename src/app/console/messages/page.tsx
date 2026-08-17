@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { MessageComposer } from "@/components/MessageComposer";
-import { requireStaff } from "@/lib/rbac";
+import { requireAdmin } from "@/lib/rbac";
 import { can } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
@@ -34,7 +34,7 @@ export default async function MessagesPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const session = await requireStaff();
+  const session = await requireAdmin();
   const canBroadcast = can(session.role, "broadcastAll");
   const ticket = await mintConsoleTicket();
 

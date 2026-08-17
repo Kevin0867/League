@@ -11,16 +11,19 @@ import type { AudienceType } from "@/lib/domain/audience";
 // and bounce through the console layout's auth.
 export const dynamic = "force-dynamic";
 
-// Broad audiences require broadcast permission (COO/Director). A coach may
-// message their OWN team only (§17 — permissions attach to the team-contact role).
-const BROAD: AudienceType[] = ["ALL_PLAYERS", "ALL_COACHES", "MARKET", "DIVISION"];
+// Admin-only broad audiences (the whole club). A coach may reach staff broadcast
+// audiences (all coaches, all admins) and any team they coach.
+const ADMIN_ONLY: AudienceType[] = ["ALL_PLAYERS", "MARKET", "DIVISION"];
+const STAFF_BROADCAST: AudienceType[] = ["ALL_COACHES", "ALL_ADMINS"];
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
-  const back = (qs: string) =>
-    NextResponse.redirect(new URL(`/console/messages${qs}`, origin), 303);
-
   const formData = await req.formData();
+  const rawReturn = String(formData.get("returnTo") ?? "");
+  const returnBase = rawReturn.startsWith("/console/") ? rawReturn : "/console/messages";
+  const back = (qs: string) =>
+    NextResponse.redirect(new URL(`${returnBase}${qs}`, origin), 303);
+
   const actor = await actorFromForm(formData);
   const op = String(formData.get("op") ?? "");
 
@@ -28,8 +31,13 @@ export async function POST(req: Request) {
     case "send": {
       if (!actor) return back("?err=auth");
 
-      const audienceType = String(formData.get("audienceType") ?? "") as AudienceType;
-      const audienceRef = String(formData.get("audienceRef") ?? "") || null;
+      // The composer can encode a team choice as "TEAM:<teamId>" in one select.
+      let audienceType = String(formData.get("audienceType") ?? "") as AudienceType;
+      let audienceRef = String(formData.get("audienceRef") ?? "") || null;
+      if (audienceType.startsWith("TEAM:")) {
+        audienceRef = audienceType.slice(5);
+        audienceType = "TEAM";
+      }
       const subject = String(formData.get("subject") ?? "").trim();
       const body = String(formData.get("body") ?? "").trim();
       const channels = (["IN_APP", "EMAIL", "SMS"] as Channel[]).filter(
@@ -41,18 +49,30 @@ export async function POST(req: Request) {
 
       // Authorization.
       const broadcaster = can(actor.role, "broadcastAll");
-      if (BROAD.includes(audienceType) && !broadcaster) return back("?err=perm");
+      if (ADMIN_ONLY.includes(audienceType) && !broadcaster) return back("?err=perm");
+
+      // Resolve this actor's coach identity once (the ticket carries only
+      // userId + role) — used to gate staff broadcasts and team messages.
+      const needsCoachCheck =
+        !broadcaster && (STAFF_BROADCAST.includes(audienceType) || audienceType === "TEAM");
+      const actorCoach = needsCoachCheck
+        ? await prisma.user
+            .findUnique({ where: { id: actor.userId }, select: { personId: true } })
+            .then((u) => (u?.personId ? prisma.coach.findUnique({ where: { personId: u.personId }, select: { id: true } }) : null))
+        : null;
+
+      if (STAFF_BROADCAST.includes(audienceType) && !broadcaster && !actorCoach) return back("?err=perm");
       if (audienceType === "TEAM" && !broadcaster) {
-        // Coaches may only message a team they coach. The ticket carries only
-        // userId + role, so resolve this actor's personId to compare.
-        const actorUser = await prisma.user.findUnique({
-          where: { id: actor.userId },
-          select: { personId: true },
-        });
         const team = audienceRef
-          ? await prisma.team.findUnique({ where: { id: audienceRef }, include: { coach: true } })
+          ? await prisma.team.findUnique({
+              where: { id: audienceRef },
+              select: { coachId: true, assistantCoaches: { select: { coachId: true } } },
+            })
           : null;
-        if (!team || team.coach?.personId !== actorUser?.personId) return back("?err=team");
+        const owns =
+          !!actorCoach && !!team &&
+          (team.coachId === actorCoach.id || team.assistantCoaches.some((a) => a.coachId === actorCoach.id));
+        if (!owns) return back("?err=team");
       }
 
       const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });

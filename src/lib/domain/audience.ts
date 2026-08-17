@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "../db";
+import { ADMIN_ROLES } from "../enums";
 
 // Audience resolution (§13). Turns an audience selection into the set of people
 // who should receive a message. For team, player, and division audiences, minors
@@ -9,6 +10,7 @@ import { prisma } from "../db";
 export type AudienceType =
   | "ALL_PLAYERS"
   | "ALL_COACHES"
+  | "ALL_ADMINS"
   | "MARKET"
   | "DIVISION"
   | "TEAM"
@@ -89,6 +91,15 @@ export async function resolveAudience(
     case "ALL_COACHES": {
       const coaches = await prisma.coach.findMany({ select: { personId: true } });
       personIds = coaches.map((c) => c.personId);
+      expandMinors = false;
+      break;
+    }
+    case "ALL_ADMINS": {
+      const admins = await prisma.user.findMany({
+        where: { active: true, personId: { not: null }, role: { in: ADMIN_ROLES as unknown as string[] } },
+        select: { personId: true },
+      });
+      personIds = admins.map((u) => u.personId!).filter(Boolean);
       expandMinors = false;
       break;
     }
