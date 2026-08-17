@@ -277,7 +277,7 @@ export default async function RegistrationsPage({
               return (
                 <li key={i} className="rounded-lg bg-amber-50 px-3 py-2">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="font-medium text-slate-800">{keep.firstName} {keep.lastName}</span>
+                    <Link href={`/console/people/${keep.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">{keep.firstName} {keep.lastName}</Link>
                     <span className="badge bg-emerald-100 text-emerald-800">keep</span>
                     <span className="text-xs text-slate-500">{keep.email ?? keep.phone ?? "—"}</span>
                   </div>
@@ -287,7 +287,7 @@ export default async function RegistrationsPage({
                       return (
                         <div key={p.id} className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-slate-600">
-                            {p.firstName} {p.lastName}
+                            <Link href={`/console/people/${p.id}`} className="hover:text-brand-700 hover:underline">{p.firstName} {p.lastName}</Link>
                             <span className="ml-2 text-xs text-slate-400">{p.email ?? p.phone ?? "—"}</span>
                             {m && (m.regs + m.teams + m.pays + m.waivers > 0) && (
                               <span className="ml-2 text-xs text-slate-500">

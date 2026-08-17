@@ -656,7 +656,7 @@ export default async function TeamDetailPage({
               </div>
               {team.assistantCoaches.map((tc) => (
                 <div key={tc.id} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm ring-1 ring-slate-100">
-                  <span className="text-slate-700">{tc.coach.person.firstName} {tc.coach.person.lastName}</span>
+                  <Link href={`/console/coaches/${tc.coach.person.id}`} className="text-slate-700 hover:text-brand-700 hover:underline">{tc.coach.person.firstName} {tc.coach.person.lastName}</Link>
                   <span className="flex items-center gap-2">
                     <span className="badge bg-slate-100 text-slate-600 capitalize">{tc.role.toLowerCase()}</span>
                     <form method="POST" action="/api/console/teams">

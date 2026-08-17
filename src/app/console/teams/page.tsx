@@ -45,7 +45,7 @@ export default async function TeamBuildBoard({
       facility: true,
       division: true,
       members: {
-        include: { person: { select: { firstName: true, lastName: true } } },
+        include: { person: { select: { id: true, firstName: true, lastName: true } } },
         orderBy: { joinedAt: "asc" },
       },
     },
@@ -368,7 +368,9 @@ export default async function TeamBuildBoard({
                     <ul className="mt-2 flex flex-wrap gap-1.5">
                       {t.members.map((m) => (
                         <li key={m.personId} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
-                          {m.person.firstName} {m.person.lastName}
+                          <Link href={`/console/people/${m.person.id}`} className="hover:text-brand-700 hover:underline">
+                            {m.person.firstName} {m.person.lastName}
+                          </Link>
                         </li>
                       ))}
                     </ul>
