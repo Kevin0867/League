@@ -114,6 +114,21 @@ export default async function SystemPage({
           <input type="hidden" name="ticket" value={ticket} />
           <button className="btn-secondary text-sm" disabled={!zohoOn}>Sync existing registrations</button>
         </form>
+
+        {zohoOn && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <h3 className="text-sm font-semibold text-slate-800">Send a test contact</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Push one contact to your Zoho list to confirm the connection end-to-end. Use your own email, then
+              check that it appears in the list in Zoho.
+            </p>
+            <form method="POST" action="/api/console/zoho-test" className="mt-2 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input name="email" type="email" required placeholder="you@example.com" className="input text-sm" />
+              <button className="btn-secondary text-sm">Send test contact</button>
+            </form>
+          </div>
+        )}
         {!zohoOn && (
           <p className="mt-2 text-xs text-slate-400">
             Set ZOHO_CAMPAIGNS_CLIENT_ID, ZOHO_CAMPAIGNS_CLIENT_SECRET, ZOHO_CAMPAIGNS_REFRESH_TOKEN, and
