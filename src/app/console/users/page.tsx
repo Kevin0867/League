@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { TableFilter } from "@/components/TableFilter";
@@ -127,7 +128,11 @@ export default async function UsersPage({
               return (
                 <tr key={u.id} data-filter-row data-filter-text={`${u.person ? `${u.person.firstName} ${u.person.lastName}` : ""} ${u.email}`}>
                   <td className="px-4 py-3 font-medium text-slate-800">
-                    {u.person ? `${u.person.firstName} ${u.person.lastName}` : "—"}
+                    {u.person ? (
+                      <Link href={`/console/people/${u.person.id}`} className="text-slate-800 hover:text-brand-700 hover:underline">
+                        {u.person.firstName} {u.person.lastName}
+                      </Link>
+                    ) : "—"}
                     {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
                   </td>
                   <td className="hidden px-4 py-3 text-slate-500 sm:table-cell">{u.email}</td>
