@@ -40,6 +40,15 @@ export function unitPriceCents(garment: string, shirtCents: number, tankCents: n
   return garment === "TANK" ? tankCents : shirtCents;
 }
 
+/**
+ * Sales tax applies to APPAREL only — never to the season fee, coaching, or
+ * private/group lessons. 8% of the apparel subtotal, rounded to the cent.
+ */
+export const APPAREL_TAX_RATE = 0.08;
+export function apparelTaxCents(apparelSubtotalCents: number): number {
+  return Math.round(apparelSubtotalCents * APPAREL_TAX_RATE);
+}
+
 export type CartLine = { garment: Garment; size: SizeKey; quantity: number; personId?: string | null };
 
 const MAX_QTY_PER_LINE = 20;

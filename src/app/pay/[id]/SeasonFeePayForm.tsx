@@ -6,6 +6,7 @@ import {
   unitPriceCents,
   garmentLabel,
   sizeLabel,
+  apparelTaxCents,
   type Garment,
   type SizeKey,
 } from "@/lib/domain/apparel";
@@ -83,7 +84,9 @@ export function SeasonFeePayForm({
 
   const priceOf = (g: Garment) => unitPriceCents(g, shirtCents, tankCents);
   const apparelCents = lines.reduce((s, l) => s + priceOf(l.garment) * l.quantity, 0);
-  const totalCents = seasonFeeCents + apparelCents;
+  // 8% sales tax on apparel only (never the season fee).
+  const taxCents = apparelTaxCents(apparelCents);
+  const totalCents = seasonFeeCents + apparelCents + taxCents;
 
   const linesFor = (pid: string | null) => lines.filter((l) => (l.personId ?? null) === (pid ?? null));
   const sectionDone = (pid: string | null) => linesFor(pid).length > 0;
@@ -150,6 +153,12 @@ export function SeasonFeePayForm({
           <dt className="text-slate-500">Team apparel</dt>
           <dd className="text-slate-700">{formatCents(apparelCents)}</dd>
         </div>
+        {taxCents > 0 && (
+          <div className="mt-1 flex items-center justify-between">
+            <dt className="text-slate-500">Sales tax (8% apparel)</dt>
+            <dd className="text-slate-700">{formatCents(taxCents)}</dd>
+          </div>
+        )}
         <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
           <dt className="font-semibold text-slate-800">Total</dt>
           <dd className="text-lg font-bold text-slate-900">{formatCents(totalCents)}</dd>
@@ -171,7 +180,7 @@ export function SeasonFeePayForm({
           }`}
         >
           <span className="block font-semibold text-slate-900">Pay in full — {formatCents(totalCents)}</span>
-          <span className="block text-xs text-slate-500">One secure payment now (season fee + apparel).</span>
+          <span className="block text-xs text-slate-500">One secure payment now (season fee + apparel{taxCents > 0 ? " + tax" : ""}).</span>
         </button>
 
         <button
@@ -183,10 +192,10 @@ export function SeasonFeePayForm({
           }`}
         >
           <span className="block font-semibold text-slate-900">
-            Pay in {installmentCount} — {formatCents(perInstallmentCents + apparelCents)} today, then 2 more
+            Pay in {installmentCount} — {formatCents(perInstallmentCents + apparelCents + taxCents)} today, then 2 more
           </span>
           <span className="block text-xs text-slate-500">
-            The season fee splits into {installmentCount} equal payments 30 days apart; apparel is included in
+            The season fee splits into {installmentCount} equal payments 30 days apart; apparel{taxCents > 0 ? " and tax are" : " is"} included in
             today&apos;s first payment.
           </span>
         </button>
