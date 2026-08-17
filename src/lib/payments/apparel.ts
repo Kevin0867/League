@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { normalizeCart, unitPriceCents, garmentLabel, sizeLabel, type CartLine } from "@/lib/domain/apparel";
+import { normalizeCart, unitPriceCents, garmentLabel, sizeLabel, apparelTaxCents, type CartLine } from "@/lib/domain/apparel";
 
 /** Current apparel prices (falls back to $25 each if no rate config exists). */
 export async function apparelPrices(): Promise<{ shirtCents: number; tankCents: number }> {
@@ -49,7 +49,7 @@ export async function saveApparelForPayment(
  */
 export async function apparelLineItems(paymentId: string) {
   const rows = await prisma.apparelOrderItem.findMany({ where: { paymentId }, orderBy: { createdAt: "asc" } });
-  return rows.map((a) => ({
+  const items = rows.map((a) => ({
     quantity: a.quantity,
     price_data: {
       currency: "usd" as const,
@@ -57,4 +57,19 @@ export async function apparelLineItems(paymentId: string) {
       product_data: { name: `Team ${garmentLabel(a.garment)} — ${sizeLabel(a.size)}` },
     },
   }));
+  // 8% sales tax on apparel only — added as its own line so it's charged once
+  // alongside the apparel (the season fee itself is never taxed).
+  const apparelSubtotal = rows.reduce((s, a) => s + a.unitPriceCents * a.quantity, 0);
+  const taxCents = apparelTaxCents(apparelSubtotal);
+  if (taxCents > 0) {
+    items.push({
+      quantity: 1,
+      price_data: {
+        currency: "usd" as const,
+        unit_amount: taxCents,
+        product_data: { name: "Sales tax (8% apparel)" },
+      },
+    });
+  }
+  return items;
 }

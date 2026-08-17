@@ -4,7 +4,7 @@ import { appUrl } from "@/lib/stripe";
 import { formatCents } from "@/lib/money";
 import { sendEmail } from "@/lib/notify";
 import { coveredIds } from "@/lib/payments/familyFee";
-import { garmentLabel as apparelGarmentLabel, sizeLabel as apparelSizeLabel } from "@/lib/domain/apparel";
+import { garmentLabel as apparelGarmentLabel, sizeLabel as apparelSizeLabel, apparelTaxCents } from "@/lib/domain/apparel";
 
 // Shared payment-confirmation content for the thank-you page and the emailed
 // receipt, so the two never drift. Support contact and the second logo are
@@ -65,6 +65,8 @@ export type Receipt = {
   installments: { amountCents: number; date: string }[];
   apparel: { label: string; qty: number; amountCents: number }[];
   apparelTotalCents: number;
+  /** 8% sales tax on apparel only (0 when no apparel). */
+  apparelTaxCents: number;
   supportEmail: string;
   supportPhone: string;
 };
@@ -105,6 +107,7 @@ export async function loadReceipt(paymentId: string): Promise<Receipt | null> {
     amountCents: a.unitPriceCents * a.quantity,
   }));
   const apparelTotalCents = apparel.reduce((s, a) => s + a.amountCents, 0);
+  const apparelTaxTotalCents = apparelTaxCents(apparelTotalCents);
 
   const plan = payment.installmentPlan ? "INSTALLMENTS_3" : "UPFRONT";
   // Installments are anchored at registration (the payment record's creation),
@@ -129,6 +132,7 @@ export async function loadReceipt(paymentId: string): Promise<Receipt | null> {
     installments,
     apparel,
     apparelTotalCents,
+    apparelTaxCents: apparelTaxTotalCents,
     supportEmail: SUPPORT_ADDRESS,
     supportPhone: SUPPORT_PHONE,
   };
