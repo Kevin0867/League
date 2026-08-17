@@ -1,9 +1,10 @@
 import { DateField } from "@/components/DateField";
 import { TimeSelect } from "@/components/TimeSelect";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { mintConsoleTicket } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
@@ -72,6 +73,20 @@ export default async function SessionDetail({
   const allCoaches = await prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } });
   const coachName = new Map(allCoaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`]));
   const sessionCoachIds = new Set(s.coaches.map((c) => c.coachId));
+
+  // Admins manage any session; a coach may open only sessions they cover (as the
+  // session coach or a session team's head coach) and sees attendance only —
+  // reschedule / relocate / cancel / delete / coach-staffing stay admin-only.
+  const viewer = await getSession();
+  const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
+  if (!admin) {
+    const coachId = viewer?.personId
+      ? (await prisma.coach.findUnique({ where: { personId: viewer.personId }, select: { id: true } }))?.id ?? null
+      : null;
+    const onSession = !!coachId && (sessionCoachIds.has(coachId) || s.teams.some((t) => t.team.coachId === coachId));
+    if (!onSession) redirect("/console");
+  }
+
   const attMap = new Map(s.attendance.map((a) => [a.personId, a.status]));
   const roster = s.teams.flatMap((t) => t.team.members.map((m) => ({ ...m, teamName: t.team.name })));
   const active = s.status === "SCHEDULED" || s.status === "DELIVERED";
@@ -80,7 +95,7 @@ export default async function SessionDetail({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/console/schedule" className="text-sm text-brand-600 hover:underline">← Schedule</Link>
+        <Link href={admin ? "/console/schedule" : "/console"} className="text-sm text-brand-600 hover:underline">← {admin ? "Schedule" : "Home"}</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-900">
             {TYPE_LABEL[s.type] ?? s.type} · {formatDate(s.date)}
@@ -166,7 +181,8 @@ export default async function SessionDetail({
           )}
         </form>
 
-        {/* Session controls */}
+        {/* Session controls — admin only. Coaches record attendance (left). */}
+        {admin && (
         <div className="space-y-4">
           {/* Coaching — primary + add a substitute/backup for this one class */}
           <div className="card">
@@ -303,6 +319,7 @@ export default async function SessionDetail({
             />
           </div>
         </div>
+        )}
       </div>
     </div>
   );
