@@ -28,9 +28,10 @@ const SECTIONS: NavSection[] = [
   {
     title: "Players & teams",
     items: [
-      // One Rostering destination with Pools / Board / Teams views inside it,
-      // instead of three near-identically-named "board" routes in the sidebar.
-      { href: "/console/teams", label: "Rostering", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/pools", "/console/board", "/console/teams"] },
+      // One destination that opens on the Teams list, with Board / Pools as
+      // in-page views — instead of three near-identically-named "board" routes.
+      // Labeled "Teams" because that's the word admins look for.
+      { href: "/console/teams", label: "Teams", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/pools", "/console/board", "/console/teams"] },
       { href: "/console/team-import", label: "Team import", roles: ["COO", "DIRECTOR"] },
       { href: "/console/requests", label: "Placement requests", roles: ["COO", "DIRECTOR"] },
     ],

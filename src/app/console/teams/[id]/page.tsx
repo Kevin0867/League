@@ -12,6 +12,7 @@ import { TeamScheduleFields } from "./TeamScheduleFields";
 import { mintConsoleTicket } from "@/lib/auth";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { AddPlayerToTeam } from "./AddPlayerToTeam";
 import { PrintButton } from "@/components/PrintButton";
 import { TeamPhotoUploadForm } from "@/components/TeamPhotoUploadForm";
 
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 const OK_MSG: Record<string, string> = {
   updateTeam: "Team fields saved.",
+  addPlayer: "Player added to the roster.",
   removePlayer: "Player removed back to the pool.",
   publishTeam: "Team published to families.",
   unpublishTeam: "Team unpublished.",
@@ -42,6 +44,7 @@ const ERR_MSG: Record<string, string> = {
   slot: "That day/time isn't available at the selected facility. Pick one of the facility's available times.",
   dupname: "A team with that name already exists this season — here it is. Give the new team a distinct name (e.g. a different color).",
   player: "Missing player.",
+  cap: "That team is already at capacity — remove a player before adding another.",
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",
   op: "Unknown action.",
@@ -70,10 +73,31 @@ export default async function TeamDetailPage({
   });
   if (!team) notFound();
 
-  const [coaches, facilities] = await Promise.all([
+  const [coaches, facilities, candidateRegs] = await Promise.all([
     prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } }),
     prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, include: { courtBlocks: true } }),
+    // Registered players this season who aren't already on this team — the pool
+    // of people the roster's "Add players" picker can pull from.
+    prisma.registration.findMany({
+      where: {
+        seasonId: team.seasonId,
+        status: { notIn: ["WITHDRAWN", "DUPLICATE", "MERGED"] },
+        person: { teamMemberships: { none: { teamId: team.id } } },
+      },
+      include: { person: { select: { id: true, firstName: true, lastName: true } }, division: { select: { name: true } } },
+      orderBy: [{ person: { lastName: "asc" } }],
+    }),
   ]);
+
+  // De-dupe by person (a person can have >1 registration) and describe each.
+  const seenCandidate = new Set<string>();
+  const candidates = candidateRegs
+    .filter((r) => (seenCandidate.has(r.person.id) ? false : (seenCandidate.add(r.person.id), true)))
+    .map((r) => ({
+      id: r.person.id,
+      name: `${r.person.firstName} ${r.person.lastName}`,
+      meta: [r.division?.name, r.status === "ASSIGNED" ? "on another team" : r.status.toLowerCase()].filter(Boolean).join(" · "),
+    }));
 
   // Facility availability windows, keyed by facility, for the schedule picker.
   const slotsByFacility: Record<string, { day: string; start: string; end: string }[]> = {};
@@ -144,7 +168,7 @@ export default async function TeamDetailPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/console/teams" className="text-sm text-brand-600 hover:underline">← Team build board</Link>
+          <Link href="/console/teams" className="text-sm text-brand-600 hover:underline">← All teams</Link>
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-slate-900">
             <TeamColorDot color={team.color} size={16} />
             {team.name}
@@ -396,6 +420,7 @@ export default async function TeamDetailPage({
                 ))}
               </ul>
             )}
+            <AddPlayerToTeam ticket={ticket} teamId={team.id} candidates={candidates} atCap={roster.atCap} />
           </div>
 
           {/* Publish gate */}
