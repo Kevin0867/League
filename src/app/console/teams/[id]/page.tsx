@@ -149,6 +149,21 @@ export default async function TeamDetailPage({
   const hasDayTime = !!(team.dayOfWeek && team.startTime);
   const readyToLaunch = hasCoach && hasFacility && hasDayTime && team.members.length > 0;
 
+  // Launch is never blocked — but the admin gets a heads-up listing anything
+  // unusual (no/uncleared coach, unexecuted facility, missing day/time) so the
+  // decision is informed. The confirm dialog repeats these before sending.
+  const launchWarnings: string[] = [];
+  if (!hasCoach) launchWarnings.push("no coach is assigned");
+  else if (team.coach && !coachAssignmentGate(team.coach).ok) {
+    launchWarnings.push(`${team.coach.person.firstName} ${team.coach.person.lastName} has no background check on file`);
+  }
+  if (!hasFacility) launchWarnings.push("no facility is set");
+  else if (team.facility && team.facility.agreementStatus !== "EXECUTED") launchWarnings.push("the facility agreement isn't executed");
+  if (!hasDayTime) launchWarnings.push("no practice day/time is set");
+  const launchWarnText = launchWarnings.length
+    ? `Heads up — ${launchWarnings.join("; ")}. `
+    : "";
+
   // Team apparel orders (what to print, and the size tally for bulk ordering).
   const apparelItems = memberIds.length
     ? await prisma.apparelOrderItem.findMany({
@@ -240,7 +255,9 @@ export default async function TeamDetailPage({
               <ConfirmSubmit
                 action="/api/console/teams"
                 fields={{ ticket, op: "launchTeam", teamId: team.id }}
-                confirm={`Launch "${team.name}"? Sends one combined email (welcome + apparel & fee + waiver) to every player's family.`}
+                confirm={`${launchWarnText}Launch "${team.name}"? Sends one combined email (welcome + apparel & fee + waiver) to every player's family.`}
+                confirmLabel={launchWarnings.length ? "Launch anyway" : "Launch team"}
+                danger={launchWarnings.length > 0}
                 label="Launch team"
                 className="btn-primary text-sm"
               />
@@ -436,19 +453,29 @@ export default async function TeamDetailPage({
                   <button className="btn-ghost text-sm">Unpublish</button>
                 </form>
               </>
-            ) : publish.ok ? (
+            ) : (
               <div>
-                <p className="mb-3 text-sm text-slate-600">Ready to publish. Families will see the team, coach, location, day, and time.</p>
+                {publish.ok ? (
+                  <p className="mb-3 text-sm text-slate-600">Ready to publish. Families will see the team, coach, location, day, and time.</p>
+                ) : (
+                  <p className="mb-3 rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Heads up — {publish.reason} You can publish anyway.
+                  </p>
+                )}
                 <ConfirmSubmit
                   action="/api/console/teams"
                   fields={{ ticket, op: "publishTeam", teamId: team.id }}
-                  confirm={`Publish "${team.name}" to families? It becomes visible to players and parents.`}
+                  confirm={
+                    publish.ok
+                      ? `Publish "${team.name}" to families? It becomes visible to players and parents.`
+                      : `Heads up — ${publish.reason} Publish "${team.name}" to families anyway?`
+                  }
+                  confirmLabel="Publish anyway"
+                  danger={!publish.ok}
                   label="Publish to families"
                   className="btn-primary text-sm"
                 />
               </div>
-            ) : (
-              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">🔒 {publish.reason}</p>
             )}
           </div>
 
@@ -526,7 +553,7 @@ export default async function TeamDetailPage({
                   {coaches.map((c) => {
                     const gate = coachAssignmentGate(c);
                     return (
-                      <option key={c.id} value={c.id} disabled={!gate.ok}>
+                      <option key={c.id} value={c.id}>
                         {c.person.firstName} {c.person.lastName}{!gate.ok ? " (not cleared)" : ""}
                       </option>
                     );
@@ -604,7 +631,7 @@ export default async function TeamDetailPage({
                     .map((c) => {
                       const gate = coachAssignmentGate(c);
                       return (
-                        <option key={c.id} value={c.id} disabled={!gate.ok}>
+                        <option key={c.id} value={c.id}>
                           {c.person.firstName} {c.person.lastName}{!gate.ok ? " (not cleared)" : ""}
                         </option>
                       );

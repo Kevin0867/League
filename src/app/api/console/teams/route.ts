@@ -100,12 +100,11 @@ export async function POST(req: Request) {
 
       const coachId = g("coachId");
       const force = String(formData.get("force") ?? "") === "1";
-      // Coach screening hard gate (§5): no assignment without background check.
+      // Coach screening is a WARNING, not a hard gate — the admin decides (the
+      // dropdown flags "not cleared"); we still guard genuine day/time clashes.
       if (coachId) {
         const coach = await prisma.coach.findUnique({ where: { id: coachId } });
         if (!coach) return back("?err=coach");
-        const gate = coachAssignmentGate(coach);
-        if (!gate.ok) return back("?err=coach");
         // Overlap guard against the coach's OTHER teams, using the new day/time.
         if (!force) {
           const clashes = await coachTeamConflicts({ coachId, dayOfWeek: g("dayOfWeek"), startTime: g("startTime"), excludeTeamId: teamId });
@@ -270,11 +269,15 @@ export async function POST(req: Request) {
       const rawReturn = String(formData.get("returnTo") ?? "");
       const dest = rawReturn.startsWith("/console/coaches/") ? rawReturn : "/console/matching";
       const go = (qs: string) => NextResponse.redirect(new URL(`${dest}${qs}`, origin), 303);
+      let overrideNote = "";
       if (coachId) {
         const coach = await prisma.coach.findUnique({ where: { id: coachId } });
         if (!coach) return go("?err=coach");
+        // Background-check clearance is a WARNING, not a block — the admin decides
+        // (the UI shows "(not cleared)" and confirms). We record the override so
+        // an uncleared assignment is never silent in the audit log.
         const gate = coachAssignmentGate(coach);
-        if (!gate.ok) return go("?err=coach");
+        if (!gate.ok) overrideNote = ` (OVERRIDE — not cleared: ${gate.reasons.join(", ")})`;
         // A coach can hold multiple teams at different times/locations, but not
         // with overlapping day/time. Block unless the admin forces it.
         const team = await prisma.team.findUnique({ where: { id: teamId }, select: { dayOfWeek: true, startTime: true } });
@@ -286,7 +289,7 @@ export async function POST(req: Request) {
         }
       }
       await prisma.team.update({ where: { id: teamId }, data: { coachId } });
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: coachId ? `Assigned coach ${coachId}` : "Cleared coach" });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: (coachId ? `Assigned coach ${coachId}` : "Cleared coach") + overrideNote });
       return go(`?ok=${coachId ? "assignedCoach" : "clearedCoach"}`);
     }
 
@@ -313,16 +316,21 @@ export async function POST(req: Request) {
       for (const ch of changes) {
         const team = await prisma.team.findUnique({ where: { id: ch.teamId }, select: { name: true, dayOfWeek: true, startTime: true } });
         if (!team) { skipped.push(ch.teamId); continue; }
+        let bulkOverride = "";
         if (ch.coachId) {
           const coach = await prisma.coach.findUnique({ where: { id: ch.coachId } });
-          if (!coach || !coachAssignmentGate(coach).ok) { skipped.push(team.name); continue; }
+          if (!coach) { skipped.push(team.name); continue; }
+          // Not-cleared is a warning, not a skip — record the override instead.
+          const g = coachAssignmentGate(coach);
+          if (!g.ok) bulkOverride = ` (OVERRIDE — not cleared: ${g.reasons.join(", ")})`;
+          // A genuine day/time double-booking is still skipped unless forced.
           if (!force) {
             const clashes = await coachTeamConflicts({ coachId: ch.coachId, dayOfWeek: team.dayOfWeek, startTime: team.startTime, excludeTeamId: ch.teamId });
             if (clashes.length) { skipped.push(team.name); continue; }
           }
         }
         await prisma.team.update({ where: { id: ch.teamId }, data: { coachId: ch.coachId } });
-        await audit({ actorId: actor.userId, entityType: "Team", entityId: ch.teamId, action: "ASSIGN_COACH", summary: ch.coachId ? `Assigned coach ${ch.coachId} (bulk)` : "Cleared coach (bulk)" });
+        await audit({ actorId: actor.userId, entityType: "Team", entityId: ch.teamId, action: "ASSIGN_COACH", summary: (ch.coachId ? `Assigned coach ${ch.coachId} (bulk)` : "Cleared coach (bulk)") + bulkOverride });
         applied++;
       }
       const qs = new URLSearchParams({ ok: "bulkCoaches", n: String(applied) });
@@ -339,8 +347,9 @@ export async function POST(req: Request) {
       if (!coachId) return back("?err=coach");
       const coach = await prisma.coach.findUnique({ where: { id: coachId } });
       if (!coach) return back("?err=coach");
+      // Clearance is a warning, not a block — record an override if not cleared.
       const gate = coachAssignmentGate(coach);
-      if (!gate.ok) return back("?err=coachgate");
+      const addOverride = gate.ok ? "" : ` (OVERRIDE — not cleared: ${gate.reasons.join(", ")})`;
 
       const team = await prisma.team.findUnique({ where: { id: teamId }, select: { coachId: true, dayOfWeek: true, startTime: true } });
       if (team?.coachId === coachId) return back("?err=coachishead");
@@ -353,7 +362,7 @@ export async function POST(req: Request) {
         create: { teamId, coachId, role },
         update: { role },
       });
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ADD_COACH", summary: `Added ${role.toLowerCase()} coach ${coachId}` });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ADD_COACH", summary: `Added ${role.toLowerCase()} coach ${coachId}${addOverride}` });
       return back("?ok=addTeamCoach");
     }
 
@@ -429,15 +438,17 @@ export async function POST(req: Request) {
       });
       if (!team) return back("?err=notfound");
 
-      // Publication gate (§4): complete team + roster minimum + executed facility agreement.
+      // Publication readiness (complete team + executed facility agreement) is a
+      // WARNING the admin can override, not a hard block — the UI confirms with
+      // the specific reason. We record the override so it's auditable.
       const gate = canPublishTeam(team, team.facility);
-      if (!gate.ok) return back("?err=publish");
+      const pubOverride = gate.ok ? "" : ` (OVERRIDE — ${gate.reason ?? "not fully set up"})`;
 
       await prisma.team.update({
         where: { id: teamId },
         data: { published: true, publishedAt: new Date() },
       });
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "PUBLISH", summary: "Published to families" });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "PUBLISH", summary: `Published to families${pubOverride}` });
       return back("?ok=publishTeam");
     }
 
