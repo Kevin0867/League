@@ -114,6 +114,18 @@ export default async function TeamDetailPage({
 
   // How many rostered players still need a season-fee request?
   const memberIds = team.members.map((m) => m.personId);
+  // Each member's registration this season, so their name links straight to the
+  // editable profile (add email/phone, resend, assign) — the same detail page
+  // people open from Registrations. Falls back to the person profile.
+  const memberRegs = memberIds.length
+    ? await prisma.registration.findMany({
+        where: { seasonId: team.seasonId, personId: { in: memberIds } },
+        select: { id: true, personId: true },
+      })
+    : [];
+  const regByPerson = new Map(memberRegs.map((r) => [r.personId, r.id]));
+  const profileHref = (personId: string) =>
+    regByPerson.has(personId) ? `/console/registrations/${regByPerson.get(personId)}` : `/console/people/${personId}`;
   const existingFees = memberIds.length
     ? await prisma.payment.findMany({
         where: { partyId: { in: memberIds }, seasonId: team.seasonId, category: "PLAYER_FEE" },
@@ -427,9 +439,12 @@ export default async function TeamDetailPage({
                 {team.members.map((m) => (
                   <li key={m.id} className="flex items-center justify-between py-2">
                     <div>
-                      <div className="text-sm font-medium text-slate-800">{m.person.firstName} {m.person.lastName}</div>
+                      <Link href={profileHref(m.personId)} className="text-sm font-medium text-slate-800 hover:text-brand-700 hover:underline">
+                        {m.person.firstName} {m.person.lastName}
+                      </Link>
                       <div className="text-xs text-slate-400">
                         {m.person.duprRating ? `DUPR ${m.person.duprRating}` : "no rating"}
+                        {!m.person.email && <span className="ml-2 text-amber-600">⚠ no email</span>}
                         {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
                       </div>
                     </div>
