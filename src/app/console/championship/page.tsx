@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
 import { roundRobinStandings } from "@/lib/domain/bracketRoundRobin";
+import { kotcStandings } from "@/lib/domain/bracketKotc";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatDateTime12 } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
@@ -48,7 +49,7 @@ export default async function ChampionshipPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Championship" subtitle="Championship week, Dec 7–13. Teams are seeded from division standings. Pick a format per division — single or double elimination, waterfall, or King of the Court round-robin; byes auto-advance in the elimination draws." />
+      <PageHeader title="Championship" subtitle="Championship week, Dec 7–13. Teams are seeded from division standings. Pick a format per division — single or double elimination, waterfall, King of the Court feeder courts, or a round-robin; byes auto-advance in the elimination draws." />
 
       {sp.ok === "bracket" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Bracket drawn.</div>
@@ -122,14 +123,50 @@ export default async function ChampionshipPage({
                       <option value="single">Single elimination</option>
                       <option value="double">Double elimination</option>
                       <option value="waterfall">Waterfall (Gold + flights)</option>
-                      <option value="kotc">King of the Court (round-robin)</option>
+                      <option value="kotc">King of the Court (feeder courts)</option>
+                      <option value="roundrobin">Round-robin (everyone plays)</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="label text-xs">Rounds</label>
+                    <input name="rounds" type="number" min={1} max={12} placeholder="auto" className="input w-20 py-1.5 text-sm" title="King of the Court only — number of rounds (blank = auto)" />
                   </div>
                   <button className="btn-secondary text-sm" disabled={eligible < 2}>
                     {matches.length > 0 ? "Redraw bracket" : "Draw bracket"}
                   </button>
                 </form>
               </div>
+              {matches.some((m) => m.bracket === "KOTC") && (() => {
+                const { table, king } = kotcStandings(matches);
+                return (
+                  <div className="mb-4 overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                          <th className="px-3 py-2 font-semibold">Court</th>
+                          <th className="px-3 py-2 font-semibold">Team</th>
+                          <th className="px-3 py-2 text-center font-semibold">W</th>
+                          <th className="px-3 py-2 text-center font-semibold">L</th>
+                          <th className="px-3 py-2 text-center font-semibold">Diff</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {table.map((s) => (
+                          <tr key={s.teamId} className={`border-b border-slate-100 last:border-0 ${king === s.teamId ? "bg-amber-50" : ""}`}>
+                            <td className="px-3 py-2 text-slate-500">
+                              {king === s.teamId ? <span title="King of the Court">👑</span> : `Court ${s.finalCourt + 1}`}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-slate-800">{teamNames[s.teamId] ?? "Unknown"}</td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-700">{s.wins}</td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-700">{s.losses}</td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-500">{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
               {matches.some((m) => m.bracket === "RR") && (() => {
                 const table = roundRobinStandings(matches);
                 const played = table.reduce((n, s) => n + s.played, 0) > 0;
