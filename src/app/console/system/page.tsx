@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { requireAdmin } from "@/lib/rbac";
-import { isZohoConfigured, isZohoAuthConfigured, configuredListKey, listZohoMailingLists } from "@/lib/integrations/zoho";
+import { isZohoConfigured, isZohoAuthConfigured, configuredListKey, listZohoMailingLists, hasZohoClientCreds } from "@/lib/integrations/zoho";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ export default async function SystemPage({
   const ticket = await mintConsoleTicket();
   const zohoOn = isZohoConfigured();
   const zohoAuthOn = isZohoAuthConfigured();
+  const zohoClientOn = hasZohoClientCreds();
   const currentListKey = configuredListKey();
   // When the OAuth credentials are in but the list key isn't (or to double-check
   // it), fetch the account's lists so the admin can copy the right key.
@@ -65,6 +66,34 @@ export default async function SystemPage({
       {sp.bferr === "auth" && (
         <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           Not authorized to run the Zoho sync.
+        </div>
+      )}
+
+      {/* Connect step — exchange a Self-Client grant code for the refresh token,
+          no terminal required. Shown until the full connection is live. */}
+      {!zohoOn && (
+        <div className="card">
+          <h2 className="font-semibold text-slate-900">Connect Zoho — get your refresh token</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            In your Zoho Self Client, generate a grant code (scope
+            <span className="font-mono text-xs"> ZohoCampaigns.contact.CREATE,ZohoCampaigns.contact.UPDATE</span>,
+            10&nbsp;minutes), paste it below, and we&apos;ll exchange it for the permanent refresh token to put in
+            Vercel. Do it right after generating the code — grant codes expire in about 10 minutes.
+          </p>
+          <form method="POST" action="/api/console/zoho-connect" className="mt-3 space-y-2">
+            <input type="hidden" name="ticket" value={ticket} />
+            {!zohoClientOn && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input name="clientId" className="input text-sm" placeholder="Client ID (1000.xxxx)" />
+                <input name="clientSecret" className="input text-sm" placeholder="Client Secret" />
+              </div>
+            )}
+            <input name="code" className="input w-full text-sm" placeholder="Paste grant code (1000.xxxx.xxxx)" required />
+            <button className="btn-primary text-sm">Get refresh token</button>
+          </form>
+          {zohoClientOn && (
+            <p className="mt-2 text-xs text-slate-400">Using the Client ID and Secret already set in the environment — you only need the grant code.</p>
+          )}
         </div>
       )}
 
