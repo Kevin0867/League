@@ -75,10 +75,10 @@ export default async function SystemPage({
         <div className="card">
           <h2 className="font-semibold text-slate-900">Connect Zoho — get your refresh token</h2>
           <p className="mt-1 text-sm text-slate-600">
-            In your Zoho Self Client, generate a grant code (scope
-            <span className="font-mono text-xs"> ZohoCampaigns.contact.CREATE,ZohoCampaigns.contact.UPDATE</span>,
-            10&nbsp;minutes), paste it below, and we&apos;ll exchange it for the permanent refresh token to put in
-            Vercel. Do it right after generating the code — grant codes expire in about 10 minutes.
+            In your Zoho Self Client, generate a grant code with scope
+            <span className="font-mono text-xs"> ZohoCampaigns.contact.ALL</span> (this covers reading your lists and
+            adding contacts), 10&nbsp;minutes, then paste it below and we&apos;ll exchange it for the permanent refresh
+            token to put in Vercel. Do it right after generating the code — grant codes expire in about 10 minutes.
           </p>
           <form method="POST" action="/api/console/zoho-connect" className="mt-3 space-y-2">
             <input type="hidden" name="ticket" value={ticket} />
