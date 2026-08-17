@@ -207,7 +207,7 @@ export default async function AlaCartePage({
                   <div className="text-sm">
                     <span className="font-medium text-slate-800">{b.offering.title}</span>
                     <span className="ml-2 text-xs text-slate-400">
-                      {b.client.firstName} {b.client.lastName} · {b.offering.facility.name}
+                      <Link href={`/console/people/${b.client.id}`} className="hover:text-brand-700 hover:underline">{b.client.firstName} {b.client.lastName}</Link> · {b.offering.facility.name}
                       {b.coach ? ` · ${b.coach.person.firstName} ${b.coach.person.lastName}` : ""}
                     </span>
                   </div>

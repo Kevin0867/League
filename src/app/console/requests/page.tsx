@@ -187,7 +187,7 @@ export default async function RequestsPage({
                       <div key={person.id} className="space-y-2 rounded-lg ring-1 ring-slate-100 px-3 py-2 text-sm">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-slate-700">
-                            {person.firstName} {person.lastName}
+                            <Link href={`/console/registrations/${regId}`} className="hover:text-brand-700 hover:underline">{person.firstName} {person.lastName}</Link>
                             {reason === "sibling" && <span className="ml-2 badge bg-violet-50 text-violet-700">likely sibling</span>}
                             <span className="ml-2 text-xs text-slate-400">{team ? `on ${team.name}${full ? " · FULL" : ""}` : "in pool"}</span>
                           </span>
