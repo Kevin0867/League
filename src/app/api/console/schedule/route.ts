@@ -8,7 +8,6 @@ import { dispatchMessage } from "@/lib/messaging";
 import { generatePracticeDates, cancellationOutcome } from "@/lib/domain/schedule";
 import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { icsInvite, phoenixWallTimeToUtc, type IcsEvent } from "@/lib/domain/ics";
-import { coachAssignmentGate } from "@/lib/domain/teams";
 import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
 import { isBookable, DOW } from "@/lib/domain/facilityWindows";
 
@@ -386,8 +385,8 @@ export async function POST(req: Request) {
     if (!session) return back("?err=session");
     const coach = await prisma.coach.findUnique({ where: { id: coachId } });
     if (!coach) return back("?err=coachgate");
-    const gate = coachAssignmentGate(coach);
-    if (!gate.ok) return back("?err=coachgate");
+    // Clearance is a warning, not a block — the admin may assign an uncleared
+    // coach (e.g. a last-minute sub) and decide for themselves.
 
     if (!force) {
       const clashes = await coachSessionConflicts({ coachId, date: session.date, startTime: session.startTime, endTime: session.endTime, excludeSessionId: sessionId });

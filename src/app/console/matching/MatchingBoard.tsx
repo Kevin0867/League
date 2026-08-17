@@ -73,9 +73,9 @@ export function MatchingBoard({ ticket, teams }: { ticket: string; teams: MatchT
                 >
                   <option value="">— Unassigned —</option>
                   {team.options.map((o) => (
-                    <option key={o.id} value={o.id} disabled={!o.cleared}>
+                    <option key={o.id} value={o.id}>
                       {o.name}
-                      {!o.cleared ? " (not cleared)" : `${o.marketMatch ? " · ✓location" : ""}${o.dayMatch ? " · ✓day" : ""}`}
+                      {!o.cleared ? " ⚠ not cleared" : `${o.marketMatch ? " · ✓location" : ""}${o.dayMatch ? " · ✓day" : ""}`}
                     </option>
                   ))}
                 </select>

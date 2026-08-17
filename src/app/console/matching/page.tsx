@@ -117,7 +117,7 @@ export default async function MatchingPage({
       {sp.ok && OK[sp.ok] && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {sp.ok === "bulkCoaches" && sp.n ? `Saved ${sp.n} coach change${sp.n === "1" ? "" : "s"}.` : OK[sp.ok]}
-          {sp.skipped ? <span className="text-rose-700"> Skipped (not cleared or a day/time clash): {sp.skipped}.</span> : null}
+          {sp.skipped ? <span className="text-rose-700"> Skipped (a day/time clash): {sp.skipped}.</span> : null}
         </p>
       )}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>}
