@@ -17,7 +17,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const OK: Record<string, string> = {
-  saved: "Week saved.",
+  saved: "Note saved — the parent was NOT notified. Use “Send report” below to send it to them.",
   sent: "Progress report emailed to the parent/guardian.",
   sentsim: "Report generated — email provider isn't configured, so nothing was actually delivered.",
 };
@@ -155,10 +155,16 @@ export default async function StudentProgressPage({
         <div>
           <h2 className="font-semibold text-slate-900">Send Week {active} report</h2>
           <p className="text-sm text-slate-500">
+            Saving a note never emails anyone — the parent only hears from us when you send the report here.
             Choose who receives it — checked by default for parents/guardians.
             {note?.sentToParentAt && <span className="ml-1 text-emerald-700">Last sent {formatStamp(note.sentToParentAt)}.</span>}
           </p>
         </div>
+        {note && noteHasContent(note) && !note.sentToParentAt && (
+          <p className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+            This week&apos;s note is saved but hasn&apos;t been sent to the parent yet.
+          </p>
+        )}
         <RecipientChecklist person={student} guardian={student.guardian} purpose="report" />
         <div className="flex justify-end">
           <PendingSubmit label={note?.sentToParentAt ? "Resend report" : "Send report"} className="btn-secondary text-sm" pendingLabel="Sending…" />
