@@ -18,6 +18,17 @@ import { TeamPhotoUploadForm } from "@/components/TeamPhotoUploadForm";
 
 export const dynamic = "force-dynamic";
 
+// Any email on file counts — the player's own (email/email2/email3, where a
+// minor's parent email is stored) or the guardian record's. Only flag "no email"
+// when the family has none anywhere.
+type WithEmails = { email?: string | null; email2?: string | null; email3?: string | null };
+function anyEmail(p: WithEmails | null | undefined): boolean {
+  return !!(p && (p.email || p.email2 || p.email3));
+}
+function hasFamilyEmail(person: WithEmails & { guardian?: WithEmails | null }): boolean {
+  return anyEmail(person) || anyEmail(person.guardian);
+}
+
 const OK_MSG: Record<string, string> = {
   updateTeam: "Team fields saved.",
   addPlayer: "Player added to the roster.",
@@ -67,7 +78,7 @@ export default async function TeamDetailPage({
       division: true,
       coach: { include: { person: true } },
       assistantCoaches: { include: { coach: { include: { person: true } } } },
-      members: { include: { person: true }, orderBy: { joinedAt: "asc" } },
+      members: { include: { person: { include: { guardian: true } } }, orderBy: { joinedAt: "asc" } },
       season: { include: { divisions: { orderBy: { name: "asc" } } } },
     },
   });
@@ -444,7 +455,7 @@ export default async function TeamDetailPage({
                       </Link>
                       <div className="text-xs text-slate-400">
                         {m.person.duprRating ? `DUPR ${m.person.duprRating}` : "no rating"}
-                        {!m.person.email && <span className="ml-2 text-amber-600">⚠ no email</span>}
+                        {!hasFamilyEmail(m.person) && <span className="ml-2 text-amber-600">⚠ no email</span>}
                         {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
                       </div>
                     </div>

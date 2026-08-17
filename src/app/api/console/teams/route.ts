@@ -17,6 +17,7 @@ import { appUrl } from "@/lib/stripe";
 import { formatTime12 } from "@/lib/time";
 import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
 import { TEAM_CAP } from "@/lib/enums";
+import { personEmails } from "@/lib/domain/audience";
 
 /** Colors used by OTHER teams in the same gender+level group (divisionCode) —
  *  the set a new/edited team must avoid, since every team in a division (e.g.
@@ -27,6 +28,20 @@ async function divisionColorsUsed(divisionCode: string, excludeTeamId?: string):
     select: { color: true },
   });
   return rows.map((r) => r.color).filter(Boolean) as string[];
+}
+
+/** Every email on file for a rostered player's family — the player's own
+ *  addresses (email/email2/email3, where a minor's parent email is stored) plus
+ *  the guardian record's, deduped. If there's only one address anywhere, it's
+ *  used. Empty only when the family has no email at all. */
+function familyEmailsOf(m: {
+  person: {
+    email?: string | null; email2?: string | null; email3?: string | null;
+    guardian?: { email?: string | null; email2?: string | null; email3?: string | null } | null;
+  };
+}): string[] {
+  const g = m.person.guardian;
+  return [...new Set([...personEmails(m.person), ...(g ? personEmails(g) : [])])];
 }
 
 // Team mutations as native-form-POST route handlers with ticket auth. Route
@@ -459,7 +474,7 @@ export async function POST(req: Request) {
       // own team and other waived places are skipped.
       const team = await prisma.team.findUnique({
         where: { id: teamId },
-        include: { members: { include: { person: true } }, season: true },
+        include: { members: { include: { person: { include: { guardian: true } } } }, season: true },
       });
       if (!team) return back("?err=notfound");
 
@@ -491,20 +506,22 @@ export async function POST(req: Request) {
           description: payment.description ?? `${seasonName} season fee — ${m.person.firstName} ${m.person.lastName}`,
           paymentId: payment.id,
         });
-        const dres = await dispatchMessage({
+        const familyEmails = familyEmailsOf(m);
+        await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
-          audienceRef: res.payerId,
+          audienceRef: m.personId,
           channels: ["IN_APP", "EMAIL"],
           triggerType: "PAYMENT_REQUEST",
           subject: email.subject,
           body: email.text,
           html: email.html,
+          toEmails: familyEmails,
         });
-        // The fee is still recorded either way, but flag families we couldn't
-        // email the request to so the admin can add an address and resend.
-        if (dres.failureReasons.some((r) => r.startsWith("email:"))) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
+        // The fee is still recorded either way, but flag families with no email
+        // on file anywhere so the admin can add an address and resend.
+        if (familyEmails.length === 0) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
         billed++;
       }
 
@@ -527,7 +544,7 @@ export async function POST(req: Request) {
       if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
       const team = await prisma.team.findUnique({
         where: { id: teamId },
-        include: { facility: true, coach: { include: { person: true } }, members: { include: { person: true } } },
+        include: { facility: true, coach: { include: { person: true } }, members: { include: { person: { include: { guardian: true } } } } },
       });
       if (!team) return back("?err=notfound");
       const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
@@ -549,21 +566,21 @@ export async function POST(req: Request) {
           locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
           practiceWhen,
         });
-        const res = await dispatchMessage({
+        const familyEmails = familyEmailsOf(m);
+        await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
-          // Send to the paying guardian (or the player if they're the adult) so
-          // it lands the same way the Launch email does.
-          audienceRef: m.person.guardianId ?? m.personId,
+          audienceRef: m.personId,
           channels: ["IN_APP", "EMAIL", "SMS"],
           triggerType: "TEAM_ASSIGNMENT",
           subject: email.subject,
           body: email.text,
           html: email.html,
+          toEmails: familyEmails,
           smsBody: `PURE Academy — welcome to ${team.name}! ${m.person.firstName}'s team info (coach, location & practice day/time) is in your email.`,
         });
-        if (res.failureReasons.some((r) => r.startsWith("email:"))) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
+        if (familyEmails.length === 0) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
         else sent++;
       }
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "NOTIFY", summary: `Sent welcome/placement to ${sent} member(s)${noContact.length ? `; ${noContact.length} had no email` : ""}` });
@@ -577,7 +594,7 @@ export async function POST(req: Request) {
       if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
       const team = await prisma.team.findUnique({
         where: { id: teamId },
-        include: { members: { include: { person: true } } },
+        include: { members: { include: { person: { include: { guardian: true } } } } },
       });
       if (!team) return back("?err=notfound");
       // all=1 re-sends to everyone (a deliberate resend); otherwise only players
@@ -591,18 +608,20 @@ export async function POST(req: Request) {
         const token = await signWaiverToken(m.personId);
         const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
         const email = waiverRequestEmail({ name: m.person.firstName, link, isMinor: m.person.isMinor });
-        const res = await dispatchMessage({
+        const familyEmails = familyEmailsOf(m);
+        await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
-          audienceRef: m.person.guardianId ?? m.personId,
+          audienceRef: m.personId,
           channels: ["IN_APP", "EMAIL"],
           triggerType: "WAIVER_REQUEST",
           subject: email.subject,
           body: email.text,
           html: email.html,
+          toEmails: familyEmails,
         });
-        if (res.failureReasons.some((r) => r.startsWith("email:"))) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
+        if (familyEmails.length === 0) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
         else sent++;
       }
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "WAIVER_REQUESTED", summary: `Sent waiver request to ${sent} team member(s)${noContact.length ? `; ${noContact.length} had no email` : ""}` });
@@ -617,7 +636,7 @@ export async function POST(req: Request) {
       if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
       const team = await prisma.team.findUnique({
         where: { id: teamId },
-        include: { facility: true, coach: { include: { person: true } }, members: { include: { person: true } }, season: true },
+        include: { facility: true, coach: { include: { person: true } }, members: { include: { person: { include: { guardian: true } } } }, season: true },
       });
       if (!team) return back("?err=notfound");
 
@@ -662,23 +681,24 @@ export async function POST(req: Request) {
           waiverUrl,
         });
         const smsBody = `PURE Academy — welcome to ${team.name}! Pick your team apparel & pay the season fee here: ${payUrl} Full team details${waiverUrl ? " + your waiver" : ""} are in your email.`;
-        const dres = await dispatchMessage({
+        // Deliver to EVERY email on file for the family (player + guardian). If
+        // there's only one address anywhere, it's used.
+        const familyEmails = familyEmailsOf(m);
+        await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
-          audienceRef: payerId,
+          audienceRef: m.personId,
           channels: ["IN_APP", "EMAIL", "SMS"],
           triggerType: "TEAM_LAUNCH",
           subject: email.subject,
           body: email.text,
           html: email.html,
+          toEmails: familyEmails,
           smsBody,
         });
-        // Email is the channel that carries the welcome + pay link + waiver. If it
-        // couldn't be delivered (no email on file), this family got nothing —
-        // surface that instead of falsely reporting a successful launch.
-        const emailFailed = dres.failureReasons.some((r) => r.startsWith("email:"));
-        if (emailFailed) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
+        // Only a true no-email-on-file family gets flagged (nothing was delivered).
+        if (familyEmails.length === 0) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
         else sent++;
       }
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "LAUNCH", summary: `Launched team — combined email to ${sent} family/families${noContact.length ? `; ${noContact.length} had no email on file (${noContact.join(", ")})` : ""}` });
