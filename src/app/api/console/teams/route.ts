@@ -471,6 +471,7 @@ export async function POST(req: Request) {
       // player's paying adult with that player's invoice (a guardian with two
       // players receives two requests, one per child).
       let billed = 0;
+      const noContact: string[] = [];
       for (const m of team.members) {
         // Skip coach-players and anyone with a fee-waived registration this season.
         const reg = await prisma.registration.findFirst({
@@ -490,7 +491,7 @@ export async function POST(req: Request) {
           description: payment.description ?? `${seasonName} season fee — ${m.person.firstName} ${m.person.lastName}`,
           paymentId: payment.id,
         });
-        await dispatchMessage({
+        const dres = await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
@@ -501,6 +502,9 @@ export async function POST(req: Request) {
           body: email.text,
           html: email.html,
         });
+        // The fee is still recorded either way, but flag families we couldn't
+        // email the request to so the admin can add an address and resend.
+        if (dres.failureReasons.some((r) => r.startsWith("email:"))) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
         billed++;
       }
 
@@ -509,10 +513,10 @@ export async function POST(req: Request) {
         entityType: "Team",
         entityId: teamId,
         action: "REQUEST_PAYMENT",
-        summary: `Requested season fee for ${billed} player(s)`,
+        summary: `Requested season fee for ${billed} player(s)${noContact.length ? `; ${noContact.length} had no email` : ""}`,
       });
 
-      return back("?ok=requestSeasonFees");
+      { const q = new URLSearchParams({ ok: "requestSeasonFees", n: String(billed) }); if (noContact.length) { q.set("failed", String(noContact.length)); q.set("failedNames", noContact.slice(0, 6).join(", ")); } return back(`?${q.toString()}`); }
     }
 
     // LAUNCH — deliberate welcome/placement to the whole team. This is the send
@@ -532,6 +536,7 @@ export async function POST(req: Request) {
         ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
         : "A day and time to be confirmed";
       let sent = 0;
+      const noContact: string[] = [];
       for (const m of team.members) {
         if (m.roleOnTeam === "COACH_PLAYER") continue;
         const email = teamAssignmentEmail({
@@ -544,7 +549,7 @@ export async function POST(req: Request) {
           locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
           practiceWhen,
         });
-        await dispatchMessage({
+        const res = await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
@@ -558,10 +563,11 @@ export async function POST(req: Request) {
           html: email.html,
           smsBody: `PURE Academy — welcome to ${team.name}! ${m.person.firstName}'s team info (coach, location & practice day/time) is in your email.`,
         });
-        sent++;
+        if (res.failureReasons.some((r) => r.startsWith("email:"))) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
+        else sent++;
       }
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "NOTIFY", summary: `Sent welcome/placement to ${sent} member(s)` });
-      return back(`?ok=welcome&n=${sent}`);
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "NOTIFY", summary: `Sent welcome/placement to ${sent} member(s)${noContact.length ? `; ${noContact.length} had no email` : ""}` });
+      { const q = new URLSearchParams({ ok: "welcome", n: String(sent) }); if (noContact.length) { q.set("failed", String(noContact.length)); q.set("failedNames", noContact.slice(0, 6).join(", ")); } return back(`?${q.toString()}`); }
     }
 
     // LAUNCH — waiver requests to rostered players who haven't signed. Tokenized
@@ -578,13 +584,14 @@ export async function POST(req: Request) {
       // who haven't signed yet.
       const resendAll = String(formData.get("all") ?? "") === "1";
       let sent = 0;
+      const noContact: string[] = [];
       for (const m of team.members) {
         if (m.roleOnTeam === "COACH_PLAYER") continue;
         if (!resendAll && m.person.waiverSignedAt) continue;
         const token = await signWaiverToken(m.personId);
         const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
         const email = waiverRequestEmail({ name: m.person.firstName, link, isMinor: m.person.isMinor });
-        await dispatchMessage({
+        const res = await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
@@ -595,10 +602,11 @@ export async function POST(req: Request) {
           body: email.text,
           html: email.html,
         });
-        sent++;
+        if (res.failureReasons.some((r) => r.startsWith("email:"))) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
+        else sent++;
       }
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "WAIVER_REQUESTED", summary: `Sent waiver request to ${sent} team member(s)` });
-      return back(`?ok=waivers&n=${sent}`);
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "WAIVER_REQUESTED", summary: `Sent waiver request to ${sent} team member(s)${noContact.length ? `; ${noContact.length} had no email` : ""}` });
+      { const q = new URLSearchParams({ ok: "waivers", n: String(sent) }); if (noContact.length) { q.set("failed", String(noContact.length)); q.set("failedNames", noContact.slice(0, 6).join(", ")); } return back(`?${q.toString()}`); }
     }
 
     // LAUNCH EVERYTHING — one combined email per household: welcome + team
@@ -628,6 +636,7 @@ export async function POST(req: Request) {
       // paying adult, with that player's own season-fee invoice. A guardian with
       // two players on the team receives two emails, one per child.
       let sent = 0;
+      const noContact: string[] = [];
       for (const m of team.members) {
         if (m.roleOnTeam === "COACH_PLAYER") continue;
         const payerId = m.person.guardianId ?? m.personId;
@@ -653,7 +662,7 @@ export async function POST(req: Request) {
           waiverUrl,
         });
         const smsBody = `PURE Academy — welcome to ${team.name}! Pick your team apparel & pay the season fee here: ${payUrl} Full team details${waiverUrl ? " + your waiver" : ""} are in your email.`;
-        await dispatchMessage({
+        const dres = await dispatchMessage({
           senderId: actor.userId,
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
@@ -665,10 +674,17 @@ export async function POST(req: Request) {
           html: email.html,
           smsBody,
         });
-        sent++;
+        // Email is the channel that carries the welcome + pay link + waiver. If it
+        // couldn't be delivered (no email on file), this family got nothing —
+        // surface that instead of falsely reporting a successful launch.
+        const emailFailed = dres.failureReasons.some((r) => r.startsWith("email:"));
+        if (emailFailed) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
+        else sent++;
       }
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "LAUNCH", summary: `Launched team — combined email to ${sent} player(s)` });
-      return back(`?ok=launched&n=${sent}`);
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "LAUNCH", summary: `Launched team — combined email to ${sent} family/families${noContact.length ? `; ${noContact.length} had no email on file (${noContact.join(", ")})` : ""}` });
+      const lq = new URLSearchParams({ ok: "launched", n: String(sent) });
+      if (noContact.length) { lq.set("failed", String(noContact.length)); lq.set("failedNames", noContact.slice(0, 6).join(", ")); }
+      return back(`?${lq.toString()}`);
     }
 
     case "unpublishTeam": {
