@@ -119,7 +119,7 @@ export function SeasonFeePayForm({
           <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">Required</span>
         </div>
         <p className="mt-1 text-sm text-slate-600">
-          Every player gets team gear. Pick a T-shirt or a tank top and a size{sections.length > 1 ? " for each player" : ""}.
+          Every player needs team gear. Pick a T-shirt or a tank top and a size{sections.length > 1 ? " for each player" : ""}.
         </p>
 
         <SizeGuide />
