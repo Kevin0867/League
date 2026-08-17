@@ -11,6 +11,7 @@ import {
 import {
   buildWaterfall, computeLiveness as wfLiveness, goldWinnerTarget, goldLoserTarget, flightWinnerTarget,
 } from "@/lib/domain/bracketWaterfall";
+import { buildRoundRobin } from "@/lib/domain/bracketRoundRobin";
 import { computeStandings, type FixtureResult } from "@/lib/domain/standings";
 
 // Championship mutations as native-form-POST route handlers with ticket auth.
@@ -270,10 +271,28 @@ async function generateBracket(
   if (seeded.length < 2) return back("?err=eligible");
 
   const formatRaw = String(formData.get("format") ?? "single").trim();
-  const format = formatRaw === "double" || formatRaw === "waterfall" ? formatRaw : "single";
+  const format = formatRaw === "double" || formatRaw === "waterfall" || formatRaw === "kotc" ? formatRaw : "single";
 
   // Fresh draw.
   await prisma.championshipMatch.deleteMany({ where: { seasonId, divisionId } });
+
+  if (format === "kotc") {
+    // King of the Court — a round-robin: every team plays every other once, and
+    // whoever tops the table is the King. Every pairing has two real teams, so
+    // each match is created ready to play; results don't advance anywhere.
+    const { rounds, matches } = buildRoundRobin(seeded);
+    for (const m of matches) {
+      await prisma.championshipMatch.create({
+        data: {
+          seasonId, divisionId, bracket: m.bracket, round: m.round, slot: m.slot,
+          homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId, homeSeed: m.homeSeed, awaySeed: m.awaySeed,
+          status: "READY", scheduledAt: roundDate(m.round),
+        },
+      });
+    }
+    await audit({ actorId: actor.userId, entityType: "ChampionshipMatch", entityId: divisionId, action: "GENERATE_BRACKET", summary: `Drew a ${seeded.length}-team King of the Court (round-robin, ${rounds} rounds)` });
+    return back("?ok=bracket");
+  }
 
   if (format === "waterfall") {
     const { size, matches } = buildWaterfall(seeded);
@@ -379,7 +398,10 @@ async function recordChampResult(
   });
 
   const loserTeamId = winnerTeamId === match.homeTeamId ? match.awayTeamId : match.homeTeamId;
-  if (await isWaterfall(match.seasonId, match.divisionId)) {
+  if (match.bracket === "RR") {
+    // King of the Court — each round-robin match stands alone; nothing advances.
+    // The standings roll it up.
+  } else if (await isWaterfall(match.seasonId, match.divisionId)) {
     // Waterfall: advance the winner; a Gold loser drops into its flight.
     const { size, n } = await wfSizeAndN(match.seasonId, match.divisionId);
     await advanceWaterfall(match.seasonId, match.divisionId, size, match, winnerTeamId, match.bracket === "GOLD" ? loserTeamId : null);
