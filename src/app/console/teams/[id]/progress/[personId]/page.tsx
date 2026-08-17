@@ -20,6 +20,7 @@ const OK: Record<string, string> = {
   saved: "Note saved — the parent was NOT notified. Use “Send report” below to send it to them.",
   sent: "Progress report emailed to the parent/guardian.",
   sentsim: "Report generated — email provider isn't configured, so nothing was actually delivered.",
+  contact: "Contact info saved.",
 };
 const ERR: Record<string, string> = {
   auth: "You can only manage progress notes for your own teams.",
@@ -77,6 +78,47 @@ export default async function StudentProgressPage({
           {ERR[sp.err] ?? "Something went wrong."}{sp.reason ? ` — ${sp.reason}` : ""}
         </p>
       )}
+
+      {/* Contact info — coaches can fix a player's or parent's email/phone here.
+          Collapsed by default so the week notes stay the focus. */}
+      <details className="card">
+        <summary className="cursor-pointer list-none font-semibold text-slate-900">
+          Contact info
+          <span className="ml-2 text-sm font-normal text-slate-400">— update email &amp; mobile</span>
+        </summary>
+        <form method="POST" action="/api/console/coach-contact" className="mt-4 space-y-4">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="teamId" value={teamId} />
+          <input type="hidden" name="personId" value={personId} />
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Player</div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <div><label className="label">First name</label><input name="firstName" defaultValue={student.firstName} className="input" /></div>
+              <div><label className="label">Last name</label><input name="lastName" defaultValue={student.lastName} className="input" /></div>
+              <div><label className="label">Email</label><input name="email" type="email" defaultValue={student.email ?? ""} className="input" /></div>
+              <div><label className="label">Mobile</label><input name="phone" type="tel" defaultValue={student.phone ?? ""} className="input" /></div>
+              <div><label className="label">Additional email</label><input name="email2" type="email" defaultValue={student.email2 ?? ""} className="input" /></div>
+              <div><label className="label">Additional email</label><input name="email3" type="email" defaultValue={student.email3 ?? ""} className="input" /></div>
+            </div>
+          </div>
+          {student.guardian ? (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Parent / guardian{student.guardian.firstName ? ` — ${student.guardian.firstName} ${student.guardian.lastName}` : ""}
+              </div>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <div><label className="label">Parent email</label><input name="guardianEmail" type="email" defaultValue={student.guardian.email ?? ""} className="input" /></div>
+                <div><label className="label">Parent mobile</label><input name="guardianPhone" type="tel" defaultValue={student.guardian.phone ?? ""} className="input" /></div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">No parent/guardian is linked to this player.</p>
+          )}
+          <div className="flex justify-end">
+            <button className="btn-primary text-sm">Save contact</button>
+          </div>
+        </form>
+      </details>
 
       {/* Week selector — one section per week, a dot when a week has content and a
           check once it's been shared with the parent. */}

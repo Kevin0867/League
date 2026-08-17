@@ -105,6 +105,30 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         <p className="text-slate-500">Your teams, sessions, and earnings.</p>
       </div>
 
+      {/* Quick actions — the whole job in four big buttons. When a coach has one
+          team the buttons jump straight to it; with several, they jump to the
+          team picker below. */}
+      {(() => {
+        const one = headTeams.length === 1 ? headTeams[0].id : null;
+        const teamHref = (hash: string) => (one ? `/console/teams/${one}/progress${hash}` : "#myteams");
+        return (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <QuickTile href={teamHref("#checkin")} label="Check-ins" icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M9 5h6a1 1 0 0 1 1 1v0a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v0a1 1 0 0 1 1-1Z"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 14l2 2 4-4"/></svg>
+            } />
+            <QuickTile href={teamHref("#message")} label="Messaging" icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M4 5h16v11H8l-4 3V5Z"/></svg>
+            } />
+            <QuickTile href={teamHref("#notes")} label="Team notes" icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 9h8M8 13h6"/></svg>
+            } />
+            <QuickTile href="/console/profile" label="My profile" icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+            } />
+          </div>
+        );
+      })()}
+
       {/* Getting started toward "cleared & assignable" */}
       {nextIdx >= 0 && (
         <div className="card border-l-4 border-brand-500">
@@ -163,7 +187,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
 
       {/* My teams — the heart of a coach's job. Each team opens straight to
           Message & notes, with attendance and details one tap away. */}
-      <section>
+      <section id="myteams" className="scroll-mt-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">My teams</h2>
         {headTeams.length === 0 ? (
           <div className="card text-sm text-slate-500">You&apos;re not assigned to a team yet. Once you&apos;re cleared, an admin can assign you.</div>
@@ -248,6 +272,18 @@ function startOfTomorrow() {
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + 1);
   return d;
+}
+
+function QuickTile({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="flex min-h-[96px] flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm active:bg-slate-50"
+    >
+      <span className="text-brand-600">{icon}</span>
+      <span className="text-sm font-semibold text-slate-800">{label}</span>
+    </Link>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {

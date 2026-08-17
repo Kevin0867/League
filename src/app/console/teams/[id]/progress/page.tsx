@@ -81,7 +81,7 @@ export default async function TeamProgressPage({
       )}
 
       {/* CHECK PLAYERS IN — the day-of task, first and biggest. */}
-      <section>
+      <section id="checkin" className="scroll-mt-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Check players in</h2>
         {needsAttendance.length === 0 && upcoming.length === 0 ? (
           <div className="card text-sm text-slate-500">No practices scheduled for this team yet.</div>
@@ -124,7 +124,7 @@ export default async function TeamProgressPage({
       </section>
 
       {/* MESSAGE THE TEAM — one message to every player + parent. */}
-      <section>
+      <section id="message" className="scroll-mt-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Message the team</h2>
         <div className="card">
           <p className="mb-3 text-sm text-slate-500">
@@ -135,7 +135,7 @@ export default async function TeamProgressPage({
       </section>
 
       {/* PLAYER NOTES — tappable per-player rows with a weekly progress strip. */}
-      <section>
+      <section id="notes" className="scroll-mt-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Player notes</h2>
         <div className="card">
           {team.members.length === 0 ? (
