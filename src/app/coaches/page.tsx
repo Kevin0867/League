@@ -100,9 +100,9 @@ export default async function CoachesPage() {
         <section className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6">
           <h2 className="font-semibold text-slate-900">How we screen and train our coaches</h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
-            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>Every coach completes a background check and PURE curriculum training before Week 1, without exception.</span></li>
-            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>RPO is an official sponsor of PURE Academy. RPO Level 1 certification carries SafeSport certification and additional insurance.</span></li>
-            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>One coach per team for the full twelve weeks wherever possible.</span></li>
+            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>Every coach is selected and approved by our Academy Director, and trained on the PURE curriculum.</span></li>
+            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>Every coach completes a background check and SafeSport abuse-prevention training before Week 1, without exception.</span></li>
+            <li className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-500" /><span>Our Academy Director assigns every coach personally — matching level, location, and schedule to each team — with the expectation that the coach stays with that team for the full season.</span></li>
           </ul>
         </section>
 
