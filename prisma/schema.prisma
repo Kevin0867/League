@@ -132,6 +132,9 @@ model Person {
   /// the exact language and timestamp are also captured in MessagingConsent.
   emailConsentAt     DateTime?
   smsConsentAt       DateTime?
+  /// Set when this contact was last successfully synced to the Zoho Campaigns
+  /// mailing list. Lets the backfill resume without re-pushing everyone.
+  zohoSyncedAt       DateTime?
   /// Set when a minor turns 18 and their parent-signed waiver must be replaced
   /// by an adult self-signed waiver. Cleared when they sign the new one.
   waiverRenewalRequiredAt DateTime?
