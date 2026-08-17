@@ -12,6 +12,9 @@ import {
   buildWaterfall, computeLiveness as wfLiveness, goldWinnerTarget, goldLoserTarget, flightWinnerTarget,
 } from "@/lib/domain/bracketWaterfall";
 import { buildRoundRobin } from "@/lib/domain/bracketRoundRobin";
+import {
+  buildKotcRound1, kotcCourts, kotcDefaultRounds, kotcWinnerTarget, kotcLoserTarget, kotcDeadAway,
+} from "@/lib/domain/bracketKotc";
 import { computeStandings, type FixtureResult } from "@/lib/domain/standings";
 
 // Championship mutations as native-form-POST route handlers with ticket auth.
@@ -225,6 +228,61 @@ async function resolveWaterfall(seasonId: string, divisionId: string, size: numb
   }
 }
 
+// ---- King of the Court helpers --------------------------------------------
+
+/** Court count and whether the field is odd, read off the KOTC round-1 draw. */
+async function kotcDims(seasonId: string, divisionId: string): Promise<{ courts: number; oddField: boolean }> {
+  const r1 = await prisma.championshipMatch.findMany({ where: { seasonId, divisionId, bracket: "KOTC", round: 1 } });
+  const courts = r1.length;
+  const bottom = r1.reduce<(typeof r1)[number] | null>((m, x) => (!m || x.slot > m.slot ? x : m), null);
+  const oddField = !!bottom && !bottom.awayTeamId;
+  return { courts, oddField };
+}
+
+/** Route a completed King-of-the-Court match: the winner climbs (or the King
+ *  stays), the loser slides (or the bottom team stays). Off-the-board targets
+ *  (past the final round) are no-ops. */
+async function advanceKotc(
+  seasonId: string, divisionId: string, courts: number,
+  match: { round: number; slot: number; homeTeamId: string | null; awayTeamId: string | null; homeSeed: number | null; awaySeed: number | null },
+  winnerTeamId: string, loserTeamId: string | null,
+) {
+  const winnerSeed = winnerTeamId === match.homeTeamId ? match.homeSeed : match.awaySeed;
+  const loserSeed = loserTeamId && loserTeamId === match.homeTeamId ? match.homeSeed : match.awaySeed;
+  const nextRound = match.round + 1;
+  const wt = kotcWinnerTarget(courts, match.slot);
+  await placeInto(seasonId, divisionId, { bracket: "KOTC", round: nextRound, slot: wt.court, asHome: wt.asHome }, winnerTeamId, winnerSeed);
+  if (loserTeamId) {
+    const lt = kotcLoserTarget(courts, match.slot);
+    await placeInto(seasonId, divisionId, { bracket: "KOTC", round: nextRound, slot: lt.court, asHome: lt.asHome }, loserTeamId, loserSeed);
+  }
+}
+
+/** Mark full courts READY and auto-advance bottom-court byes (odd fields),
+ *  cascading until nothing changes. */
+async function resolveKotc(seasonId: string, divisionId: string, courts: number, oddField: boolean) {
+  for (let guard = 0; guard < 200; guard++) {
+    const matches = await prisma.championshipMatch.findMany({ where: { seasonId, divisionId, bracket: "KOTC" } });
+    let changed = false;
+    for (const m of matches) {
+      if (m.status === "COMPLETED" || m.status === "BYE") continue;
+      const hasHome = !!m.homeTeamId, hasAway = !!m.awayTeamId;
+      if (hasHome && hasAway) {
+        if (m.status === "PENDING") { await prisma.championshipMatch.update({ where: { id: m.id }, data: { status: "READY" } }); changed = true; }
+        continue;
+      }
+      // A present team whose partner seat is the structural bottom-court bye
+      // advances without a recorded win.
+      if (hasHome && kotcDeadAway(courts, oddField, m.slot)) {
+        await prisma.championshipMatch.update({ where: { id: m.id }, data: { status: "BYE", winnerTeamId: m.homeTeamId } });
+        await advanceKotc(seasonId, divisionId, courts, m, m.homeTeamId!, null);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+}
+
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const back = (qs: string) =>
@@ -271,15 +329,44 @@ async function generateBracket(
   if (seeded.length < 2) return back("?err=eligible");
 
   const formatRaw = String(formData.get("format") ?? "single").trim();
-  const format = formatRaw === "double" || formatRaw === "waterfall" || formatRaw === "kotc" ? formatRaw : "single";
+  const format = ["double", "waterfall", "kotc", "roundrobin"].includes(formatRaw) ? formatRaw : "single";
 
   // Fresh draw.
   await prisma.championshipMatch.deleteMany({ where: { seasonId, divisionId } });
 
   if (format === "kotc") {
-    // King of the Court — a round-robin: every team plays every other once, and
-    // whoever tops the table is the King. Every pairing has two real teams, so
-    // each match is created ready to play; results don't advance anywhere.
+    // King of the Court — feeder courts. Teams spread two-per-court; winners
+    // climb toward the King court, losers slide down. Every round is created up
+    // front (empty) and results route teams forward as they're recorded.
+    const { courts, matches: r1 } = buildKotcRound1(seeded);
+    const oddField = seeded.length % 2 === 1;
+    const roundsRaw = parseInt(String(formData.get("rounds") ?? ""), 10);
+    const rounds = Number.isFinite(roundsRaw) && roundsRaw > 0 ? Math.min(12, roundsRaw) : kotcDefaultRounds(courts);
+
+    // Create every court for every round; round 1 gets the seeded fill.
+    for (let r = 1; r <= rounds; r++) {
+      for (let c = 0; c < courts; c++) {
+        await prisma.championshipMatch.create({
+          data: { seasonId, divisionId, bracket: "KOTC", round: r, slot: c, status: "PENDING", scheduledAt: roundDate(r) },
+        });
+      }
+    }
+    for (const m of r1) {
+      await prisma.championshipMatch.update({
+        where: { seasonId_divisionId_bracket_round_slot: { seasonId, divisionId, bracket: "KOTC", round: 1, slot: m.slot } },
+        data: { homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId, homeSeed: m.homeSeed, awaySeed: m.awaySeed },
+      });
+    }
+    // Mark full courts READY and settle any bottom-court bye.
+    await resolveKotc(seasonId, divisionId, courts, oddField);
+    await audit({ actorId: actor.userId, entityType: "ChampionshipMatch", entityId: divisionId, action: "GENERATE_BRACKET", summary: `Drew a ${courts}-court King of the Court (${rounds} rounds) from ${seeded.length} seeds` });
+    return back("?ok=bracket");
+  }
+
+  if (format === "roundrobin") {
+    // Round-robin — every team plays every other once; the table decides it.
+    // Every pairing has two real teams, so each match is created ready to play
+    // and results don't advance anywhere.
     const { rounds, matches } = buildRoundRobin(seeded);
     for (const m of matches) {
       await prisma.championshipMatch.create({
@@ -290,7 +377,7 @@ async function generateBracket(
         },
       });
     }
-    await audit({ actorId: actor.userId, entityType: "ChampionshipMatch", entityId: divisionId, action: "GENERATE_BRACKET", summary: `Drew a ${seeded.length}-team King of the Court (round-robin, ${rounds} rounds)` });
+    await audit({ actorId: actor.userId, entityType: "ChampionshipMatch", entityId: divisionId, action: "GENERATE_BRACKET", summary: `Drew a ${seeded.length}-team round-robin (${rounds} rounds)` });
     return back("?ok=bracket");
   }
 
@@ -399,8 +486,14 @@ async function recordChampResult(
 
   const loserTeamId = winnerTeamId === match.homeTeamId ? match.awayTeamId : match.homeTeamId;
   if (match.bracket === "RR") {
-    // King of the Court — each round-robin match stands alone; nothing advances.
-    // The standings roll it up.
+    // Round-robin — each match stands alone; nothing advances. The standings
+    // roll it up.
+  } else if (match.bracket === "KOTC") {
+    // King of the Court — the winner climbs, the loser slides; then settle any
+    // newly-full courts and bottom-court byes.
+    const { courts, oddField } = await kotcDims(match.seasonId, match.divisionId);
+    await advanceKotc(match.seasonId, match.divisionId, courts, match, winnerTeamId, loserTeamId);
+    await resolveKotc(match.seasonId, match.divisionId, courts, oddField);
   } else if (await isWaterfall(match.seasonId, match.divisionId)) {
     // Waterfall: advance the winner; a Gold loser drops into its flight.
     const { size, n } = await wfSizeAndN(match.seasonId, match.divisionId);

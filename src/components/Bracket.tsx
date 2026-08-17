@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 export type BracketMatch = {
   id: string;
   bracket?: string; // "W" | "L" | "GF" — absent/"W" for single-elimination
@@ -68,6 +70,11 @@ export function Bracket({
     return <p className="text-sm text-slate-400">No bracket drawn yet.</p>;
   }
 
+  // King of the Court renders as a court-by-round grid, not a knockout lane.
+  if (matches.every((m) => m.bracket === "KOTC")) {
+    return <KotcGrid matches={matches} teamNames={teamNames} editable={editable} ticket={ticket} />;
+  }
+
   const grouped = matches.some((m) => m.bracket && m.bracket !== "W");
   if (!grouped) {
     return <Lane matches={matches} teamNames={teamNames} editable={editable} ticket={ticket} fancyLabels />;
@@ -112,6 +119,48 @@ export function Bracket({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// King of the Court: courts down the side, rounds across the top. Each cell is
+// the match on that court in that round, using the same editable MatchCard.
+function KotcGrid({
+  matches, teamNames, editable, ticket,
+}: { matches: BracketMatch[]; teamNames: Record<string, string>; editable: boolean; ticket?: string }) {
+  const rounds = Math.max(...matches.map((m) => m.round));
+  const courts = Math.max(...matches.map((m) => m.slot)) + 1;
+  const at = (r: number, c: number) => matches.find((m) => m.round === r && m.slot === c);
+  const roundCols = Array.from({ length: rounds }, (_, i) => i + 1);
+  const courtRows = Array.from({ length: courts }, (_, i) => i);
+  return (
+    <div className="overflow-x-auto pb-2">
+      <div
+        className="grid items-start gap-3"
+        style={{ gridTemplateColumns: `auto repeat(${rounds}, minmax(190px, 1fr))` }}
+      >
+        <div />
+        {roundCols.map((r) => (
+          <h3 key={`h${r}`} className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Round {r}
+          </h3>
+        ))}
+        {courtRows.map((c) => (
+          <Fragment key={`row${c}`}>
+            <div className="flex h-full items-center pr-3 text-xs font-semibold text-slate-500">
+              {c === 0 ? <span className="text-amber-600">Court 1 · 👑 King</span> : `Court ${c + 1}`}
+            </div>
+            {roundCols.map((r) => {
+              const m = at(r, c);
+              return (
+                <div key={`c${c}r${r}`}>
+                  {m ? <MatchCard m={m} teamNames={teamNames} editable={editable} ticket={ticket} /> : null}
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
     </div>
   );
 }
