@@ -58,7 +58,7 @@ export default async function TeamDetailPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err, imgok, imgerr } = await searchParams;
+  const { ok, err, imgok, imgerr, n, failed, failedNames } = await searchParams;
   const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
     where: { id },
@@ -206,9 +206,21 @@ export default async function TeamDetailPage({
         </div>
       </div>
 
-      {ok && OK_MSG[ok] && (
+      {ok && Number(failed) > 0 ? (
+        <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          {ok === "launched"
+            ? `Launched to ${n ?? 0} famil${n === "1" ? "y" : "ies"} — but `
+            : `${OK_MSG[ok] ?? "Done"} — but `}
+          <strong>{failed} had no email on file, so nothing was delivered to them</strong>
+          {failedNames ? `: ${failedNames}` : ""}. Add an email to those players (or their parent) in Registrations, then resend.
+        </div>
+      ) : ok === "launched" ? (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Launched — combined welcome + apparel &amp; fee + waiver emailed/texted to {n ?? 0} famil{n === "1" ? "y" : "ies"}.
+        </div>
+      ) : ok && OK_MSG[ok] ? (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{OK_MSG[ok]}</div>
-      )}
+      ) : null}
       {imgok === "team" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Team photo uploaded.</div>
       )}
