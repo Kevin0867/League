@@ -13,6 +13,22 @@ import {
 type Line = { garment: Garment; size: SizeKey; quantity: number; personId: string | null };
 type Player = { id: string; name: string };
 
+/** Simple black-outline garment icons (no photo) so a buyer sees the difference:
+ *  a T-shirt has short sleeves; a tank top has straps and no sleeves. */
+function GarmentIcon({ garment }: { garment: Garment }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-slate-900" aria-hidden="true">
+      {garment === "TANK" ? (
+        // Tank top: neckline scoop, thin straps, no sleeves.
+        <path d="M16 2a4 4 0 0 1-8 0L7.4 2.3C6.6 4 6 6 6 8v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8c0-2-.6-4-1.4-5.7z" />
+      ) : (
+        // T-shirt: neckline scoop with short sleeves out to the shoulders.
+        <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+      )}
+    </svg>
+  );
+}
+
 const YOUTH: { key: SizeKey; short: string }[] = [
   { key: "YS", short: "S" },
   { key: "YM", short: "M" },
@@ -216,11 +232,12 @@ function PlayerApparel({
     <button
       type="button"
       onClick={() => setGarment(g)}
-      className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+      className={`flex flex-1 flex-col items-center gap-1 rounded-lg border px-3 py-2 text-sm font-medium ${
         garment === g ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
       }`}
     >
-      {label} <span className="text-xs font-normal text-slate-400">{formatCents(priceOf(g))}</span>
+      <GarmentIcon garment={g} />
+      <span>{label} <span className="text-xs font-normal text-slate-400">{formatCents(priceOf(g))}</span></span>
     </button>
   );
 
