@@ -17,11 +17,19 @@ if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
   process.env.DIRECT_URL = process.env.DATABASE_URL;
 }
 
+const isProd = process.env.VERCEL_ENV === "production" || process.env.NEXT_PUBLIC_APP_ENV === "production";
+
 if (process.env.DATABASE_URL) {
   console.log("→ Applying database migrations (prisma migrate deploy)…");
   run("prisma migrate deploy");
+} else if (isProd) {
+  // A production deploy must never ship ahead of its schema — that's the exact
+  // "table/column does not exist" failure the manual db-repair page exists to
+  // rescue. Fail the build instead of silently skipping.
+  console.error("✖ Production build has no DATABASE_URL — refusing to build without applying migrations.");
+  process.exit(1);
 } else {
-  console.warn("⚠ No DATABASE_URL at build time — skipping migrations. Run `npm run db:deploy` separately.");
+  console.warn("⚠ No DATABASE_URL at build time (non-production) — skipping migrations. Run `npm run db:deploy` separately.");
 }
 
 console.log("→ Building Next.js app…");

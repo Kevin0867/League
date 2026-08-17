@@ -10,6 +10,7 @@ import {
   notifyTeamOfRegistration,
   type EnrolledPlayer,
 } from "@/lib/domain/registrationEmail";
+import { pushContactToZoho } from "@/lib/integrations/zoho";
 
 export type RegisterState = { error?: string };
 
@@ -397,6 +398,22 @@ export async function registerAction(
       await notifyTeamOfRegistration(summary);
     } catch {
       // swallow — registration already succeeded
+    }
+  }
+
+  // Sync the account-holder contact to Zoho Campaigns (dormant until configured).
+  // The registrant consented during registration, so this is a silent, direct
+  // add. Never let a Zoho hiccup affect a successful registration.
+  if (email) {
+    try {
+      const r = await pushContactToZoho({ email, firstName, lastName, phone });
+      if (r.ok) {
+        await prisma.person.update({ where: { id: primaryId }, data: { zohoSyncedAt: new Date() } }).catch(() => {});
+      } else if (!("skipped" in r && r.skipped)) {
+        console.warn("[zoho] push failed:", r);
+      }
+    } catch (e) {
+      console.warn("[zoho] push threw:", e);
     }
   }
 
