@@ -42,14 +42,7 @@ export default async function LocationsPage() {
         <div className="mt-8 space-y-8">
           {[...byMarket.entries()].map(([market, items]) => (
             <section key={market}>
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{market}</h2>
-                {market !== "Other" && (
-                  <Link href={`/register?location=${encodeURIComponent(market)}`} className="text-xs font-semibold text-brand-600 hover:underline">
-                    Register in {market} →
-                  </Link>
-                )}
-              </div>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{market}</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {items.map((it) => (
                   <Link
