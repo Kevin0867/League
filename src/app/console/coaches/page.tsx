@@ -7,6 +7,7 @@ import { can, requireAdmin } from "@/lib/rbac";
 import { StaffForm } from "./StaffForm";
 import { TableFilter } from "@/components/TableFilter";
 import { LoginStatus } from "@/components/LoginStatus";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ const ERRORS: Record<string, string> = {
   exists: "A user with that email already exists.",
   op: "Unknown operation.",
   notfound: "Coach not found.",
+  removefail: "Couldn't remove the coach. Try again, or unassign them from their teams first.",
 };
 
 export default async function CoachesPage({
@@ -95,7 +97,7 @@ export default async function CoachesPage({
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
       {sp.ok && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {sp.ok === "profile" ? "Coach profile updated." : sp.ok === "publish" ? "Public site visibility updated." : sp.ok === "waiverSent" ? "Waiver request sent to the coach." : "Account created."}
+          {sp.ok === "profile" ? "Coach profile updated." : sp.ok === "publish" ? "Public site visibility updated." : sp.ok === "waiverSent" ? "Waiver request sent to the coach." : sp.ok === "removed" ? "Coach removed." : "Account created."}
         </p>
       )}
       {sp.err && (
@@ -152,6 +154,7 @@ export default async function CoachesPage({
               <th>Availability</th>
               <th className="hidden md:table-cell">Teams</th>
               <th className="hidden lg:table-cell">Recruited</th>
+              <th className="text-right">Manage</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -225,13 +228,28 @@ export default async function CoachesPage({
                     {coach?._count.recruits ?? 0}
                     <span className="ml-1 text-xs text-slate-400">credit{(coach?._count.recruits ?? 0) === 1 ? "" : "s"}</span>
                   </td>
+                  <td className="whitespace-nowrap text-right">
+                    <Link href={`/console/coaches/${person.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">Edit</Link>
+                    {session && can(session.role, "manageCoaches") && (
+                      <>
+                        <span className="mx-1.5 text-slate-300">·</span>
+                        <ConfirmSubmit
+                          action="/api/console/coaches"
+                          fields={{ ticket, op: "removeCoach", personId: person.id, returnTo: "/console/coaches" }}
+                          confirm={`Remove ${person.firstName} ${person.lastName} as a coach? This unassigns them from all teams and deletes their coach profile. Their login and any player/parent records are kept.`}
+                          label="Remove"
+                          className="text-xs text-rose-600 hover:underline"
+                        />
+                      </>
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={9} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={10} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
-            <tr data-filter-empty hidden><td colSpan={9} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
+            <tr data-filter-empty hidden><td colSpan={10} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
           </tbody>
         </table>
       </div>

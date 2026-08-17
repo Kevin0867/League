@@ -11,6 +11,7 @@ import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { dispatchMessage } from "@/lib/messaging";
 import type { Role } from "@/lib/enums";
+import { effectiveRoles, splitRoles } from "@/lib/enums";
 
 // Staff/coach account creation as a native-form-POST route handler with ticket
 // auth. Route handlers 303-redirect to a fresh GET (which carries the session
@@ -206,6 +207,54 @@ export async function POST(req: Request) {
         return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${inviteQuery({ ok: "account" }, inv)}`, origin), 303);
       }
       return back("?ok=1");
+    }
+    // Remove a coach: strip their coaching role and delete the Coach profile.
+    // The person and their login are KEPT (they may also be a parent/player) —
+    // we just unassign them from everything coach-related and drop the COACH
+    // role. If COACH was their only role the login is neutralized to PLAYER, so
+    // it stays valid but no longer appears as a coach.
+    case "removeCoach": {
+      if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      const person = await prisma.person.findUnique({
+        where: { id: personId },
+        select: { id: true, firstName: true, lastName: true, coach: { select: { id: true } } },
+      });
+      if (!person) return back("?err=notfound");
+      const coachId = person.coach?.id ?? null;
+      const user = await prisma.user.findFirst({ where: { personId }, select: { id: true, role: true, extraRoles: true } });
+
+      try {
+        await prisma.$transaction(async (tx) => {
+          if (coachId) {
+            // Detach every reference to this coach before deleting the profile.
+            await tx.team.updateMany({ where: { coachId }, data: { coachId: null } });
+            await tx.teamCoach.deleteMany({ where: { coachId } });
+            await tx.sessionCoach.deleteMany({ where: { coachId } });
+            await tx.alaCarteBooking.updateMany({ where: { coachId }, data: { coachId: null } });
+            await tx.alaCarteOffering.updateMany({ where: { coachId }, data: { coachId: null } });
+            await tx.coachPayoutLine.deleteMany({ where: { coachId } });
+            await tx.registration.updateMany({ where: { recruitedByCoachId: coachId }, data: { recruitedByCoachId: null } });
+            await tx.person.updateMany({ where: { recruitedByCoachId: coachId }, data: { recruitedByCoachId: null } });
+            await tx.coach.delete({ where: { id: coachId } }); // availability blocks cascade
+          }
+          if (user) {
+            const roles = effectiveRoles(user).filter((r) => r !== "COACH");
+            if (roles.length === 0) {
+              await tx.user.update({ where: { id: user.id }, data: { role: "PLAYER", extraRoles: [] } });
+            } else {
+              const split = splitRoles(roles);
+              await tx.user.update({ where: { id: user.id }, data: { role: split.role, extraRoles: split.extraRoles } });
+            }
+          }
+        });
+      } catch (e) {
+        console.error("removeCoach failed", e);
+        return back("?err=removefail");
+      }
+
+      await audit({ actorId: actor.userId, entityType: "Coach", entityId: coachId ?? personId, action: "coach.remove", summary: `Removed coach ${person.firstName} ${person.lastName}` });
+      return back("?ok=removed");
     }
     default:
       return back("?err=op");
