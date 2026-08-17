@@ -3,6 +3,7 @@ import { TimeSelect } from "@/components/TimeSelect";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { Bracket, type BracketMatch } from "@/components/Bracket";
+import { roundRobinStandings } from "@/lib/domain/bracketRoundRobin";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatDateTime12 } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
@@ -47,7 +48,7 @@ export default async function ChampionshipPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Championship" subtitle="Championship week, Dec 7–13. Teams are seeded from division standings; the bracket is single-elimination and byes auto-advance." />
+      <PageHeader title="Championship" subtitle="Championship week, Dec 7–13. Teams are seeded from division standings. Pick a format per division — single or double elimination, waterfall, or King of the Court round-robin; byes auto-advance in the elimination draws." />
 
       {sp.ok === "bracket" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Bracket drawn.</div>
@@ -121,6 +122,7 @@ export default async function ChampionshipPage({
                       <option value="single">Single elimination</option>
                       <option value="double">Double elimination</option>
                       <option value="waterfall">Waterfall (Gold + flights)</option>
+                      <option value="kotc">King of the Court (round-robin)</option>
                     </select>
                   </div>
                   <button className="btn-secondary text-sm" disabled={eligible < 2}>
@@ -128,6 +130,38 @@ export default async function ChampionshipPage({
                   </button>
                 </form>
               </div>
+              {matches.some((m) => m.bracket === "RR") && (() => {
+                const table = roundRobinStandings(matches);
+                const played = table.reduce((n, s) => n + s.played, 0) > 0;
+                return (
+                  <div className="mb-4 overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                          <th className="px-3 py-2 font-semibold">#</th>
+                          <th className="px-3 py-2 font-semibold">Team</th>
+                          <th className="px-3 py-2 text-center font-semibold">W</th>
+                          <th className="px-3 py-2 text-center font-semibold">L</th>
+                          <th className="px-3 py-2 text-center font-semibold">Diff</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {table.map((s, i) => (
+                          <tr key={s.teamId} className={`border-b border-slate-100 last:border-0 ${i === 0 && played ? "bg-amber-50" : ""}`}>
+                            <td className="px-3 py-2 text-slate-400">
+                              {i === 0 && played ? <span title="King of the Court">👑</span> : i + 1}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-slate-800">{teamNames[s.teamId] ?? "Unknown"}</td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-700">{s.wins}</td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-700">{s.losses}</td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-500">{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
               {matches.length > 0 ? (
                 <Bracket matches={matches} teamNames={teamNames} editable ticket={ticket} />
               ) : (

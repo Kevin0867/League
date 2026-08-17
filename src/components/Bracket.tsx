@@ -75,7 +75,7 @@ export function Bracket({
 
   // Order and label the lanes: main draw first, then losers, then flights, GF last.
   const laneOrder = (b: string): number => {
-    if (b === "W" || b === "GOLD") return 0;
+    if (b === "W" || b === "GOLD" || b === "RR") return 0;
     if (b === "L") return 1;
     if (b === "GF") return 99;
     if (b.startsWith("F")) return 10 + (parseInt(b.slice(1), 10) || 0);
@@ -84,6 +84,7 @@ export function Bracket({
   const laneLabel = (b: string): { title: string; note?: string } => {
     if (b === "W") return { title: "Winners bracket" };
     if (b === "GOLD") return { title: "Gold bracket" };
+    if (b === "RR") return { title: "Round-robin", note: "every team plays every other" };
     if (b === "L") return { title: "Losers bracket", note: "a second loss is out" };
     if (b === "GF") return { title: "Grand Final" };
     if (b === "F1") return { title: "Silver flight", note: "1st-round losers" };
