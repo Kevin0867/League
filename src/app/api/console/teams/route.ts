@@ -16,6 +16,7 @@ import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { formatTime12 } from "@/lib/time";
 import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
+import { TEAM_CAP } from "@/lib/enums";
 
 /** Colors used by OTHER teams in the same gender+level group (divisionCode) —
  *  the set a new/edited team must avoid, since every team in a division (e.g.
@@ -389,6 +390,36 @@ export async function POST(req: Request) {
       });
 
       return back("?ok=removePlayer");
+    }
+
+    // Add a registered player onto this team directly from the team page — same
+    // side effects as a pool assignment (one team per season, mark assigned),
+    // and silent by design (families hear from us at Launch, not on roster moves).
+    case "addPlayer": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      if (!teamId || !personId) return back("?err=player");
+
+      const team = await prisma.team.findUnique({ where: { id: teamId }, include: { _count: { select: { members: true } } } });
+      if (!team) return back("?err=notfound");
+      const effective = team._count.members + (team.coachPlays ? 1 : 0) + 1;
+      if (effective > TEAM_CAP) return back("?err=cap");
+
+      // One team per season: pull them off any other team first.
+      const otherTeamIds = (
+        await prisma.team.findMany({ where: { seasonId: team.seasonId, id: { not: teamId } }, select: { id: true } })
+      ).map((t) => t.id);
+      if (otherTeamIds.length) await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: otherTeamIds } } });
+
+      await prisma.teamMember.upsert({
+        where: { teamId_personId: { teamId, personId } },
+        create: { teamId, personId, roleOnTeam: "PLAYER" },
+        update: {},
+      });
+      await prisma.registration.updateMany({ where: { personId, seasonId: team.seasonId }, data: { status: "ASSIGNED" } });
+
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster` });
+      return back("?ok=addPlayer");
     }
 
     case "publishTeam": {
