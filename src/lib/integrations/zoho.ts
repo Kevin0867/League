@@ -43,6 +43,38 @@ export function configuredListKey(): string | null {
   return process.env.ZOHO_CAMPAIGNS_LIST_KEY || null;
 }
 
+export function hasZohoClientCreds(): boolean {
+  return Boolean(process.env.ZOHO_CAMPAIGNS_CLIENT_ID && process.env.ZOHO_CAMPAIGNS_CLIENT_SECRET);
+}
+
+/** Exchange a one-time Self-Client grant code for the permanent refresh token,
+ *  server-side (the deployed app can reach Zoho even where a shell can't). Uses
+ *  the client id/secret from env unless overridden. */
+export async function exchangeGrantCode(
+  code: string, clientId?: string, clientSecret?: string,
+): Promise<{ ok: true; refreshToken: string } | { ok: false; error: string }> {
+  const cid = (clientId || process.env.ZOHO_CAMPAIGNS_CLIENT_ID || "").trim();
+  const secret = (clientSecret || process.env.ZOHO_CAMPAIGNS_CLIENT_SECRET || "").trim();
+  const grant = code.trim();
+  if (!cid || !secret) return { ok: false, error: "Missing client id/secret" };
+  if (!grant) return { ok: false, error: "Missing grant code" };
+  try {
+    const body = new URLSearchParams({
+      grant_type: "authorization_code", client_id: cid, client_secret: secret, code: grant,
+    });
+    const res = await fetchWithTimeout(`https://${ACCOUNTS_HOST}/oauth/v2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    const data = (await res.json().catch(() => ({}))) as { refresh_token?: string; error?: string };
+    if (data.refresh_token) return { ok: true, refreshToken: data.refresh_token };
+    return { ok: false, error: data.error || `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "unknown error" };
+  }
+}
+
 export type ZohoList = { listkey: string; listname: string; count: number };
 
 /** Fetch the account's mailing lists (name + list key) so the admin can copy the
