@@ -26,12 +26,48 @@ const CAMPAIGNS_HOST = process.env.ZOHO_CAMPAIGNS_HOST || "campaigns.zoho.com";
 const TIMEOUT_MS = 6000;
 
 export function isZohoConfigured(): boolean {
+  return isZohoAuthConfigured() && Boolean(process.env.ZOHO_CAMPAIGNS_LIST_KEY);
+}
+
+// OAuth is configured (the three credentials) even if the list key isn't yet —
+// enough to look the list key up from Zoho so you never have to hunt for it.
+export function isZohoAuthConfigured(): boolean {
   return Boolean(
     process.env.ZOHO_CAMPAIGNS_CLIENT_ID &&
     process.env.ZOHO_CAMPAIGNS_CLIENT_SECRET &&
-    process.env.ZOHO_CAMPAIGNS_REFRESH_TOKEN &&
-    process.env.ZOHO_CAMPAIGNS_LIST_KEY,
+    process.env.ZOHO_CAMPAIGNS_REFRESH_TOKEN,
   );
+}
+
+export function configuredListKey(): string | null {
+  return process.env.ZOHO_CAMPAIGNS_LIST_KEY || null;
+}
+
+export type ZohoList = { listkey: string; listname: string; count: number };
+
+/** Fetch the account's mailing lists (name + list key) so the admin can copy the
+ *  right key. Needs only the OAuth credentials, not the list key itself. */
+export async function listZohoMailingLists(): Promise<{ ok: true; lists: ZohoList[] } | { ok: false; error: string }> {
+  if (!isZohoAuthConfigured()) return { ok: false, error: "not-configured" };
+  try {
+    const token = await getAccessToken();
+    const params = new URLSearchParams({ resfmt: "JSON", sortBy: "asc", range: "100", fromindex: "1" });
+    const res = await fetchWithTimeout(`https://${CAMPAIGNS_HOST}/api/v1.1/getmailinglists?${params.toString()}`, {
+      method: "GET",
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      status?: string; code?: string; message?: string;
+      list_of_details?: { listkey: string; listname: string; noofcontacts?: string | number }[];
+    };
+    if (!res.ok || data.status !== "success") return { ok: false, error: data.message || data.code || `HTTP ${res.status}` };
+    const lists = (data.list_of_details ?? []).map((l) => ({
+      listkey: l.listkey, listname: l.listname, count: Number(l.noofcontacts ?? 0),
+    }));
+    return { ok: true, lists };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "unknown error" };
+  }
 }
 
 export type ZohoContact = {
