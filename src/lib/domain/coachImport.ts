@@ -205,8 +205,9 @@ export function parseCoachRows(text: string): { records: CoachRecord[]; headerRo
       bio,
       availability,
     };
-    if (!email) rec.skipReason = "no email — needed to create the account";
-    else if (!first) rec.skipReason = "no name";
+    // A coach can import without an email — just as a profile with no login
+    // (add the email later, then invite them). Only a nameless row is unusable.
+    if (!first) rec.skipReason = "no name — nothing to import";
     records.push(rec);
   }
 
@@ -251,8 +252,11 @@ export async function runCoachImport(
       continue;
     }
     try {
-      // Person — match on email; fill/refresh contact fields.
-      let person = await prisma.person.findFirst({ where: { email: rec.email! } });
+      // Person — match on email; for an email-less coach, match an existing
+      // coach by name so re-running stays idempotent, else create fresh.
+      let person = rec.email
+        ? await prisma.person.findFirst({ where: { email: rec.email } })
+        : (await prisma.coach.findFirst({ where: { person: { firstName: rec.firstName, lastName: rec.lastName, email: null } }, include: { person: true } }))?.person ?? null;
       if (person) {
         person = await prisma.person.update({
           where: { id: person.id },
@@ -293,10 +297,11 @@ export async function runCoachImport(
       result.blocks += blockCount;
 
       // Login — create one so the coach has an account (no email sent here).
-      if (opts.createLogins) {
-        const existingUser = await prisma.user.findUnique({ where: { email: rec.email! } });
+      // Needs an email; an email-less coach imports as a profile only.
+      if (opts.createLogins && rec.email) {
+        const existingUser = await prisma.user.findUnique({ where: { email: rec.email } });
         if (!existingUser) {
-          await prisma.user.create({ data: { email: rec.email!, passwordHash: await opts.makePasswordHash(), role: "COACH", personId: person.id } });
+          await prisma.user.create({ data: { email: rec.email, passwordHash: await opts.makePasswordHash(), role: "COACH", personId: person.id } });
           result.logins++;
         } else if (!existingUser.personId) {
           await prisma.user.update({ where: { id: existingUser.id }, data: { personId: person.id } });
@@ -304,7 +309,7 @@ export async function runCoachImport(
       }
 
       if (existingCoach) result.updated++; else result.created++;
-      result.perCoach.push({ name: `${person.firstName} ${person.lastName}`.trim(), email: rec.email!, action: existingCoach ? "updated" : "created", blocks: blockCount });
+      result.perCoach.push({ name: `${person.firstName} ${person.lastName}`.trim(), email: rec.email ?? "no email", action: existingCoach ? "updated" : "created", blocks: blockCount });
     } catch (e) {
       result.errors.push({ name: rec.fullName || rec.email || "(unnamed)", reason: e instanceof Error ? e.message.slice(0, 160) : "unknown error" });
     }
