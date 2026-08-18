@@ -102,10 +102,15 @@ export default async function ConsoleInboxPage({
               <label className="label">Message</label>
               <textarea name="body" required rows={4} className="input" placeholder="Write your message…" />
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <input type="checkbox" name="channel_EMAIL" value="on" /> Also send by email
-              </label>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" name="channel_SMS" value="on" defaultChecked /> Text (SMS)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" name="channel_EMAIL" value="on" /> Also send by email
+                </label>
+              </div>
               <button className="btn-primary text-sm">Send broadcast</button>
             </div>
           </form>

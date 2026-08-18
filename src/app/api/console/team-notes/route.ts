@@ -40,6 +40,7 @@ export async function POST(req: Request) {
 
   const body = String(fd.get("body") ?? "").trim();
   if (!body) return back("?err=empty");
+  const alsoText = fd.get("channel_SMS") === "on";
 
   const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "Your PURE coach";
   const email = teamUpdateEmail({ teamName: team.name, coachName, body });
@@ -48,11 +49,14 @@ export async function POST(req: Request) {
     seasonId: team.seasonId,
     audienceType: "TEAM",
     audienceRef: teamId,
-    channels: ["IN_APP", "EMAIL"],
+    channels: alsoText ? ["IN_APP", "EMAIL", "SMS"] : ["IN_APP", "EMAIL"],
     triggerType: "TEAM_UPDATE",
     subject: email.subject,
     body: email.text,
     html: email.html,
+    // The email body is long-form; the SMS gets the coach's raw note prefixed
+    // with the team name so it reads cleanly as a text.
+    smsBody: `${team.name} update from ${coachName}:\n${body}`,
   });
 
   await audit({
