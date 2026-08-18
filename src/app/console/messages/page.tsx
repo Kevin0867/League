@@ -13,6 +13,7 @@ const ERRORS: Record<string, string> = {
   perm: "You don't have permission to message that audience.",
   team: "You can only message your own team.",
   norecipients: "No recipients matched that audience.",
+  nocat: "Pick at least one group to announce to.",
   op: "Unknown operation.",
 };
 
@@ -84,6 +85,42 @@ export default async function MessagesPage({
         <Chan label="In-app" on />
         <Chan label="Email" on={emailConfigured()} note={emailConfigured() ? undefined : "simulated"} />
         <Chan label="SMS" on={smsConfigured()} note={smsConfigured() ? undefined : "simulated"} />
+      </div>
+
+      {/* Platform announcement — tick the groups, write once, send to the union. */}
+      <div className="card border-l-4 border-brand-500">
+        <h2 className="font-semibold text-slate-900">Platform announcement</h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          For big news that affects everyone. Tick the groups to reach, write your message, and send one
+          announcement to everyone selected — deduped, and logged like every other message.
+        </p>
+        <form method="POST" action="/api/console/messages" className="mt-3 space-y-3">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="op" value="announce" />
+          <div className="flex flex-wrap gap-2">
+            {[
+              { name: "cat_players", label: "All players" },
+              { name: "cat_parents", label: "All parents" },
+              { name: "cat_coaches", label: "All coaches" },
+              { name: "cat_admins", label: "All admins" },
+            ].map((c) => (
+              <label key={c.name} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                <input type="checkbox" name={c.name} /> {c.label}
+              </label>
+            ))}
+          </div>
+          <input name="subject" className="input" placeholder="Subject (optional)" />
+          <textarea name="body" required rows={4} className="input" placeholder="Write your announcement…" />
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Send by</span>
+            <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_IN_APP" defaultChecked /> In-app</label>
+            <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_EMAIL" defaultChecked /> Email</label>
+            <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_SMS" /> SMS</label>
+          </div>
+          <div className="flex justify-end">
+            <button className="btn-primary text-sm">Send announcement</button>
+          </div>
+        </form>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

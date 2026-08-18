@@ -11,6 +11,7 @@ export type AudienceType =
   | "ALL_PLAYERS"
   | "ALL_COACHES"
   | "ALL_ADMINS"
+  | "PLATFORM"
   | "MARKET"
   | "DIVISION"
   | "TEAM"
@@ -101,6 +102,35 @@ export async function resolveAudience(
       });
       personIds = admins.map((u) => u.personId!).filter(Boolean);
       expandMinors = false;
+      break;
+    }
+    // Whole-platform announcement — the union of the categories named in `ref`
+    // (comma-separated: players, parents, coaches, admins). Minor players expand
+    // to their guardians as usual; dedupe happens when we fetch the people.
+    case "PLATFORM": {
+      const cats = new Set((ref ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
+      const everyone = cats.has("everyone");
+      const ids = new Set<string>();
+      if (everyone || cats.has("players")) {
+        const regs = await prisma.registration.findMany({ where: seasonId ? { seasonId } : {}, select: { personId: true } });
+        regs.forEach((r) => ids.add(r.personId));
+      }
+      if (everyone || cats.has("parents")) {
+        const regs = await prisma.registration.findMany({ where: seasonId ? { seasonId } : {}, select: { person: { select: { guardianId: true } } } });
+        regs.forEach((r) => { if (r.person.guardianId) ids.add(r.person.guardianId); });
+      }
+      if (everyone || cats.has("coaches")) {
+        const coaches = await prisma.coach.findMany({ select: { personId: true } });
+        coaches.forEach((c) => ids.add(c.personId));
+      }
+      if (everyone || cats.has("admins")) {
+        const admins = await prisma.user.findMany({
+          where: { active: true, personId: { not: null }, role: { in: ADMIN_ROLES as unknown as string[] } },
+          select: { personId: true },
+        });
+        admins.forEach((u) => { if (u.personId) ids.add(u.personId); });
+      }
+      personIds = [...ids];
       break;
     }
     case "DIVISION": {

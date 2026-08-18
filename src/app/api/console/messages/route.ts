@@ -91,6 +91,35 @@ export async function POST(req: Request) {
 
       return back(`?ok=1&n=${result.recipients}&failed=${result.failures}`);
     }
+
+    // Whole-platform announcement — the admin ticks the categories to reach and
+    // we send one message to the deduped union.
+    case "announce": {
+      if (!actor) return back("?err=auth");
+      if (!can(actor.role, "broadcastAll")) return back("?err=perm");
+
+      const cats = ["players", "parents", "coaches", "admins"].filter((c) => formData.get(`cat_${c}`) === "on");
+      if (cats.length === 0) return back("?err=nocat");
+
+      const subject = String(formData.get("subject") ?? "").trim();
+      const body = String(formData.get("body") ?? "").trim();
+      const channels = (["IN_APP", "EMAIL", "SMS"] as Channel[]).filter((c) => formData.get(`channel_${c}`) === "on");
+      if (!body) return back("?err=body");
+      if (channels.length === 0) return back("?err=channels");
+
+      const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });
+      const result = await dispatchMessage({
+        senderId: actor.userId,
+        seasonId: season?.id ?? null,
+        audienceType: "PLATFORM",
+        audienceRef: cats.join(","),
+        channels,
+        subject: subject || undefined,
+        body,
+      });
+      if (result.recipients === 0) return back("?err=norecipients");
+      return back(`?ok=1&n=${result.recipients}&failed=${result.failures}`);
+    }
     default:
       return back("?err=op");
   }
