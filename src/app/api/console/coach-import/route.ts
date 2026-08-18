@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       .map((r) => {
         const who = r.skipReason
           ? `<span class="bad">${esc(r.fullName || "(unnamed)")}<br><span style="font-size:11px">${esc(r.skipReason)}</span></span>`
-          : `<strong>${esc(r.fullName)}</strong><br><span class="muted" style="font-size:12px">${esc(r.email ?? "")}</span>`;
+          : `<strong>${esc(r.fullName)}</strong><br><span style="font-size:12px" class="${r.email ? "muted" : "warn"}">${r.email ? esc(r.email) : "no email — imports without a login"}</span>`;
         return `<tr>
           <td>${who}</td>
           <td>${esc(r.coachingLevels ?? "—")}</td>
