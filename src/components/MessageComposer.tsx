@@ -85,7 +85,7 @@ export function MessageComposer({
         <div className="flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2"><input type="checkbox" name="channel_IN_APP" defaultChecked /> In-app</label>
           <label className="flex items-center gap-2"><input type="checkbox" name="channel_EMAIL" defaultChecked /> Email</label>
-          <label className="flex items-center gap-2"><input type="checkbox" name="channel_SMS" /> SMS <span className="text-xs text-slate-400">(time-critical)</span></label>
+          <label className="flex items-center gap-2"><input type="checkbox" name="channel_SMS" defaultChecked /> SMS <span className="text-xs text-slate-400">(time-critical)</span></label>
         </div>
       </div>
 
