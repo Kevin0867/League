@@ -52,7 +52,7 @@ export function AnnouncementComposer({ ticket, counts }: { ticket: string; count
           <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Send by</span>
           <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_IN_APP" defaultChecked /> In-app</label>
           <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_EMAIL" defaultChecked /> Email</label>
-          <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_SMS" /> SMS</label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_SMS" defaultChecked /> SMS</label>
         </div>
         <div className="flex items-center justify-end gap-3">
           {key && <span className="text-xs text-slate-400">Goes to {count.toLocaleString()} {count === 1 ? "person" : "people"}</span>}
