@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/rbac";
 import { can } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
+import { ADMIN_ROLES } from "@/lib/enums";
+import { AnnouncementComposer } from "./AnnouncementComposer";
 
 const ERRORS: Record<string, string> = {
   auth: "Not signed in.",
@@ -68,6 +70,41 @@ export default async function MessagesPage({
 
   const markets = [...new Set((await prisma.team.findMany({ select: { market: true } })).map((t) => t.market).filter(Boolean))] as string[];
 
+  // Live recipient counts for the platform-announcement composer. Union sizes
+  // overlap (a coach can also be a parent), so we precompute the deduped count
+  // for every combination of the four groups. Minor players expand to guardians,
+  // matching what the send actually does.
+  const regsForCount = await prisma.registration.findMany({
+    where: season ? { seasonId: season.id } : {},
+    select: { personId: true, person: { select: { isMinor: true, guardianId: true } } },
+  });
+  const playerIds = new Set<string>();
+  const parentIds = new Set<string>();
+  const minorGuardian = new Map<string, string>();
+  for (const r of regsForCount) {
+    playerIds.add(r.personId);
+    if (r.person.guardianId) {
+      parentIds.add(r.person.guardianId);
+      if (r.person.isMinor) minorGuardian.set(r.personId, r.person.guardianId);
+    }
+  }
+  const coachIds = new Set((await prisma.coach.findMany({ select: { personId: true } })).map((c) => c.personId));
+  const adminIds = new Set(
+    (await prisma.user.findMany({ where: { active: true, personId: { not: null }, role: { in: ADMIN_ROLES as unknown as string[] } }, select: { personId: true } }))
+      .map((u) => u.personId!)
+      .filter(Boolean),
+  );
+  const catSets: Record<string, Set<string>> = { players: playerIds, parents: parentIds, coaches: coachIds, admins: adminIds };
+  const catNames = ["players", "parents", "coaches", "admins"];
+  const announceCounts: Record<string, number> = {};
+  for (let mask = 1; mask < 16; mask++) {
+    const chosen = catNames.filter((_, i) => mask & (1 << i));
+    const union = new Set<string>();
+    for (const c of chosen) for (const id of catSets[c]) union.add(id);
+    for (const [pid, gid] of minorGuardian) if (union.has(pid)) union.add(gid);
+    announceCounts[chosen.slice().sort().join(",")] = union.size;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Communications" subtitle="A core capability — every message logged per person and per team, so “we told them” is verifiable." />
@@ -87,41 +124,8 @@ export default async function MessagesPage({
         <Chan label="SMS" on={smsConfigured()} note={smsConfigured() ? undefined : "simulated"} />
       </div>
 
-      {/* Platform announcement — tick the groups, write once, send to the union. */}
-      <div className="card border-l-4 border-brand-500">
-        <h2 className="font-semibold text-slate-900">Platform announcement</h2>
-        <p className="mt-0.5 text-sm text-slate-500">
-          For big news that affects everyone. Tick the groups to reach, write your message, and send one
-          announcement to everyone selected — deduped, and logged like every other message.
-        </p>
-        <form method="POST" action="/api/console/messages" className="mt-3 space-y-3">
-          <input type="hidden" name="ticket" value={ticket} />
-          <input type="hidden" name="op" value="announce" />
-          <div className="flex flex-wrap gap-2">
-            {[
-              { name: "cat_players", label: "All players" },
-              { name: "cat_parents", label: "All parents" },
-              { name: "cat_coaches", label: "All coaches" },
-              { name: "cat_admins", label: "All admins" },
-            ].map((c) => (
-              <label key={c.name} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-                <input type="checkbox" name={c.name} /> {c.label}
-              </label>
-            ))}
-          </div>
-          <input name="subject" className="input" placeholder="Subject (optional)" />
-          <textarea name="body" required rows={4} className="input" placeholder="Write your announcement…" />
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Send by</span>
-            <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_IN_APP" defaultChecked /> In-app</label>
-            <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_EMAIL" defaultChecked /> Email</label>
-            <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_SMS" /> SMS</label>
-          </div>
-          <div className="flex justify-end">
-            <button className="btn-primary text-sm">Send announcement</button>
-          </div>
-        </form>
-      </div>
+      {/* Platform announcement — checkboxes with a live recipient count. */}
+      <AnnouncementComposer ticket={ticket} counts={announceCounts} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <MessageComposer
