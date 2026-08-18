@@ -68,6 +68,9 @@ export default async function EditCoachPage({
 
   return (
     <div className="space-y-6">
+      <Link href="/console/coaches" className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800">
+        ← Back to Coaches
+      </Link>
       <PageHeader
         title={`Edit coach — ${person.firstName} ${person.lastName}`}
         subtitle="Update certification, availability, and contact on this coach's behalf."
