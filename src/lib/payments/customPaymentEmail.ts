@@ -14,10 +14,11 @@ export function customPaymentEmailContent(opts: {
   description: string;
   paymentId: string;
   discountNote?: string | null;
-}): { subject: string; text: string; html: string } {
+}): { subject: string; text: string; html: string; sms: string } {
   const base = appUrl();
   const amount = formatCents(opts.amountCents);
   const payUrl = `${base}/pay/${opts.paymentId}?plan=full`;
+  const sms = `PURE Academy: ${opts.description} — ${amount} due. Pay securely: ${payUrl}`;
 
   const contentHtml =
     `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:16px">` +
@@ -46,6 +47,7 @@ export function customPaymentEmailContent(opts: {
   return {
     subject: `Your PURE Academy payment — ${amount}`,
     text,
+    sms,
     html: brandedEmailHtml({ heading: "Payment request", intro: `Hi ${opts.name},`, contentHtml }),
   };
 }
