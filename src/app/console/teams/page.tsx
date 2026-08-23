@@ -151,6 +151,7 @@ export default async function TeamBuildBoard({
   const fSegment = sp.segment?.trim() || null;
   const fLevel = (sp.level ?? sp.division)?.trim() || null; // `division` kept as an alias
   const fMarket = sp.market?.trim() || null;
+  const fSort = sp.sort?.trim() || "division";
   const anyFilter = !!(fSegment || fLevel || fMarket);
 
   const shownTeams = teams.filter((t) => {
@@ -173,17 +174,43 @@ export default async function TeamBuildBoard({
 
   // Build a URL that keeps the other facets and toggles one. Passing null clears
   // a facet; clicking the already-active value clears it (a toggle).
-  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null }) => {
+  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null; sort?: string | null }) => {
     const seg = "segment" in over ? over.segment : fSegment;
     const lvl = "level" in over ? over.level : fLevel;
     const mkt = "market" in over ? over.market : fMarket;
+    const srt = "sort" in over ? over.sort : fSort;
     const params = new URLSearchParams();
     if (seg) params.set("segment", seg);
     if (lvl) params.set("level", lvl);
     if (mkt) params.set("market", mkt);
+    if (srt && srt !== "division") params.set("sort", srt); // division is the default
     const qs = params.toString();
     return `/console/teams${qs ? `?${qs}` : ""}#teams-grid`;
   };
+
+  // Sort the shown teams by whatever field the admin picks — all backed by data
+  // we actually store. Default groups by division (segment → level), matching how
+  // people think about the roster.
+  const bandOf = (code: string | null) => parseFloat(code?.match(/(\d\.\d)/)?.[1] ?? "0");
+  const youthRank = (code: string | null) => (code === "ELE" ? 0 : code === "MID" ? 1 : code === "HS" ? 2 : 9);
+  const segRank = (code: string | null) => (segOf(code) === "M" ? 0 : segOf(code) === "W" ? 1 : segOf(code) === "YOUTH" ? 2 : 3);
+  const divKey = (t: (typeof teams)[number]): [number, number, string] => {
+    const code = codeOf(t);
+    const s = segRank(code);
+    return [s, s === 2 ? youthRank(code) : bandOf(code), t.market ?? ""];
+  };
+  const statusRank = (t: (typeof teams)[number]) => (t.published ? 2 : teamMissingFields(t).length === 0 ? 1 : 0);
+  const dayRank = (d: string | null) => { const i = (WEEKDAYS as readonly string[]).indexOf(d ?? ""); return i < 0 ? 99 : i; };
+  const cmpByName = (a: (typeof teams)[number], b: (typeof teams)[number]) => a.name.localeCompare(b.name);
+  const SORTS: Record<string, { label: string; cmp: (a: (typeof teams)[number], b: (typeof teams)[number]) => number }> = {
+    division: { label: "Division", cmp: (a, b) => { const ka = divKey(a), kb = divKey(b); return ka[0] - kb[0] || ka[1] - kb[1] || ka[2].localeCompare(kb[2]) || cmpByName(a, b); } },
+    location: { label: "Location", cmp: (a, b) => (a.market ?? "").localeCompare(b.market ?? "") || cmpByName(a, b) },
+    name: { label: "Name", cmp: cmpByName },
+    players: { label: "Players", cmp: (a, b) => b._count.members - a._count.members || cmpByName(a, b) },
+    status: { label: "Status", cmp: (a, b) => statusRank(a) - statusRank(b) || cmpByName(a, b) },
+    day: { label: "Day/time", cmp: (a, b) => dayRank(a.dayOfWeek) - dayRank(b.dayOfWeek) || (a.startTime ?? "").localeCompare(b.startTime ?? "") || cmpByName(a, b) },
+  };
+  const shownSorted = [...shownTeams].sort((SORTS[fSort] ?? SORTS.division).cmp);
 
   return (
     <div className="space-y-6">
@@ -390,6 +417,11 @@ export default async function TeamBuildBoard({
               ))}
             </FacetRow>
           )}
+          <FacetRow label="Sort by">
+            {Object.entries(SORTS).map(([key, s]) => (
+              <Chip key={key} href={facetHref({ sort: key })} active={fSort === key}>{s.label}</Chip>
+            ))}
+          </FacetRow>
           {anyFilter && (
             <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
               <span className="text-slate-500">{shownTeams.length} team{shownTeams.length === 1 ? "" : "s"} match</span>
@@ -404,7 +436,7 @@ export default async function TeamBuildBoard({
           <div className="card py-8 text-center text-sm text-slate-400">No teams match those filters. <Link href="/console/teams" className="text-brand-700 underline">Clear filters</Link>.</div>
         ) : null}
         <div id="teams-grid" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {shownTeams.map((t) => {
+          {shownSorted.map((t) => {
             const missing = teamMissingFields(t);
             const roster = rosterStatus(t._count.members, t.coachPlays);
             const publish = canPublishTeam(t, t.facility);
