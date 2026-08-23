@@ -131,14 +131,59 @@ export default async function TeamBuildBoard({
     .filter((g) => g.length > 1)
     .sort((a, b) => a[0].name.localeCompare(b[0].name));
 
-  // Division drill-down: ?division=<code> narrows the whole page to one division
-  // group (e.g. "M3.5"), using the same gender+level label the color-audit groups
-  // by. When set we show just that division's teams and scope the bulk tools to
-  // them, so an admin can manage a single division in isolation.
-  const divisionLabelOf = (t: (typeof teams)[number]) =>
+  // Drill-down facets: Segment (Men's / Women's / Youth), Level (the exact
+  // division code, e.g. M3.5 or HS), and Location (market). They COMBINE, so you
+  // can slice to "Women's · 3.5" or "Youth · High School · Mesa". Each narrows
+  // the grid and the bulk tools; the season-wide audit cards hide while drilled.
+  const codeOf = (t: (typeof teams)[number]) =>
     t.divisionCode ?? deriveDivisionCode(t.division?.name) ?? t.division?.name ?? null;
-  const divisionFilter = sp.division?.trim() || null;
-  const shownTeams = divisionFilter ? teams.filter((t) => divisionLabelOf(t) === divisionFilter) : teams;
+  const segOf = (code: string | null): "M" | "W" | "YOUTH" | null => {
+    if (!code) return null;
+    if (/^M/.test(code)) return "M";
+    if (/^W/.test(code)) return "W";
+    if (/^(ELE|MID|HS)$/.test(code)) return "YOUTH";
+    return null;
+  };
+  const SEG_LABEL: Record<string, string> = { M: "Men's", W: "Women's", YOUTH: "Youth" };
+  const LEVEL_LABEL: Record<string, string> = { ELE: "Elementary", MID: "Middle", HS: "High School" };
+  const levelLabel = (code: string) => LEVEL_LABEL[code] ?? code;
+
+  const fSegment = sp.segment?.trim() || null;
+  const fLevel = (sp.level ?? sp.division)?.trim() || null; // `division` kept as an alias
+  const fMarket = sp.market?.trim() || null;
+  const anyFilter = !!(fSegment || fLevel || fMarket);
+
+  const shownTeams = teams.filter((t) => {
+    const code = codeOf(t);
+    if (fSegment && segOf(code) !== fSegment) return false;
+    if (fLevel && code !== fLevel) return false;
+    if (fMarket && (t.market ?? "") !== fMarket) return false;
+    return true;
+  });
+
+  // Options come from the teams that actually exist this season.
+  const segmentsPresent = [...new Set(teams.map((t) => segOf(codeOf(t))).filter(Boolean))] as ("M" | "W" | "YOUTH")[];
+  const levelsPresent = [...new Set(teams.map((t) => codeOf(t)).filter(Boolean))] as string[];
+  const marketsPresent = [...new Set(teams.map((t) => t.market).filter(Boolean))] as string[];
+  const orderSeg = { M: 0, W: 1, YOUTH: 2 } as Record<string, number>;
+  segmentsPresent.sort((a, b) => (orderSeg[a] ?? 9) - (orderSeg[b] ?? 9));
+  // Level chips respect a chosen segment (choosing Men's shows only M* levels).
+  const levelChips = levelsPresent.filter((c) => !fSegment || segOf(c) === fSegment).sort();
+  marketsPresent.sort();
+
+  // Build a URL that keeps the other facets and toggles one. Passing null clears
+  // a facet; clicking the already-active value clears it (a toggle).
+  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null }) => {
+    const seg = "segment" in over ? over.segment : fSegment;
+    const lvl = "level" in over ? over.level : fLevel;
+    const mkt = "market" in over ? over.market : fMarket;
+    const params = new URLSearchParams();
+    if (seg) params.set("segment", seg);
+    if (lvl) params.set("level", lvl);
+    if (mkt) params.set("market", mkt);
+    const qs = params.toString();
+    return `/console/teams${qs ? `?${qs}` : ""}#teams-grid`;
+  };
 
   return (
     <div className="space-y-6">
@@ -171,7 +216,7 @@ export default async function TeamBuildBoard({
 
       {/* Duplicate-team detector — same name = almost always a duplicate record,
           which shows twice on the board. Review each and delete the extra. */}
-      {!divisionFilter && duplicateGroups.length > 0 && (
+      {!anyFilter && duplicateGroups.length > 0 && (
         <div className="card border-l-4 border-rose-400">
           <h2 className="font-semibold text-rose-700">
             {duplicateGroups.length} duplicate team name{duplicateGroups.length === 1 ? "" : "s"}
@@ -263,7 +308,7 @@ export default async function TeamBuildBoard({
         />
       )}
 
-      {!divisionFilter && teams.length > 0 && (
+      {!anyFilter && teams.length > 0 && (
         <div className="card">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -293,9 +338,9 @@ export default async function TeamBuildBoard({
                 <div key={g.label} className={`rounded-lg border p-2.5 text-sm ${g.ok ? "border-slate-200" : "border-amber-300 bg-amber-50"}`}>
                   <div className="flex items-center gap-2">
                     <span className={g.ok ? "text-emerald-600" : "text-amber-600"}>{g.ok ? "✓" : "!"}</span>
-                    <Link href={`/console/teams?division=${encodeURIComponent(g.label)}#teams-grid`} className="font-medium text-brand-700 hover:underline">{g.label}</Link>
+                    <Link href={facetHref({ level: g.label, segment: segOf(g.label) })} className="font-medium text-brand-700 hover:underline">{g.label}</Link>
                     <span className="text-xs text-slate-400">{g.teams.length} teams</span>
-                    <Link href={`/console/teams?division=${encodeURIComponent(g.label)}#teams-grid`} className="ml-auto text-xs font-medium text-brand-600 hover:underline">Open →</Link>
+                    <Link href={facetHref({ level: g.label, segment: segOf(g.label) })} className="ml-auto text-xs font-medium text-brand-600 hover:underline">Open →</Link>
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {g.teams.map((t, i) => (
@@ -321,20 +366,42 @@ export default async function TeamBuildBoard({
         </div>
       ) : (
         <>
-        {divisionFilter && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5">
-            <div className="text-sm text-slate-700">
-              Showing division <span className="font-semibold text-slate-900">{divisionFilter}</span>
-              <span className="text-slate-400"> · {shownTeams.length} team{shownTeams.length === 1 ? "" : "s"}</span>
+        {/* Drill-down facet bar — Segment / Level / Location, all combinable. */}
+        <div className="card space-y-2.5 py-3">
+          <FacetRow label="Segment">
+            <Chip href={facetHref({ segment: null, level: null })} active={!fSegment}>All</Chip>
+            {segmentsPresent.map((s) => (
+              <Chip key={s} href={facetHref({ segment: fSegment === s ? null : s, level: null })} active={fSegment === s}>{SEG_LABEL[s]}</Chip>
+            ))}
+          </FacetRow>
+          {levelChips.length > 0 && (
+            <FacetRow label="Level">
+              <Chip href={facetHref({ level: null })} active={!fLevel}>All</Chip>
+              {levelChips.map((c) => (
+                <Chip key={c} href={facetHref({ level: fLevel === c ? null : c, segment: segOf(c) })} active={fLevel === c}>{levelLabel(c)}</Chip>
+              ))}
+            </FacetRow>
+          )}
+          {marketsPresent.length > 0 && (
+            <FacetRow label="Location">
+              <Chip href={facetHref({ market: null })} active={!fMarket}>All</Chip>
+              {marketsPresent.map((m) => (
+                <Chip key={m} href={facetHref({ market: fMarket === m ? null : m })} active={fMarket === m}>{m}</Chip>
+              ))}
+            </FacetRow>
+          )}
+          {anyFilter && (
+            <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
+              <span className="text-slate-500">{shownTeams.length} team{shownTeams.length === 1 ? "" : "s"} match</span>
+              <Link href="/console/teams" className="font-medium text-brand-700 hover:underline">Clear filters</Link>
             </div>
-            <Link href="/console/teams" className="text-sm font-medium text-brand-700 hover:underline">← All teams</Link>
-          </div>
-        )}
+          )}
+        </div>
         <div className="max-w-md">
           <TableFilter targetId="teams-grid" placeholder="Search teams by name, market, or division…" />
         </div>
-        {divisionFilter && shownTeams.length === 0 ? (
-          <div className="card py-8 text-center text-sm text-slate-400">No teams in {divisionFilter}. <Link href="/console/teams" className="text-brand-700 underline">Back to all teams</Link>.</div>
+        {anyFilter && shownTeams.length === 0 ? (
+          <div className="card py-8 text-center text-sm text-slate-400">No teams match those filters. <Link href="/console/teams" className="text-brand-700 underline">Clear filters</Link>.</div>
         ) : null}
         <div id="teams-grid" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {shownTeams.map((t) => {
@@ -470,5 +537,29 @@ function Pill({ label, value, tone = "slate" }: { label: string; value: number; 
     <div className={`rounded-lg px-3 py-1.5 ${tones[tone]}`}>
       <span className="font-bold">{value}</span> <span className="text-xs">{label}</span>
     </div>
+  );
+}
+
+function FacetRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="w-16 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function Chip({ href, active, children }: { href: string; active?: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-full px-3 py-1 text-sm ring-1 ring-inset transition-colors ${
+        active
+          ? "bg-brand-600 text-white ring-brand-600"
+          : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 hover:ring-slate-300"
+      }`}
+    >
+      {children}
+    </Link>
   );
 }
