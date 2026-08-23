@@ -512,11 +512,12 @@ export async function POST(req: Request) {
           seasonId: team.seasonId,
           audienceType: "SINGLE_PERSON",
           audienceRef: m.personId,
-          channels: ["IN_APP", "EMAIL"],
+          channels: ["IN_APP", "EMAIL", "SMS"],
           triggerType: "PAYMENT_REQUEST",
           subject: email.subject,
           body: email.text,
           html: email.html,
+          smsBody: email.sms,
           toEmails: familyEmails,
         });
         // The fee is still recorded either way, but flag families with no email
