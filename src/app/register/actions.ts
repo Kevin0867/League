@@ -91,6 +91,12 @@ async function enrollPlayer(opts: {
   guardianId?: string;
   email?: string;
   phone?: string;
+  // For a minor without their own email, the guardian's email is carried onto the
+  // minor's record as a secondary (labeled) address so the child is reachable from
+  // their own registration. Kept OUT of the primary `email` field so contact
+  // lookups that match an adult by email never resolve to a child.
+  guardianEmail?: string;
+  guardianContactLabel?: string;
   // Grouping the family clicked on the Programs page (division name → id), used
   // as a fallback when the player's own track doesn't resolve a division.
   preferredDivisionId?: string | null;
@@ -121,6 +127,10 @@ async function enrollPlayer(opts: {
         firstName: player.firstName,
         lastName: player.lastName,
         email: opts.email || null,
+        // Minor without their own email → carry the guardian's email as a labeled
+        // secondary address so the child's own record is reachable.
+        email2: opts.email ? null : opts.guardianEmail || null,
+        email2Label: opts.email ? null : opts.guardianEmail ? opts.guardianContactLabel ?? "Parent/guardian" : null,
         phone: opts.phone || null,
         dob,
         isMinor,
@@ -253,8 +263,10 @@ export async function registerAction(
     : null;
   const preferredFacilityMarket = preferredFacility?.market ?? null;
 
-  // Reuse an existing person by email so families don't create duplicates.
-  const existing = await prisma.person.findFirst({ where: { email } });
+  // Reuse an existing adult person by email so families don't create duplicates.
+  // Scoped to non-minors: a child may now carry the guardian's email as a
+  // secondary address, and the primary contact here is always an adult.
+  const existing = await prisma.person.findFirst({ where: { email, isMinor: false } });
   let primaryId: string;
   if (existing) {
     primaryId = existing.id;
@@ -358,6 +370,13 @@ export async function registerAction(
         practiceTimes,
         comments,
         guardianId: primaryId,
+        // Bring the parent/guardian's contact onto the minor's own record: their
+        // phone (minors rarely have their own) and their email as a labeled
+        // secondary address. Staff can override case-by-case if the child has
+        // their own contact.
+        phone: phone || undefined,
+        guardianEmail: email || undefined,
+        guardianContactLabel: `Parent/guardian (${firstName})`,
         preferredDivisionId,
         preferredDivisionName,
       preferredFacilityId: preferredFacility?.id ?? null,

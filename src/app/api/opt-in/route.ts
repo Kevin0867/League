@@ -28,9 +28,11 @@ export async function POST(req: Request) {
   const userAgent = req.headers.get("user-agent") ?? null;
 
   // Match an existing person by email or phone (don't mint phantom records).
+  // Prefer a non-minor: a child may carry a guardian's phone as their contact,
+  // and someone submitting an opt-in for themselves is the adult account holder.
   const person =
     (email ? await prisma.person.findFirst({ where: { email } }) : null) ??
-    (phone ? await prisma.person.findFirst({ where: { phone } }) : null);
+    (phone ? await prisma.person.findFirst({ where: { phone }, orderBy: { isMinor: "asc" } }) : null);
 
   await prisma.messagingConsent.create({
     data: {
