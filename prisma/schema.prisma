@@ -28,6 +28,78 @@ datasource db {
 }
 
 // ===========================================================================
+// TENANCY (SaaS)
+// ===========================================================================
+
+/// A licensed customer of the platform — PURE itself (the primary org) plus any
+/// school, club, or company we license the software to. One shared deployment
+/// and database serve every org; a request is mapped to its org by hostname
+/// (custom domain or "<slug>.<platform-domain>" subdomain), and all tenant data
+/// carries an organizationId so orgs never see each other's records. Branding,
+/// contact identity, locale, and integration credentials live here so a new
+/// org can be stood up as a fully self-branded instance without a code change.
+model Organization {
+  id            String   @id @default(cuid())
+  /// URL-safe short name; also the default subdomain (e.g. "pure" → pure.app).
+  slug          String   @unique
+  /// Display name shown in the app chrome and communications ("PURE Academy").
+  name          String
+  /// Legal entity name for receipts/contracts, when different from `name`.
+  legalName     String?
+  /// The ONE primary org (PURE). Used as the fallback tenant and the "main site"
+  /// whose feature updates roll out to everyone. Exactly one row should be true.
+  isPrimary     Boolean  @default(false)
+  /// ACTIVE | SUSPENDED — a suspended org's public + portal surfaces are closed.
+  status        String   @default("ACTIVE")
+
+  // --- Hostname routing -----------------------------------------------------
+  /// Custom production domain, if the org has one (e.g. "portal.school.edu").
+  primaryHost   String?  @unique
+  /// Extra hostnames that also resolve to this org (JSON array of strings) —
+  /// apex+www, staging domains, a vanity domain, etc.
+  altHosts      Json?
+
+  // --- Branding -------------------------------------------------------------
+  /// Primary logo (app chrome, emails). Served URL or /brand path.
+  logoUrl       String?
+  /// Optional secondary/co-brand logo shown alongside the primary (PURE pairs
+  /// its Academy mark with the Pickleball & Padel mark).
+  secondaryLogoUrl String?
+  faviconUrl    String?
+  /// Brand colors as hex (#0f766e). Drive the CSS theme variables per org.
+  primaryColor  String?
+  accentColor   String?
+
+  // --- Contact identity (communications) ------------------------------------
+  /// From-name and address for outbound email ("PURE Academy",
+  /// "team@purepickleball.com"). Falls back to platform defaults when unset.
+  fromName      String?
+  fromEmail     String?
+  supportEmail  String?
+  supportPhone  String?
+  /// Short brand token prefixed on outbound SMS ("PURE Academy: …").
+  smsBrand      String?
+  /// IANA timezone + ISO currency for money/schedule display.
+  timezone      String?  @default("America/Phoenix")
+  currency      String?  @default("usd")
+
+  // --- Integrations (per-org, used from Phase 3 on) -------------------------
+  /// Connected Stripe account id (acct_…) for Stripe Connect — the org's own
+  /// account that collects their members' fees. Null → falls back to platform.
+  stripeAccountId String?
+  /// Optional platform application-fee in basis points taken on Connect charges.
+  platformFeeBps  Int?
+  /// Free-form per-org settings (Zoho list key, feature flags, etc.) as JSON,
+  /// so we can add tenant config without a migration each time.
+  settings      Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ===========================================================================
 // AUTH & IDENTITY
 // ===========================================================================
 
