@@ -311,7 +311,7 @@ export async function POST(req: Request) {
         const email = paymentRequestEmail({ name: payer.firstName, amountCents: payment.amountCents, description: payment.description ?? `${r.season?.name ?? "Season"} season fee`, paymentId: payment.id });
         await dispatchMessage({
           senderId: actor.userId, seasonId: r.seasonId, audienceType: "SINGLE_PERSON", audienceRef: res.payerId,
-          channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+          channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
         });
       }
       sent++;
@@ -474,7 +474,7 @@ export async function POST(req: Request) {
         const email = paymentRequestEmail({ name: payer.firstName, amountCents: payment.amountCents, description: payment.description ?? `${seasonName} season fee`, paymentId: payment.id });
         await dispatchMessage({
           senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: res.payerId,
-          channels: ["IN_APP", "EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+          channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
         });
       }
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: res.paymentId, action: "REQUESTED", summary: `Fee ${res.created ? "requested" : "re-sent"} for ${person.firstName} ${person.lastName}` });
