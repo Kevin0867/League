@@ -89,7 +89,7 @@ const REMINDABLE_CATEGORIES = ["PLAYER_FEE", "ALA_CARTE", "CUSTOM", "ACP_ENTRY",
 function reminderEmailFor(
   pay: { id: string; amountCents: number; description: string | null; category: string },
   person: { firstName: string }
-): { subject: string; text: string; html: string } {
+): { subject: string; text: string; html: string; sms: string } {
   if (pay.category === "PLAYER_FEE") {
     return paymentRequestEmail({
       name: person.firstName,
@@ -201,11 +201,11 @@ export async function POST(req: Request) {
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
       if (!person) { tally.skipped++; if (!tally.reason) tally.reason = "a payer record was missing"; continue; }
       const email = reminderEmailFor(pay, person);
-      // Resend = email only. The original request already posted an in-app
-      // announcement; re-nudging shouldn't pile up duplicates in the portal.
+      // Resend goes by email + text (no new in-app announcement — re-nudging
+      // shouldn't pile up duplicates in the portal).
       const res = await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? seasonScope ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
-        channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        channels: ["EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
       });
       if (res.failures > 0) {
         tally.failed++;
@@ -248,7 +248,7 @@ export async function POST(req: Request) {
       const { picked } = await pickedRecipients(pay.partyId, fd.getAll(`to_${pay.id}`).map((v) => String(v)));
       const res = await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
-        channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        channels: ["EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
         ...(picked.length ? { toEmails: picked } : {}),
       });
       if (res.failures > 0) {
@@ -718,10 +718,10 @@ export async function POST(req: Request) {
       // Hand-picked recipients from the detail-page checklist; the list-view
       // quick resend sends to every address on file (picked empty → fan-out).
       const { picked } = await pickedRecipients(personId, fd.getAll("to").map((v) => String(v)));
-      // Resend = email only (no new in-app announcement — see resendAllFees).
+      // Resend goes by email + text (no new in-app announcement — see resendAllFees).
       await dispatchMessage({
         senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
-        channels: ["EMAIL"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html,
+        channels: ["EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
         ...(picked.length ? { toEmails: picked } : {}),
       });
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "RESEND", summary: "Resent fee request" });
