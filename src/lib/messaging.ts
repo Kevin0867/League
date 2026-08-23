@@ -76,6 +76,13 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   let simulated = 0;
   const allFailureReasons: string[] = [];
 
+  // Guardian expansion can put the same address on two recipients (a minor whose
+  // contact is the parent, plus the parent themselves). Track what we've already
+  // sent so one physical email/text address is only messaged once per send; the
+  // second recipient still gets a logged row, marked SKIPPED.
+  const sentEmails = new Set<string>();
+  const sentPhones = new Set<string>();
+
   for (const r of recipients) {
     // In-app is always delivered — it lives in our own database.
     const inAppStatus = channels.includes("IN_APP") ? "DELIVERED" : "QUEUED";
@@ -88,11 +95,25 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     if (channels.includes("EMAIL")) {
       // Hand-picked recipients win; otherwise deliver to every address on file
       // for this person (both parents + the student).
-      const to = hasPicked ? pickedEmails : r.emails.length ? r.emails : r.email;
-      const res = await sendEmail(to, subject, input.body, input.html, input.attachments);
-      emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
-      if (!res.ok) failureReasons.push(`email: ${res.error}`);
-      if (res.ok && res.simulated) wasSimulated = true;
+      const candidates = (hasPicked ? pickedEmails : r.emails.length ? r.emails : r.email ? [r.email] : [])
+        .map((e) => (e ?? "").trim())
+        .filter(Boolean);
+      // Drop any address already sent to earlier in this dispatch.
+      const fresh = candidates.filter((e) => {
+        const k = e.toLowerCase();
+        if (sentEmails.has(k)) return false;
+        sentEmails.add(k);
+        return true;
+      });
+      if (fresh.length) {
+        const res = await sendEmail(fresh, subject, input.body, input.html, input.attachments);
+        emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
+        if (!res.ok) failureReasons.push(`email: ${res.error}`);
+        if (res.ok && res.simulated) wasSimulated = true;
+      } else if (candidates.length) {
+        // Every address was already reached via another recipient (e.g. the parent).
+        emailStatus = "SKIPPED";
+      }
     }
     if (channels.includes("SMS")) {
       // Manual broadcasts (no triggerType — the Messaging composer) carry opt-out
@@ -101,10 +122,17 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
       // built-in STOP handling and stay concise.
       const optOut = input.triggerType ? "" : "\nReply STOP to opt out.";
       const smsText = input.smsBody ?? `${subject}\n${input.body}`;
-      const res = await sendSms(r.phone, `${smsText}${optOut}`);
-      smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
-      if (!res.ok) failureReasons.push(`sms: ${res.error}`);
-      if (res.ok && res.simulated) wasSimulated = true;
+      const num = (r.phone ?? "").trim();
+      const k = num.toLowerCase();
+      if (num && !sentPhones.has(k)) {
+        sentPhones.add(k);
+        const res = await sendSms(r.phone, `${smsText}${optOut}`);
+        smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
+        if (!res.ok) failureReasons.push(`sms: ${res.error}`);
+        if (res.ok && res.simulated) wasSimulated = true;
+      } else if (num) {
+        smsStatus = "SKIPPED";
+      }
     }
 
     if (failureReasons.length) {
