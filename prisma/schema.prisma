@@ -1506,3 +1506,122 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId])
 }
+
+// ===========================================================================
+// SPONSORSHIPS
+// ===========================================================================
+// Sell sponsorships at three levels — a whole LEAGUE, a TOURNAMENT, or an
+// individual TEAM (ORG-wide is also available). A league organizer sells at the
+// league level; each team can independently source and secure its own sponsors.
+// The "ways a sponsor gets value" are a fully customizable catalog (SponsorBenefit)
+// — every entry can be renamed, deactivated, or added to; nothing is hardcoded.
+// Scope is polymorphic (scopeType + scopeId) to fit this codebase's Season-as-
+// league / Season-as-tournament / Team model without brittle cross-FKs:
+//   LEAGUE / TOURNAMENT → scopeId is a Season id
+//   TEAM                → scopeId is a Team id
+//   ORG                 → scopeId is null (applies to the whole organization)
+// organizationId scopes every row to its tenant (Phase 2 enforces this globally).
+
+/// A customizable "way a sponsor gets value" — the catalog an org edits freely
+/// (rename, deactivate, add). Packages pick from these; none of it is fixed.
+model SponsorBenefit {
+  id             String   @id @default(cuid())
+  organizationId String
+  label          String
+  description    String?
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  packageLinks   SponsorshipPackageBenefit[]
+
+  @@index([organizationId, active])
+}
+
+/// A sponsoring company or individual (reusable across levels and seasons).
+model Sponsor {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  contactName    String?
+  email          String?
+  phone          String?
+  website        String?
+  logoUrl        String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sponsorships   Sponsorship[]
+
+  @@index([organizationId])
+}
+
+/// A sellable sponsorship package/tier at a level. scopeId null = a reusable
+/// template for that scope type (e.g. a default "Gold" any team can offer); set
+/// scopeId to bind a package to one specific league/tournament/team.
+model SponsorshipPackage {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// LEAGUE | TOURNAMENT | TEAM | ORG
+  scopeType      String
+  /// Season id (LEAGUE/TOURNAMENT), Team id (TEAM), or null (ORG / template).
+  scopeId        String?
+  name           String
+  description    String?
+  priceCents     Int      @default(0)
+  /// Optional cap on how many of this package can be sold (null = unlimited).
+  inventory      Int?
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  benefitLinks   SponsorshipPackageBenefit[]
+  sponsorships   Sponsorship[]
+
+  @@index([organizationId, scopeType, scopeId])
+}
+
+/// Which benefits a package includes (join between package and benefit catalog).
+model SponsorshipPackageBenefit {
+  id         String   @id @default(cuid())
+  packageId  String
+  package    SponsorshipPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  benefitId  String
+  benefit    SponsorBenefit     @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, benefitId])
+  @@index([benefitId])
+}
+
+/// A secured or in-progress sponsorship deal at a scope. A team coach sourcing
+/// their own team sponsor and an admin selling a league title sponsor both land
+/// here, distinguished by scopeType/scopeId and securedById.
+model Sponsorship {
+  id             String   @id @default(cuid())
+  organizationId String
+  sponsorId      String
+  sponsor        Sponsor  @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+  /// LEAGUE | TOURNAMENT | TEAM | ORG
+  scopeType      String
+  scopeId        String?
+  packageId      String?
+  package        SponsorshipPackage? @relation(fields: [packageId], references: [id])
+  amountCents    Int      @default(0)
+  /// PROSPECT | COMMITTED | ACTIVE | DECLINED | ARCHIVED
+  status         String   @default("PROSPECT")
+  /// Free-text benefits/term for a custom deal that isn't a catalog package.
+  benefitsNote   String?
+  notes          String?
+  /// Who secured it — the coach who sourced a team sponsor, or an admin.
+  securedById    String?
+  /// Optional link to a Payment when the sponsorship fee is collected on-platform.
+  paymentId      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, scopeType, scopeId])
+  @@index([sponsorId])
+}
