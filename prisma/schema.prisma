@@ -373,6 +373,11 @@ model Team {
   ///                  fields 2+ teams in a division; assigned in palette order
   club          String    @default("PURE")
   divisionCode  String?
+  /// Team gender: MALE | FEMALE | COED. For adults it's implied by the division
+  /// code (M/W) but stored here too when set; it's the ONLY place youth gender
+  /// lives (e.g. High School Boys vs Girls), since the youth codes ELE/MID/HS
+  /// don't carry it. Null = unspecified (treated as coed).
+  gender        String?
   color         String?
 
   /// Optional team photo (object-storage URL). Shown on the public team page

@@ -585,6 +585,8 @@ export default async function TeamDetailPage({
                 options={[{ value: "", label: "—" }, ...team.season.divisions.map((d) => ({ value: d.id, label: d.name }))]} />
               <Field label="Level band" name="levelBand" defaultValue={team.levelBand ?? ""} placeholder="e.g. 4.0–4.5" />
               <Field label="Market" name="market" defaultValue={team.market ?? ""} />
+              <Select label="Gender" name="gender" defaultValue={team.gender ?? ""}
+                options={[{ value: "", label: "— coed / unspecified —" }, { value: "MALE", label: "Boys / Men's" }, { value: "FEMALE", label: "Girls / Women's" }, { value: "COED", label: "Coed" }]} />
 
               <div>
                 <label className="label" htmlFor="color">Team color</label>
