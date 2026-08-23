@@ -12,6 +12,7 @@ import { TeamScheduleFields } from "./TeamScheduleFields";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
+import { TeamSponsors } from "./TeamSponsors";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { AddPlayerToTeam } from "./AddPlayerToTeam";
@@ -236,6 +237,8 @@ export default async function TeamDetailPage({
           )}
         </div>
       </div>
+
+      <TeamSponsors teamId={team.id} ticket={ticket} />
 
       {ok && Number(failed) > 0 ? (
         <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-2 text-sm text-amber-800">

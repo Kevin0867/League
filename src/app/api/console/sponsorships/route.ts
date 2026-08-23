@@ -206,6 +206,35 @@ export async function POST(req: Request) {
       return back("?ok=dealDel#deals");
     }
 
+    // One-step team sourcing: create the sponsor AND the team sponsorship in a
+    // single action, so a coach can add a sponsor they've secured for their team
+    // without a separate sponsor-then-deal flow. Admin anywhere; a coach only for
+    // a team they coach.
+    case "teamSponsorQuickAdd": {
+      const teamId = g("teamId");
+      if (!teamId) return back("?err=fields");
+      if (!isAdmin && !(await coachOwnsTeam(teamId))) return back("?err=perm");
+      const name = g("sponsorName");
+      if (!name) return back("?err=fields");
+      const status = STATUSES.includes(g("status")) ? g("status") : "COMMITTED";
+      const sponsor = await prisma.sponsor.create({
+        data: {
+          organizationId: orgId, name,
+          contactName: g("contactName") || null, email: g("email") || null,
+          phone: g("phone") || null, website: g("website") || null,
+        },
+      });
+      await prisma.sponsorship.create({
+        data: {
+          organizationId: orgId, sponsorId: sponsor.id, scopeType: "TEAM", scopeId: teamId,
+          amountCents: dollarsToCents(g("amount")), status,
+          benefitsNote: g("benefitsNote") || null, securedById: actor.userId,
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Sponsorship", entityId: teamId, action: "CREATE", summary: `Team sponsor added: ${name}` });
+      return back("?ok=teamSponsor#sponsors");
+    }
+
     default:
       return back("?err=op");
   }
