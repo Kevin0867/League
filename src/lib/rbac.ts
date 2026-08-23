@@ -26,6 +26,10 @@ export const CAN: Record<string, Role[]> = {
   runPayouts: ADMIN,
   broadcastAll: ADMIN,
   overrideEligibility: ADMIN,
+  // Platform super-admin: manage the licensed organizations (tenants). Restricted
+  // to top-level admins; in Phase 2 this also requires membership in the primary
+  // org so a licensed customer's own admin can never manage other tenants.
+  manageOrganizations: ADMIN,
   markAttendance: [...ADMIN, "COACH"],
   viewOwnEarnings: [...ADMIN, "COACH"],
 };
