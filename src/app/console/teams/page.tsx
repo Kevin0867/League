@@ -148,17 +148,29 @@ export default async function TeamBuildBoard({
   const LEVEL_LABEL: Record<string, string> = { ELE: "Elementary", MID: "Middle", HS: "High School" };
   const levelLabel = (code: string) => LEVEL_LABEL[code] ?? code;
 
+  // Gender: use the team's stored gender when set; otherwise adults derive it
+  // from the M/W division code. Youth teams have no gender in their code, so this
+  // is the only way "High School Boys" vs "Girls" can be told apart.
+  const GENDER_LABEL: Record<string, string> = { MALE: "Boys / Men", FEMALE: "Girls / Women", COED: "Coed" };
+  const genderOf = (t: (typeof teams)[number]): "MALE" | "FEMALE" | "COED" | null => {
+    if (t.gender === "MALE" || t.gender === "FEMALE" || t.gender === "COED") return t.gender;
+    const seg = segOf(codeOf(t));
+    return seg === "M" ? "MALE" : seg === "W" ? "FEMALE" : null;
+  };
+
   const fSegment = sp.segment?.trim() || null;
   const fLevel = (sp.level ?? sp.division)?.trim() || null; // `division` kept as an alias
   const fMarket = sp.market?.trim() || null;
+  const fGender = sp.gender?.trim() || null;
   const fSort = sp.sort?.trim() || "division";
-  const anyFilter = !!(fSegment || fLevel || fMarket);
+  const anyFilter = !!(fSegment || fLevel || fMarket || fGender);
 
   const shownTeams = teams.filter((t) => {
     const code = codeOf(t);
     if (fSegment && segOf(code) !== fSegment) return false;
     if (fLevel && code !== fLevel) return false;
     if (fMarket && (t.market ?? "") !== fMarket) return false;
+    if (fGender && genderOf(t) !== fGender) return false;
     return true;
   });
 
@@ -166,6 +178,8 @@ export default async function TeamBuildBoard({
   const segmentsPresent = [...new Set(teams.map((t) => segOf(codeOf(t))).filter(Boolean))] as ("M" | "W" | "YOUTH")[];
   const levelsPresent = [...new Set(teams.map((t) => codeOf(t)).filter(Boolean))] as string[];
   const marketsPresent = [...new Set(teams.map((t) => t.market).filter(Boolean))] as string[];
+  const gendersPresent = [...new Set(teams.map((t) => genderOf(t)).filter(Boolean))] as ("MALE" | "FEMALE" | "COED")[];
+  gendersPresent.sort((a, b) => ({ MALE: 0, FEMALE: 1, COED: 2 }[a] - { MALE: 0, FEMALE: 1, COED: 2 }[b]));
   const orderSeg = { M: 0, W: 1, YOUTH: 2 } as Record<string, number>;
   segmentsPresent.sort((a, b) => (orderSeg[a] ?? 9) - (orderSeg[b] ?? 9));
   // Level chips respect a chosen segment (choosing Men's shows only M* levels).
@@ -174,15 +188,17 @@ export default async function TeamBuildBoard({
 
   // Build a URL that keeps the other facets and toggles one. Passing null clears
   // a facet; clicking the already-active value clears it (a toggle).
-  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null; sort?: string | null }) => {
+  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null; gender?: string | null; sort?: string | null }) => {
     const seg = "segment" in over ? over.segment : fSegment;
     const lvl = "level" in over ? over.level : fLevel;
     const mkt = "market" in over ? over.market : fMarket;
+    const gen = "gender" in over ? over.gender : fGender;
     const srt = "sort" in over ? over.sort : fSort;
     const params = new URLSearchParams();
     if (seg) params.set("segment", seg);
     if (lvl) params.set("level", lvl);
     if (mkt) params.set("market", mkt);
+    if (gen) params.set("gender", gen);
     if (srt && srt !== "division") params.set("sort", srt); // division is the default
     const qs = params.toString();
     return `/console/teams${qs ? `?${qs}` : ""}#teams-grid`;
@@ -406,6 +422,14 @@ export default async function TeamBuildBoard({
               <Chip href={facetHref({ level: null })} active={!fLevel}>All</Chip>
               {levelChips.map((c) => (
                 <Chip key={c} href={facetHref({ level: fLevel === c ? null : c, segment: segOf(c) })} active={fLevel === c}>{levelLabel(c)}</Chip>
+              ))}
+            </FacetRow>
+          )}
+          {gendersPresent.length > 1 && (
+            <FacetRow label="Gender">
+              <Chip href={facetHref({ gender: null })} active={!fGender}>All</Chip>
+              {gendersPresent.map((gn) => (
+                <Chip key={gn} href={facetHref({ gender: fGender === gn ? null : gn })} active={fGender === gn}>{GENDER_LABEL[gn]}</Chip>
               ))}
             </FacetRow>
           )}

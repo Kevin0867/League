@@ -158,6 +158,7 @@ export async function POST(req: Request) {
           divisionId: g("divisionId"),
           levelBand: g("levelBand"),
           market: g("market"),
+          gender: (() => { const v = g("gender"); return v && ["MALE", "FEMALE", "COED"].includes(v) ? v : v === null ? null : undefined; })(),
           color,
           coachId,
           teamContactId: g("teamContactId"),
