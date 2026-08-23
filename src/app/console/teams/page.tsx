@@ -131,6 +131,15 @@ export default async function TeamBuildBoard({
     .filter((g) => g.length > 1)
     .sort((a, b) => a[0].name.localeCompare(b[0].name));
 
+  // Division drill-down: ?division=<code> narrows the whole page to one division
+  // group (e.g. "M3.5"), using the same gender+level label the color-audit groups
+  // by. When set we show just that division's teams and scope the bulk tools to
+  // them, so an admin can manage a single division in isolation.
+  const divisionLabelOf = (t: (typeof teams)[number]) =>
+    t.divisionCode ?? deriveDivisionCode(t.division?.name) ?? t.division?.name ?? null;
+  const divisionFilter = sp.division?.trim() || null;
+  const shownTeams = divisionFilter ? teams.filter((t) => divisionLabelOf(t) === divisionFilter) : teams;
+
   return (
     <div className="space-y-6">
       <RosteringTabs active="teams" />
@@ -162,7 +171,7 @@ export default async function TeamBuildBoard({
 
       {/* Duplicate-team detector — same name = almost always a duplicate record,
           which shows twice on the board. Review each and delete the extra. */}
-      {duplicateGroups.length > 0 && (
+      {!divisionFilter && duplicateGroups.length > 0 && (
         <div className="card border-l-4 border-rose-400">
           <h2 className="font-semibold text-rose-700">
             {duplicateGroups.length} duplicate team name{duplicateGroups.length === 1 ? "" : "s"}
@@ -238,12 +247,12 @@ export default async function TeamBuildBoard({
 
       <TeamCreateForm ticket={ticket} seasons={seasons} facilities={facilities} />
 
-      {teams.length > 0 && (
+      {shownTeams.length > 0 && (
         <BulkScheduleEditor
           ticket={ticket}
           facilities={facilities}
           slotsByFacility={slotsByFacility}
-          teams={teams.map((t) => ({
+          teams={shownTeams.map((t) => ({
             id: t.id,
             name: t.name,
             market: t.market,
@@ -254,7 +263,7 @@ export default async function TeamBuildBoard({
         />
       )}
 
-      {teams.length > 0 && (
+      {!divisionFilter && teams.length > 0 && (
         <div className="card">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -284,8 +293,9 @@ export default async function TeamBuildBoard({
                 <div key={g.label} className={`rounded-lg border p-2.5 text-sm ${g.ok ? "border-slate-200" : "border-amber-300 bg-amber-50"}`}>
                   <div className="flex items-center gap-2">
                     <span className={g.ok ? "text-emerald-600" : "text-amber-600"}>{g.ok ? "✓" : "!"}</span>
-                    <span className="font-medium text-slate-800">{g.label}</span>
+                    <Link href={`/console/teams?division=${encodeURIComponent(g.label)}#teams-grid`} className="font-medium text-brand-700 hover:underline">{g.label}</Link>
                     <span className="text-xs text-slate-400">{g.teams.length} teams</span>
+                    <Link href={`/console/teams?division=${encodeURIComponent(g.label)}#teams-grid`} className="ml-auto text-xs font-medium text-brand-600 hover:underline">Open →</Link>
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {g.teams.map((t, i) => (
@@ -311,11 +321,23 @@ export default async function TeamBuildBoard({
         </div>
       ) : (
         <>
+        {divisionFilter && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5">
+            <div className="text-sm text-slate-700">
+              Showing division <span className="font-semibold text-slate-900">{divisionFilter}</span>
+              <span className="text-slate-400"> · {shownTeams.length} team{shownTeams.length === 1 ? "" : "s"}</span>
+            </div>
+            <Link href="/console/teams" className="text-sm font-medium text-brand-700 hover:underline">← All teams</Link>
+          </div>
+        )}
         <div className="max-w-md">
           <TableFilter targetId="teams-grid" placeholder="Search teams by name, market, or division…" />
         </div>
+        {divisionFilter && shownTeams.length === 0 ? (
+          <div className="card py-8 text-center text-sm text-slate-400">No teams in {divisionFilter}. <Link href="/console/teams" className="text-brand-700 underline">Back to all teams</Link>.</div>
+        ) : null}
         <div id="teams-grid" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {teams.map((t) => {
+          {shownTeams.map((t) => {
             const missing = teamMissingFields(t);
             const roster = rosterStatus(t._count.members, t.coachPlays);
             const publish = canPublishTeam(t, t.facility);
