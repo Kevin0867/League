@@ -84,6 +84,9 @@ export default async function RegistrationsPage({
   // record has no email/phone), so searching a parent's email finds the child.
   if (q) filters.push({ person: { OR: [
     ...personSearchOR(q),
+    // Their account login email, when it differs from the contact email on file.
+    { user: { is: { email: { contains: q, mode: "insensitive" as const } } } },
+    // Their guardian's contact (a minor with no email/phone of their own).
     { guardian: { is: { OR: personSearchOR(q) } } },
   ] } });
   if (sp.div) filters.push({ divisionId: sp.div });
@@ -106,8 +109,19 @@ export default async function RegistrationsPage({
     updated_desc: { updatedAt: "desc" },
     first_asc: { person: { firstName: "asc" } },
     last_asc: { person: { lastName: "asc" } },
+    division_asc: { division: { name: "asc" } },
     status_asc: { status: "asc" },
   };
+  // Clickable column headers: link to a sort while preserving the active filters.
+  const sortHref = (s: string) => {
+    const params = new URLSearchParams();
+    for (const k of ["q", "div", "loc", "waiver", "pay", "assign"] as const) {
+      if (sp[k]) params.set(k, sp[k]!);
+    }
+    params.set("sort", s);
+    return `/console/registrations?${params.toString()}`;
+  };
+  const arrow = (...keys: string[]) => (keys.includes(sort) ? " ↓" : "");
 
   const [registrations, divisionOpts, marketRows] = await Promise.all([
     prisma.registration.findMany({
@@ -124,6 +138,21 @@ export default async function RegistrationsPage({
   // Roster quick-action context: teams per season, each player's current team,
   // and their fee status — so each row can assign/move/request/refund.
   const personIds = [...new Set(registrations.map((r) => r.person.id))];
+
+  // Cross-record fallback: a search may name someone who exists but has no
+  // registration this season — a coach, an admin, or an account whose login
+  // email differs from any contact email. Find those people (across every field
+  // + their account email) so the search never dead-ends when the record exists.
+  const shownIds = new Set(personIds);
+  const otherMatches = q
+    ? (await prisma.person.findMany({
+        where: { OR: [...personSearchOR(q), { user: { is: { email: { contains: q, mode: "insensitive" as const } } } }] },
+        select: { id: true, firstName: true, lastName: true, email: true, coach: { select: { id: true } }, user: { select: { email: true } } },
+        orderBy: { lastName: "asc" },
+        take: 25,
+      })).filter((p) => !shownIds.has(p.id))
+    : [];
+
   const [teamRows, memberships, payments] = await Promise.all([
     prisma.team.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, seasonId: true } }),
     prisma.teamMember.findMany({ where: { personId: { in: personIds } }, select: { personId: true, teamId: true, team: { select: { seasonId: true } } } }),
@@ -275,6 +304,29 @@ export default async function RegistrationsPage({
         <p className="text-sm text-slate-500">{registrations.length} matching registration{registrations.length === 1 ? "" : "s"}.</p>
       )}
 
+      {q && otherMatches.length > 0 && (
+        <div className="card border-l-4 border-brand-400">
+          <h2 className="font-semibold text-slate-900">
+            {otherMatches.length} other {otherMatches.length === 1 ? "person matches" : "people match"} “{q}” (no registration this season)
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-500">Coaches, admins, or accounts whose record matched your search. Click to open their profile.</p>
+          <ul className="mt-3 divide-y divide-slate-100 text-sm">
+            {otherMatches.map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-2 py-2">
+                <Link href={p.coach ? `/console/coaches/${p.id}` : `/console/people/${p.id}`} className="font-medium text-brand-700 hover:underline">
+                  {p.firstName} {p.lastName}
+                </Link>
+                <span className="flex items-center gap-2 text-xs text-slate-400">
+                  <span>{p.email ?? p.user?.email ?? "—"}</span>
+                  {p.coach && <span className="badge bg-brand-50 text-brand-700">Coach</span>}
+                  {!p.coach && p.user && <span className="badge bg-slate-100 text-slate-600">Account</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {sp.ok && OK[sp.ok] && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok]}</p>
       )}
@@ -353,11 +405,11 @@ export default async function RegistrationsPage({
           <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="w-8 py-2"></th>
-              <th className="py-2">Player</th>
-              <th className="hidden sm:table-cell">Division</th>
+              <th className="py-2"><a href={sortHref(sort === "last_asc" ? "first_asc" : "last_asc")} className="hover:text-brand-700">Player{arrow("first_asc", "last_asc")}</a></th>
+              <th className="hidden sm:table-cell"><a href={sortHref("division_asc")} className="hover:text-brand-700">Division{arrow("division_asc")}</a></th>
               <th className="hidden md:table-cell">Location prefs</th>
               <th className="hidden sm:table-cell">Waiver</th>
-              <th>Status</th>
+              <th><a href={sortHref("status_asc")} className="hover:text-brand-700">Status{arrow("status_asc")}</a></th>
               <th className="text-right">Actions</th>
             </tr>
           </thead>
