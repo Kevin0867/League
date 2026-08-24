@@ -89,7 +89,7 @@ export async function POST(req: Request) {
 
       if (result.recipients === 0) return back("?err=norecipients");
 
-      return back(`?ok=1&n=${result.recipients}&failed=${result.failures}`);
+      return back(`?ok=1&n=${result.recipients}&failed=${result.failures}&nophone=${result.noPhone}&noemail=${result.noEmail}`);
     }
 
     // Whole-platform announcement — the admin ticks the categories to reach and

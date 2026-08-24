@@ -43,6 +43,11 @@ export type DispatchResult = {
   simulated: number;
   /** Human-readable reasons for each channel failure, for surfacing to admins. */
   failureReasons: string[];
+  /** Recipients for whom a REQUESTED channel had no address on file — SMS asked
+   *  for but no phone, or email asked for but no address. Not a delivery failure
+   *  (nothing was attempted), but the admin should know the channel was skipped. */
+  noPhone: number;
+  noEmail: number;
 };
 
 export async function dispatchMessage(input: DispatchInput): Promise<DispatchResult> {
@@ -82,6 +87,8 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // second recipient still gets a logged row, marked SKIPPED.
   const sentEmails = new Set<string>();
   const sentPhones = new Set<string>();
+  let noPhone = 0;
+  let noEmail = 0;
 
   for (const r of recipients) {
     // In-app is always delivered — it lives in our own database.
@@ -113,6 +120,9 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
       } else if (candidates.length) {
         // Every address was already reached via another recipient (e.g. the parent).
         emailStatus = "SKIPPED";
+      } else {
+        // Email requested but this recipient has no address on file.
+        noEmail++;
       }
     }
     if (channels.includes("SMS")) {
@@ -132,6 +142,9 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
         if (res.ok && res.simulated) wasSimulated = true;
       } else if (num) {
         smsStatus = "SKIPPED";
+      } else {
+        // SMS requested but this recipient has no phone number on file.
+        noPhone++;
       }
     }
 
@@ -154,5 +167,5 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     });
   }
 
-  return { messageId: message.id, recipients: recipients.length, failures, simulated, failureReasons: allFailureReasons };
+  return { messageId: message.id, recipients: recipients.length, failures, simulated, failureReasons: allFailureReasons, noPhone, noEmail };
 }
