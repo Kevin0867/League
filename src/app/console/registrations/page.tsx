@@ -10,6 +10,7 @@ import { RegistrationsBulkBar } from "@/components/RegistrationsBulkBar";
 import { requireAdmin } from "@/lib/rbac";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -98,11 +99,21 @@ export default async function RegistrationsPage({
   if (sp.pay === "paid") filters.push({ person: { paymentsMade: { some: { category: "PLAYER_FEE", status: "PAID" } } } });
   const where = filters.length ? { AND: filters } : {};
 
+  const sort = sp.sort ?? "added_desc";
+  const REG_SORTS: Record<string, Prisma.RegistrationOrderByWithRelationInput> = {
+    added_desc: { submittedAt: "desc" },
+    added_asc: { submittedAt: "asc" },
+    updated_desc: { updatedAt: "desc" },
+    first_asc: { person: { firstName: "asc" } },
+    last_asc: { person: { lastName: "asc" } },
+    status_asc: { status: "asc" },
+  };
+
   const [registrations, divisionOpts, marketRows] = await Promise.all([
     prisma.registration.findMany({
       where,
       include: { person: true, division: true, locationPrefs: { orderBy: { rank: "asc" }, include: { facility: true } } },
-      orderBy: { submittedAt: "desc" },
+      orderBy: REG_SORTS[sort] ?? REG_SORTS.added_desc,
     }),
     prisma.division.findMany({ where: { divisionType: { not: "LESSON" } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.facility.findMany({ where: { archived: false, market: { not: null } }, select: { market: true } }),
@@ -244,6 +255,17 @@ export default async function RegistrationsPage({
             <option value="unassigned">Unassigned</option>
             <option value="assigned">Assigned</option>
             <option value="waitlisted">Waitlisted</option>
+          </select>
+        </div>
+        <div>
+          <label className="label text-xs">Sort by</label>
+          <select name="sort" defaultValue={sort} className="input py-1.5 text-sm">
+            <option value="added_desc">Date added (newest)</option>
+            <option value="added_asc">Date added (oldest)</option>
+            <option value="updated_desc">Recently updated</option>
+            <option value="first_asc">First name (A–Z)</option>
+            <option value="last_asc">Last name (A–Z)</option>
+            <option value="status_asc">Status</option>
           </select>
         </div>
         <button className="btn-secondary">Apply</button>

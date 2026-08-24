@@ -67,12 +67,20 @@ export default async function CoachesPage({
   // Coach relation shape shared by both sources (the profile source carries an
   // extra `person`, which is structurally assignable to this smaller type).
   type CoachRel = NonNullable<(typeof coachUsers)[number]["person"]>["coach"];
-  const byPerson = new Map<string, { person: { id: string; firstName: string; lastName: string; waiverSignedAt: Date | null }; coach: CoachRel }>();
-  for (const u of coachUsers) if (u.person) byPerson.set(u.person.id, { person: u.person, coach: u.person.coach });
-  for (const c of coachProfiles) if (!byPerson.has(c.personId)) byPerson.set(c.personId, { person: c.person, coach: c });
-  const coaches = [...byPerson.values()].sort((a, b) =>
-    `${a.person.lastName} ${a.person.firstName}`.localeCompare(`${b.person.lastName} ${b.person.firstName}`)
-  );
+  type CoachEntry = { person: { id: string; firstName: string; lastName: string; waiverSignedAt: Date | null }; coach: CoachRel; createdAt: Date; updatedAt: Date };
+  const byPerson = new Map<string, CoachEntry>();
+  for (const u of coachUsers) if (u.person) byPerson.set(u.person.id, { person: u.person, coach: u.person.coach, createdAt: u.person.createdAt, updatedAt: u.person.updatedAt });
+  for (const c of coachProfiles) if (!byPerson.has(c.personId)) byPerson.set(c.personId, { person: c.person, coach: c, createdAt: c.person.createdAt, updatedAt: c.person.updatedAt });
+
+  const sort = sp.sort ?? "last_asc";
+  const COACH_SORTS: Record<string, { label: string; cmp: (a: CoachEntry, b: CoachEntry) => number }> = {
+    last_asc: { label: "Last name (A–Z)", cmp: (a, b) => `${a.person.lastName} ${a.person.firstName}`.localeCompare(`${b.person.lastName} ${b.person.firstName}`) },
+    first_asc: { label: "First name (A–Z)", cmp: (a, b) => `${a.person.firstName} ${a.person.lastName}`.localeCompare(`${b.person.firstName} ${b.person.lastName}`) },
+    added_desc: { label: "Date added (newest)", cmp: (a, b) => b.createdAt.getTime() - a.createdAt.getTime() },
+    added_asc: { label: "Date added (oldest)", cmp: (a, b) => a.createdAt.getTime() - b.createdAt.getTime() },
+    updated_desc: { label: "Recently updated", cmp: (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() },
+  };
+  const coaches = [...byPerson.values()].sort((COACH_SORTS[sort] ?? COACH_SORTS.last_asc).cmp);
 
   // Login activity per coach: whether they hold an account and when they last
   // signed in — the definitive answer to "was the coach able to log on yet?".
@@ -123,6 +131,13 @@ export default async function CoachesPage({
         <div className="max-w-md flex-1">
           <TableFilter targetId="coaches-table" placeholder="Search coaches by name…" />
         </div>
+        <form method="GET" className="flex items-center gap-2">
+          <label className="label text-xs whitespace-nowrap">Sort by</label>
+          <select name="sort" defaultValue={sort} className="input py-1.5 text-sm">
+            {Object.entries(COACH_SORTS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
+          </select>
+          <button className="btn-secondary text-sm">Apply</button>
+        </form>
         {session && can(session.role, "manageCoaches") && (
           <div className="flex gap-2">
             <form method="POST" action="/api/console/coaches">
