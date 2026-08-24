@@ -72,7 +72,7 @@ export default async function CoachesPage({
   for (const u of coachUsers) if (u.person) byPerson.set(u.person.id, { person: u.person, coach: u.person.coach, createdAt: u.person.createdAt, updatedAt: u.person.updatedAt });
   for (const c of coachProfiles) if (!byPerson.has(c.personId)) byPerson.set(c.personId, { person: c.person, coach: c, createdAt: c.person.createdAt, updatedAt: c.person.updatedAt });
 
-  const sort = sp.sort ?? "last_asc";
+  const sort = sp.sort ?? "first_asc";
   const COACH_SORTS: Record<string, { label: string; cmp: (a: CoachEntry, b: CoachEntry) => number }> = {
     last_asc: { label: "Last name (A–Z)", cmp: (a, b) => `${a.person.lastName} ${a.person.firstName}`.localeCompare(`${b.person.lastName} ${b.person.firstName}`) },
     first_asc: { label: "First name (A–Z)", cmp: (a, b) => `${a.person.firstName} ${a.person.lastName}`.localeCompare(`${b.person.firstName} ${b.person.lastName}`) },
@@ -80,7 +80,7 @@ export default async function CoachesPage({
     added_asc: { label: "Date added (oldest)", cmp: (a, b) => a.createdAt.getTime() - b.createdAt.getTime() },
     updated_desc: { label: "Recently updated", cmp: (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() },
   };
-  const coaches = [...byPerson.values()].sort((COACH_SORTS[sort] ?? COACH_SORTS.last_asc).cmp);
+  const coaches = [...byPerson.values()].sort((COACH_SORTS[sort] ?? COACH_SORTS.first_asc).cmp);
 
   // Login activity per coach: whether they hold an account and when they last
   // signed in — the definitive answer to "was the coach able to log on yet?".
