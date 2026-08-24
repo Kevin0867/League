@@ -41,13 +41,17 @@ export default async function MessagesPage({
   const canBroadcast = can(session.role, "broadcastAll");
   const ticket = await mintConsoleTicket();
 
+  const noPhone = Number(sp.nophone ?? "0");
+  const noEmail = Number(sp.noemail ?? "0");
   const successNote = sp.ok
     ? `Sent to ${sp.n ?? "0"} recipient${sp.n === "1" ? "" : "s"}` +
       (sp.failed && sp.failed !== "0"
         ? ` · ${sp.failed} delivery failure${sp.failed === "1" ? "" : "s"} flagged`
-        : "")
+        : "") +
+      (noPhone > 0 ? ` · ${noPhone} had no phone (no text sent)` : "") +
+      (noEmail > 0 ? ` · ${noEmail} had no email (no email sent)` : "")
     : null;
-  const hasFailures = sp.ok && sp.failed && sp.failed !== "0";
+  const hasFailures = sp.ok && ((sp.failed && sp.failed !== "0") || noPhone > 0 || noEmail > 0);
 
   const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });
 

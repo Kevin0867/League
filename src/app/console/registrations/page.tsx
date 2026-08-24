@@ -9,6 +9,7 @@ import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { RegistrationsBulkBar } from "@/components/RegistrationsBulkBar";
 import { requireAdmin } from "@/lib/rbac";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
+import { personSearchOR } from "@/lib/domain/personSearch";
 
 export const dynamic = "force-dynamic";
 
@@ -78,11 +79,11 @@ export default async function RegistrationsPage({
     { seasonId: scopeSeasonId },
     { status: { notIn: [...DEAD_REG_STATUS] } },
   ];
+  // Also match a registrant through their guardian's contact (a minor whose own
+  // record has no email/phone), so searching a parent's email finds the child.
   if (q) filters.push({ person: { OR: [
-    { firstName: { contains: q, mode: "insensitive" as const } },
-    { lastName: { contains: q, mode: "insensitive" as const } },
-    { email: { contains: q, mode: "insensitive" as const } },
-    { phone: { contains: q, mode: "insensitive" as const } },
+    ...personSearchOR(q),
+    { guardian: { is: { OR: personSearchOR(q) } } },
   ] } });
   if (sp.div) filters.push({ divisionId: sp.div });
   if (sp.loc) filters.push({ locationPrefs: { some: { facility: { market: sp.loc } } } });
