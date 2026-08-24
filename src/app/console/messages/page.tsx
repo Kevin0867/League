@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { MessageComposer } from "@/components/MessageComposer";
@@ -152,16 +153,18 @@ export default async function MessagesPage({
                 {messages.map((m) => {
                   const failures = m.recipients.filter((r) => r.failedReason).length;
                   return (
-                    <li key={m.id} className="py-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-slate-800">{m.subject ?? m.triggerType ?? "Message"}</span>
-                        <span className="text-xs text-slate-400">{m.recipients.length} recipients</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <span>{m.audienceType.replace(/_/g, " ")}</span>
-                        <span>· {m.channels}</span>
-                        {failures > 0 && <span className="badge bg-rose-100 text-rose-800">{failures} failed</span>}
-                      </div>
+                    <li key={m.id}>
+                      <Link href={`/console/messages/${m.id}`} className="-mx-2 block rounded-lg px-2 py-2 hover:bg-slate-50">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-800">{m.subject ?? m.triggerType ?? "Message"}</span>
+                          <span className="text-xs text-slate-400">{m.recipients.length} recipients</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <span>{m.audienceType.replace(/_/g, " ")}</span>
+                          <span>· {m.channels}</span>
+                          {failures > 0 && <span className="badge bg-rose-100 text-rose-800">{failures} failed</span>}
+                        </div>
+                      </Link>
                     </li>
                   );
                 })}
