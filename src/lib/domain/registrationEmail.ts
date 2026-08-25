@@ -32,8 +32,9 @@ function playerRows(players: EnrolledPlayer[]): string {
     .join("");
 }
 
-/** Confirmation to the registrant summarizing who was enrolled and preferences. */
-export async function sendRegistrationConfirmation(s: RegistrationSummary) {
+/** Pure builder for the registrant confirmation — returns {subject, text, html}
+ *  so it can be sent OR unit-tested without a mail provider. */
+export function registrationConfirmationContent(s: RegistrationSummary): { subject: string; text: string; html: string } {
   const prefs: string[] = [];
   if (s.locations.length) prefs.push(`Locations: ${s.locations.join(", ")}`);
   if (s.practiceTimes.length) prefs.push(`Practice times: ${s.practiceTimes.join(", ")}`);
@@ -82,18 +83,23 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
     `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
-  return sendEmail(
-    s.toEmail,
-    wl ? `You're on the ${s.seasonName} waitlist` : `We received your ${s.seasonName} registration`,
+  return {
+    subject: wl ? `You're on the ${s.seasonName} waitlist` : `We received your ${s.seasonName} registration`,
     text,
-    brandedEmailHtml({
+    html: brandedEmailHtml({
       heading: wl ? `You're on the waitlist, ${s.recipientName}` : `Thanks, ${s.recipientName}!`,
       intro: wl
         ? `Registration for ${s.seasonName} has closed, so we've added you to the waitlist.`
         : `We received your ${s.seasonName} registration. Here's what you signed up for.`,
       contentHtml,
-    })
-  );
+    }),
+  };
+}
+
+/** Confirmation to the registrant summarizing who was enrolled and preferences. */
+export async function sendRegistrationConfirmation(s: RegistrationSummary) {
+  const c = registrationConfirmationContent(s);
+  return sendEmail(s.toEmail, c.subject, c.text, c.html);
 }
 
 /** Internal heads-up to the team inbox that a new registration came in. */
