@@ -7,11 +7,21 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Whole-dollar amounts read cleaner without the ".00" ("$495", "$25"); anything
+// with cents keeps the full currency format.
+function usd(cents: number): string {
+  return cents % 100 === 0 ? `$${cents / 100}` : formatCents(cents);
+}
+
+/** Default payment deadline shown in placement/launch emails (Academy). */
+export const PAYMENT_DUE_LABEL = "September 1";
+
 /**
  * The single "team launch" email — one message to a player/guardian that folds
  * together everything they need to do: welcome + team details, pick apparel &
- * pay the season fee, and complete the waiver. Sent instead of three separate
- * emails. Each CTA still deep-links to the same page the individual sends use.
+ * pay the season fee, and (when still outstanding) complete the waiver. Sent
+ * instead of three separate emails. Each CTA deep-links to the same page the
+ * individual sends use.
  */
 export function teamLaunchEmail(opts: {
   recipientName: string;
@@ -24,14 +34,16 @@ export function teamLaunchEmail(opts: {
   practiceWhen: string;
   payUrl: string;
   feeCents: number;
+  apparelCents?: number;
+  paymentDueLabel?: string;
   waiverUrl: string | null;
 }): { subject: string; text: string; html: string } {
+  const apparelCents = opts.apparelCents ?? 2500;
+  const dueLabel = opts.paymentDueLabel ?? PAYMENT_DUE_LABEL;
+
   const detailRow = (label: string, value: string) =>
     `<tr><td style="padding:5px 0;color:#64748b;font-size:13px;width:90px">${label}</td>` +
     `<td style="padding:5px 0;color:#0f172a;font-size:14px;font-weight:600">${value}</td></tr>`;
-
-  const stepNum = (n: number) =>
-    `<span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:11px;background:#4338ca;color:#fff;font-size:12px;font-weight:700;margin-right:8px">${n}</span>`;
 
   const contentHtml =
     // Team details
@@ -42,37 +54,39 @@ export function teamLaunchEmail(opts: {
     detailRow("Location", opts.locationAddress ? `${esc(opts.locationName)}<br><span style="font-weight:400;color:#64748b;font-size:13px">${esc(opts.locationAddress)}</span>` : esc(opts.locationName)) +
     detailRow("Practice", esc(opts.practiceWhen)) +
     `</table></div>` +
-    // Step 1 — apparel + fee
-    `<p style="margin:0 0 6px;font-size:15px;color:#0f172a">${stepNum(1)}<strong>Pick your team apparel &amp; pay</strong></p>` +
-    `<p style="margin:0 0 10px 30px;font-size:13px;color:#64748b">Each player chooses one team T-shirt or tank top (style &amp; size), then pays the ${formatCents(opts.feeCents)} season fee and apparel together in one secure checkout.</p>` +
-    `<div style="margin-left:30px">${emailButton(opts.payUrl, "Choose apparel &amp; pay", { primary: true })}</div>` +
-    // Step 2 — waiver (only if needed)
+    // Choose apparel + pay
+    `<p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#0f172a">Choose Team Apparel &amp; Pay</p>` +
+    `<p style="margin:0 0 12px;font-size:14px;color:#475569">Choose one PURE Academy team T-shirt or tank top (${usd(apparelCents)}), select your size, and pay your ${usd(opts.feeCents)} season fee in one checkout.</p>` +
+    `<div>${emailButton(opts.payUrl, "Choose Team Apparel &amp; Pay", { primary: true })}</div>` +
+    // Waiver — only when still outstanding
     (opts.waiverUrl
-      ? `<p style="margin:18px 0 6px;font-size:15px;color:#0f172a">${stepNum(2)}<strong>Complete the participation waiver</strong></p>` +
-        `<p style="margin:0 0 10px 30px;font-size:13px;color:#64748b">Required before the first practice — it only takes a minute.</p>` +
-        `<div style="margin-left:30px">${emailButton(opts.waiverUrl, "Complete the waiver")}</div>`
+      ? `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Complete the Participation Waiver</p>` +
+        `<p style="margin:0 0 12px;font-size:14px;color:#475569">Required before the first practice — it only takes a minute.</p>` +
+        `<div>${emailButton(opts.waiverUrl, "Complete the waiver")}</div>`
       : "") +
-    `<p style="margin:18px 0 0;font-size:12px;color:#94a3b8">The fee reserves your place on the team, not a session count. Secure checkout is hosted by Stripe — we never see your card details.</p>`;
+    `<p style="margin:22px 0 0;font-size:13px;color:#64748b">Questions? Contact us at <a href="mailto:${SUPPORT_ADDRESS}" style="color:#4338ca;text-decoration:none">${SUPPORT_ADDRESS}</a>.</p>`;
 
   const text = [
+    `You've been placed on ${opts.teamName}. Please complete payment as soon as possible, and no later than ${dueLabel}, to confirm your spot on the team.`,
+    ``,
     `Team: ${opts.teamName}`,
     `Coach: ${opts.coachName}${opts.coachContact ? ` (${opts.coachContact})` : ""}`,
     `Location: ${opts.locationName}${opts.locationAddress ? ` — ${opts.locationAddress}` : ""}`,
     `Practice: ${opts.practiceWhen}`,
     ``,
-    `1) Pick your team apparel & pay the ${formatCents(opts.feeCents)} season fee (one checkout):`,
+    `Choose Team Apparel & Pay — one PURE Academy T-shirt or tank top (${usd(apparelCents)}), select your size, and pay your ${usd(opts.feeCents)} season fee in one checkout:`,
     `   ${opts.payUrl}`,
-    ...(opts.waiverUrl ? [``, `2) Complete the participation waiver:`, `   ${opts.waiverUrl}`] : []),
+    ...(opts.waiverUrl ? [``, `Complete the participation waiver:`, `   ${opts.waiverUrl}`] : []),
     ``,
-    `Any questions, contact us at ${SUPPORT_ADDRESS}.`,
+    `Questions? Contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
   return {
-    subject: `Welcome to ${opts.teamName} — apparel, season fee & waiver`,
+    subject: `Welcome to PURE Academy — you're on ${opts.teamName}`,
     text,
     html: brandedEmailHtml({
-      heading: `Welcome to ${opts.teamName}!`,
-      intro: `Hi ${opts.recipientName} — a couple of quick steps to get set for the season.`,
+      heading: `Welcome to PURE Academy!`,
+      intro: `Hi ${opts.recipientName} — you've been placed on ${esc(opts.teamName)}. Please complete payment as soon as possible, and no later than ${dueLabel}, to confirm your spot on the team.`,
       contentHtml,
     }),
   };

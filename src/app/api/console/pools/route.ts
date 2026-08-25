@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
+import { placementPayLink } from "@/lib/payments/familyFee";
 import { TEAM_CAP } from "@/lib/enums";
 
 // Pool assignment as native-form-POST route handlers with ticket auth. Route
@@ -37,6 +38,7 @@ async function notifyAssignment(teamId: string, personIds: string[], seasonId: s
   for (const personId of personIds) {
     const person = team.members.find((m) => m.personId === personId)?.person;
     const firstName = person?.firstName ?? "there";
+    const pay = await placementPayLink(personId, seasonId);
     const email = teamAssignmentEmail({
       name: firstName,
       teamId: team.id,
@@ -46,6 +48,8 @@ async function notifyAssignment(teamId: string, personIds: string[], seasonId: s
       locationName,
       locationAddress,
       practiceWhen,
+      payUrl: pay?.payUrl ?? null,
+      feeCents: pay?.feeCents ?? null,
     });
     await dispatchMessage({
       seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,

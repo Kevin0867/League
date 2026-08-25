@@ -357,6 +357,12 @@ model Team {
   /// keeps their own team; no second coach is assigned to it.
   coachPlays    Boolean   @default(false)
 
+  /// Set when the team is "launched" — the combined welcome + apparel/pay (+
+  /// waiver) email has gone out to the roster's families. Drives the
+  /// Launched / Ready to launch status shown on the Teams page. A re-launch
+  /// refreshes it; it stays set once launched.
+  launchedAt    DateTime?
+
   /// Origin — must NOT assume a team belongs to PURE Academy (§12)
   /// PURE_ACADEMY | ACP_CLUB
   origin        String    @default("PURE_ACADEMY")
