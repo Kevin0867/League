@@ -19,6 +19,7 @@ import { accruePlayerSeasonFee } from "@/lib/payments/familyFee";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { formatTime12 } from "@/lib/time";
+import { decryptField } from "@/lib/crypto";
 
 // Console registration actions: add a walk-in player, and per-registrant roster
 // quick-actions (assign/move to a team, send back to the pool, request the
@@ -597,6 +598,90 @@ export async function POST(req: Request) {
 
       await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "UPDATE", summary: "Edited registration" });
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=edit`, origin), 303);
+    }
+
+    // Split this registration onto its OWN person record. Fixes families where
+    // two registrations (e.g. a parent and a child) ended up sharing one contact
+    // record — so renaming one would rename both. Clones the shared person into a
+    // fresh record, re-points THIS registration (and its team assignment) to the
+    // clone, and leaves the other registration on the original person. The admin
+    // can then edit the new record's name and contact independently.
+    case "splitPerson": {
+      if (!reg) return back("?err=fields");
+      const source = await prisma.person.findUnique({ where: { id: personId } });
+      if (!source) return back("?err=fields");
+      // Nothing to split if this is the person's only registration.
+      const regCount = await prisma.registration.count({ where: { personId } });
+      if (regCount < 2) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nosplit`, origin), 303);
+
+      // Encrypted-at-rest fields must be handed to the write layer as plaintext,
+      // or the encryption extension would double-encrypt the already-ciphertext
+      // value. decryptField returns a sentinel when the value can't be read on
+      // this key; drop it rather than copy garbage.
+      const decClone = (v: string | null) => {
+        if (!v) return null;
+        const d = decryptField(v);
+        return d === "[unable to decrypt]" ? null : d;
+      };
+
+      const clone = await prisma.person.create({
+        data: {
+          firstName: source.firstName,
+          lastName: source.lastName,
+          dob: source.dob,
+          email: source.email,
+          email2: source.email2,
+          email3: source.email3,
+          emailLabel: source.emailLabel,
+          email2Label: source.email2Label,
+          email3Label: source.email3Label,
+          phone: source.phone,
+          gender: source.gender,
+          howHeard: source.howHeard,
+          isMinor: source.isMinor,
+          guardianId: source.guardianId,
+          mediaOptOut: source.mediaOptOut,
+          waiverSignedAt: source.waiverSignedAt,
+          emailConsentAt: source.emailConsentAt,
+          smsConsentAt: source.smsConsentAt,
+          waiverRenewalRequiredAt: source.waiverRenewalRequiredAt,
+          duprId: source.duprId,
+          duprRating: source.duprRating,
+          duprVerified: source.duprVerified,
+          duprVerifiedAt: source.duprVerifiedAt,
+          duprParentalConsent: source.duprParentalConsent,
+          // Encrypted fields — pass decrypted plaintext so they re-encrypt cleanly.
+          address: decClone(source.address),
+          emergencyName: decClone(source.emergencyName),
+          emergencyPhone: decClone(source.emergencyPhone),
+          emergencyRelation: decClone(source.emergencyRelation),
+          medicalNotes: decClone(source.medicalNotes),
+          // Deliberately NOT copied: stripeCustomerId / zohoSyncedAt / imageUrl —
+          // the split record starts its own billing + sync identity.
+        },
+      });
+
+      // Move this registration to the clone.
+      await prisma.registration.update({ where: { id: reg.id }, data: { personId: clone.id } });
+
+      // Move the team assignment that belongs to this registration (matched by the
+      // registration's division within the season) so the roster follows the split.
+      const memberships = await prisma.teamMember.findMany({
+        where: { personId, team: { seasonId: reg.seasonId } },
+        include: { team: { select: { divisionId: true } } },
+      });
+      let toMove = reg.divisionId ? memberships.find((m) => m.team.divisionId === reg.divisionId) ?? null : null;
+      if (!toMove && memberships.length === 1) toMove = memberships[0];
+      if (toMove) await prisma.teamMember.update({ where: { id: toMove.id }, data: { personId: clone.id } });
+
+      await audit({
+        actorId: actor.userId,
+        entityType: "Registration",
+        entityId: reg.id,
+        action: "SPLIT_PERSON",
+        summary: `Split registration onto its own record (was shared with another registration under ${source.firstName} ${source.lastName})`,
+      });
+      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=split`, origin), 303);
     }
 
     // Resend the team-assignment email for a currently-assigned player.
