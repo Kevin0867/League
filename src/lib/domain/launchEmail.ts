@@ -52,7 +52,7 @@ export function teamLaunchEmail(opts: {
         `<p style="margin:0 0 10px 30px;font-size:13px;color:#64748b">Required before the first practice — it only takes a minute.</p>` +
         `<div style="margin-left:30px">${emailButton(opts.waiverUrl, "Complete the waiver")}</div>`
       : "") +
-    `<p style="margin:18px 0 0;font-size:12px;color:#94a3b8">The fee reserves a place on a team, not a session count. Secure checkout is hosted by Stripe — we never see your card details.</p>`;
+    `<p style="margin:18px 0 0;font-size:12px;color:#94a3b8">The fee reserves your place on the team, not a session count. Secure checkout is hosted by Stripe — we never see your card details.</p>`;
 
   const text = [
     `Team: ${opts.teamName}`,
