@@ -32,12 +32,14 @@ const OK: Record<string, string> = {
   sentall: "Sent — welcome, season fee + apparel, and waiver, in one combined email to the family.",
   welcomeSent: "Welcome sent.",
   feeexists: "This player's season fee was already invoiced — nothing new sent.",
+  split: "Split onto its own record. This registration now has its own contact info — edit the name and details below so they're correct.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
   nopayment: "No outstanding fee to resend.",
   fields: "Missing information.",
   noemail: "No email on file for this player — add one before sending the waiver.",
+  nosplit: "This registration already has its own record — nothing to split.",
 };
 
 const STATUSES = ["SUBMITTED", "ASSIGNED", "WAITLISTED", "WITHDRAWN", "DUPLICATE"];
@@ -67,10 +69,17 @@ export default async function RegistrationDetail({
 
   const p = reg.person;
   const guardian = p.isMinor ? p.guardian : null;
-  const [teams, membership, payments] = await Promise.all([
+  const [teams, membership, payments, sharedRegs] = await Promise.all([
     prisma.team.findMany({ where: { seasonId: reg.seasonId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.teamMember.findFirst({ where: { personId: p.id, team: { seasonId: reg.seasonId } }, include: { team: true } }),
     prisma.payment.findMany({ where: { partyId: p.id, seasonId: reg.seasonId }, orderBy: { createdAt: "desc" } }),
+    // Other registrations on the SAME person record — renaming this person would
+    // rename those too, so surface a "split onto its own record" fix when present.
+    prisma.registration.findMany({
+      where: { personId: p.id, id: { not: reg.id } },
+      orderBy: { createdAt: "desc" },
+      include: { division: { select: { name: true } }, season: { select: { name: true } } },
+    }),
   ]);
   const outstanding = payments.find((x) => x.category === "PLAYER_FEE" && ["REQUESTED", "PENDING"].includes(x.status));
   const paid = payments.find((x) => x.category === "PLAYER_FEE" && x.status === "PAID");
@@ -131,6 +140,32 @@ export default async function RegistrationDetail({
       {sp.err === "cpamount" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter an amount greater than $0.50.</p>}
       {sp.err && !["cpname", "cpemail", "cpamount"].includes(sp.err) && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERR[sp.err] ?? "Something went wrong."}</p>
+      )}
+
+      {/* Shared contact record — this person has more than one registration, so
+          the name/email/phone here are shared with those. Split this registration
+          onto its own record to give it a different name (e.g. a parent whose
+          registration was saved under their child's name). */}
+      {sharedRegs.length > 0 && (
+        <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">⚠ Shared contact record</p>
+          <p className="mt-1 text-sm text-slate-700">
+            This person also has {sharedRegs.length === 1 ? "another registration" : `${sharedRegs.length} other registrations`} on the
+            same contact record — {sharedRegs.map((r) => r.division?.name ?? r.programInterest ?? r.season?.name ?? "registration").join(", ")}.
+            Editing the name, email, or phone below changes it on all of them. If this registration is really a different
+            person (for example a parent whose registration was saved under their child&apos;s name), split it onto its own
+            record first, then edit the name.
+          </p>
+          <div className="mt-3">
+            <ConfirmSubmit
+              action="/api/console/registrations"
+              fields={{ ticket, op: "splitPerson", personId: p.id, registrationId: reg.id }}
+              confirm={`Give this registration its own contact record, separate from ${p.firstName} ${p.lastName}'s other registration${sharedRegs.length === 1 ? "" : "s"}? You can then rename it without affecting the others.`}
+              label="Split onto its own record"
+              className="rounded-lg border border-amber-500 bg-white px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+            />
+          </div>
+        </div>
       )}
 
       {/* Signup comments / placement requests — surfaced prominently. */}
