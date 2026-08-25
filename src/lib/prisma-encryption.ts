@@ -5,8 +5,15 @@ import { encryptField } from "./crypto";
 // reaches the database (§18). Reads return ciphertext; call sites that display
 // these fields decrypt explicitly with decryptField (access-controlled to staff).
 
+// Fields encrypted at the application layer (AES-256-GCM) before they ever reach
+// the database — a second layer on top of the provider's at-rest disk encryption.
+// Only fields that are NEVER filtered, searched, sorted, or matched on may be
+// added here: encryption uses a random IV per value, so ciphertext is not
+// equal-comparable or orderable. Identifiers used to run the product (name,
+// email, phone) are therefore protected by at-rest encryption + access control,
+// not this layer. `address` is safe — it's displayed, never queried.
 export const ENCRYPTED_FIELDS: Record<string, string[]> = {
-  person: ["emergencyName", "emergencyPhone", "emergencyRelation", "medicalNotes"],
+  person: ["address", "emergencyName", "emergencyPhone", "emergencyRelation", "medicalNotes"],
   registration: ["medicalDisclosures"],
 };
 
