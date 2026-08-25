@@ -55,11 +55,11 @@ export default async function RegisterPage({
   const notYetOpen = season?.opensOn && season.opensOn > now;
   const alreadyClosed = season?.closesOn && season.closesOn < now;
 
-  if (!season || notYetOpen || alreadyClosed) {
-    const heading = alreadyClosed ? "Registration has closed" : "Registration isn't open yet";
-    const detail = alreadyClosed
-      ? `Enrollment for ${season!.name} closed on ${formatDate(season!.closesOn)}.`
-      : notYetOpen
+  // Past the deadline we keep the form OPEN for waitlist sign-ups (handled
+  // below). Only "no season" or "not open yet" fully closes the page.
+  if (!season || notYetOpen) {
+    const heading = "Registration isn't open yet";
+    const detail = notYetOpen
       ? `Enrollment for ${season!.name} opens on ${formatDate(season!.opensOn)}.`
       : "No active season is currently accepting registrations.";
     return (
@@ -91,11 +91,19 @@ export default async function RegisterPage({
     <div>
       <PublicNav />
       <div className="mx-auto max-w-3xl px-4 py-10">
+        {alreadyClosed && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <p className="font-semibold text-amber-900">Registration for {season.name} has closed{season.closesOn ? ` (${formatDate(season.closesOn)})` : ""}.</p>
+            <p className="mt-1 text-sm text-amber-800">
+              You can still sign up below to join the <strong>waitlist</strong> — we&apos;ll reach out if a spot opens up. No payment is due unless you&apos;re placed.
+            </p>
+          </div>
+        )}
         <div className="mb-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-            {season.name} · Player Enrollment
+            {season.name} · {alreadyClosed ? "Waitlist Sign-up" : "Player Enrollment"}
           </p>
-          <h1 className="display text-3xl text-brand-900 sm:text-4xl">PURE Academy enrollment</h1>
+          <h1 className="display text-3xl text-brand-900 sm:text-4xl">{alreadyClosed ? "Join the PURE Academy waitlist" : "PURE Academy enrollment"}</h1>
           <p className="mt-2 text-slate-600">
             Tell us about the player. Our team matches you to the right team, coach, and
             location — then reaches out to confirm. Enroll today, pay later: we&apos;ll request
@@ -130,6 +138,7 @@ export default async function RegisterPage({
           preselectedDivision={preselectedDivision ?? null}
           preselectedLocation={effectiveLocation}
           preferredFacility={preferredFacility ? { id: preferredFacility.id, label: facilityLabel ?? "" } : null}
+          waitlist={!!alreadyClosed}
         />
       </div>
       <SiteFooter />

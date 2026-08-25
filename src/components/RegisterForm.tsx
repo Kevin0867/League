@@ -20,12 +20,14 @@ export function RegisterForm({
   preselectedDivision = null,
   preselectedLocation = null,
   preferredFacility = null,
+  waitlist = false,
 }: {
   seasonId: string;
   locations: string[];
   preselectedDivision?: string | null;
   preselectedLocation?: string | null;
   preferredFacility?: { id: string; label: string } | null;
+  waitlist?: boolean;
 }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, {});
   const [mode, setMode] = useState<Mode>("adult");
@@ -236,7 +238,7 @@ export function RegisterForm({
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className="btn-primary">
-          {pending ? "Submitting…" : "Submit registration"}
+          {pending ? "Submitting…" : waitlist ? "Join the waitlist" : "Submit registration"}
         </button>
         <span className="text-sm text-slate-500">No payment is required to register.</span>
       </div>

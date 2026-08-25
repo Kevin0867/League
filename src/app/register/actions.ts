@@ -105,6 +105,8 @@ async function enrollPlayer(opts: {
   // location preference so the registration is placed at that court.
   preferredFacilityId?: string | null;
   preferredFacilityMarket?: string | null;
+  // Past the registration deadline: file the registration on the waitlist.
+  waitlisted?: boolean;
 }): Promise<void> {
   const { player } = opts;
   const dob = player.dob ? new Date(player.dob) : null;
@@ -167,7 +169,7 @@ async function enrollPlayer(opts: {
       schedule: opts.practiceTimes.join(", ") || null,
       partnerRequests: opts.comments || null,
       mediaOptOut: opts.mediaOptOut,
-      status: "SUBMITTED",
+      status: opts.waitlisted ? "WAITLISTED" : "SUBMITTED",
     },
   });
 
@@ -207,7 +209,10 @@ export async function registerAction(
   if (!windowSeason || !windowSeason.active) return { error: "This season is no longer accepting registrations." };
   const nowTs = new Date();
   if (windowSeason.opensOn && windowSeason.opensOn > nowTs) return { error: `Registration opens on ${formatDate(windowSeason.opensOn)}.` };
-  if (windowSeason.closesOn && windowSeason.closesOn < nowTs) return { error: `Registration closed on ${formatDate(windowSeason.closesOn)}.` };
+  // Past the deadline we don't turn people away — we accept them onto the
+  // WAITLIST and tell them registration has closed. Only the "not open yet"
+  // window above is a hard stop.
+  const waitlisted = !!(windowSeason.closesOn && windowSeason.closesOn < nowTs);
 
   const mode = g("mode") || "adult"; // "adult" | "child" | "both"
   const adultPlaying = mode === "adult" || mode === "both";
@@ -332,6 +337,7 @@ export async function registerAction(
       preferredDivisionName,
       preferredFacilityId: preferredFacility?.id ?? null,
       preferredFacilityMarket,
+      waitlisted,
     });
     enrolled.push({ name: `${firstName} ${lastName}`, program: programLabel(team, skill) || preferredDivisionName || "" });
   }
@@ -381,6 +387,7 @@ export async function registerAction(
         preferredDivisionName,
       preferredFacilityId: preferredFacility?.id ?? null,
       preferredFacilityMarket,
+      waitlisted,
       });
       enrolled.push({ name: `${kid.firstName} ${kid.lastName}`, program: programLabel(kid.team, kid.skill) || preferredDivisionName || "" });
     }
@@ -411,6 +418,7 @@ export async function registerAction(
       players: enrolled,
       locations,
       practiceTimes,
+      waitlisted,
     };
     try {
       await sendRegistrationConfirmation(summary);
@@ -436,5 +444,5 @@ export async function registerAction(
     }
   }
 
-  redirect("/register/thanks");
+  redirect(waitlisted ? "/register/thanks?waitlist=1" : "/register/thanks");
 }
