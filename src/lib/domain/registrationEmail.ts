@@ -17,6 +17,9 @@ export type RegistrationSummary = {
   players: EnrolledPlayer[];
   locations: string[];
   practiceTimes: string[];
+  /** True when the registration deadline has passed — the registrant is on the
+   *  waitlist, and the confirmation says so. */
+  waitlisted?: boolean;
 };
 
 function playerRows(players: EnrolledPlayer[]): string {
@@ -35,29 +38,45 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
   if (s.locations.length) prefs.push(`Locations: ${s.locations.join(", ")}`);
   if (s.practiceTimes.length) prefs.push(`Practice times: ${s.practiceTimes.join(", ")}`);
 
+  const wl = !!s.waitlisted;
+  const waitBanner = wl
+    ? `<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:12px 16px;margin-bottom:14px">` +
+      `<p style="margin:0;font-size:14px;color:#92400e"><strong>Registration for ${esc(s.seasonName)} has closed.</strong> ` +
+      `You're on the <strong>waitlist</strong> — we'll be in touch if a spot opens up. No payment is due unless you're placed.</p></div>`
+    : "";
+  const followUp = wl
+    ? `<p style="margin:16px 0 12px;font-size:14px;color:#475569">We've added ${
+        s.players.length > 1 ? "each player" : "you"
+      } to the waitlist and will reach out if space becomes available. There's nothing more to do for now, and no payment is due unless a spot opens and you're placed.</p>`
+    : `<p style="margin:16px 0 12px;font-size:14px;color:#475569">Our team is matching ${
+        s.players.length > 1 ? "each player" : "you"
+      } to the right team, coach, and location, and we'll reach out to confirm. ` +
+      `Enroll today, pay later — no payment is due until placement is set. ` +
+      `We'll email your team placement and, separately, a secure link to pay the season fee.</p>`;
+
   const contentHtml =
+    waitBanner +
     `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">` +
     `<table style="width:100%;border-collapse:collapse">${playerRows(s.players)}</table>` +
     (prefs.length
       ? `<p style="margin:12px 0 0;font-size:13px;color:#64748b">${prefs.join(" &nbsp;·&nbsp; ")}</p>`
       : "") +
     `</div>` +
-    `<p style="margin:16px 0 12px;font-size:14px;color:#475569">Our team is matching ${
-      s.players.length > 1 ? "each player" : "you"
-    } to the right team, coach, and location, and we'll reach out to confirm. ` +
-    `Enroll today, pay later — no payment is due until placement is set. ` +
-    `We'll email your team placement and, separately, a secure link to pay the season fee.</p>` +
+    followUp +
     emailButton(`${appUrl()}/programs`, "Explore PURE Academy programs", { primary: true });
 
   const text = [
-    `Thanks, ${s.recipientName}! We received your ${s.seasonName} registration.`,
+    wl
+      ? `Thanks, ${s.recipientName}! Registration for ${s.seasonName} has closed, so you've been added to the WAITLIST.`
+      : `Thanks, ${s.recipientName}! We received your ${s.seasonName} registration.`,
     ``,
     ...s.players.map((p) => `  - ${p.name}${p.program ? ` — ${p.program}` : ""}`),
     ``,
     ...prefs,
     ``,
-    `Our team will match placement and reach out to confirm. No payment is due yet.`,
-    `We'll email your team placement and a secure link to pay the season fee.`,
+    wl
+      ? `We'll reach out if a spot opens up. No payment is due unless you're placed.`
+      : `Our team will match placement and reach out to confirm. No payment is due yet.\nWe'll email your team placement and a secure link to pay the season fee.`,
     ``,
     `Explore PURE Academy programs: ${appUrl()}/programs`,
     `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
@@ -65,11 +84,13 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
 
   return sendEmail(
     s.toEmail,
-    `We received your ${s.seasonName} registration`,
+    wl ? `You're on the ${s.seasonName} waitlist` : `We received your ${s.seasonName} registration`,
     text,
     brandedEmailHtml({
-      heading: `Thanks, ${s.recipientName}!`,
-      intro: `We received your ${s.seasonName} registration. Here's what you signed up for.`,
+      heading: wl ? `You're on the waitlist, ${s.recipientName}` : `Thanks, ${s.recipientName}!`,
+      intro: wl
+        ? `Registration for ${s.seasonName} has closed, so we've added you to the waitlist.`
+        : `We received your ${s.seasonName} registration. Here's what you signed up for.`,
       contentHtml,
     })
   );
