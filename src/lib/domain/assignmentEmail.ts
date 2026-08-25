@@ -2,9 +2,19 @@ import "server-only";
 import { appUrl } from "@/lib/stripe";
 import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
 import { SUPPORT_ADDRESS } from "@/lib/payments/receipt";
+import { formatCents } from "@/lib/money";
 
-// Branded team-assignment email: team, coach, location + address, practice
-// day/time, and a button to view the full team (coach info + teammates).
+/** Default payment deadline shown in the placement email (Academy). */
+const PAYMENT_DUE_LABEL = "September 1";
+
+// Branded team placement / welcome email: "Welcome to PURE Academy!", team,
+// coach, location + address, practice day/time, and — when a pay link is
+// supplied — a "Choose Team Apparel & Pay" button with the season fee. Mirrors
+// the team launch email so the two look the same.
+
+function usd(cents: number): string {
+  return cents % 100 === 0 ? `$${cents / 100}` : formatCents(cents);
+}
 
 export type AssignmentDetail = {
   name: string;
@@ -15,6 +25,11 @@ export type AssignmentDetail = {
   locationName: string;
   locationAddress?: string | null;
   practiceWhen: string;
+  // When supplied, the email carries the apparel + season-fee checkout button.
+  payUrl?: string | null;
+  feeCents?: number | null;
+  apparelCents?: number;
+  paymentDueLabel?: string;
 };
 
 function row(label: string, value: string): string {
@@ -32,7 +47,8 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
   html: string;
 } {
   const base = appUrl();
-  const teamUrl = `${base}/portal/team/${d.teamId}`;
+  const dueLabel = d.paymentDueLabel ?? PAYMENT_DUE_LABEL;
+  const apparelCents = d.apparelCents ?? 2500;
 
   const rows = [
     row("Team", d.teamName),
@@ -41,33 +57,44 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
     row("Practice", d.practiceWhen),
   ].join("");
 
+  // Pay section when a checkout link is available; otherwise point to the portal.
+  const payBlock = d.payUrl
+    ? `<p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#0f172a">Choose Team Apparel &amp; Pay</p>` +
+      `<p style="margin:0 0 12px;font-size:14px;color:#475569">Choose one PURE Academy team T-shirt or tank top (${usd(apparelCents)}), select your size, and pay your ${usd(d.feeCents ?? 49500)} season fee in one checkout.</p>` +
+      `<div>${emailButton(d.payUrl, "Choose Team Apparel &amp; Pay", { primary: true })}</div>`
+    : `<p style="margin:0 0 12px;font-size:14px;color:#475569">Open your portal to choose team apparel and pay your season fee.</p>` +
+      `<div>${emailButton(`${base}/portal`, "Open your portal to pay", { primary: true })}</div>`;
+
   const contentHtml =
     `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:6px 16px;margin-bottom:16px">` +
     `<table style="width:100%;border-collapse:collapse">${rows}</table>` +
     `</div>` +
-    emailButton(teamUrl, "View your team", { primary: true }) +
-    `<p style="margin:14px 0 0;font-size:13px;color:#475569">See your coach's info, your teammates, and practice details in your portal. ` +
-    `Your season fee request will follow shortly.</p>`;
+    payBlock +
+    `<p style="margin:22px 0 0;font-size:13px;color:#64748b">Questions? Contact us at <a href="mailto:${SUPPORT_ADDRESS}" style="color:#4338ca;text-decoration:none">${SUPPORT_ADDRESS}</a>.</p>`;
+
+  const payLine = d.payUrl
+    ? [`Choose Team Apparel & Pay — one PURE Academy T-shirt or tank top (${usd(apparelCents)}), select your size, and pay your ${usd(d.feeCents ?? 49500)} season fee in one checkout:`, `   ${d.payUrl}`]
+    : [`Open your portal to choose team apparel and pay your season fee:`, `   ${base}/portal`];
 
   const text = [
-    `Great news, ${d.name} — you're on ${d.teamName}!`,
+    `You've been placed on ${d.teamName}. Please complete payment as soon as possible, and no later than ${dueLabel}, to confirm your spot on the team.`,
     ``,
+    `Team: ${d.teamName}`,
     `Coach: ${d.coachName}${d.coachContact ? ` (${d.coachContact})` : ""}`,
     `Location: ${d.locationName}${d.locationAddress ? ` — ${d.locationAddress}` : ""}`,
     `Practice: ${d.practiceWhen}`,
     ``,
-    `View your team (coach info + teammates): ${teamUrl}`,
-    `Your season fee request will follow shortly.`,
+    ...payLine,
     ``,
-    `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
+    `Questions? Contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
   return {
-    subject: `You're on ${d.teamName}!`,
+    subject: `Welcome to PURE Academy — you're on ${d.teamName}`,
     text,
     html: brandedEmailHtml({
-      heading: `You're on ${d.teamName}!`,
-      intro: `Great news, ${d.name} — here are your team details.`,
+      heading: `Welcome to PURE Academy!`,
+      intro: `Hi ${d.name} — you've been placed on ${d.teamName}. Please complete payment as soon as possible, and no later than ${dueLabel}, to confirm your spot on the team.`,
       contentHtml,
     }),
   };

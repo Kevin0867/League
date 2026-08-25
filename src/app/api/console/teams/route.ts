@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
-import { accruePlayerSeasonFee } from "@/lib/payments/familyFee";
+import { accruePlayerSeasonFee, placementPayLink } from "@/lib/payments/familyFee";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
 import { isBookable } from "@/lib/domain/facilityWindows";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
@@ -558,6 +558,7 @@ export async function POST(req: Request) {
       const noContact: string[] = [];
       for (const m of team.members) {
         if (m.roleOnTeam === "COACH_PLAYER") continue;
+        const pay = await placementPayLink(m.personId, team.seasonId);
         const email = teamAssignmentEmail({
           name: m.person.firstName,
           teamId: team.id,
@@ -567,6 +568,8 @@ export async function POST(req: Request) {
           locationName: team.facility?.name ?? "To be confirmed",
           locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
           practiceWhen,
+          payUrl: pay?.payUrl ?? null,
+          feeCents: pay?.feeCents ?? null,
         });
         const familyEmails = familyEmailsOf(m);
         await dispatchMessage({
@@ -703,6 +706,7 @@ export async function POST(req: Request) {
         if (familyEmails.length === 0) noContact.push(`${m.person.firstName} ${m.person.lastName}`);
         else sent++;
       }
+      await prisma.team.update({ where: { id: teamId }, data: { launchedAt: new Date() } });
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "LAUNCH", summary: `Launched team — combined email to ${sent} family/families${noContact.length ? `; ${noContact.length} had no email on file (${noContact.join(", ")})` : ""}` });
       const lq = new URLSearchParams({ ok: "launched", n: String(sent) });
       if (noContact.length) { lq.set("failed", String(noContact.length)); lq.set("failedNames", noContact.slice(0, 6).join(", ")); }

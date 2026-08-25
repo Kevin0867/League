@@ -162,8 +162,14 @@ export default async function TeamBuildBoard({
   const fLevel = (sp.level ?? sp.division)?.trim() || null; // `division` kept as an alias
   const fMarket = sp.market?.trim() || null;
   const fGender = sp.gender?.trim() || null;
+  const fLaunch = sp.launch?.trim() || null;
   const fSort = sp.sort?.trim() || "division";
-  const anyFilter = !!(fSegment || fLevel || fMarket || fGender);
+  const anyFilter = !!(fSegment || fLevel || fMarket || fGender || fLaunch);
+
+  // Launch lifecycle: launched (welcome+pay email sent) → ready to launch
+  // (complete, nothing missing) → building (still missing required fields).
+  const launchState = (t: (typeof teams)[number]): "launched" | "ready" | "building" =>
+    t.launchedAt ? "launched" : teamMissingFields(t).length === 0 ? "ready" : "building";
 
   const shownTeams = teams.filter((t) => {
     const code = codeOf(t);
@@ -171,6 +177,7 @@ export default async function TeamBuildBoard({
     if (fLevel && code !== fLevel) return false;
     if (fMarket && (t.market ?? "") !== fMarket) return false;
     if (fGender && genderOf(t) !== fGender) return false;
+    if (fLaunch && launchState(t) !== fLaunch) return false;
     return true;
   });
 
@@ -188,17 +195,19 @@ export default async function TeamBuildBoard({
 
   // Build a URL that keeps the other facets and toggles one. Passing null clears
   // a facet; clicking the already-active value clears it (a toggle).
-  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null; gender?: string | null; sort?: string | null }) => {
+  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null; gender?: string | null; launch?: string | null; sort?: string | null }) => {
     const seg = "segment" in over ? over.segment : fSegment;
     const lvl = "level" in over ? over.level : fLevel;
     const mkt = "market" in over ? over.market : fMarket;
     const gen = "gender" in over ? over.gender : fGender;
+    const lnc = "launch" in over ? over.launch : fLaunch;
     const srt = "sort" in over ? over.sort : fSort;
     const params = new URLSearchParams();
     if (seg) params.set("segment", seg);
     if (lvl) params.set("level", lvl);
     if (mkt) params.set("market", mkt);
     if (gen) params.set("gender", gen);
+    if (lnc) params.set("launch", lnc);
     if (srt && srt !== "division") params.set("sort", srt); // division is the default
     const qs = params.toString();
     return `/console/teams${qs ? `?${qs}` : ""}#teams-grid`;
@@ -216,6 +225,7 @@ export default async function TeamBuildBoard({
     return [s, s === 2 ? youthRank(code) : bandOf(code), t.market ?? ""];
   };
   const statusRank = (t: (typeof teams)[number]) => (t.published ? 2 : teamMissingFields(t).length === 0 ? 1 : 0);
+  const launchRank = (t: (typeof teams)[number]) => ({ launched: 0, ready: 1, building: 2 }[launchState(t)]);
   const dayRank = (d: string | null) => { const i = (WEEKDAYS as readonly string[]).indexOf(d ?? ""); return i < 0 ? 99 : i; };
   const cmpByName = (a: (typeof teams)[number], b: (typeof teams)[number]) => a.name.localeCompare(b.name);
   const SORTS: Record<string, { label: string; cmp: (a: (typeof teams)[number], b: (typeof teams)[number]) => number }> = {
@@ -224,6 +234,7 @@ export default async function TeamBuildBoard({
     name: { label: "Name", cmp: cmpByName },
     players: { label: "Players", cmp: (a, b) => b._count.members - a._count.members || cmpByName(a, b) },
     status: { label: "Status", cmp: (a, b) => statusRank(a) - statusRank(b) || cmpByName(a, b) },
+    launch: { label: "Launch status", cmp: (a, b) => launchRank(a) - launchRank(b) || cmpByName(a, b) },
     day: { label: "Day/time", cmp: (a, b) => dayRank(a.dayOfWeek) - dayRank(b.dayOfWeek) || (a.startTime ?? "").localeCompare(b.startTime ?? "") || cmpByName(a, b) },
   };
   const shownSorted = [...shownTeams].sort((SORTS[fSort] ?? SORTS.division).cmp);
@@ -441,6 +452,14 @@ export default async function TeamBuildBoard({
               ))}
             </FacetRow>
           )}
+          <FacetRow label="Launch">
+            <Chip href={facetHref({ launch: null })} active={!fLaunch}>All</Chip>
+            {([["launched", "Launched"], ["ready", "Ready to launch"], ["building", "Building"]] as const).map(([val, lbl]) => (
+              <Chip key={val} href={facetHref({ launch: fLaunch === val ? null : val })} active={fLaunch === val}>
+                {lbl} <span className="text-slate-400">({teams.filter((t) => launchState(t) === val).length})</span>
+              </Chip>
+            ))}
+          </FacetRow>
           <FacetRow label="Sort by">
             {Object.entries(SORTS).map(([key, s]) => (
               <Chip key={key} href={facetHref({ sort: key })} active={fSort === key}>{s.label}</Chip>
@@ -476,13 +495,16 @@ export default async function TeamBuildBoard({
                       {t.origin === "ACP_CLUB" ? t.clubName ?? "Outside club" : "PURE Academy"}
                     </p>
                   </div>
-                  {t.published ? (
-                    <StatusBadge status="PUBLISHED" />
-                  ) : missing.length === 0 ? (
-                    <span className="badge bg-emerald-100 text-emerald-800">ready</span>
-                  ) : (
-                    <span className="badge bg-amber-100 text-amber-800">building</span>
-                  )}
+                  <div className="flex flex-col items-end gap-1">
+                    {t.launchedAt ? (
+                      <span className="badge bg-emerald-100 text-emerald-800">✓ Launched</span>
+                    ) : missing.length === 0 ? (
+                      <span className="badge bg-indigo-100 text-indigo-800">Ready to launch</span>
+                    ) : (
+                      <span className="badge bg-amber-100 text-amber-800">Building</span>
+                    )}
+                    {t.published && <StatusBadge status="PUBLISHED" />}
+                  </div>
                 </div>
 
                 {/* Six fields */}

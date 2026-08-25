@@ -15,7 +15,7 @@ import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
-import { accruePlayerSeasonFee } from "@/lib/payments/familyFee";
+import { accruePlayerSeasonFee, placementPayLink } from "@/lib/payments/familyFee";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { formatTime12 } from "@/lib/time";
@@ -61,6 +61,7 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
   const person = team.members.find((m) => m.personId === personId)?.person;
   const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
   const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
+  const pay = await placementPayLink(personId, seasonId);
   const email = teamAssignmentEmail({
     name: person?.firstName ?? "there",
     teamId: team.id,
@@ -70,6 +71,8 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
     locationName: team.facility?.name ?? "To be confirmed",
     locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
     practiceWhen: team.dayOfWeek ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}` : "A day and time to be confirmed",
+    payUrl: pay?.payUrl ?? null,
+    feeCents: pay?.feeCents ?? null,
   });
   await dispatchMessage({
     seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,

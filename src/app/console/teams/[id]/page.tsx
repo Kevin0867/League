@@ -271,10 +271,12 @@ export default async function TeamDetailPage({
       <div className="card border-l-4 border-brand-500">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-slate-900">Launch this team</h2>
-          {readyToLaunch ? (
-            <span className="badge bg-emerald-100 text-emerald-800">ready to launch</span>
+          {team.launchedAt ? (
+            <span className="badge bg-emerald-100 text-emerald-800">✓ Launched {formatStamp(team.launchedAt)}</span>
+          ) : readyToLaunch ? (
+            <span className="badge bg-indigo-100 text-indigo-800">Ready to launch</span>
           ) : (
-            <span className="badge bg-amber-100 text-amber-800">finish setup first</span>
+            <span className="badge bg-amber-100 text-amber-800">Building — finish setup first</span>
           )}
         </div>
         <p className="mt-1 text-sm text-slate-500">

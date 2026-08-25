@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { appUrl } from "@/lib/stripe";
 
 // Per-player season fee (§8). Each player gets their OWN season-fee invoice, so
 // every payment maps to exactly one player → one team, giving clean per-team
@@ -99,4 +100,26 @@ export async function accruePlayerSeasonFee(opts: {
     },
   });
   return { paymentId: created.id, payerId, amountCents: feeCents, coveredCount: 1, created: true };
+}
+
+/**
+ * For a placed player, ensure the season fee is invoiced and return the secure
+ * pay link + fee amount, so placement / welcome / launch emails can carry a
+ * "Choose apparel & pay" button. Idempotent — reuses the existing invoice.
+ * Returns null when the player's fee is waived (nothing to collect).
+ */
+export async function placementPayLink(
+  personId: string,
+  seasonId: string,
+): Promise<{ payUrl: string; feeCents: number } | null> {
+  const reg = await prisma.registration.findFirst({ where: { personId, seasonId }, select: { feeWaived: true } });
+  if (reg?.feeWaived) return null;
+  const [rate, season] = await Promise.all([
+    prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } }),
+    prisma.season.findUnique({ where: { id: seasonId }, select: { name: true } }),
+  ]);
+  const feeCents = rate?.seasonFeeCents ?? 49500;
+  const res = await accruePlayerSeasonFee({ playerId: personId, seasonId, feeCents, seasonName: season?.name ?? "Season" });
+  if (!res?.paymentId) return null;
+  return { payUrl: `${appUrl()}/pay/${res.paymentId}`, feeCents };
 }
