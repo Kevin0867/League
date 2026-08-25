@@ -26,8 +26,6 @@ export function teamLaunchEmail(opts: {
   feeCents: number;
   waiverUrl: string | null;
 }): { subject: string; text: string; html: string } {
-  const who = opts.players.length > 1 ? opts.players.join(" & ") : opts.players[0] ?? "your player";
-
   const detailRow = (label: string, value: string) =>
     `<tr><td style="padding:5px 0;color:#64748b;font-size:13px;width:90px">${label}</td>` +
     `<td style="padding:5px 0;color:#0f172a;font-size:14px;font-weight:600">${value}</td></tr>`;
@@ -36,9 +34,6 @@ export function teamLaunchEmail(opts: {
     `<span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:11px;background:#4338ca;color:#fff;font-size:12px;font-weight:700;margin-right:8px">${n}</span>`;
 
   const contentHtml =
-    `<p style="margin:0 0 14px;font-size:15px;color:#475569">${esc(who)} ${
-      opts.players.length > 1 ? "are" : "is"
-    } on <strong>${esc(opts.teamName)}</strong> — welcome to the team! Here&apos;s everything to get set for the season.</p>` +
     // Team details
     `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:18px">` +
     `<table style="width:100%;border-collapse:collapse">` +
@@ -60,8 +55,6 @@ export function teamLaunchEmail(opts: {
     `<p style="margin:18px 0 0;font-size:12px;color:#94a3b8">The fee reserves a place on a team, not a session count. Secure checkout is hosted by Stripe — we never see your card details.</p>`;
 
   const text = [
-    `${who} ${opts.players.length > 1 ? "are" : "is"} on ${opts.teamName} — welcome to the team!`,
-    ``,
     `Team: ${opts.teamName}`,
     `Coach: ${opts.coachName}${opts.coachContact ? ` (${opts.coachContact})` : ""}`,
     `Location: ${opts.locationName}${opts.locationAddress ? ` — ${opts.locationAddress}` : ""}`,
