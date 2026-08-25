@@ -37,6 +37,24 @@ export default async function SystemPage({
           Couldn&apos;t apply updates: {sp.err}
         </div>
       )}
+      {sp.enc && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Encryption backfill complete — encrypted {sp.enc.split(".")[0]} people and {sp.enc.split(".")[1]} registrations that still had plaintext fields.
+        </div>
+      )}
+
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Encrypt existing records</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          New and edited records encrypt their sensitive fields (home address, emergency contact, medical notes)
+          automatically. Run this once to also encrypt any older records that were saved before a field was added to
+          the encrypted set. Safe to run more than once — already-encrypted values are skipped.
+        </p>
+        <form method="POST" action="/api/console/encrypt-backfill" className="mt-3">
+          <input type="hidden" name="ticket" value={ticket} />
+          <button className="btn-primary text-sm">Encrypt existing records</button>
+        </form>
+      </div>
 
       <div className="card">
         <h2 className="font-semibold text-slate-900">Apply database updates</h2>
