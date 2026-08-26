@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { placementPayLink } from "@/lib/payments/familyFee";
+import { placementWaiverLink } from "@/lib/domain/waiverRenewal";
 import { TEAM_CAP } from "@/lib/enums";
 
 // Pool assignment as native-form-POST route handlers with ticket auth. Route
@@ -39,6 +40,7 @@ async function notifyAssignment(teamId: string, personIds: string[], seasonId: s
     const person = team.members.find((m) => m.personId === personId)?.person;
     const firstName = person?.firstName ?? "there";
     const pay = await placementPayLink(personId, seasonId);
+    const waiver = await placementWaiverLink(personId);
     const email = teamAssignmentEmail({
       name: firstName,
       teamId: team.id,
@@ -50,6 +52,8 @@ async function notifyAssignment(teamId: string, personIds: string[], seasonId: s
       practiceWhen,
       payUrl: pay?.payUrl ?? null,
       feeCents: pay?.feeCents ?? null,
+      waiverUrl: waiver.waiverUrl,
+      waiverSigned: waiver.signed,
     });
     await dispatchMessage({
       seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,

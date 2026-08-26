@@ -11,7 +11,7 @@ import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { customPaymentEmailContent } from "@/lib/payments/customPaymentEmail";
 import { personContacts, filterToContacts } from "@/lib/domain/contacts";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
-import { signWaiverToken } from "@/lib/domain/waiverRenewal";
+import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
@@ -62,6 +62,7 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
   const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
   const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
   const pay = await placementPayLink(personId, seasonId);
+  const waiver = await placementWaiverLink(personId);
   const email = teamAssignmentEmail({
     name: person?.firstName ?? "there",
     teamId: team.id,
@@ -73,6 +74,8 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
     practiceWhen: team.dayOfWeek ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}` : "A day and time to be confirmed",
     payUrl: pay?.payUrl ?? null,
     feeCents: pay?.feeCents ?? null,
+    waiverUrl: waiver.waiverUrl,
+    waiverSigned: waiver.signed,
   });
   await dispatchMessage({
     seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
@@ -737,8 +740,10 @@ export async function POST(req: Request) {
       const practiceWhen = team?.dayOfWeek
         ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
         : "To be confirmed";
-      const needsWaiver = !payer.waiverSignedAt || !person.waiverSignedAt;
-      const waiverUrl = needsWaiver ? `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}` : null;
+      // Always include the participation-waiver link; wording adapts to whether
+      // it's already on file.
+      const waiverSigned = !!payer.waiverSignedAt && !!person.waiverSignedAt;
+      const waiverUrl = `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}`;
 
       const email = teamLaunchEmail({
         recipientName: payer.firstName,
@@ -752,8 +757,9 @@ export async function POST(req: Request) {
         payUrl: payUrl ?? `${appUrl()}/portal`,
         feeCents,
         waiverUrl,
+        waiverSigned,
       });
-      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details${waiverUrl ? " + your waiver" : ""} are in your email.`;
+      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details${waiverSigned ? "" : " + your waiver"} are in your email.`;
       await dispatchMessage({
         senderId: actor.userId,
         seasonId: reg.seasonId,

@@ -30,6 +30,9 @@ export type AssignmentDetail = {
   feeCents?: number | null;
   apparelCents?: number;
   paymentDueLabel?: string;
+  // When supplied, the email carries the participation-waiver link.
+  waiverUrl?: string | null;
+  waiverSigned?: boolean;
 };
 
 function row(label: string, value: string): string {
@@ -65,11 +68,23 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
     : `<p style="margin:0 0 12px;font-size:14px;color:#475569">Open your portal to choose team apparel and pay your season fee.</p>` +
       `<div>${emailButton(`${base}/portal`, "Open your portal to pay", { primary: true })}</div>`;
 
+  // Participation waiver — always linked when available; wording depends on state.
+  const waiverBlock = d.waiverUrl
+    ? (d.waiverSigned
+        ? `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Participation Waiver</p>` +
+          `<p style="margin:0 0 12px;font-size:14px;color:#475569">Your participation waiver is on file — thank you. You can view or update it any time.</p>` +
+          `<div>${emailButton(d.waiverUrl, "View your waiver")}</div>`
+        : `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Complete the Participation Waiver</p>` +
+          `<p style="margin:0 0 12px;font-size:14px;color:#475569">Required before the first practice — it only takes a minute.</p>` +
+          `<div>${emailButton(d.waiverUrl, "Complete the waiver")}</div>`)
+    : "";
+
   const contentHtml =
     `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:6px 16px;margin-bottom:16px">` +
     `<table style="width:100%;border-collapse:collapse">${rows}</table>` +
     `</div>` +
     payBlock +
+    waiverBlock +
     `<p style="margin:22px 0 0;font-size:13px;color:#64748b">Questions? Contact us at <a href="mailto:${SUPPORT_ADDRESS}" style="color:#4338ca;text-decoration:none">${SUPPORT_ADDRESS}</a>.</p>`;
 
   const payLine = d.payUrl
@@ -85,6 +100,9 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
     `Practice: ${d.practiceWhen}`,
     ``,
     ...payLine,
+    ...(d.waiverUrl
+      ? [``, d.waiverSigned ? `Your participation waiver is on file. View or update it:` : `Complete the participation waiver:`, `   ${d.waiverUrl}`]
+      : []),
     ``,
     `Questions? Contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");

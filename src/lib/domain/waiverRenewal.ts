@@ -1,6 +1,7 @@
 import "server-only";
 import type { PrismaClient } from "@prisma/client";
 import { SignJWT, jwtVerify } from "jose";
+import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/stripe";
 import { sendEmail } from "@/lib/notify";
 import { brandedEmailHtml, emailButton } from "@/lib/email/branded";
@@ -25,6 +26,25 @@ export async function signWaiverToken(personId: string, ttlDays = 120): Promise<
     .setIssuedAt()
     .setExpirationTime(Math.floor(Date.now() / 1000) + ttlDays * 86400)
     .sign(secret);
+}
+
+/**
+ * A tokenized waiver-sign link for a player, plus whether the waiver is already
+ * on file, so placement / welcome / launch emails can always carry it. The
+ * waiver is signed by the paying adult — a minor's guardian, or the player
+ * themselves — so `signed` requires both the player and (for a minor) the
+ * guardian to have signed.
+ */
+export async function placementWaiverLink(personId: string): Promise<{ waiverUrl: string; signed: boolean }> {
+  const person = await prisma.person.findUnique({
+    where: { id: personId },
+    select: { guardianId: true, waiverSignedAt: true, guardian: { select: { waiverSignedAt: true } } },
+  });
+  const payerId = person?.guardianId ?? personId;
+  const payerSigned = person?.guardianId ? !!person.guardian?.waiverSignedAt : !!person?.waiverSignedAt;
+  const signed = !!person?.waiverSignedAt && payerSigned;
+  const waiverUrl = `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}`;
+  return { waiverUrl, signed };
 }
 
 export async function verifyWaiverToken(token: string | undefined | null): Promise<string | null> {
