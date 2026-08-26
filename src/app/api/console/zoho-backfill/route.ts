@@ -47,6 +47,7 @@ export async function POST(req: Request) {
   const all = [...pending.values()];
   const batch = all.slice(0, PER_RUN);
   let pushed = 0, failed = 0;
+  const reasons: string[] = [];
   for (const c of batch) {
     const r = await pushContactToZoho({ email: c.email!, firstName: c.firstName, lastName: c.lastName, phone: c.phone });
     if (r.ok) {
@@ -54,10 +55,14 @@ export async function POST(req: Request) {
       await prisma.person.update({ where: { id: c.id }, data: { zohoSyncedAt: new Date() } }).catch(() => {});
     } else {
       failed++;
+      const why = "error" in r && r.error ? r.error : "skipped" in r && r.skipped ? r.reason : "unknown";
+      if (reasons.length < 5) reasons.push(`${c.email} — ${why}`);
     }
   }
   const remaining = Math.max(0, all.length - batch.length);
 
-  await audit({ actorId: actor.userId, entityType: "System", entityId: "zoho-backfill", action: "ZOHO_BACKFILL", summary: `Synced ${pushed} contacts to Zoho (${failed} failed, ${remaining} remaining)` });
-  return back(`?bfok=1&pushed=${pushed}&failed=${failed}&remaining=${remaining}`);
+  await audit({ actorId: actor.userId, entityType: "System", entityId: "zoho-backfill", action: "ZOHO_BACKFILL", summary: `Synced ${pushed} contacts to Zoho (${failed} failed, ${remaining} remaining)${reasons.length ? ` — ${reasons.join("; ")}` : ""}` });
+  const qs = new URLSearchParams({ bfok: "1", pushed: String(pushed), failed: String(failed), remaining: String(remaining) });
+  if (reasons.length) qs.set("failinfo", reasons.join(" | "));
+  return back(`?${qs.toString()}`);
 }

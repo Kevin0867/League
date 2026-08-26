@@ -70,10 +70,26 @@ export default async function SystemPage({
       </div>
 
       {sp.bfok && (
-        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Synced {sp.pushed ?? "0"} contact{sp.pushed === "1" ? "" : "s"} to Zoho
-          {sp.failed && sp.failed !== "0" ? ` · ${sp.failed} failed` : ""}
-          {sp.remaining && sp.remaining !== "0" ? ` · ${sp.remaining} still to go — run again to continue` : " · all caught up"}.
+        <div className={`rounded-lg px-4 py-3 text-sm ${sp.failed && sp.failed !== "0" ? "border-l-4 border-amber-400 bg-amber-50 text-amber-900" : "bg-emerald-50 text-emerald-800"}`}>
+          <p>
+            Synced {sp.pushed ?? "0"} contact{sp.pushed === "1" ? "" : "s"} to Zoho
+            {sp.failed && sp.failed !== "0" ? ` · ${sp.failed} failed` : ""}
+            {sp.remaining && sp.remaining !== "0" ? ` · ${sp.remaining} still to go — run again to continue` : " · all caught up"}.
+          </p>
+          {sp.failinfo && (
+            <div className="mt-2">
+              <p className="font-medium">Why the failures (Zoho&apos;s reason):</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {sp.failinfo.split(" | ").map((r, i) => (
+                  <li key={i} className="font-mono text-xs">{r}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-800">
+                Common causes: an invalid/blank email, a bad phone format, or a contact Zoho has marked unsubscribed / do-not-mail.
+                Fix the field on the person&apos;s record and run the sync again — it retries anyone not yet synced.
+              </p>
+            </div>
+          )}
         </div>
       )}
       {sp.bferr === "notconfigured" && (
