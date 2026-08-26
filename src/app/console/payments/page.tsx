@@ -88,41 +88,49 @@ export default async function PaymentsPage({
       )}
 
       {/* Webhook health — a broken webhook is the usual reason paid charges don't
-          get recorded, so surface it right where the money is. */}
-      {wh.stripeConfigured && (
-        wh.matchingHealthy && wh.webhookSecretSet ? (
+          get recorded, so surface it right where the money is, with direct
+          Stripe links (mode-aware: live vs test). */}
+      {wh.stripeConfigured && (() => {
+        const hereEp = wh.endpoints.find((e) => e.pointsHere);
+        const A = ({ href, children }: { href: string; children: string }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium underline">{children}</a>
+        );
+        return wh.matchingHealthy && wh.webhookSecretSet ? (
           <details className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
-            <summary className="cursor-pointer font-medium">✓ Payment webhook connected</summary>
+            <summary className="cursor-pointer font-medium">✓ Payment webhook connected{wh.liveMode ? "" : " (test mode)"}</summary>
             <p className="mt-2 text-emerald-700">
-              Stripe is set to notify <span className="font-mono text-xs">{wh.expectedUrl}</span> on payment completion, and the
-              signing secret is set. New payments should record automatically. If a webhook is ever missed, use
-              &ldquo;Reconcile with Stripe&rdquo; above.
+              Stripe notifies <span className="font-mono text-xs">{wh.expectedUrl}</span> on payment completion and the signing
+              secret is set — new payments should record automatically. If one is ever missed, use &ldquo;Reconcile with
+              Stripe&rdquo; above. {hereEp && <>View this endpoint&apos;s deliveries: <A href={hereEp.dashboardUrl}>open in Stripe ↗</A>.</>}
             </p>
           </details>
         ) : (
           <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <p className="font-semibold">⚠ Payment webhook needs attention — this is why paid charges may not be recording.</p>
+            <p className="font-semibold">⚠ Payment webhook needs attention — this is why paid charges may not be recording.{wh.liveMode ? "" : " (Stripe is in TEST mode.)"}</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               {!wh.webhookSecretSet && (
-                <li><strong>Signing secret not set.</strong> Add <span className="font-mono text-xs">STRIPE_WEBHOOK_SECRET</span> in Vercel (copy it from the endpoint in Stripe).</li>
+                <li><strong>Signing secret not set.</strong> Open <A href={hereEp ? hereEp.dashboardUrl : wh.webhooksUrl}>your webhook endpoint in Stripe ↗</A>, click <em>Reveal</em> under &ldquo;Signing secret,&rdquo; and set it as <span className="font-mono text-xs">STRIPE_WEBHOOK_SECRET</span> in <A href="https://vercel.com/dashboard">Vercel ↗</A>, then redeploy.</li>
               )}
               {wh.listed && !wh.endpoints.some((e) => e.pointsHere) && (
-                <li><strong>No Stripe webhook points here.</strong> In Stripe → Developers → Webhooks, add an endpoint for <span className="font-mono text-xs">{wh.expectedUrl}</span>.</li>
+                <li><strong>No Stripe webhook points here.</strong> <A href={wh.createUrl}>Add an endpoint in Stripe ↗</A> with URL <span className="font-mono text-xs">{wh.expectedUrl}</span> and event <span className="font-mono text-xs">checkout.session.completed</span>.</li>
               )}
-              {wh.endpoints.filter((e) => e.pointsHere && e.status !== "enabled").map((e, i) => (
-                <li key={`dis${i}`}><strong>The endpoint here is {e.status}.</strong> Enable it in Stripe.</li>
+              {wh.endpoints.filter((e) => e.pointsHere && e.status !== "enabled").map((e) => (
+                <li key={`dis${e.id}`}><strong>The endpoint here is {e.status}.</strong> <A href={e.dashboardUrl}>Enable it in Stripe ↗</A>.</li>
               ))}
-              {wh.endpoints.filter((e) => e.pointsHere && e.status === "enabled" && !e.coversRequired).map((e, i) => (
-                <li key={`ev${i}`}><strong>Missing the completion event.</strong> Subscribe the endpoint to <span className="font-mono text-xs">checkout.session.completed</span>{e.missingHelpful.length ? ` (also recommended: ${e.missingHelpful.filter((x) => x !== "checkout.session.completed").join(", ")})` : ""}.</li>
+              {wh.endpoints.filter((e) => e.pointsHere && e.status === "enabled" && !e.coversRequired).map((e) => (
+                <li key={`ev${e.id}`}><strong>Missing the completion event.</strong> <A href={e.dashboardUrl}>Open the endpoint ↗</A> and subscribe it to <span className="font-mono text-xs">checkout.session.completed</span>{e.missingHelpful.length ? ` (also recommended: ${e.missingHelpful.filter((x) => x !== "checkout.session.completed").join(", ")})` : ""}.</li>
               ))}
               {!wh.listed && (
-                <li>Couldn&apos;t read your webhooks from Stripe{wh.listError ? ` (${wh.listError})` : ""} — check them in Stripe → Developers → Webhooks. Expected URL: <span className="font-mono text-xs">{wh.expectedUrl}</span>.</li>
+                <li>Couldn&apos;t read your webhooks from Stripe{wh.listError ? ` (${wh.listError})` : ""} — check <A href={wh.webhooksUrl}>Stripe → Webhooks ↗</A>. Expected URL: <span className="font-mono text-xs">{wh.expectedUrl}</span>.</li>
               )}
             </ul>
-            <p className="mt-2 text-amber-800">Meanwhile, &ldquo;Reconcile with Stripe&rdquo; above will pull in any charges that were missed.</p>
+            <p className="mt-2 text-amber-800">
+              Reference: <A href={wh.webhooksUrl}>Webhooks ↗</A> · <A href={wh.apiKeysUrl}>API keys ↗</A>.
+              Meanwhile, &ldquo;Reconcile with Stripe&rdquo; above pulls in any charges that were missed.
+            </p>
           </div>
-        )
-      )}
+        );
+      })()}
 
       {sp.ok === "statements" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Facility statements generated.</div>

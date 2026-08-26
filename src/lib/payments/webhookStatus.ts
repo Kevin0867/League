@@ -15,17 +15,24 @@ const HELPFUL_EVENTS = ["checkout.session.completed", "invoice.paid", "invoice.p
 export const WEBHOOK_PATH = "/api/stripe/webhook";
 
 export type WebhookEndpointInfo = {
+  id: string;
   url: string;
   status: string; // "enabled" | "disabled"
   pointsHere: boolean;
   coversRequired: boolean; // subscribed to checkout.session.completed (or "*")
   missingHelpful: string[];
+  dashboardUrl: string; // deep link to this endpoint (signing secret + deliveries live here)
 };
 
 export type WebhookStatus = {
   stripeConfigured: boolean;
   webhookSecretSet: boolean;
+  liveMode: boolean;
   expectedUrl: string;
+  // Direct Stripe dashboard links (mode-aware: live vs test).
+  webhooksUrl: string;
+  createUrl: string;
+  apiKeysUrl: string;
   listed: boolean; // did we successfully read endpoints from Stripe
   listError?: string;
   endpoints: WebhookEndpointInfo[];
@@ -34,10 +41,19 @@ export type WebhookStatus = {
 
 export async function getStripeWebhookStatus(): Promise<WebhookStatus> {
   const expectedUrl = `${appUrl()}${WEBHOOK_PATH}`;
+  // Live vs test decides the dashboard path (…/webhooks vs …/test/webhooks).
+  // We only read the key's PREFIX to pick the URL — never log or expose the key.
+  const liveMode = (process.env.STRIPE_SECRET_KEY ?? "").startsWith("sk_live");
+  const dash = liveMode ? "https://dashboard.stripe.com" : "https://dashboard.stripe.com/test";
+
   const base: WebhookStatus = {
     stripeConfigured: isStripeConfigured(),
     webhookSecretSet: !!process.env.STRIPE_WEBHOOK_SECRET,
+    liveMode,
     expectedUrl,
+    webhooksUrl: `${dash}/webhooks`,
+    createUrl: `${dash}/webhooks/create`,
+    apiKeysUrl: `${dash}/apikeys`,
     listed: false,
     endpoints: [],
     matchingHealthy: false,
@@ -52,11 +68,13 @@ export async function getStripeWebhookStatus(): Promise<WebhookStatus> {
       const coversRequired = events.includes("*") || events.includes(REQUIRED_EVENT);
       const missingHelpful = events.includes("*") ? [] : HELPFUL_EVENTS.filter((ev) => !events.includes(ev));
       return {
+        id: e.id,
         url: e.url,
         status: e.status ?? "unknown",
         pointsHere: e.url.replace(/\/$/, "").endsWith(WEBHOOK_PATH),
         coversRequired,
         missingHelpful,
+        dashboardUrl: `${dash}/webhooks/${e.id}`,
       };
     });
     base.matchingHealthy = base.endpoints.some((e) => e.pointsHere && e.status === "enabled" && e.coversRequired);
