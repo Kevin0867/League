@@ -9,7 +9,7 @@
 // the newsletter posts to the parent site's endpoint. Brand tokens: navy
 // #0a1628, green #8ab800, dark-green accent #5f7d00.
 
-import { ZohoNewsletter } from "./ZohoNewsletter";
+import { NewsletterForm } from "./NewsletterForm";
 
 const SITE = "https://purepickleball.com";
 
@@ -103,9 +103,9 @@ export function SiteFooter() {
             <p className="text-sm text-white/60">News, events, and updates from PURE Pickleball &amp; Padel — straight to your inbox.</p>
           </div>
           <div className="flex-1">
-            {/* Zoho-hosted form: posts directly to Zoho Campaigns, so signups land
-                in the same list as the main site. */}
-            <ZohoNewsletter />
+            {/* First-party form → /api/newsletter → Zoho Campaigns (server-side).
+                Replaces the embedded Zoho web-optin that could 404 on submit. */}
+            <NewsletterForm />
           </div>
         </div>
       </section>
