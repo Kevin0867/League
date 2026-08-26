@@ -12,7 +12,30 @@ const DAY_PLURAL: Record<string, string> = {
   FRI: "Fridays", SAT: "Saturdays", SUN: "Sundays",
 };
 
+// Sun=0 … Sat=6, to match JS getUTCDay().
+const DOW_INDEX: Record<string, number> = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+
 const PRACTICE_HOURS = 2;
+
+/**
+ * The team's first practice date: the first occurrence of its weekday during the
+ * season's opening week. The season starts "the week of" its start date, so we
+ * anchor to the Sunday of that week and step to the team's day — e.g. a season
+ * that starts the week of Sun Sep 13 gives Monday teams Sep 14, Tuesday Sep 15.
+ */
+export function firstPracticeDate(seasonStart: Date, dayCode: string): Date | null {
+  const target = DOW_INDEX[dayCode];
+  if (target === undefined) return null;
+  // Read the season start's calendar date in the business timezone, then do the
+  // day math on a UTC noon date (stable, DST-free).
+  const [y, m, d] = seasonStart.toLocaleDateString("en-CA", { timeZone: BUSINESS_TZ }).split("-").map(Number);
+  const anchor = new Date(Date.UTC(y, m - 1, d, 12));
+  const sunday = new Date(anchor);
+  sunday.setUTCDate(anchor.getUTCDate() - anchor.getUTCDay()); // back up to that week's Sunday
+  const result = new Date(sunday);
+  result.setUTCDate(sunday.getUTCDate() + target); // step forward to the team's weekday
+  return result;
+}
 
 /** Add whole hours to an "HH:MM" 24h time, clamped to the same day. */
 export function addHoursHHMM(hhmm: string | null | undefined, hours: number): string | null {
@@ -66,11 +89,16 @@ export async function describeTeamPractice(
   const dayTime = [day, range].filter(Boolean).join(", ");
   if (!dayTime) return "A day and time to be confirmed";
 
-  // When practices begin: exact first-practice date if we have it, else the
-  // week of the season start.
+  // When practices begin: the exact first-practice date if the schedule exists;
+  // otherwise the first occurrence of the team's weekday in the season's opening
+  // week (Mon → Sep 14, Tue → Sep 15…); else just "the week of" the start.
   let begins = "";
-  if (firstPractice?.date) begins = ` · starting ${weekdayMonthDay(firstPractice.date)}`;
-  else if (season?.startDate) begins = ` · starting the week of ${monthDay(season.startDate)}`;
+  if (firstPractice?.date) {
+    begins = ` · starting ${weekdayMonthDay(firstPractice.date)}`;
+  } else if (season?.startDate) {
+    const computed = team.dayOfWeek ? firstPracticeDate(season.startDate, team.dayOfWeek) : null;
+    begins = computed ? ` · starting ${weekdayMonthDay(computed)}` : ` · starting the week of ${monthDay(season.startDate)}`;
+  }
 
   return `${dayTime}${begins}`;
 }
