@@ -14,7 +14,7 @@ import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
-import { formatTime12 } from "@/lib/time";
+import { describeTeamPractice } from "@/lib/domain/practiceInfo";
 import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
 import { TEAM_CAP } from "@/lib/enums";
 import { personEmails } from "@/lib/domain/audience";
@@ -551,9 +551,7 @@ export async function POST(req: Request) {
       if (!team) return back("?err=notfound");
       const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
       const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
-      const practiceWhen = team.dayOfWeek
-        ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
-        : "A day and time to be confirmed";
+      const practiceWhen = await describeTeamPractice(team, team.seasonId);
       let sent = 0;
       const noContact: string[] = [];
       for (const m of team.members) {
@@ -652,9 +650,7 @@ export async function POST(req: Request) {
       const seasonName = team.season?.name ?? "Season";
       const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
       const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
-      const practiceWhen = team.dayOfWeek
-        ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
-        : "A day and time to be confirmed";
+      const practiceWhen = await describeTeamPractice(team, team.seasonId);
       const locationName = team.facility?.name ?? "To be confirmed";
       const locationAddress = team.facility?.exactAddress ?? team.facility?.generalArea ?? null;
 
@@ -687,7 +683,7 @@ export async function POST(req: Request) {
           feeCents,
           waiverUrl,
         });
-        const smsBody = `PURE Academy — welcome to ${team.name}! Pick your team apparel & pay the season fee here: ${payUrl} Full team details + your waiver are in your email.`;
+        const smsBody = `PURE Academy — welcome to ${team.name}! Practices: ${practiceWhen}. Pick your team apparel & pay the season fee here: ${payUrl} Full team details + your waiver are in your email.`;
         // Deliver to EVERY email on file for the family (player + guardian). If
         // there's only one address anywhere, it's used.
         const familyEmails = familyEmailsOf(m);
