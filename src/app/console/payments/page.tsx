@@ -52,8 +52,36 @@ export default async function PaymentsPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <PageHeader title="Payments" subtitle="Fees in, coaches and facilities out. Card data never touches our servers — Stripe hosted checkout." />
-        <PrintButton label="Print" />
+        <div className="flex items-center gap-2">
+          <form method="POST" action="/api/console/payments-reconcile">
+            <input type="hidden" name="ticket" value={ticket} />
+            <button className="btn-secondary text-sm" title="Check Stripe for any payment that was completed there but not yet recorded here, and record it.">
+              Reconcile with Stripe
+            </button>
+          </form>
+          <PrintButton label="Print" />
+        </div>
       </div>
+
+      {sp.recok && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Reconciled {sp.scanned ?? "0"} Stripe payment{sp.scanned === "1" ? "" : "s"}.{" "}
+          {Number(sp.paid ?? 0) > 0
+            ? <><strong>{sp.paid} newly recorded as paid</strong> — {formatCents(Number(sp.cents ?? 0))} added to Collected.</>
+            : "Everything already matched Stripe — nothing to record."}
+          {sp.recerrs && sp.recerrs !== "0" ? ` (${sp.recerrs} couldn't be checked — try again.)` : ""}
+        </div>
+      )}
+      {sp.recerr === "notconfigured" && (
+        <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Stripe isn&apos;t connected, so there&apos;s nothing to reconcile against.
+        </div>
+      )}
+      {sp.recerr && sp.recerr !== "notconfigured" && (
+        <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          Couldn&apos;t reconcile: {sp.recerr}
+        </div>
+      )}
 
       {sp.ok === "statements" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Facility statements generated.</div>

@@ -120,6 +120,9 @@ export async function createCheckoutRedirect(opts: {
         ...apparel,
       ],
       metadata: { paymentId: payment.id },
+      // Also stamp the id on the PaymentIntent so the charge itself is traceable
+      // back to this Payment (reconciliation / debugging), not just the session.
+      payment_intent_data: { metadata: { paymentId: payment.id } },
       success_url: success,
       cancel_url: cancel,
     });
