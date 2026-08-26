@@ -495,13 +495,13 @@ export default async function TeamBuildBoard({
                       {t.origin === "ACP_CLUB" ? t.clubName ?? "Outside club" : "PURE Academy"}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex shrink-0 flex-col items-end gap-1">
                     {t.launchedAt ? (
-                      <span className="badge bg-emerald-100 text-emerald-800">✓ Launched</span>
+                      <span className="badge whitespace-nowrap bg-emerald-100 text-emerald-800">✓ Launched</span>
                     ) : missing.length === 0 ? (
-                      <span className="badge bg-indigo-100 text-indigo-800">Ready to launch</span>
+                      <span className="badge whitespace-nowrap bg-indigo-100 text-indigo-800">Ready to launch</span>
                     ) : (
-                      <span className="badge bg-amber-100 text-amber-800">Building</span>
+                      <span className="badge whitespace-nowrap bg-amber-100 text-amber-800">Building</span>
                     )}
                     {t.published && <StatusBadge status="PUBLISHED" />}
                   </div>
