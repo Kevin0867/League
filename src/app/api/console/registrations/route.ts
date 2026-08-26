@@ -19,7 +19,7 @@ import { accruePlayerSeasonFee, placementPayLink } from "@/lib/payments/familyFe
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
-import { formatTime12 } from "@/lib/time";
+import { describeTeamPractice } from "@/lib/domain/practiceInfo";
 import { decryptField } from "@/lib/crypto";
 
 // Console registration actions: add a walk-in player, and per-registrant roster
@@ -64,6 +64,7 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
   const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
   const pay = await placementPayLink(personId, seasonId);
   const waiver = await placementWaiverLink(personId);
+  const practiceWhen = await describeTeamPractice(team, seasonId);
   const email = teamAssignmentEmail({
     name: person?.firstName ?? "there",
     teamId: team.id,
@@ -72,7 +73,7 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
     coachContact,
     locationName: team.facility?.name ?? "To be confirmed",
     locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
-    practiceWhen: team.dayOfWeek ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}` : "A day and time to be confirmed",
+    practiceWhen,
     payUrl: pay?.payUrl ?? null,
     feeCents: pay?.feeCents ?? null,
     waiverUrl: waiver.waiverUrl,
@@ -737,9 +738,7 @@ export async function POST(req: Request) {
 
       const coachName = team?.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
       const coachContact = team?.coach ? [team.coach.person.email, team.coach.person.phone].filter(Boolean).join(" · ") || null : null;
-      const practiceWhen = team?.dayOfWeek
-        ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
-        : "To be confirmed";
+      const practiceWhen = team ? await describeTeamPractice(team, reg.seasonId) : "To be confirmed";
       // Always include the participation-waiver link so anyone unsigned is caught.
       const waiverUrl = `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}`;
 
@@ -756,7 +755,7 @@ export async function POST(req: Request) {
         feeCents,
         waiverUrl,
       });
-      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details + your waiver are in your email.`;
+      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${team ? `Practices: ${practiceWhen}. ` : ""}${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details + your waiver are in your email.`;
       await dispatchMessage({
         senderId: actor.userId,
         seasonId: reg.seasonId,

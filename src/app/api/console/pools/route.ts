@@ -7,6 +7,7 @@ import { dispatchMessage } from "@/lib/messaging";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { placementPayLink } from "@/lib/payments/familyFee";
 import { placementWaiverLink } from "@/lib/domain/waiverRenewal";
+import { describeTeamPractice } from "@/lib/domain/practiceInfo";
 import { TEAM_CAP } from "@/lib/enums";
 
 // Pool assignment as native-form-POST route handlers with ticket auth. Route
@@ -32,9 +33,7 @@ async function notifyAssignment(teamId: string, personIds: string[], seasonId: s
   const locationName = team.facility?.name ?? "To be confirmed";
   // Assigned players may see the exact address (§15); private courts show general area otherwise.
   const locationAddress = team.facility?.exactAddress ?? team.facility?.generalArea ?? null;
-  const practiceWhen = team.dayOfWeek
-    ? `${team.dayOfWeek}${team.startTime ? ` at ${team.startTime}` : ""}`
-    : "A day and time to be confirmed";
+  const practiceWhen = await describeTeamPractice(team, seasonId);
 
   for (const personId of personIds) {
     const person = team.members.find((m) => m.personId === personId)?.person;
