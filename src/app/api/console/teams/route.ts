@@ -12,7 +12,7 @@ import { isBookable } from "@/lib/domain/facilityWindows";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
-import { signWaiverToken } from "@/lib/domain/waiverRenewal";
+import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { formatTime12 } from "@/lib/time";
 import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
@@ -559,6 +559,7 @@ export async function POST(req: Request) {
       for (const m of team.members) {
         if (m.roleOnTeam === "COACH_PLAYER") continue;
         const pay = await placementPayLink(m.personId, team.seasonId);
+        const waiver = await placementWaiverLink(m.personId);
         const email = teamAssignmentEmail({
           name: m.person.firstName,
           teamId: team.id,
@@ -570,6 +571,8 @@ export async function POST(req: Request) {
           practiceWhen,
           payUrl: pay?.payUrl ?? null,
           feeCents: pay?.feeCents ?? null,
+          waiverUrl: waiver.waiverUrl,
+          waiverSigned: waiver.signed,
         });
         const familyEmails = familyEmailsOf(m);
         await dispatchMessage({
@@ -669,8 +672,10 @@ export async function POST(req: Request) {
         if (!res) continue; // fee-waived player — use the individual sends
         const payer = await prisma.person.findUnique({ where: { id: payerId } });
         if (!payer) continue;
-        const needsWaiver = !m.person.waiverSignedAt || !payer.waiverSignedAt;
-        const waiverUrl = needsWaiver ? `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}` : null;
+        // Always include the participation-waiver link; the email wording adapts
+        // to whether it's already on file (view) or still needed (complete).
+        const waiverSigned = !!m.person.waiverSignedAt && !!payer.waiverSignedAt;
+        const waiverUrl = `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}`;
         const payUrl = `${appUrl()}/pay/${res.paymentId}`;
         const email = teamLaunchEmail({
           recipientName: payer.firstName,
@@ -684,8 +689,9 @@ export async function POST(req: Request) {
           payUrl,
           feeCents,
           waiverUrl,
+          waiverSigned,
         });
-        const smsBody = `PURE Academy — welcome to ${team.name}! Pick your team apparel & pay the season fee here: ${payUrl} Full team details${waiverUrl ? " + your waiver" : ""} are in your email.`;
+        const smsBody = `PURE Academy — welcome to ${team.name}! Pick your team apparel & pay the season fee here: ${payUrl} Full team details${waiverSigned ? "" : " + your waiver"} are in your email.`;
         // Deliver to EVERY email on file for the family (player + guardian). If
         // there's only one address anywhere, it's used.
         const familyEmails = familyEmailsOf(m);
