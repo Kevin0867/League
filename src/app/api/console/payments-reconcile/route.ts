@@ -33,6 +33,8 @@ export async function POST(req: Request) {
       paid: String(r.nowPaid),
       updated: String(r.updated),
       cents: String(r.recoveredCents),
+      refunds: String(r.refundsRecorded),
+      refcents: String(r.refundedCents),
     });
     if (r.errors) params.set("recerrs", String(r.errors));
     return back(`?${params.toString()}`);

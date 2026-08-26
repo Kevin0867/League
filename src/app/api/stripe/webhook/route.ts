@@ -4,6 +4,7 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 import { sendPaymentConfirmation } from "@/lib/payments/receipt";
 import { notifyAdminsPaymentFailed } from "@/lib/payments/adminAlert";
+import { syncRefundsForCharge, paymentForIntent } from "@/lib/payments/refunds";
 
 // Resolve the local Payment for a Stripe subscription. Normally it's linked by
 // stripeSubscriptionId (set on checkout.session.completed), but the first
@@ -136,6 +137,19 @@ export async function POST(req: Request) {
         await prisma.payment.updateMany({ where: { id: paymentId, status: "PENDING" }, data: { status: "FAILED" } });
         await audit({ entityType: "Payment", entityId: paymentId, action: "PAYMENT_FAILED", summary: "Async payment failed" });
         await notifyAdminsPaymentFailed(paymentId);
+      }
+      break;
+    }
+    case "charge.refunded": {
+      // A refund was issued — in the app OR directly in the Stripe dashboard.
+      // Book it against the local payment so revenue stays accurate. Idempotent
+      // by refund id, so an app-initiated refund isn't double-counted.
+      const ch = event.data.object as { id: string; amount: number; amount_refunded: number; payment_intent?: string };
+      if (ch.payment_intent) {
+        const original = await paymentForIntent(ch.payment_intent);
+        if (original) {
+          await syncRefundsForCharge(original, ch.id, ch.amount, ch.amount_refunded);
+        }
       }
       break;
     }

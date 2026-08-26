@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { prisma } from "@/lib/db";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
+import { syncRefundsForCharge } from "@/lib/payments/refunds";
 
 // Reconcile local Payment rows against Stripe — the safety net for payments that
 // were completed in Stripe but never marked PAID here (a missed / mis-signed
@@ -19,6 +20,8 @@ export type ReconcileResult = {
   updated: number;
   nowPaid: number;
   recoveredCents: number;
+  refundsRecorded: number;
+  refundedCents: number;
   errors: number;
   details: Array<{ paymentId: string; note: string; amountCents: number; nowPaid: boolean }>;
 };
@@ -136,7 +139,7 @@ async function reconcileOne(
  * Returns a summary of what changed. Safe to run repeatedly.
  */
 export async function reconcileStripePayments(opts?: { sinceDays?: number; limit?: number }): Promise<ReconcileResult> {
-  const res: ReconcileResult = { scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, errors: 0, details: [] };
+  const res: ReconcileResult = { scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0, errors: 0, details: [] };
   if (!isStripeConfigured()) return res;
 
   const since = new Date(Date.now() - (opts?.sinceDays ?? 365) * 86400_000);
@@ -176,5 +179,40 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
       console.error(`reconcile failed for payment ${p.id}`, e);
     }
   }
+
+  // Second pass: catch refunds issued directly in Stripe (no app record). Look at
+  // PAID inbound charges and book any refund we haven't recorded yet.
+  const paidCharges = await prisma.payment.findMany({
+    where: {
+      direction: "IN",
+      method: "STRIPE",
+      status: "PAID",
+      createdAt: { gte: since },
+      stripePaymentIntentId: { not: null },
+    },
+    orderBy: { createdAt: "desc" },
+    take: opts?.limit ?? 1000,
+    select: { id: true, partyId: true, seasonId: true, amountCents: true, status: true, description: true, stripePaymentIntentId: true },
+  });
+  for (const p of paidCharges) {
+    try {
+      const pi = await stripe().paymentIntents.retrieve(p.stripePaymentIntentId!, { expand: ["latest_charge"] });
+      const charge = pi.latest_charge as { id: string; amount: number; amount_refunded: number } | null;
+      if (charge && charge.amount_refunded > 0) {
+        const r = await syncRefundsForCharge(
+          { id: p.id, partyId: p.partyId, seasonId: p.seasonId, amountCents: p.amountCents, status: p.status, description: p.description },
+          charge.id, charge.amount, charge.amount_refunded,
+        );
+        if (r.created > 0) {
+          res.refundsRecorded += r.created;
+          res.refundedCents += r.createdCents;
+        }
+      }
+    } catch (e) {
+      res.errors++;
+      console.error(`refund reconcile failed for payment ${p.id}`, e);
+    }
+  }
+
   return res;
 }
