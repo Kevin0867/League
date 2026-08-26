@@ -767,6 +767,10 @@ model Payment {
   stripeCheckoutId String?
   stripePaymentIntentId String?
   stripeSubscriptionId String?
+  /// On an OUT/REFUND row: the Stripe refund id it records. Makes refund
+  /// syncing idempotent — a refund (from the app OR the Stripe dashboard) is
+  /// only ever booked once, whichever path sees it first.
+  stripeRefundId String? @unique
 
   /// Monthly-vs-full for player fees (§8). installmentPlan = true means the
   /// 3-payment plan; installmentsPaid/Total track how many of the 3 have cleared.

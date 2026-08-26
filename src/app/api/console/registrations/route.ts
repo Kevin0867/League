@@ -16,6 +16,7 @@ import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
 import { accruePlayerSeasonFee, placementPayLink } from "@/lib/payments/familyFee";
+import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { formatTime12 } from "@/lib/time";
@@ -830,25 +831,32 @@ export async function POST(req: Request) {
       });
       if (!pay) return back("?err=norefund");
 
-      let simulated = false;
+      const original = { id: pay.id, partyId: pay.partyId, seasonId: pay.seasonId, amountCents: pay.amountCents, status: pay.status, description: pay.description };
       if (isStripeConfigured() && pay.stripePaymentIntentId) {
         try {
-          await stripe().refunds.create({ payment_intent: pay.stripePaymentIntentId });
+          const refund = await stripe().refunds.create({ payment_intent: pay.stripePaymentIntentId });
+          const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id ?? null;
+          if (chargeId) {
+            const charge = await stripe().charges.retrieve(chargeId);
+            // Books the OUT/REFUND row (idempotent by refund id) and marks the
+            // original REFUNDED when fully refunded — same path the webhook uses.
+            await syncRefundsForCharge(original, charge.id, charge.amount, charge.amount_refunded);
+          }
         } catch {
           return back("?err=refundfail");
         }
       } else {
-        simulated = true;
+        // No Stripe — simulate the booking so the ledger still balances in dev.
+        await prisma.payment.update({ where: { id: pay.id }, data: { status: "REFUNDED" } });
+        await prisma.payment.create({
+          data: {
+            direction: "OUT", partyId: personId, amountCents: pay.amountCents, method: "STRIPE",
+            status: "PAID", category: "REFUND", seasonId: reg.seasonId, paidAt: new Date(),
+            description: `Refund — ${pay.description ?? "season fee"} [simulated]`,
+          },
+        });
       }
-      await prisma.payment.update({ where: { id: pay.id }, data: { status: "REFUNDED" } });
-      await prisma.payment.create({
-        data: {
-          direction: "OUT", partyId: personId, amountCents: pay.amountCents, method: "STRIPE",
-          status: "PAID", category: "REFUND", seasonId: reg.seasonId, paidAt: new Date(),
-          description: `Refund — ${pay.description ?? "season fee"}${simulated ? " [simulated]" : ""}`,
-        },
-      });
-      await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "REFUNDED", summary: `Refund started${simulated ? " (simulated)" : ""}` });
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "REFUNDED", summary: "Refund issued" });
       return back("?ok=refund");
     }
 

@@ -72,7 +72,9 @@ export default async function PaymentsPage({
           Reconciled {sp.scanned ?? "0"} Stripe payment{sp.scanned === "1" ? "" : "s"}.{" "}
           {Number(sp.paid ?? 0) > 0
             ? <><strong>{sp.paid} newly recorded as paid</strong> — {formatCents(Number(sp.cents ?? 0))} added to Collected.</>
-            : "Everything already matched Stripe — nothing to record."}
+            : "No new payments to record."}
+          {Number(sp.refunds ?? 0) > 0 ? <> {" "}<strong>{sp.refunds} refund{sp.refunds === "1" ? "" : "s"} recorded</strong> ({formatCents(Number(sp.refcents ?? 0))}).</> : ""}
+          {Number(sp.paid ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? " Everything already matched Stripe." : ""}
           {sp.recerrs && sp.recerrs !== "0" ? ` (${sp.recerrs} couldn't be checked — try again.)` : ""}
         </div>
       )}
