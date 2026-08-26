@@ -11,6 +11,10 @@ import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
 // endpoint or missing event is caught here.
 
 const REQUIRED_EVENT = "checkout.session.completed";
+
+function safeHost(u: string): string {
+  try { return new URL(u).host; } catch { return ""; }
+}
 const HELPFUL_EVENTS = ["checkout.session.completed", "invoice.paid", "invoice.payment_failed", "checkout.session.expired"];
 export const WEBHOOK_PATH = "/api/stripe/webhook";
 
@@ -18,7 +22,8 @@ export type WebhookEndpointInfo = {
   id: string;
   url: string;
   status: string; // "enabled" | "disabled"
-  pointsHere: boolean;
+  pointsHere: boolean; // exact host + path match for THIS deployment
+  samePathOtherHost: boolean; // our webhook path, but a different domain (e.g. another deployment/DB)
   coversRequired: boolean; // subscribed to checkout.session.completed (or "*")
   missingHelpful: string[];
   dashboardUrl: string; // deep link to this endpoint (signing secret + deliveries live here)
@@ -60,6 +65,7 @@ export async function getStripeWebhookStatus(): Promise<WebhookStatus> {
   };
   if (!base.stripeConfigured) return base;
 
+  const expectedHost = safeHost(expectedUrl);
   try {
     const list = await stripe().webhookEndpoints.list({ limit: 100 });
     base.listed = true;
@@ -67,11 +73,15 @@ export async function getStripeWebhookStatus(): Promise<WebhookStatus> {
       const events = e.enabled_events ?? [];
       const coversRequired = events.includes("*") || events.includes(REQUIRED_EVENT);
       const missingHelpful = events.includes("*") ? [] : HELPFUL_EVENTS.filter((ev) => !events.includes(ev));
+      const host = safeHost(e.url);
+      const pathMatches = e.url.replace(/\/$/, "").endsWith(WEBHOOK_PATH);
+      const pointsHere = pathMatches && !!expectedHost && host === expectedHost;
       return {
         id: e.id,
         url: e.url,
         status: e.status ?? "unknown",
-        pointsHere: e.url.replace(/\/$/, "").endsWith(WEBHOOK_PATH),
+        pointsHere,
+        samePathOtherHost: pathMatches && !pointsHere,
         coversRequired,
         missingHelpful,
         dashboardUrl: `${dash}/webhooks/${e.id}`,

@@ -111,7 +111,10 @@ export default async function PaymentsPage({
               {!wh.webhookSecretSet && (
                 <li><strong>Signing secret not set.</strong> Open <A href={hereEp ? hereEp.dashboardUrl : wh.webhooksUrl}>your webhook endpoint in Stripe ↗</A>, click <em>Reveal</em> under &ldquo;Signing secret,&rdquo; and set it as <span className="font-mono text-xs">STRIPE_WEBHOOK_SECRET</span> in <A href="https://vercel.com/dashboard">Vercel ↗</A>, then redeploy.</li>
               )}
-              {wh.listed && !wh.endpoints.some((e) => e.pointsHere) && (
+              {wh.listed && !wh.endpoints.some((e) => e.pointsHere) && wh.endpoints.filter((e) => e.samePathOtherHost).map((e) => (
+                <li key={`host${e.id}`}><strong>A webhook points at a different domain.</strong> It targets <span className="font-mono text-xs">{e.url}</span>, but this site expects <span className="font-mono text-xs">{wh.expectedUrl}</span>. If that domain is a <em>different deployment or database</em>, your payments are being recorded there, not here. <A href={e.dashboardUrl}>Open the endpoint ↗</A> and set its URL to <span className="font-mono text-xs">{wh.expectedUrl}</span> (or confirm both domains serve the same project).</li>
+              ))}
+              {wh.listed && !wh.endpoints.some((e) => e.pointsHere) && !wh.endpoints.some((e) => e.samePathOtherHost) && (
                 <li><strong>No Stripe webhook points here.</strong> <A href={wh.createUrl}>Add an endpoint in Stripe ↗</A> with URL <span className="font-mono text-xs">{wh.expectedUrl}</span> and event <span className="font-mono text-xs">checkout.session.completed</span>.</li>
               )}
               {wh.endpoints.filter((e) => e.pointsHere && e.status !== "enabled").map((e) => (
