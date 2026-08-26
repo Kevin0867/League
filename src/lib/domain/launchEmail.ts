@@ -37,7 +37,6 @@ export function teamLaunchEmail(opts: {
   apparelCents?: number;
   paymentDueLabel?: string;
   waiverUrl: string | null;
-  waiverSigned?: boolean;
 }): { subject: string; text: string; html: string } {
   const apparelCents = opts.apparelCents ?? 2500;
   const dueLabel = opts.paymentDueLabel ?? PAYMENT_DUE_LABEL;
@@ -59,15 +58,11 @@ export function teamLaunchEmail(opts: {
     `<p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#0f172a">Choose Team Apparel &amp; Pay</p>` +
     `<p style="margin:0 0 12px;font-size:14px;color:#475569">Choose one PURE Academy team T-shirt or tank top (${usd(apparelCents)}), select your size, and pay your ${usd(opts.feeCents)} season fee in one checkout.</p>` +
     `<div>${emailButton(opts.payUrl, "Choose Team Apparel &amp; Pay", { primary: true })}</div>` +
-    // Participation waiver — always linked; wording depends on whether it's signed
+    // Participation waiver — always included so anyone who hasn't signed is caught.
     (opts.waiverUrl
-      ? (opts.waiverSigned
-          ? `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Participation Waiver</p>` +
-            `<p style="margin:0 0 12px;font-size:14px;color:#475569">Your participation waiver is on file — thank you. You can view or update it any time.</p>` +
-            `<div>${emailButton(opts.waiverUrl, "View your waiver")}</div>`
-          : `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Complete the Participation Waiver</p>` +
-            `<p style="margin:0 0 12px;font-size:14px;color:#475569">Required before the first practice — it only takes a minute.</p>` +
-            `<div>${emailButton(opts.waiverUrl, "Complete the waiver")}</div>`)
+      ? `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Participation Waiver</p>` +
+        `<p style="margin:0 0 12px;font-size:14px;color:#475569">If you haven&apos;t completed your participation waiver yet, <a href="${opts.waiverUrl}" style="color:#4338ca;text-decoration:underline">click here</a> to sign it — it&apos;s required before the first practice.</p>` +
+        `<div>${emailButton(opts.waiverUrl, "Complete the waiver")}</div>`
       : "") +
     `<p style="margin:22px 0 0;font-size:13px;color:#64748b">Questions? Contact us at <a href="mailto:${SUPPORT_ADDRESS}" style="color:#4338ca;text-decoration:none">${SUPPORT_ADDRESS}</a>.</p>`;
 
@@ -82,7 +77,7 @@ export function teamLaunchEmail(opts: {
     `Choose Team Apparel & Pay — one PURE Academy T-shirt or tank top (${usd(apparelCents)}), select your size, and pay your ${usd(opts.feeCents)} season fee in one checkout:`,
     `   ${opts.payUrl}`,
     ...(opts.waiverUrl
-      ? [``, opts.waiverSigned ? `Your participation waiver is on file. View or update it:` : `Complete the participation waiver:`, `   ${opts.waiverUrl}`]
+      ? [``, `Participation waiver — if you haven't completed yours yet, sign it here (required before the first practice):`, `   ${opts.waiverUrl}`]
       : []),
     ``,
     `Questions? Contact us at ${SUPPORT_ADDRESS}.`,

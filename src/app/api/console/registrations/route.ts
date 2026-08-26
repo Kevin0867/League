@@ -75,7 +75,6 @@ async function notifyAssignment(teamId: string, personId: string, seasonId: stri
     payUrl: pay?.payUrl ?? null,
     feeCents: pay?.feeCents ?? null,
     waiverUrl: waiver.waiverUrl,
-    waiverSigned: waiver.signed,
   });
   await dispatchMessage({
     seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
@@ -740,9 +739,7 @@ export async function POST(req: Request) {
       const practiceWhen = team?.dayOfWeek
         ? `${team.dayOfWeek}${team.startTime ? ` at ${formatTime12(team.startTime)}` : ""}`
         : "To be confirmed";
-      // Always include the participation-waiver link; wording adapts to whether
-      // it's already on file.
-      const waiverSigned = !!payer.waiverSignedAt && !!person.waiverSignedAt;
+      // Always include the participation-waiver link so anyone unsigned is caught.
       const waiverUrl = `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}`;
 
       const email = teamLaunchEmail({
@@ -757,9 +754,8 @@ export async function POST(req: Request) {
         payUrl: payUrl ?? `${appUrl()}/portal`,
         feeCents,
         waiverUrl,
-        waiverSigned,
       });
-      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details${waiverSigned ? "" : " + your waiver"} are in your email.`;
+      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details + your waiver are in your email.`;
       await dispatchMessage({
         senderId: actor.userId,
         seasonId: reg.seasonId,
