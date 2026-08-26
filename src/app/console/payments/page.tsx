@@ -11,6 +11,7 @@ import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
+import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,9 @@ export default async function PaymentsPage({
   const requested = outstanding.reduce((s, p) => s + p.amountCents, 0);
   const paidOut = paidOutAgg._sum.amountCents ?? 0;
 
+  // Webhook health — the usual reason paid charges don't get recorded here.
+  const wh = await getStripeWebhookStatus();
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -81,6 +85,43 @@ export default async function PaymentsPage({
         <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           Couldn&apos;t reconcile: {sp.recerr}
         </div>
+      )}
+
+      {/* Webhook health — a broken webhook is the usual reason paid charges don't
+          get recorded, so surface it right where the money is. */}
+      {wh.stripeConfigured && (
+        wh.matchingHealthy && wh.webhookSecretSet ? (
+          <details className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+            <summary className="cursor-pointer font-medium">✓ Payment webhook connected</summary>
+            <p className="mt-2 text-emerald-700">
+              Stripe is set to notify <span className="font-mono text-xs">{wh.expectedUrl}</span> on payment completion, and the
+              signing secret is set. New payments should record automatically. If a webhook is ever missed, use
+              &ldquo;Reconcile with Stripe&rdquo; above.
+            </p>
+          </details>
+        ) : (
+          <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-semibold">⚠ Payment webhook needs attention — this is why paid charges may not be recording.</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {!wh.webhookSecretSet && (
+                <li><strong>Signing secret not set.</strong> Add <span className="font-mono text-xs">STRIPE_WEBHOOK_SECRET</span> in Vercel (copy it from the endpoint in Stripe).</li>
+              )}
+              {wh.listed && !wh.endpoints.some((e) => e.pointsHere) && (
+                <li><strong>No Stripe webhook points here.</strong> In Stripe → Developers → Webhooks, add an endpoint for <span className="font-mono text-xs">{wh.expectedUrl}</span>.</li>
+              )}
+              {wh.endpoints.filter((e) => e.pointsHere && e.status !== "enabled").map((e, i) => (
+                <li key={`dis${i}`}><strong>The endpoint here is {e.status}.</strong> Enable it in Stripe.</li>
+              ))}
+              {wh.endpoints.filter((e) => e.pointsHere && e.status === "enabled" && !e.coversRequired).map((e, i) => (
+                <li key={`ev${i}`}><strong>Missing the completion event.</strong> Subscribe the endpoint to <span className="font-mono text-xs">checkout.session.completed</span>{e.missingHelpful.length ? ` (also recommended: ${e.missingHelpful.filter((x) => x !== "checkout.session.completed").join(", ")})` : ""}.</li>
+              ))}
+              {!wh.listed && (
+                <li>Couldn&apos;t read your webhooks from Stripe{wh.listError ? ` (${wh.listError})` : ""} — check them in Stripe → Developers → Webhooks. Expected URL: <span className="font-mono text-xs">{wh.expectedUrl}</span>.</li>
+              )}
+            </ul>
+            <p className="mt-2 text-amber-800">Meanwhile, &ldquo;Reconcile with Stripe&rdquo; above will pull in any charges that were missed.</p>
+          </div>
+        )
       )}
 
       {sp.ok === "statements" && (
