@@ -32,7 +32,6 @@ export type AssignmentDetail = {
   paymentDueLabel?: string;
   // When supplied, the email carries the participation-waiver link.
   waiverUrl?: string | null;
-  waiverSigned?: boolean;
 };
 
 function row(label: string, value: string): string {
@@ -68,15 +67,11 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
     : `<p style="margin:0 0 12px;font-size:14px;color:#475569">Open your portal to choose team apparel and pay your season fee.</p>` +
       `<div>${emailButton(`${base}/portal`, "Open your portal to pay", { primary: true })}</div>`;
 
-  // Participation waiver — always linked when available; wording depends on state.
+  // Participation waiver — always included so anyone who hasn't signed is caught.
   const waiverBlock = d.waiverUrl
-    ? (d.waiverSigned
-        ? `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Participation Waiver</p>` +
-          `<p style="margin:0 0 12px;font-size:14px;color:#475569">Your participation waiver is on file — thank you. You can view or update it any time.</p>` +
-          `<div>${emailButton(d.waiverUrl, "View your waiver")}</div>`
-        : `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Complete the Participation Waiver</p>` +
-          `<p style="margin:0 0 12px;font-size:14px;color:#475569">Required before the first practice — it only takes a minute.</p>` +
-          `<div>${emailButton(d.waiverUrl, "Complete the waiver")}</div>`)
+    ? `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Participation Waiver</p>` +
+      `<p style="margin:0 0 12px;font-size:14px;color:#475569">If you haven&apos;t completed your participation waiver yet, <a href="${d.waiverUrl}" style="color:#4338ca;text-decoration:underline">click here</a> to sign it — it&apos;s required before the first practice.</p>` +
+      `<div>${emailButton(d.waiverUrl, "Complete the waiver")}</div>`
     : "";
 
   const contentHtml =
@@ -101,7 +96,7 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
     ``,
     ...payLine,
     ...(d.waiverUrl
-      ? [``, d.waiverSigned ? `Your participation waiver is on file. View or update it:` : `Complete the participation waiver:`, `   ${d.waiverUrl}`]
+      ? [``, `Participation waiver — if you haven't completed yours yet, sign it here (required before the first practice):`, `   ${d.waiverUrl}`]
       : []),
     ``,
     `Questions? Contact us at ${SUPPORT_ADDRESS}.`,

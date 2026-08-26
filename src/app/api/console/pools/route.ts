@@ -53,7 +53,6 @@ async function notifyAssignment(teamId: string, personIds: string[], seasonId: s
       payUrl: pay?.payUrl ?? null,
       feeCents: pay?.feeCents ?? null,
       waiverUrl: waiver.waiverUrl,
-      waiverSigned: waiver.signed,
     });
     await dispatchMessage({
       seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
