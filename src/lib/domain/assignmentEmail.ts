@@ -70,7 +70,7 @@ export function teamAssignmentEmail(d: AssignmentDetail): {
   // Participation waiver — always included so anyone who hasn't signed is caught.
   const waiverBlock = d.waiverUrl
     ? `<p style="margin:20px 0 6px;font-size:16px;font-weight:700;color:#0f172a">Participation Waiver</p>` +
-      `<p style="margin:0 0 12px;font-size:14px;color:#475569">If you haven&apos;t completed your participation waiver yet, click below to sign it — it&apos;s required before the first practice.</p>` +
+      `<p style="margin:0 0 12px;font-size:14px;color:#475569">If you haven&apos;t completed your participation waiver yet, click below to sign it — <span style="text-decoration:underline">it&apos;s required before the first practice</span>.</p>` +
       `<div>${emailButton(d.waiverUrl, "Complete the waiver")}</div>`
     : "";
 
