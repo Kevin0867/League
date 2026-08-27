@@ -79,6 +79,16 @@ export default async function TeamBuildBoard({
       : Promise.resolve(0),
   ]);
 
+  // Women's 2.5 players currently sitting on non-2.5 teams (consolidated into the
+  // 2.5–3.0 band) — offer to split them back into their own Women's 2.5 teams.
+  const seasonDivisions = activeId ? await prisma.division.findMany({ where: { seasonId: activeId }, select: { id: true, name: true } }) : [];
+  const div25Id = seasonDivisions.find((d) => deriveDivisionCode(d.name) === "W2.5")?.id ?? null;
+  const misplaced25 = div25Id && activeId
+    ? await prisma.registration.count({
+        where: { seasonId: activeId, divisionId: div25Id, person: { teamMemberships: { some: { team: { seasonId: activeId, NOT: { divisionCode: "W2.5" } } } } } },
+      })
+    : 0;
+
   const seasonRows = await prisma.season.findMany({
     orderBy: [{ active: "desc" }, { startDate: "desc" }],
     include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
@@ -293,6 +303,34 @@ export default async function TeamBuildBoard({
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           Moved {sp.n ?? "0"} team{sp.n === "1" ? "" : "s"} into the active season. They should now show below and in the Move-to-team picker.
         </p>
+      )}
+      {sp.ok === "split25" && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Split Women&apos;s 2.5 back out — relabeled {sp.relabeled ?? "0"} team{sp.relabeled === "1" ? "" : "s"} to Women&apos;s 2.5 and moved {sp.moved ?? "0"} player{sp.moved === "1" ? "" : "s"} into {sp.created ?? "0"} new 2.5 team{sp.created === "1" ? "" : "s"}. Review the new teams&apos; rosters, day/time, and facility below.
+        </p>
+      )}
+      {sp.err === "no25" && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">No Women&apos;s 2.5 registrations found in this season — nothing to split.</p>
+      )}
+
+      {/* Women's 2.5 was folded into the 2.5–3.0 band — offer to split it out. */}
+      {misplaced25 > 0 && (
+        <div className="rounded-lg border-l-4 border-indigo-400 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          <p className="font-semibold">Women&apos;s 2.5 was combined into the 2.5–3.0 (3.0-labeled) band.</p>
+          <p className="mt-1">
+            <strong>{misplaced25}</strong> player{misplaced25 === 1 ? " is" : "s are"} registered Women&apos;s 2.5 but sitting on a 3.0 team. Split Women&apos;s 2.5 back into its own teams:
+            all-2.5 teams are relabeled to Women&apos;s 2.5, and 2.5 players on mixed teams move onto a new Women&apos;s 2.5 team in their market.
+          </p>
+          <div className="mt-3">
+            <ConfirmSubmit
+              action="/api/console/teams"
+              fields={{ ticket, op: "splitWomens25" }}
+              confirm={`Split Women's 2.5 back out? ${misplaced25} player(s) will move to Women's 2.5 teams, and any all-2.5 team is relabeled. You can adjust rosters afterward.`}
+              label="Split Women's 2.5 into its own teams"
+              className="rounded-lg border border-indigo-500 bg-white px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100"
+            />
+          </div>
+        </div>
       )}
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
