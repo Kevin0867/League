@@ -78,7 +78,21 @@ export default async function PaymentsPage({
   // one-time vs installment charges from Stripe, then subtract recorded apparel
   // from the one-time side to show the season-fee line — so the breakdown always
   // adds back up to the Stripe total. Falls back to app records if Stripe is off.
-  const stripeCollected = await stripeCollectedBreakdown().catch(() => null);
+  // Only count charges from this season's collection window — the Stripe account
+  // holds years of unrelated PURE charges. Cutoff = PAYMENTS_SINCE env override,
+  // else when the season opened for registration, else when it was created.
+  const paySeason = await prisma.season.findFirst({
+    where: { active: true, program: "PURE_ACADEMY" },
+    select: { opensOn: true, createdAt: true },
+  });
+  const sinceEnv = process.env.PAYMENTS_SINCE ? new Date(process.env.PAYMENTS_SINCE) : null;
+  const sinceDate =
+    (sinceEnv && !isNaN(sinceEnv.getTime()) ? sinceEnv : null) ??
+    paySeason?.opensOn ??
+    paySeason?.createdAt ??
+    null;
+  const sinceUnix = sinceDate ? Math.floor(sinceDate.getTime() / 1000) : undefined;
+  const stripeCollected = await stripeCollectedBreakdown(sinceUnix).catch(() => null);
   const usingStripe = stripeCollected !== null;
 
   const collectedTotal = usingStripe ? stripeCollected!.totalCents : collected + apparelCents;
@@ -449,7 +463,11 @@ export default async function PaymentsPage({
             {otherFeeCents !== 0 && <div className="flex justify-between"><dt>Other (ACP, lessons, custom)</dt><dd className="font-semibold text-slate-700">{formatCents(otherFeeCents)}</dd></div>}
             <div className="flex justify-between"><dt>Apparel</dt><dd className="font-semibold text-slate-700">{formatCents(apparelCents)}</dd></div>
           </dl>
-          {usingStripe && <p className="mt-1 text-[11px] text-slate-400">Live from Stripe — actual charges collected.</p>}
+          {usingStripe && (
+            <p className="mt-1 text-[11px] text-slate-400">
+              Live from Stripe{sinceDate ? ` · charges since ${formatDate(sinceDate)}` : ""} ({stripeCollected!.count} charges)
+            </p>
+          )}
         </div>
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
         <div className="rounded-xl border border-slate-200 bg-white p-4">
