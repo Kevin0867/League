@@ -100,15 +100,15 @@ export default async function PaymentsPage({
   // Coaches from calculated payout runs, falling back to delivered coach-sessions
   // × the per-session rate before any run is generated; facilities from the
   // amount due on their statements.
-  const [coachPayoutAgg, facilityDueAgg, plannedCoachSessions] = await Promise.all([
+  const [coachPayoutAgg, facilityDueAgg, deliveredCoachSessions] = await Promise.all([
     prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
     prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
-    // Every coach-session on the calendar (scheduled or delivered) — projects the
-    // full-season coach payout before the season has actually started.
-    prisma.sessionCoach.count({ where: { session: { status: { in: ["DELIVERED", "SCHEDULED", "RESCHEDULED"] } } } }),
+    // Accrued coach pay = only sessions actually DELIVERED. $0 until practices
+    // begin, which is correct — nothing is owed for sessions that haven't happened.
+    prisma.sessionCoach.count({ where: { session: { status: "DELIVERED" } } }),
   ]);
   const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
-  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : plannedCoachSessions * COACH_PER_SESSION_CENTS;
+  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : deliveredCoachSessions * COACH_PER_SESSION_CENTS;
   const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;
   const estPayoutsCents = coachEstCents + facilityEstCents;
 
@@ -471,7 +471,7 @@ export default async function PaymentsPage({
             <div className="flex justify-between"><dt>Coaches</dt><dd className="font-semibold text-slate-700">{formatCents(coachEstCents)}</dd></div>
             <div className="flex justify-between"><dt>Facilities</dt><dd className="font-semibold text-slate-700">{formatCents(facilityEstCents)}</dd></div>
           </dl>
-          <p className="mt-1 text-[11px] text-slate-400">Estimated — not yet disbursed.</p>
+          <p className="mt-1 text-[11px] text-slate-400">Accrues as sessions are delivered — not yet disbursed.</p>
         </div>
       </div>
 
