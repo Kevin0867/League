@@ -401,12 +401,11 @@ export default async function PaymentsPage({
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Collected</div>
-          <div className="mt-1 text-2xl font-extrabold text-emerald-700">{formatCents(collected)}</div>
+          <div className="mt-1 text-2xl font-extrabold text-emerald-700">{formatCents(collected + apparelCents)}</div>
           <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
             <div className="flex justify-between"><dt>Season fees</dt><dd className="font-semibold text-slate-700">{formatCents(seasonFeeCents)}</dd></div>
             {otherFeeCents !== 0 && <div className="flex justify-between"><dt>Other (ACP, lessons, custom)</dt><dd className="font-semibold text-slate-700">{formatCents(otherFeeCents)}</dd></div>}
-            <div className="flex justify-between"><dt>Apparel <span className="text-slate-400">(billed on top)</span></dt><dd className="font-semibold text-slate-700">{formatCents(apparelCents)}</dd></div>
-            <div className="flex justify-between border-t border-slate-100 pt-1 text-slate-600"><dt>Fees + apparel</dt><dd className="font-bold">{formatCents(collected + apparelCents)}</dd></div>
+            <div className="flex justify-between"><dt>Apparel</dt><dd className="font-semibold text-slate-700">{formatCents(apparelCents)}</dd></div>
           </dl>
         </div>
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
