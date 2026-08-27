@@ -67,6 +67,44 @@ export async function POST(req: Request) {
   const op = String(formData.get("op") ?? "");
 
   switch (op) {
+    // Repair: pull PURE Academy teams (and their sessions) that hold a current
+    // registrant but sit in a DIFFERENT season row into the one active season —
+    // the fix for "teams built in one season, registrations in another", which
+    // makes the Teams page and the Move-to-team picker come up empty.
+    case "consolidateSeason": {
+      const seasons = await prisma.season.findMany({
+        orderBy: [{ active: "desc" }, { startDate: "desc" }],
+        select: { id: true, active: true, program: true },
+      });
+      const target =
+        seasons.find((s) => s.active && s.program === "PURE_ACADEMY") ??
+        seasons.find((s) => s.program === "PURE_ACADEMY") ??
+        seasons.find((s) => s.active) ??
+        seasons[0];
+      if (!target) return NextResponse.redirect(new URL("/console/teams?err=noseason", origin), 303);
+
+      // Only teams that hold a player registered in the target season — surgical,
+      // so old/other-season teams and outside-club teams are left alone.
+      const strays = await prisma.team.findMany({
+        where: {
+          seasonId: { not: target.id },
+          origin: "PURE_ACADEMY",
+          members: { some: { person: { registrations: { some: { seasonId: target.id } } } } },
+        },
+        select: { id: true },
+      });
+      const ids = strays.map((t) => t.id);
+      if (ids.length) {
+        await prisma.team.updateMany({ where: { id: { in: ids } }, data: { seasonId: target.id } });
+        // Bring their sessions along so the schedule stays consistent.
+        await prisma.session.updateMany({
+          where: { seasonId: { not: target.id }, teams: { some: { teamId: { in: ids } } } },
+          data: { seasonId: target.id },
+        });
+      }
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: target.id, action: "CONSOLIDATE_SEASON", summary: `Moved ${ids.length} teams into the active season` });
+      return NextResponse.redirect(new URL(`/console/teams?ok=consolidated&n=${ids.length}`, origin), 303);
+    }
     case "createTeam": {
       const name = String(formData.get("name") ?? "").trim();
       const seasonId = String(formData.get("seasonId") ?? "").trim();

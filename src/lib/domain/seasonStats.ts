@@ -83,10 +83,20 @@ function emptyStats(): SeasonStats {
  * read whatever you need off the result.
  */
 export async function getSeasonStats(): Promise<SeasonStats> {
-  const season = await prisma.season.findFirst({
-    where: { active: true, program: "PURE_ACADEMY" },
+  // Resilient season resolution — never return "nothing" when a season exists.
+  // Prefer the active PURE Academy season, but fall back so the console still
+  // shows teams/registrations even if that season's active/program flag is off
+  // (which otherwise silently hides every team while registrations still show).
+  const seasons = await prisma.season.findMany({
+    orderBy: [{ active: "desc" }, { startDate: "desc" }],
     include: { _count: { select: { divisions: true } } },
   });
+  const season =
+    seasons.find((s) => s.active && s.program === "PURE_ACADEMY") ??
+    seasons.find((s) => s.program === "PURE_ACADEMY") ??
+    seasons.find((s) => s.active) ??
+    seasons[0] ??
+    null;
   if (!season) return emptyStats();
   const seasonId = season.id;
 

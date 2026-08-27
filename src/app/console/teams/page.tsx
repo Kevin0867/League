@@ -289,6 +289,11 @@ export default async function TeamBuildBoard({
           {sp.ok === "schedule" && sp.skipped ? ` (${sp.skipped} skipped — day/time was outside the facility's available hours.)` : ""}
         </p>
       )}
+      {sp.ok === "consolidated" && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Moved {sp.n ?? "0"} team{sp.n === "1" ? "" : "s"} into the active season. They should now show below and in the Move-to-team picker.
+        </p>
+      )}
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {ERRORS[sp.err] ?? "Something went wrong."}
@@ -327,8 +332,17 @@ export default async function TeamBuildBoard({
                 ))}
               </ul>
               <p className="mt-2 text-xs text-amber-800">
-                Fix: make the season these teams live in the single active PURE Academy season (<Link href="/console/setup" className="underline">Season setup</Link>), or un-flag test teams. Then they&apos;ll reappear here and in the Move picker.
+                Fix: move these teams into the active registration season. This pulls every team that holds a current registrant into the one active season, so they reappear here and in the Move picker.
               </p>
+              <div className="mt-2">
+                <ConfirmSubmit
+                  action="/api/console/teams"
+                  fields={{ ticket, op: "consolidateSeason" }}
+                  confirm="Move all teams that hold a current registrant into the active season? This fixes teams that were built in a different season than the registrations. Safe — it only moves PURE Academy teams that have a current-season player."
+                  label="Move these teams into the active season"
+                  className="rounded-lg border border-amber-500 bg-white px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+                />
+              </div>
             </div>
           )}
         </div>
