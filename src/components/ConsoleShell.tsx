@@ -12,6 +12,7 @@ type NavItem = { href: string; label: string; roles?: Role[]; match?: string[] }
 type NavSection = { title: string; items: NavItem[] };
 
 const DASHBOARD: NavItem = { href: "/console", label: "Dashboard" };
+const ASK: NavItem = { href: "/console/ask", label: "Ask the Console", roles: ["COO", "CEO", "DIRECTOR"] };
 
 // Grouped into logical clusters so a first-time admin can find where a task
 // lives instead of scanning one long flat list.
@@ -147,6 +148,11 @@ export function ConsoleShell({
             <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
               {DASHBOARD.label}
             </Link>
+            {roleVisible(ASK) && (
+              <Link href={ASK.href} onClick={() => setOpen(false)} className={`mt-1.5 ${linkClass(isActiveItem(ASK))}`}>
+                {ASK.label}
+              </Link>
+            )}
             {sections.map((section) => (
               <div key={section.title} className="mt-4">
                 <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-300/70">

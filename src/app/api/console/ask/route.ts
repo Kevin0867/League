@@ -1,0 +1,153 @@
+import { NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
+import { verifyActionTicket } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
+import { audit } from "@/lib/audit";
+import { CONSOLE_TOOLS, runConsoleTool } from "@/lib/ai/consoleTools";
+
+// "Ask the Console" — a READ-ONLY admin assistant. The model is given a set of
+// safe, read-only report tools (see consoleTools.ts); it picks which to call,
+// our server runs the real Prisma query, and the model answers grounded in the
+// returned data. It can never mutate anything — there is no write tool.
+//
+// Auth mirrors the rest of the console: this runtime doesn't deliver the session
+// cookie on POSTs, so the page mints a signed console ticket (on its GET render)
+// and the client sends it in the body. We verify the ticket and require admin.
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// Overridable so the model can be tuned without a code change. Defaults to the
+// current flagship; the assistant does read-only reporting, so correctness of
+// tool selection matters more than raw cost here.
+const MODEL = process.env.ASK_CONSOLE_MODEL || "claude-opus-5";
+const MAX_STEPS = 6; // hard cap on tool-use round-trips per question (cost guard)
+
+const SYSTEM_PROMPT = [
+  "You are \"Ask the Console\", a read-only assistant embedded in the admin console of PURE Academy, a youth & adult pickleball club running a season of teams.",
+  "You help staff find information and run reports by calling the provided read-only tools. You cannot change any data — you only look things up and summarize.",
+  "",
+  "Guidelines:",
+  "- Always ground answers in tool results. If you don't have a tool for something, say so plainly rather than guessing.",
+  "- Prefer calling a tool over speculating. For broad 'where do we stand' questions, start with season_overview.",
+  "- Money is reported in whole formatted dollars from the tools; quote those figures exactly.",
+  "- Be concise and scannable. Use short markdown: a one-line answer up top, then bullets or a compact table for detail.",
+  "- These are real families, some of them minors. Share only what the question needs. Never invent contact details or statuses.",
+  "- If a tool returns an error, tell the user what failed in plain language.",
+].join("\n");
+
+type ClientMsg = { role: "user" | "assistant"; text: string };
+
+export async function POST(req: Request) {
+  let body: { ticket?: string; question?: string; history?: ClientMsg[] };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
+  }
+
+  // Auth — verify the signed console ticket and require an admin role.
+  const ticket = await verifyActionTicket(body.ticket, "console");
+  const roles = ticket?.roles ?? (ticket?.role ? [ticket.role] : []);
+  if (!ticket || !isAdmin(roles)) {
+    return NextResponse.json({ ok: false, error: "Not authorized." }, { status: 403 });
+  }
+
+  const question = (body.question ?? "").trim();
+  if (!question) return NextResponse.json({ ok: false, error: "Ask a question." }, { status: 400 });
+  if (question.length > 2000) {
+    return NextResponse.json({ ok: false, error: "That question is too long." }, { status: 400 });
+  }
+
+  // Graceful degradation — mirror how Stripe/Zoho report "not configured".
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { ok: false, configured: false, error: "The assistant isn't configured yet — set ANTHROPIC_API_KEY in the environment to enable it." },
+      { status: 200 },
+    );
+  }
+
+  const client = new Anthropic({ apiKey });
+
+  // Rebuild prior turns as plain text (we keep the server stateless; the tool
+  // loop re-runs fresh each question). Cap history so context stays bounded.
+  const history = (Array.isArray(body.history) ? body.history : [])
+    .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.text === "string")
+    .slice(-10)
+    .map((m) => ({ role: m.role, content: m.text }));
+
+  const messages: Anthropic.MessageParam[] = [...history, { role: "user", content: question }];
+  const toolsUsed: string[] = [];
+
+  try {
+    let steps = 0;
+    while (steps < MAX_STEPS) {
+      steps++;
+      const resp = await client.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system: SYSTEM_PROMPT,
+        tools: CONSOLE_TOOLS,
+        messages,
+      });
+
+      if (resp.stop_reason === "tool_use") {
+        // Preserve the assistant turn verbatim, then answer each tool_use block.
+        messages.push({ role: "assistant", content: resp.content });
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        for (const block of resp.content) {
+          if (block.type === "tool_use") {
+            toolsUsed.push(block.name);
+            const result = await runConsoleTool(block.name, (block.input ?? {}) as Record<string, unknown>);
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify(result),
+            });
+          }
+        }
+        messages.push({ role: "user", content: toolResults });
+        continue;
+      }
+
+      // Final answer.
+      const answer = resp.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("\n")
+        .trim();
+
+      await audit({
+        actorId: ticket.userId,
+        entityType: "Console",
+        entityId: "ask",
+        action: "ASK",
+        summary: question.slice(0, 300),
+        metadata: { toolsUsed, steps },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        answer: answer || "I couldn't produce an answer for that — try rephrasing.",
+        toolsUsed: [...new Set(toolsUsed)],
+      });
+    }
+
+    // Ran out of tool-use steps without a final answer.
+    await audit({
+      actorId: ticket.userId, entityType: "Console", entityId: "ask", action: "ASK",
+      summary: question.slice(0, 300), metadata: { toolsUsed, steps, truncated: true },
+    });
+    return NextResponse.json({
+      ok: true,
+      answer: "That took more steps than I could complete in one go. Try narrowing the question.",
+      toolsUsed: [...new Set(toolsUsed)],
+    });
+  } catch (e) {
+    console.error("ask-the-console failed", e);
+    const msg = e instanceof Anthropic.APIError
+      ? "The assistant service returned an error. Please try again."
+      : "Something went wrong answering that. Please try again.";
+    return NextResponse.json({ ok: false, error: msg }, { status: 502 });
+  }
+}
