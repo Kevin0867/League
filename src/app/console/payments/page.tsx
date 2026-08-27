@@ -48,8 +48,18 @@ export default async function PaymentsPage({
     prisma.payment.aggregate({ where: { direction: "OUT", status: "PAID" }, _sum: { amountCents: true } }),
   ]);
 
-  const collected = collectedAgg._sum.amountCents ?? 0;
-  const requested = outstanding.reduce((s, p) => s + p.amountCents, 0);
+  // Installment plans are PENDING (so counted as "requested") until all 3 charges
+  // clear — but the portion already paid IS collected money sitting in Stripe.
+  // Count each plan's paid share as Collected, and leave only the remainder as
+  // Requested, so the totals match what actually cleared.
+  const installmentPaidCents = outstanding.reduce((s, p) => {
+    if (!p.installmentPlan || !p.installmentsPaid) return s;
+    const total = p.installmentsTotal ?? 3;
+    return s + Math.round((p.amountCents / total) * Math.min(p.installmentsPaid, total));
+  }, 0);
+
+  const collected = (collectedAgg._sum.amountCents ?? 0) + installmentPaidCents;
+  const requested = Math.max(0, outstanding.reduce((s, p) => s + p.amountCents, 0) - installmentPaidCents);
   const paidOut = paidOutAgg._sum.amountCents ?? 0;
 
   // Break "Collected" into season fees vs everything else, and compute apparel
@@ -60,21 +70,25 @@ export default async function PaymentsPage({
     prisma.payment.aggregate({ where: { direction: "IN", status: "PAID", category: "PLAYER_FEE" }, _sum: { amountCents: true } }),
     prisma.apparelOrderItem.findMany({ where: { payment: { direction: "IN", status: "PAID" } }, select: { unitPriceCents: true, quantity: true } }),
   ]);
+  // Season fees paid in full (completed plans included via their PAID status);
+  // installment partials are shown on their own line.
   const seasonFeeCents = seasonFeeAgg._sum.amountCents ?? 0;
   const apparelCents = apparelItems.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
-  const otherFeeCents = collected - seasonFeeCents;
+  const otherFeeCents = collected - seasonFeeCents - installmentPaidCents;
 
   // Estimated payouts (not yet disbursed): what's owed to coaches and facilities.
   // Coaches from calculated payout runs, falling back to delivered coach-sessions
   // × the per-session rate before any run is generated; facilities from the
   // amount due on their statements.
-  const [coachPayoutAgg, facilityDueAgg, deliveredCoachSessions] = await Promise.all([
+  const [coachPayoutAgg, facilityDueAgg, plannedCoachSessions] = await Promise.all([
     prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
     prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
-    prisma.sessionCoach.count({ where: { session: { status: "DELIVERED" } } }),
+    // Every coach-session on the calendar (scheduled or delivered) — projects the
+    // full-season coach payout before the season has actually started.
+    prisma.sessionCoach.count({ where: { session: { status: { in: ["DELIVERED", "SCHEDULED", "RESCHEDULED"] } } } }),
   ]);
   const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
-  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : deliveredCoachSessions * COACH_PER_SESSION_CENTS;
+  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : plannedCoachSessions * COACH_PER_SESSION_CENTS;
   const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;
   const estPayoutsCents = coachEstCents + facilityEstCents;
 
@@ -418,7 +432,8 @@ export default async function PaymentsPage({
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Collected</div>
           <div className="mt-1 text-2xl font-extrabold text-emerald-700">{formatCents(collected + apparelCents)}</div>
           <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
-            <div className="flex justify-between"><dt>Season fees</dt><dd className="font-semibold text-slate-700">{formatCents(seasonFeeCents)}</dd></div>
+            <div className="flex justify-between"><dt>Season fees (paid in full)</dt><dd className="font-semibold text-slate-700">{formatCents(seasonFeeCents)}</dd></div>
+            {installmentPaidCents > 0 && <div className="flex justify-between"><dt>Installments (paid so far)</dt><dd className="font-semibold text-slate-700">{formatCents(installmentPaidCents)}</dd></div>}
             {otherFeeCents !== 0 && <div className="flex justify-between"><dt>Other (ACP, lessons, custom)</dt><dd className="font-semibold text-slate-700">{formatCents(otherFeeCents)}</dd></div>}
             <div className="flex justify-between"><dt>Apparel</dt><dd className="font-semibold text-slate-700">{formatCents(apparelCents)}</dd></div>
           </dl>
