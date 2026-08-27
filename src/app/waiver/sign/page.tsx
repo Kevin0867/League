@@ -14,6 +14,7 @@ const ERRORS: Record<string, string> = {
   agree: "Please check the box to agree before signing.",
   name: "Please type the full legal name to sign.",
   guardianemail: "Please enter the parent/guardian email so we can reach you about your player.",
+  gender: "Please select a gender for everyone on the waiver.",
 };
 
 export default async function WaiverSignPage({
@@ -66,6 +67,26 @@ export default async function WaiverSignPage({
   const isMinor = person.isMinor;
   const today = new Date().toISOString().slice(0, 10);
 
+  // One waiver covers the whole household, so we collect gender for the
+  // parent/guardian AND every child here — mirroring the sign route's family
+  // resolution: from any member's link, resolve up to the paying adult, then
+  // list that adult + all dependents.
+  const rootId = person.guardianId ?? person.id;
+  const root = await prisma.person.findUnique({
+    where: { id: rootId },
+    select: {
+      id: true, firstName: true, lastName: true, gender: true, isMinor: true,
+      dependents: { select: { id: true, firstName: true, lastName: true, gender: true }, orderBy: { firstName: "asc" } },
+    },
+  });
+  const hasChildren = (root?.dependents.length ?? 0) > 0;
+  const participants = root
+    ? [
+        { id: root.id, name: `${root.firstName} ${root.lastName}`, gender: root.gender, role: hasChildren ? "parent/guardian" : root.isMinor ? "player" : "player" },
+        ...root.dependents.map((d) => ({ id: d.id, name: `${d.firstName} ${d.lastName}`, gender: d.gender, role: "child" })),
+      ]
+    : [{ id: person.id, name: `${person.firstName} ${person.lastName}`, gender: person.gender, role: isMinor ? "child" : "player" }];
+
   return (
     <Shell>
       <div className="mb-4">
@@ -113,6 +134,34 @@ export default async function WaiverSignPage({
           <div>
             <label className="label" htmlFor="date">Date</label>
             <input id="date" type="date" className="input" defaultValue={today} readOnly />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-800">
+            {participants.length > 1 ? "Everyone on this waiver" : "Participant"}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Please confirm each person&apos;s gender — it&apos;s used to place players in the correct
+            division{participants.length > 1 ? ", including the parent/guardian and each child" : ""}.
+          </p>
+          <div className="mt-3 space-y-3">
+            {participants.map((m) => {
+              const g = m.gender === "MALE" || m.gender === "FEMALE" ? m.gender : "";
+              return (
+                <div key={m.id} className="grid grid-cols-[1fr,auto] items-center gap-3">
+                  <div className="text-sm">
+                    <span className="font-medium text-slate-800">{m.name}</span>
+                    <span className="ml-1.5 text-xs text-slate-400">({m.role})</span>
+                  </div>
+                  <select name={`gender_${m.id}`} className="input w-40" defaultValue={g} required>
+                    <option value="" disabled>Select…</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                  </select>
+                </div>
+              );
+            })}
           </div>
         </div>
 
