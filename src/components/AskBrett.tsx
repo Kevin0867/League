@@ -17,6 +17,17 @@ const SUGGESTIONS = [
   "Who hasn't signed a waiver?",
 ];
 
+// A simple, intelligent-looking person icon (head + shoulders) used as Brett's
+// avatar — replaces the earlier paddle emoji.
+function BrettAvatar({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M5 19.5c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6a.9.9 0 0 1-.9.9H5.9a.9.9 0 0 1-.9-.9Z" />
+    </svg>
+  );
+}
+
 function renderText(text: string) {
   return text.split("\n").map((line, i) => {
     const bulleted = /^\s*[-*]\s+/.test(line);
@@ -84,11 +95,13 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
       {/* Bubble */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-brand-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 ring-2 ring-accent-500 transition hover:bg-brand-800"
-        aria-label="Ask Brett"
+        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 whitespace-nowrap rounded-full bg-brand-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 ring-2 ring-accent-500 transition hover:bg-brand-800"
+        aria-label="Ask Brett, the all-knowing"
       >
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-accent-500 text-brand-900">🏓</span>
-        {open ? "Close" : "Ask Brett"}
+        <span className="grid h-6 w-6 place-items-center rounded-full bg-accent-500 text-brand-900">
+          <BrettAvatar className="h-4 w-4" />
+        </span>
+        {open ? "Close" : "Ask Brett, the all-knowing"}
       </button>
 
       {/* Panel */}
@@ -97,10 +110,12 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
           <div className="flex items-center justify-between border-b border-slate-200 bg-brand-900 px-4 py-3 text-white">
             <div className="leading-tight">
               <div className="flex items-center gap-2 font-bold">
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-accent-500 text-brand-900">🏓</span>
-                Ask Brett
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-500 text-brand-900">
+                  <BrettAvatar className="h-4 w-4" />
+                </span>
+                Ask Brett, the all-knowing
               </div>
-              <div className="text-[11px] text-brand-200">the all-knowing · reads your data, never changes it</div>
+              <div className="mt-0.5 text-[11px] text-brand-200">reads your data, never changes it</div>
             </div>
             <button onClick={() => setOpen(false)} className="rounded-md px-2 py-1 text-white/80 hover:bg-white/10 hover:text-white" aria-label="Close">✕</button>
           </div>
