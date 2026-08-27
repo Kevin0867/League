@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { verifyActionTicket } from "@/lib/auth";
+import { verifyActionTicket, getSession } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { CONSOLE_TOOLS, runConsoleTool } from "@/lib/ai/consoleTools";
@@ -36,6 +36,39 @@ const SYSTEM_PROMPT = [
 ].join("\n");
 
 type ClientMsg = { role: "user" | "assistant"; text: string };
+
+// Health check — the session cookie IS delivered on GETs, so this is admin-gated
+// by the session directly. Reports whether the key is present AND whether a live
+// call to the model actually succeeds, so the widget can say exactly what's wrong
+// (key missing vs. model unreachable vs. connected).
+export async function GET() {
+  const session = await getSession();
+  if (!session || !isAdmin(session.roles ?? [session.role])) {
+    return NextResponse.json({ ok: false, error: "Not authorized." }, { status: 403 });
+  }
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ configured: false, model: MODEL, live: { ok: false, reason: "no-key" } });
+  }
+  try {
+    const client = new Anthropic({ apiKey });
+    await client.messages.create({ model: MODEL, max_tokens: 4, messages: [{ role: "user", content: "ping" }] });
+    return NextResponse.json({ configured: true, model: MODEL, live: { ok: true } });
+  } catch (e) {
+    const status = e instanceof Anthropic.APIError ? e.status : undefined;
+    const reason =
+      status === 401 ? "bad-key"
+      : status === 403 ? "no-access"
+      : status === 404 ? "model-not-found"
+      : status === 429 ? "rate-limited-or-no-credit"
+      : "api-error";
+    return NextResponse.json({
+      configured: true,
+      model: MODEL,
+      live: { ok: false, reason, status: status ?? null, message: e instanceof Error ? e.message.slice(0, 200) : "" },
+    });
+  }
+}
 
 export async function POST(req: Request) {
   let body: { ticket?: string; question?: string; history?: ClientMsg[] };

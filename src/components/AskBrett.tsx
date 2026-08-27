@@ -69,12 +69,42 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [health, setHealth] = useState<{ configured: boolean; live?: { ok: boolean; reason?: string; status?: number | null; message?: string } } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [turns, busy, open]);
+
+  // On first open, ping the health endpoint so the header shows Brett's real
+  // status (connected / key missing / model unreachable) instead of guessing.
+  useEffect(() => {
+    if (!open || health) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/console/ask", { method: "GET" });
+        setHealth(await res.json());
+      } catch {
+        setHealth({ configured, live: { ok: false, reason: "unreachable" } });
+      }
+    })();
+  }, [open, health, configured]);
+
+  const REASONS: Record<string, string> = {
+    "no-key": "API key not visible to the server",
+    "bad-key": "API key is invalid",
+    "no-access": "key has no access to the model",
+    "model-not-found": "model not found for this key",
+    "rate-limited-or-no-credit": "rate-limited or out of credit",
+    "api-error": "the model service returned an error",
+    unreachable: "couldn't reach the assistant service",
+  };
+  const status = !health
+    ? { dot: "bg-slate-300", label: "checking…" }
+    : health.live?.ok
+    ? { dot: "bg-emerald-400", label: "connected" }
+    : { dot: "bg-red-400", label: health.live?.reason ? REASONS[health.live.reason] ?? "not working" : "not working" };
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -134,18 +164,21 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
                 </span>
                 Ask Brett, the all-knowing
               </div>
-              <div className="mt-0.5 text-[11px] text-brand-200">reads your data, never changes it</div>
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-brand-200">
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${status.dot}`} />
+                {status.label}
+              </div>
             </div>
             <button onClick={() => setOpen(false)} className="rounded-md px-2 py-1 text-white/80 hover:bg-white/10 hover:text-white" aria-label="Close">✕</button>
           </div>
 
-          {!configured ? (
+          {(health ? health.live?.reason === "no-key" : !configured) ? (
             <div className="m-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               <div className="font-semibold">Brett isn&apos;t switched on yet.</div>
               <p className="mt-1.5 leading-relaxed">
-                Set an <code className="rounded bg-amber-100 px-1">ANTHROPIC_API_KEY</code> in the
-                production environment (Vercel → Settings → Environment Variables) and redeploy.
-                Once the key is present, Brett starts answering.
+                The server can&apos;t see an <code className="rounded bg-amber-100 px-1">ANTHROPIC_API_KEY</code>.
+                Add it in Vercel → Settings → Environment Variables (Production) and redeploy so the running
+                build picks it up. Once the key is present, Brett starts answering.
               </p>
             </div>
           ) : (
