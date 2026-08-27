@@ -30,7 +30,13 @@ export async function POST(req: Request) {
   const formData = await req.formData();
   const token = formData.get("token")?.toString();
   const back = (qs: string) =>
-    NextResponse.redirect(new URL(`/waiver/sign?token=${encodeURIComponent(token ?? "")}&${qs}`, origin), 303);
+    NextResponse.redirect(new URL(`/waiver/sign?token=${encodeURIComponent(token ?? "")}&${qs}${nextQs}`, origin), 303);
+
+  // Where to land after signing — only same-site console/portal paths are honored
+  // (used by the coach waiver gate to return them to the console).
+  const nextRaw = String(formData.get("next") ?? "");
+  const safeNext = nextRaw.startsWith("/console") || nextRaw.startsWith("/portal") ? nextRaw : null;
+  const nextQs = safeNext ? `&next=${encodeURIComponent(safeNext)}` : "";
 
   const personId = await verifyWaiverToken(token);
   if (!personId) return NextResponse.redirect(new URL("/waiver/sign?err=token", origin), 303);
@@ -115,5 +121,7 @@ export async function POST(req: Request) {
     summary: `Waiver signed by ${signatureName} for ${family.length} household member${family.length === 1 ? "" : "s"}`,
   });
 
-  return NextResponse.redirect(new URL("/waiver/sign?done=1", origin), 303);
+  // Coaches gated into the waiver return straight to where they were headed;
+  // everyone else sees the confirmation screen.
+  return NextResponse.redirect(new URL(safeNext ?? "/waiver/sign?done=1", origin), 303);
 }
