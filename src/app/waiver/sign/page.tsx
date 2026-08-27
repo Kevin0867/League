@@ -20,7 +20,7 @@ const ERRORS: Record<string, string> = {
 export default async function WaiverSignPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string; done?: string; err?: string }>;
+  searchParams: Promise<{ token?: string; done?: string; err?: string; next?: string }>;
 }) {
   const sp = await searchParams;
 
@@ -109,6 +109,7 @@ export default async function WaiverSignPage({
       <form method="POST" action="/api/waiver/sign" className="card space-y-4">
         <input type="hidden" name="token" value={sp.token} />
         <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
+        {sp.next ? <input type="hidden" name="next" value={sp.next} /> : null}
         <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
           <WaiverText />
         </div>
