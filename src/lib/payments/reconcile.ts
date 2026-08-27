@@ -241,6 +241,26 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
             if (sub) matched = await prisma.payment.findFirst({ where: { stripeSubscriptionId: sub } });
           } catch { /* fall through to import */ }
         }
+        // Payment-Link / dashboard-invoice charges carry no app metadata, so the
+        // fee request they paid can't be found by id. Fall back to payer email +
+        // exact amount: if EXACTLY ONE outstanding request for that person has
+        // that exact amount, this charge paid it. The single-candidate rule keeps
+        // us from ever guessing wrong between two similar requests.
+        if (!matched) {
+          const email = charge.billing_details?.email ?? charge.receipt_email ?? pi?.receipt_email ?? null;
+          if (email) {
+            const cands = await prisma.payment.findMany({
+              where: {
+                direction: "IN",
+                status: { in: ["REQUESTED", "PENDING"] },
+                amountCents: charge.amount,
+                party: { email: { equals: email, mode: "insensitive" } },
+              },
+              take: 2,
+            });
+            if (cands.length === 1) matched = cands[0];
+          }
+        }
 
         if (matched) {
           if (matched.direction !== "IN") continue; // never touch payouts/refunds
@@ -330,13 +350,18 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
   const res: ReconcileResult = { scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0, imported: 0, importedCents: 0, chargesScanned: 0, importedUnattributed: 0, errors: 0, details: [] };
   if (!isStripeConfigured()) return res;
 
-  // Rolling scan window, but NEVER earlier than the import floor — so no run,
-  // manual or nightly, ever reaches back into the pre-floor backlog. While the
-  // floor is recent this simply means "since the floor"; once time passes it
-  // becomes a true rolling window that always sits at or after the floor.
+  // TWO windows, deliberately different:
+  //  • MATCHING window (long, e.g. a year): used to reconcile EXISTING request
+  //    rows against Stripe and mark them PAID. This is always safe — it only
+  //    corrects the status of a row we already have, it never creates money —
+  //    so it must reach back over the whole season, or paid fees stay stuck in
+  //    "Requested/Pending" and Collected reads low.
+  //  • IMPORT floor (today): governs ONLY the creation of brand-new rows for
+  //    orphan charges, so the historical backlog is never re-imported (which
+  //    is what previously inflated revenue).
   const nowUnix = Math.floor(Date.now() / 1000);
-  const scanSinceUnix = Math.max(nowUnix - (opts?.sinceDays ?? 30) * 86400, IMPORT_FLOOR_UNIX);
-  const since = new Date(scanSinceUnix * 1000);
+  const matchSinceUnix = nowUnix - (opts?.sinceDays ?? 365) * 86400;
+  const since = new Date(matchSinceUnix * 1000);
   const candidates = (await prisma.payment.findMany({
     where: {
       direction: "IN",
@@ -383,7 +408,7 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
     (await prisma.season.findFirst({ where: { active: true }, select: { id: true } })) ??
     (await prisma.season.findFirst({ orderBy: { startDate: "desc" }, select: { id: true } }));
   try {
-    await reconcileFromStripe(res, scanSinceUnix, IMPORT_FLOOR_UNIX, activeSeason?.id ?? null);
+    await reconcileFromStripe(res, matchSinceUnix, IMPORT_FLOOR_UNIX, activeSeason?.id ?? null);
   } catch (e) {
     res.errors++;
     console.error("outside-in reconcile pass failed", e);
