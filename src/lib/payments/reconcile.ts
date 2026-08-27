@@ -22,6 +22,13 @@ export type ReconcileResult = {
   recoveredCents: number;
   refundsRecorded: number;
   refundedCents: number;
+  /** Charges found in Stripe with no local row at all, imported as PAID. */
+  imported: number;
+  importedCents: number;
+  /** Charges read directly from Stripe during the outside-in pass. */
+  chargesScanned: number;
+  /** Imported charges we couldn't attribute to a known person (need a name). */
+  importedUnattributed: number;
   errors: number;
   details: Array<{ paymentId: string; note: string; amountCents: number; nowPaid: boolean }>;
 };
@@ -135,11 +142,138 @@ async function reconcileOne(
 }
 
 /**
+ * The OUTSIDE-IN pass. The inside-out reconcile above can only fix rows we
+ * already have; it is blind to a Stripe charge that never created a row here
+ * (paid via a Stripe Payment Link or dashboard invoice, or charged during a
+ * window when our webhook pointed at the wrong domain). This walks Stripe's
+ * charges directly and, for each successful one:
+ *   • matches it to a local Payment (by the paymentId we stamp on the intent,
+ *     or by a stored intent id) and marks that row PAID if it wasn't, else
+ *   • imports it as a new PAID row so it still counts toward Collected.
+ *
+ * Idempotent: a charge already represented by any local row with that intent id
+ * is skipped, so re-runs never double-count. Attribution is best-effort — we
+ * match the payer to a Person by email when we can.
+ */
+async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, activeSeasonId: string | null): Promise<void> {
+  const client = stripe();
+  const PAGE_CAP = 25; // ≤ 2,500 charges per run — a hard stop against runaways.
+
+  let startingAfter: string | undefined;
+  for (let page = 0; page < PAGE_CAP; page++) {
+    const batch: Stripe.Response<Stripe.ApiList<Stripe.Charge>> = await client.charges.list({
+      created: { gte: sinceUnix },
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+      expand: ["data.payment_intent"],
+    });
+
+    for (const charge of batch.data) {
+      res.chargesScanned++;
+      // Only real money in: a succeeded, captured charge.
+      if (charge.status !== "succeeded" || !charge.paid) continue;
+
+      try {
+        const pi = (typeof charge.payment_intent === "object" ? charge.payment_intent : null) as Stripe.PaymentIntent | null;
+        const piId = pi?.id ?? (typeof charge.payment_intent === "string" ? charge.payment_intent : null);
+        const hintedPaymentId =
+          (charge.metadata?.paymentId as string | undefined) ?? (pi?.metadata?.paymentId as string | undefined) ?? null;
+
+        // ---- Try to match an existing local row ----
+        let matched = hintedPaymentId
+          ? await prisma.payment.findUnique({ where: { id: hintedPaymentId } })
+          : null;
+        if (!matched && piId) {
+          matched = await prisma.payment.findFirst({ where: { stripePaymentIntentId: piId } });
+        }
+        // Subscription/installment charges: match the plan row by its subscription.
+        if (!matched && charge.invoice) {
+          try {
+            const inv = await client.invoices.retrieve(typeof charge.invoice === "string" ? charge.invoice : charge.invoice.id);
+            const sub = typeof inv.subscription === "string" ? inv.subscription : inv.subscription?.id ?? null;
+            if (sub) matched = await prisma.payment.findFirst({ where: { stripeSubscriptionId: sub } });
+          } catch { /* fall through to import */ }
+        }
+
+        if (matched) {
+          if (matched.direction !== "IN") continue; // never touch payouts/refunds
+          // Ensure the intent id is stored for future refund reconciliation — but
+          // not on installment plans, which track a subscription across many
+          // intents (overwriting would confuse the refund pass).
+          const needsPi = !!piId && !matched.installmentPlan && matched.stripePaymentIntentId !== piId;
+          // A one-time row Stripe says is paid but we don't: record it. Leave
+          // installment plans to the inside-out pass (it counts invoices).
+          const shouldPay = matched.status !== "PAID" && !matched.installmentPlan;
+          if (shouldPay || needsPi) {
+            await prisma.payment.update({
+              where: { id: matched.id },
+              data: {
+                ...(shouldPay ? { status: "PAID", paidAt: matched.paidAt ?? paidAtFromUnix(charge.created) ?? new Date() } : {}),
+                ...(needsPi ? { stripePaymentIntentId: piId! } : {}),
+              },
+            });
+            if (shouldPay) {
+              await audit({ entityType: "Payment", entityId: matched.id, action: "RECONCILED", summary: "Reconciled with Stripe — charge found (outside-in)" });
+              res.updated++;
+              res.nowPaid++;
+              res.recoveredCents += matched.amountCents;
+              res.details.push({ paymentId: matched.id, note: "charge found in Stripe", amountCents: matched.amountCents, nowPaid: true });
+            }
+          }
+          continue;
+        }
+
+        // ---- No local row at all: import the charge as a PAID record ----
+        // Idempotency guard: never import a charge whose intent we already hold.
+        if (piId) {
+          const existing = await prisma.payment.findFirst({ where: { stripePaymentIntentId: piId }, select: { id: true } });
+          if (existing) continue;
+        }
+
+        const email =
+          charge.billing_details?.email ??
+          charge.receipt_email ??
+          (pi?.receipt_email ?? null);
+        const person = email
+          ? await prisma.person.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } })
+          : null;
+
+        const created = await prisma.payment.create({
+          data: {
+            direction: "IN",
+            method: "STRIPE",
+            status: "PAID",
+            category: (charge.metadata?.category as string | undefined) ?? "OTHER",
+            amountCents: charge.amount,
+            partyId: person?.id ?? null,
+            seasonId: activeSeasonId,
+            stripePaymentIntentId: piId ?? undefined,
+            description: (charge.description ?? "Imported from Stripe") + (person ? "" : email ? ` · ${email}` : ""),
+            paidAt: paidAtFromUnix(charge.created) ?? new Date(),
+          },
+        });
+        await audit({ entityType: "Payment", entityId: created.id, action: "IMPORTED", summary: `Imported paid charge from Stripe — ${(charge.amount / 100).toFixed(2)}${email ? ` (${email})` : ""}${person ? "" : " · unattributed"}` });
+        res.imported++;
+        res.importedCents += charge.amount;
+        if (!person) res.importedUnattributed++;
+        res.details.push({ paymentId: created.id, note: person ? "imported from Stripe" : "imported (no matching person)", amountCents: charge.amount, nowPaid: true });
+      } catch (e) {
+        res.errors++;
+        console.error(`outside-in reconcile failed for charge ${charge.id}`, e);
+      }
+    }
+
+    if (!batch.has_more || batch.data.length === 0) break;
+    startingAfter = batch.data[batch.data.length - 1]?.id;
+  }
+}
+
+/**
  * Reconcile every inbound Stripe payment that isn't already recorded as PAID.
  * Returns a summary of what changed. Safe to run repeatedly.
  */
 export async function reconcileStripePayments(opts?: { sinceDays?: number; limit?: number }): Promise<ReconcileResult> {
-  const res: ReconcileResult = { scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0, errors: 0, details: [] };
+  const res: ReconcileResult = { scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0, imported: 0, importedCents: 0, chargesScanned: 0, importedUnattributed: 0, errors: 0, details: [] };
   if (!isStripeConfigured()) return res;
 
   const since = new Date(Date.now() - (opts?.sinceDays ?? 365) * 86400_000);
@@ -178,6 +312,21 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
       res.errors++;
       console.error(`reconcile failed for payment ${p.id}`, e);
     }
+  }
+
+  // Outside-in pass: walk Stripe's own charge list and record anything that
+  // never made it into our books (external Payment Links, dashboard invoices,
+  // or charges taken while the webhook was mis-pointed). This is what catches
+  // "Stripe shows more transactions than the app does".
+  const activeSeason =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { id: true } })) ??
+    (await prisma.season.findFirst({ orderBy: { startDate: "desc" }, select: { id: true } }));
+  try {
+    await reconcileFromStripe(res, Math.floor(since.getTime() / 1000), activeSeason?.id ?? null);
+  } catch (e) {
+    res.errors++;
+    console.error("outside-in reconcile pass failed", e);
   }
 
   // Second pass: catch refunds issued directly in Stripe (no app record). Look at

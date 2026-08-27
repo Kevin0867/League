@@ -69,12 +69,18 @@ export default async function PaymentsPage({
 
       {sp.recok && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Reconciled {sp.scanned ?? "0"} Stripe payment{sp.scanned === "1" ? "" : "s"}.{" "}
+          Checked {sp.scanned ?? "0"} Stripe {Number(sp.scanned ?? 0) === 1 ? "charge" : "charges"} against your books.{" "}
           {Number(sp.paid ?? 0) > 0
-            ? <><strong>{sp.paid} newly recorded as paid</strong> — {formatCents(Number(sp.cents ?? 0))} added to Collected.</>
-            : "No new payments to record."}
-          {Number(sp.refunds ?? 0) > 0 ? <> {" "}<strong>{sp.refunds} refund{sp.refunds === "1" ? "" : "s"} recorded</strong> ({formatCents(Number(sp.refcents ?? 0))}).</> : ""}
-          {Number(sp.paid ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? " Everything already matched Stripe." : ""}
+            ? <><strong>{sp.paid} existing {Number(sp.paid) === 1 ? "payment" : "payments"} newly marked paid</strong> ({formatCents(Number(sp.cents ?? 0))}). </>
+            : ""}
+          {Number(sp.imported ?? 0) > 0
+            ? <><strong>{sp.imported} charge{Number(sp.imported) === 1 ? "" : "s"} imported</strong> that had no record here ({formatCents(Number(sp.impcents ?? 0))} added to Collected).{" "}</>
+            : ""}
+          {Number(sp.unattributed ?? 0) > 0
+            ? <span className="text-amber-800">{sp.unattributed} imported {Number(sp.unattributed) === 1 ? "charge" : "charges"} couldn&apos;t be matched to a person — find {Number(sp.unattributed) === 1 ? "it" : "them"} in the ledger below (payer&apos;s email is in the description) and attach the right family. </span>
+            : ""}
+          {Number(sp.refunds ?? 0) > 0 ? <><strong>{sp.refunds} refund{sp.refunds === "1" ? "" : "s"} recorded</strong> ({formatCents(Number(sp.refcents ?? 0))}). </> : ""}
+          {Number(sp.paid ?? 0) === 0 && Number(sp.imported ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? "Everything already matched Stripe — your books are in sync." : ""}
           {sp.recerrs && sp.recerrs !== "0" ? ` (${sp.recerrs} couldn't be checked — try again.)` : ""}
         </div>
       )}
