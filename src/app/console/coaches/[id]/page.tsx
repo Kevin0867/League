@@ -54,7 +54,7 @@ export default async function EditCoachPage({
     ? await Promise.all([
         prisma.team.findMany({
           where: { coachId: coach.id },
-          select: { id: true, name: true, dayOfWeek: true, startTime: true, season: { select: { name: true } } },
+          select: { id: true, name: true, dayOfWeek: true, startTime: true, season: { select: { name: true } }, facility: { select: { name: true } } },
           orderBy: { name: "asc" },
         }),
         prisma.team.findMany({
@@ -194,7 +194,7 @@ export default async function EditCoachPage({
                   <div>
                     <Link href={`/console/teams/${t.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">{t.name}</Link>
                     <span className="ml-2 text-xs text-slate-400">
-                      {t.season?.name}{t.dayOfWeek ? ` · ${t.dayOfWeek} ${formatTime12(t.startTime)}` : ""}
+                      {t.season?.name}{t.dayOfWeek ? ` · ${t.dayOfWeek} ${formatTime12(t.startTime)}` : ""}{t.facility?.name ? ` · ${t.facility.name}` : ""}
                     </span>
                   </div>
                   <ConfirmSubmit
