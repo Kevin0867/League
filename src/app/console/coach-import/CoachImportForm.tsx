@@ -25,9 +25,15 @@ export function CoachImportForm({ ticket }: { ticket: string }) {
           id="text"
           name="text"
           rows={4}
-          placeholder="Paste the sheet including the header row (tab- or comma-separated)…"
+          placeholder={"First Name\tLast Name\tEmail\tPhone\tCertifications\tCoaching Levels\tBio\nJane\tDoe\tjane@email.com\t(480) 555-0100\tPPR\tAdult 3.0–4.0\t10 years coaching"}
           className="input font-mono text-xs"
         />
+        <p className="mt-1 text-xs text-slate-500">
+          <strong>Include a header row.</strong> Recognized columns: <code>First Name</code>/<code>Last Name</code> (or <code>Full Name</code>),
+          <code> Email</code>, <code>Phone</code>, <code>Certifications</code>, <code>Coaching Levels</code>, <code>Bio</code>, and
+          <code> Availability Monday</code>…<code>Availability Sunday</code>. Email &amp; phone are also auto-detected by their format,
+          so a stray column order still works. Only rows with a name are imported.
+        </p>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-700">
