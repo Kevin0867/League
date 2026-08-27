@@ -12,6 +12,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
+import { AttributeImportRow } from "@/components/AttributeImportRow";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,42 @@ export default async function PaymentsPage({
 
   // Webhook health — the usual reason paid charges don't get recorded here.
   const wh = await getStripeWebhookStatus();
+
+  // Imported-from-Stripe charges awaiting triage: attach to a family + set the
+  // real category. We tag imports with category STRIPE_IMPORT so they surface
+  // here until an admin files them.
+  const importedRaw = await prisma.payment.findMany({
+    where: { direction: "IN", category: "STRIPE_IMPORT" },
+    include: { party: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  // Best-guess a family from the payer email we stored on the description
+  // ("… · someone@example.com") for rows we couldn't match at import time.
+  const parseEmail = (desc: string | null): string | null => {
+    const m = desc ? /·\s*([^\s·]+@[^\s·]+)\s*$/.exec(desc) : null;
+    return m ? m[1] : null;
+  };
+  const guessEmails = [...new Set(importedRaw.filter((p) => !p.party).map((p) => parseEmail(p.description)).filter(Boolean) as string[])];
+  const guessPeople = guessEmails.length
+    ? await prisma.person.findMany({
+        where: { email: { in: guessEmails, mode: "insensitive" } },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      })
+    : [];
+  const guessByEmail = new Map(guessPeople.map((p) => [(p.email ?? "").toLowerCase(), p]));
+  const imported = importedRaw.map((p) => {
+    const email = p.party?.email ?? parseEmail(p.description);
+    const g = p.party ?? (email ? guessByEmail.get(email.toLowerCase()) ?? null : null);
+    return {
+      id: p.id,
+      amountCents: p.amountCents,
+      createdAt: p.createdAt,
+      payerEmail: email,
+      suggestion: g ? { id: g.id, name: `${g.firstName} ${g.lastName}`, email: g.email ?? null } : null,
+    };
+  });
+  const importedTotal = imported.reduce((s, p) => s + p.amountCents, 0);
 
   return (
     <div className="space-y-6">
@@ -100,6 +137,39 @@ export default async function PaymentsPage({
           {Number(sp.removed ?? 0) > 0
             ? <>Removed <strong>{sp.removed} auto-imported {Number(sp.removed) === 1 ? "row" : "rows"}</strong> dated before today ({formatCents(Number(sp.remcents ?? 0))} taken back out of Collected). Revenue now reflects only what was actually reconciled from today forward.</>
             : "Nothing to undo — there were no pre-today auto-imported rows."}
+        </div>
+      )}
+
+      {sp.attrok && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Charge filed — it&apos;s now attached to the family and category you chose, and will show in the right reports.
+        </div>
+      )}
+
+      {imported.length > 0 && (
+        <div className="card border-amber-200 bg-amber-50/40">
+          <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold text-slate-900">Imported from Stripe — needs filing</h2>
+            <span className="text-xs text-slate-500">{imported.length} charge{imported.length === 1 ? "" : "s"} · {formatCents(importedTotal)}</span>
+          </div>
+          <p className="mb-3 text-sm text-slate-500">
+            These charges were found in Stripe with no record here (Payment Links, dashboard invoices, etc.) and imported so
+            revenue is complete. Attach each to a family and set its category so it lands in the right reports. Where we could
+            guess the family from the payer&apos;s email, it&apos;s pre-filled — just confirm.
+          </p>
+          <div>
+            {imported.map((p) => (
+              <AttributeImportRow
+                key={p.id}
+                ticket={ticket}
+                paymentId={p.id}
+                amount={formatCents(p.amountCents)}
+                date={`${MONTHS[p.createdAt.getMonth()]} ${p.createdAt.getDate()}`}
+                payerEmail={p.payerEmail}
+                suggestion={p.suggestion}
+              />
+            ))}
+          </div>
         </div>
       )}
       {sp.recerr === "notconfigured" && (

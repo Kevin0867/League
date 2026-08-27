@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { prisma } from "@/lib/db";
 import { isStripeConfigured } from "@/lib/stripe";
 import { reconcileStripePayments, undoStripeImport } from "@/lib/payments/reconcile";
 
@@ -31,6 +32,38 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error("undo import failed", e);
       return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "undo failed")}`);
+    }
+  }
+
+  // Attribute an imported charge: attach it to a family and/or set its real
+  // category so it lands in the right reports.
+  if (String(fd.get("op") ?? "") === "attribute") {
+    const paymentId = String(fd.get("paymentId") ?? "");
+    const personId = String(fd.get("personId") ?? "").trim() || null;
+    const category = String(fd.get("category") ?? "").trim().toUpperCase() || null;
+    if (!paymentId) return back("?recerr=missing");
+    try {
+      const pay = await prisma.payment.findUnique({ where: { id: paymentId }, select: { id: true, direction: true } });
+      if (!pay || pay.direction !== "IN") return back("?recerr=notfound");
+      // Keep the person's active season on the row when we know it, so revenue
+      // reports scoped to the season pick it up.
+      const activeSeason = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } });
+      await prisma.payment.update({
+        where: { id: paymentId },
+        data: {
+          ...(personId ? { partyId: personId } : {}),
+          ...(category ? { category } : {}),
+          ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+        },
+      });
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: paymentId, action: "ATTRIBUTED",
+        summary: `Attributed imported charge${personId ? ` to person ${personId}` : ""}${category ? ` · ${category}` : ""}`,
+      });
+      return back("?attrok=1");
+    } catch (e) {
+      console.error("attribute import failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "attribute failed")}`);
     }
   }
 

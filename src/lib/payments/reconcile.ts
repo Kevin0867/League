@@ -294,7 +294,10 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
             direction: "IN",
             method: "STRIPE",
             status: "PAID",
-            category: (charge.metadata?.category as string | undefined) ?? "OTHER",
+            // Tag imports distinctly so they surface for triage on Payments
+            // (attach to a family / set the real category). A category stamped on
+            // the charge in Stripe still wins.
+            category: (charge.metadata?.category as string | undefined) ?? "STRIPE_IMPORT",
             amountCents: charge.amount,
             partyId: person?.id ?? null,
             seasonId: activeSeasonId,
