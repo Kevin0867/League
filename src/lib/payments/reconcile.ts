@@ -205,7 +205,7 @@ async function reconcileOne(
  * can show a breakdown that still reconciles to the total. Returns null if
  * Stripe isn't configured or the call fails (caller falls back to app records).
  */
-export async function stripeCollectedBreakdown(): Promise<{ totalCents: number; oneTimeCents: number; installmentCents: number; count: number } | null> {
+export async function stripeCollectedBreakdown(sinceUnix?: number): Promise<{ totalCents: number; oneTimeCents: number; installmentCents: number; count: number } | null> {
   if (!isStripeConfigured()) return null;
   const client = stripe();
   let total = 0, oneTime = 0, installment = 0, count = 0;
@@ -213,6 +213,9 @@ export async function stripeCollectedBreakdown(): Promise<{ totalCents: number; 
   for (let page = 0; page < 20; page++) {
     const batch: Stripe.Response<Stripe.ApiList<Stripe.Charge>> = await client.charges.list({
       limit: 100,
+      // Scope to the season's collection window — the Stripe account holds years
+      // of unrelated charges, so an all-time sum is meaningless.
+      ...(sinceUnix ? { created: { gte: sinceUnix } } : {}),
       ...(startingAfter ? { starting_after: startingAfter } : {}),
     });
     for (const c of batch.data) {
