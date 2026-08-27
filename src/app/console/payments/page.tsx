@@ -13,6 +13,7 @@ import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
@@ -211,6 +212,14 @@ export default async function PaymentsPage({
           Couldn&apos;t reconcile the CSV: {sp.csverr === "empty" ? "the file was empty." : sp.csverr}
         </div>
       )}
+      {sp.csvprob && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <span className="font-semibold">First row error:</span> <code className="break-all">{sp.csvprob}</code>
+        </div>
+      )}
+      {sp.delok && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Payment deleted.</div>
+      )}
 
       {imported.length > 0 && (
         <div className="card border-amber-200 bg-amber-50/40">
@@ -389,7 +398,18 @@ export default async function PaymentsPage({
                     {p.installmentPlan ? ` · installment ${Math.min(p.installmentsPaid + 1, p.installmentsTotal ?? 3)}/${p.installmentsTotal ?? 3}` : ""}
                   </span>
                 </div>
-                <span className="font-semibold text-rose-900">{formatCents(p.amountCents)}</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-rose-900">{formatCents(p.amountCents)}</span>
+                  <ConfirmSubmit
+                    action="/api/console/payments-reconcile"
+                    fields={{ ticket, op: "deletePayment", paymentId: p.id }}
+                    confirm={`Delete this ${p.status.toLowerCase()} payment${p.party ? ` for ${p.party.firstName} ${p.party.lastName}` : ""} (${formatCents(p.amountCents)})? This can't be undone.`}
+                    confirmLabel="Delete payment"
+                    label="Delete"
+                    className="text-xs font-medium text-rose-700 hover:underline"
+                    danger
+                  />
+                </div>
               </li>
             ))}
           </ul>

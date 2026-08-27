@@ -38,7 +38,10 @@ export async function POST(req: Request) {
       failed: String(r.skippedFailed),
       applied: String(r.appliedCents),
     });
-    if (r.errors) params.set("csverrs", String(r.errors));
+    if (r.errors) {
+      params.set("csverrs", String(r.errors));
+      if (r.problems[0]) params.set("csvprob", `${r.problems[0].note} (${r.problems[0].chargeId})`.slice(0, 200));
+    }
     return back(`?${params.toString()}`);
   } catch (e) {
     console.error("CSV reconcile failed", e);

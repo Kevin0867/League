@@ -35,6 +35,25 @@ export async function POST(req: Request) {
     }
   }
 
+  // Delete a single payment record — for cleaning up erroneous/failed rows.
+  if (String(fd.get("op") ?? "") === "deletePayment") {
+    const paymentId = String(fd.get("paymentId") ?? "");
+    if (!paymentId) return back("?err=missing");
+    try {
+      const pay = await prisma.payment.findUnique({ where: { id: paymentId }, select: { id: true, amountCents: true, status: true, direction: true, party: { select: { firstName: true, lastName: true } } } });
+      if (!pay) return back("?err=notfound");
+      await prisma.payment.delete({ where: { id: paymentId } }); // apparel items cascade
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: paymentId, action: "DELETED",
+        summary: `Deleted ${pay.direction} ${pay.status} payment ($${Math.round(pay.amountCents / 100)})${pay.party ? ` for ${pay.party.firstName} ${pay.party.lastName}` : ""}`,
+      });
+      return back("?delok=1");
+    } catch (e) {
+      console.error("delete payment failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "delete failed")}`);
+    }
+  }
+
   // Attribute an imported charge: attach it to a family and/or set its real
   // category so it lands in the right reports.
   if (String(fd.get("op") ?? "") === "attribute") {
