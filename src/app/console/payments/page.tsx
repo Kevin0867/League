@@ -220,17 +220,17 @@ export default async function PaymentsPage({
           <ul className="mt-1 space-y-0.5 text-xs text-emerald-900/80">
             <li>• Matched to the exact fee (by payment id): <strong>{sp.byid ?? 0}</strong></li>
             <li>• Matched to the payer by email: <strong>{sp.byemail ?? 0}</strong></li>
-            <li>• Already on the books (skipped): <strong>{sp.already ?? 0}</strong></li>
-            {Number(sp.noreq ?? 0) > 0 && (
-              <li>• Payer found but no open fee — already recorded, or needs a fee request: <strong>{sp.noreq}</strong></li>
+            {Number(sp.created ?? 0) > 0 && (
+              <li>• Newly recorded (payer had no fee on file): <strong>{sp.created}</strong></li>
             )}
+            <li>• Already on the books (skipped): <strong>{Number(sp.already ?? 0) + Number(sp.noreq ?? 0)}</strong></li>
             {Number(sp.noperson ?? 0) > 0 && (
               <li className="text-amber-800">• Payer email didn&apos;t match anyone here: <strong>{sp.noperson}</strong></li>
             )}
             {Number(sp.failed ?? 0) > 0 && <li>• Failed/declined rows ignored: <strong>{sp.failed}</strong></li>}
             {sp.csverrs && sp.csverrs !== "0" && <li className="text-rose-700">• Rows with errors: <strong>{sp.csverrs}</strong></li>}
           </ul>
-          <p className="mt-1.5 text-xs text-emerald-900/70">Mark-only: this never creates new rows, so it can&apos;t double-count. Charges with no open fee are reported, not invented.</p>
+          <p className="mt-1.5 text-xs text-emerald-900/70">Records a payment only when the payer has NO fee on file, so it can&apos;t double-count what the webhook already recorded.</p>
         </div>
       )}
       {sp.csvundo && (

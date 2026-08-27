@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       rows: String(r.paidRows),
       byid: String(r.markedById),
       byemail: String(r.markedByEmail),
+      created: String(r.createdAttributed),
       noreq: String(r.noOutstanding),
       noperson: String(r.noPersonMatch),
       already: String(r.alreadyDone),
