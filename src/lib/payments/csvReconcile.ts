@@ -175,8 +175,18 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
         continue;
       }
 
-      // 3) No person matched the payer email — report it, don't invent a row.
-      res.noPersonMatch++;
+      // 3) No person matched the payer email. Record it so the money counts, but
+      // tag it STRIPE_IMPORT and leave it unattributed so it shows in the
+      // "Imported — needs filing" card for you to attach to the right family.
+      await prisma.payment.create({
+        data: {
+          direction: "IN", method: "STRIPE", status: "PAID", category: "STRIPE_IMPORT",
+          amountCents, partyId: null, seasonId,
+          stripePaymentIntentId: chargeId || undefined,
+          description: `Stripe CSV — unmatched payer${email ? ` · ${email}` : ""}`, paidAt,
+        },
+      });
+      res.noPersonMatch++; res.appliedCents += amountCents;
       res.unmatched.push({ email: email || "(no email)", amountCents, chargeId });
     } catch (e) {
       res.errors++;
