@@ -12,6 +12,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
+import { stripeCollectedBreakdown } from "@/lib/payments/reconcile";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -70,11 +71,22 @@ export default async function PaymentsPage({
     prisma.payment.aggregate({ where: { direction: "IN", status: "PAID", category: "PLAYER_FEE" }, _sum: { amountCents: true } }),
     prisma.apparelOrderItem.findMany({ where: { payment: { direction: "IN", status: "PAID" } }, select: { unitPriceCents: true, quantity: true } }),
   ]);
-  // Season fees paid in full (completed plans included via their PAID status);
-  // installment partials are shown on their own line.
-  const seasonFeeCents = seasonFeeAgg._sum.amountCents ?? 0;
   const apparelCents = apparelItems.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
-  const otherFeeCents = collected - seasonFeeCents - installmentPaidCents;
+
+  // Authoritative Collected: the real sum of Stripe charges (net refunds). This
+  // is what actually cleared, so it never drifts from Stripe. We split it into
+  // one-time vs installment charges from Stripe, then subtract recorded apparel
+  // from the one-time side to show the season-fee line — so the breakdown always
+  // adds back up to the Stripe total. Falls back to app records if Stripe is off.
+  const stripeCollected = await stripeCollectedBreakdown().catch(() => null);
+  const usingStripe = stripeCollected !== null;
+
+  const collectedTotal = usingStripe ? stripeCollected!.totalCents : collected + apparelCents;
+  const installmentLineCents = usingStripe ? stripeCollected!.installmentCents : installmentPaidCents;
+  const seasonFeeCents = usingStripe
+    ? Math.max(0, stripeCollected!.oneTimeCents - apparelCents)
+    : (seasonFeeAgg._sum.amountCents ?? 0);
+  const otherFeeCents = usingStripe ? 0 : collected - (seasonFeeAgg._sum.amountCents ?? 0) - installmentPaidCents;
 
   // Estimated payouts (not yet disbursed): what's owed to coaches and facilities.
   // Coaches from calculated payout runs, falling back to delivered coach-sessions
@@ -429,14 +441,15 @@ export default async function PaymentsPage({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Collected</div>
-          <div className="mt-1 text-2xl font-extrabold text-emerald-700">{formatCents(collected + apparelCents)}</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Collected{usingStripe ? "" : " (recorded)"}</div>
+          <div className="mt-1 text-2xl font-extrabold text-emerald-700">{formatCents(collectedTotal)}</div>
           <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
-            <div className="flex justify-between"><dt>Season fees (paid in full)</dt><dd className="font-semibold text-slate-700">{formatCents(seasonFeeCents)}</dd></div>
-            {installmentPaidCents > 0 && <div className="flex justify-between"><dt>Installments (paid so far)</dt><dd className="font-semibold text-slate-700">{formatCents(installmentPaidCents)}</dd></div>}
+            <div className="flex justify-between"><dt>Season fees</dt><dd className="font-semibold text-slate-700">{formatCents(seasonFeeCents)}</dd></div>
+            {installmentLineCents > 0 && <div className="flex justify-between"><dt>Installments</dt><dd className="font-semibold text-slate-700">{formatCents(installmentLineCents)}</dd></div>}
             {otherFeeCents !== 0 && <div className="flex justify-between"><dt>Other (ACP, lessons, custom)</dt><dd className="font-semibold text-slate-700">{formatCents(otherFeeCents)}</dd></div>}
             <div className="flex justify-between"><dt>Apparel</dt><dd className="font-semibold text-slate-700">{formatCents(apparelCents)}</dd></div>
           </dl>
+          {usingStripe && <p className="mt-1 text-[11px] text-slate-400">Live from Stripe — actual charges collected.</p>}
         </div>
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
         <div className="rounded-xl border border-slate-200 bg-white p-4">

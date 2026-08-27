@@ -198,6 +198,37 @@ async function reconcileOne(
 }
 
 /**
+ * The authoritative "collected" figure: the actual sum of succeeded Stripe
+ * charges (net of refunds), straight from Stripe — so Collected always equals
+ * what really cleared, regardless of how the app books fees vs apparel vs
+ * installments. Split into one-time vs installment (invoice) charges so the tile
+ * can show a breakdown that still reconciles to the total. Returns null if
+ * Stripe isn't configured or the call fails (caller falls back to app records).
+ */
+export async function stripeCollectedBreakdown(): Promise<{ totalCents: number; oneTimeCents: number; installmentCents: number; count: number } | null> {
+  if (!isStripeConfigured()) return null;
+  const client = stripe();
+  let total = 0, oneTime = 0, installment = 0, count = 0;
+  let startingAfter: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const batch: Stripe.Response<Stripe.ApiList<Stripe.Charge>> = await client.charges.list({
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    for (const c of batch.data) {
+      if (c.status !== "succeeded" || !c.paid) continue;
+      const net = c.amount - c.amount_refunded;
+      total += net;
+      count++;
+      if (c.invoice) installment += net; else oneTime += net;
+    }
+    if (!batch.has_more || batch.data.length === 0) break;
+    startingAfter = batch.data[batch.data.length - 1]?.id;
+  }
+  return { totalCents: total, oneTimeCents: oneTime, installmentCents: installment, count };
+}
+
+/**
  * Remove rows the CSV reconciler CREATED (its early versions recorded a full
  * charge — fee + apparel — as a new fee, which double-counts against a fee the
  * webhook already recorded). Those rows are identifiable: they carry the Stripe
