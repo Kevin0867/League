@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyActionTicket, getSession } from "@/lib/auth";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import { CONSOLE_TOOLS, runConsoleTool } from "@/lib/ai/consoleTools";
+import { CONSOLE_TOOLS, CONSOLE_WRITE_TOOLS, runConsoleTool } from "@/lib/ai/consoleTools";
 
 // "Ask the Console" — a READ-ONLY admin assistant. The model is given a set of
 // safe, read-only report tools (see consoleTools.ts); it picks which to call,
@@ -33,6 +33,13 @@ const SYSTEM_PROMPT = [
   "- Be concise and scannable. Use short markdown: a one-line answer up top, then bullets or a compact table for detail.",
   "- These are real families, some of them minors. Share only what the question needs. Never invent contact details or statuses.",
   "- If a tool returns an error, tell the user what failed in plain language.",
+  "",
+  "Write actions (only if write tools are available to you):",
+  "- Some tools change data (e.g. assign_player_to_team). Treat these with care — they are real roster changes.",
+  "- NEVER call a write tool with confirm:true until the user has clearly said yes to the specific change you proposed.",
+  "- First call the write tool WITHOUT confirm (or confirm:false) to preview it. The tool returns exactly which person and team it matched, plus any warning (e.g. team is at capacity). Show that back to the user and ask them to confirm.",
+  "- If the tool reports it couldn't uniquely identify the person or team, relay the options it returned and ask the user to pick — do not guess.",
+  "- Only after an explicit 'yes' to that exact match, call the tool again with confirm:true, then report what changed.",
 ].join("\n");
 
 type ClientMsg = { role: "user" | "assistant"; text: string };
@@ -84,6 +91,9 @@ export async function POST(req: Request) {
   if (!ticket || !isAdmin(roles)) {
     return NextResponse.json({ ok: false, error: "Not authorized." }, { status: 403 });
   }
+  // Write tools (roster changes) are gated on the same permission the console
+  // uses for managing teams. Read-only admins get the read tools only.
+  const canWrite = can(roles, "manageTeams");
 
   const question = (body.question ?? "").trim();
   if (!question) return NextResponse.json({ ok: false, error: "Ask a question." }, { status: 400 });
@@ -120,7 +130,7 @@ export async function POST(req: Request) {
         model: MODEL,
         max_tokens: 2048,
         system: SYSTEM_PROMPT,
-        tools: CONSOLE_TOOLS,
+        tools: canWrite ? [...CONSOLE_TOOLS, ...CONSOLE_WRITE_TOOLS] : CONSOLE_TOOLS,
         messages,
       });
 
@@ -131,7 +141,11 @@ export async function POST(req: Request) {
         for (const block of resp.content) {
           if (block.type === "tool_use") {
             toolsUsed.push(block.name);
-            const result = await runConsoleTool(block.name, (block.input ?? {}) as Record<string, unknown>);
+            const result = await runConsoleTool(
+              block.name,
+              (block.input ?? {}) as Record<string, unknown>,
+              { actorId: ticket.userId, canWrite },
+            );
             toolResults.push({
               type: "tool_result",
               tool_use_id: block.id,

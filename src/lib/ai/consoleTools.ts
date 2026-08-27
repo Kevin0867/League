@@ -5,6 +5,12 @@ import { formatCents } from "@/lib/money";
 import { formatTime12 } from "@/lib/time";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
+import { audit } from "@/lib/audit";
+import { TEAM_CAP } from "@/lib/enums";
+
+/** Context passed to tool execution — identifies the actor and whether they may
+ *  make roster changes. Read tools ignore it; write tools require canWrite. */
+export type ToolCtx = { actorId?: string; canWrite?: boolean };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Read-only tools for "Ask the Console" (the admin assistant).
@@ -176,6 +182,27 @@ export const CONSOLE_TOOLS: Anthropic.Tool[] = [
     description:
       "Team apparel ordered (from paid orders), totaled by garment and size for fulfillment. Use for 'apparel order totals', 'how many size L', 'what apparel do we need to order'.",
     input_schema: { type: "object", properties: {} },
+  },
+];
+
+// Write tools — only offered to admins who can manage teams. Each one is a
+// PROPOSE-then-CONFIRM action: called without confirm:true it returns a summary
+// of what it WOULD do and changes nothing; the assistant must show that to the
+// user and only call again with confirm:true after they explicitly agree.
+export const CONSOLE_WRITE_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "assign_player_to_team",
+    description:
+      "Place a person on a team (moving them off any other team in this season). ALWAYS call first WITHOUT confirm to preview the exact person + team; show that to the user and only call again with confirm:true after they say yes. Use for 'put X on team Y', 'move X to Y', 'assign X to Y'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        person: { type: "string", description: "Name or email of the person to place." },
+        team: { type: "string", description: "Team name or fragment, e.g. \"Men's 4.5 Blue Scottsdale\"." },
+        confirm: { type: "boolean", description: "Set true ONLY after the user has explicitly confirmed the previewed change." },
+      },
+      required: ["person", "team"],
+    },
   },
 ];
 
@@ -652,11 +679,98 @@ async function apparelReport(): Promise<ToolResult> {
   };
 }
 
+// ── Write tool: assign a player to a team (propose → confirm) ────────────────
+
+/** Fuzzy team match: score by how many query words appear in the team name, with
+ *  men's/women's mapped to the M/W division-code convention. */
+async function findTeamByPhrase(phrase: string, seasonId: string | null) {
+  const teams = await prisma.team.findMany({
+    where: { isTest: false, ...(seasonId ? { seasonId } : {}) },
+    select: { id: true, name: true, divisionCode: true },
+  });
+  const raw = phrase.toLowerCase();
+  const tokens = raw.split(/\s+/).filter(Boolean).map((t) => {
+    if (t === "men's" || t === "mens" || t === "men" || t === "male") return "m";
+    if (t === "women's" || t === "womens" || t === "women" || t === "female") return "w";
+    return t;
+  });
+  const scored = teams
+    .map((t) => {
+      const name = t.name.toLowerCase();
+      const code = (t.divisionCode ?? "").toLowerCase();
+      const score = tokens.reduce((s, tok) => (name.includes(tok) || code.includes(tok) ? s + 1 : s), 0);
+      return { t, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+  return scored;
+}
+
+async function assignPlayerToTeam(input: { person?: string; team?: string; confirm?: boolean }, ctx?: ToolCtx): Promise<ToolResult> {
+  if (!ctx?.canWrite) return { error: "You don't have permission to change rosters." };
+  const q = (input.person ?? "").trim();
+  const teamQ = (input.team ?? "").trim();
+  if (!q || !teamQ) return { error: "Name both a person and a team." };
+
+  const people = await prisma.person.findMany({
+    where: { OR: personSearchOR(q) },
+    select: { id: true, firstName: true, lastName: true, email: true },
+    take: 6,
+  });
+  if (people.length === 0) return { error: `No one matching "${q}".` };
+  if (people.length > 1) {
+    return { needsDisambiguation: true, message: `More than one person matches "${q}" — which one?`, people: people.map((p) => ({ name: `${p.firstName} ${p.lastName}`, email: p.email })) };
+  }
+  const person = people[0];
+
+  const season = await resolveSeason();
+  const scored = await findTeamByPhrase(teamQ, season?.id ?? null);
+  if (scored.length === 0) return { error: `No team matching "${teamQ}".` };
+  if (scored.length > 1 && scored[0].score === scored[1].score) {
+    return { needsDisambiguation: true, message: `More than one team matches "${teamQ}" — which one?`, teams: scored.slice(0, 5).map((s) => s.t.name) };
+  }
+  const team = scored[0].t;
+
+  if (!input.confirm) {
+    return {
+      needsConfirmation: true,
+      summary: `Assign ${person.firstName} ${person.lastName} to ${team.name} (removing them from any other team this season). Confirm?`,
+      person: `${person.firstName} ${person.lastName}`,
+      team: team.name,
+    };
+  }
+
+  // Execute — mirror the pool "assign" op: cap check, remove from other teams,
+  // upsert membership here, mark the registration assigned.
+  const full = await prisma.team.findUnique({ where: { id: team.id }, include: { _count: { select: { members: true } } } });
+  if (!full) return { error: "Team not found." };
+  const alreadyOn = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId: team.id, personId: person.id } } });
+  if (!alreadyOn && full._count.members + (full.coachPlays ? 1 : 0) + 1 > TEAM_CAP) {
+    return { error: `${team.name} is at capacity (${TEAM_CAP}).` };
+  }
+  const otherTeams = season
+    ? (await prisma.team.findMany({ where: { seasonId: season.id, id: { not: team.id } }, select: { id: true } })).map((t) => t.id)
+    : [];
+  if (otherTeams.length) await prisma.teamMember.deleteMany({ where: { personId: person.id, teamId: { in: otherTeams } } });
+  await prisma.teamMember.upsert({
+    where: { teamId_personId: { teamId: team.id, personId: person.id } },
+    create: { teamId: team.id, personId: person.id, roleOnTeam: "PLAYER" },
+    update: {},
+  });
+  if (season) {
+    await prisma.registration.updateMany({ where: { personId: person.id, seasonId: season.id }, data: { status: "ASSIGNED" } });
+  }
+  await audit({ actorId: ctx.actorId ?? null, entityType: "Team", entityId: team.id, action: "ASSIGN", summary: `Ask Brett: assigned ${person.firstName} ${person.lastName} to ${team.name}` });
+
+  return { ok: true, message: `Done — ${person.firstName} ${person.lastName} is now on ${team.name}.` };
+}
+
 /** Dispatch a tool call by name. Unknown / failed calls return an error object
  *  (never throw) so the model can recover and tell the user what happened. */
-export async function runConsoleTool(name: string, input: Record<string, unknown>): Promise<ToolResult> {
+export async function runConsoleTool(name: string, input: Record<string, unknown>, ctx?: ToolCtx): Promise<ToolResult> {
   try {
     switch (name) {
+      case "assign_player_to_team": return await assignPlayerToTeam(input, ctx);
       case "season_overview": return await seasonOverview();
       case "find_people": return await findPeople(input);
       case "registrations_report": return await registrationsReport(input);
