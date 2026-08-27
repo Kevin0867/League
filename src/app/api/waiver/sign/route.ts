@@ -66,6 +66,15 @@ export async function POST(req: Request) {
     ? [{ id: root.id, minor: !!root.isMinor }, ...root.dependents.map((d) => ({ id: d.id, minor: true }))]
     : [{ id: personId, minor: !!person?.isMinor }];
 
+  // Gender is collected on the waiver for the parent/guardian AND every child
+  // (per-person field gender_<id>). Required — used to place players in the
+  // correct division. Reject if any household member's gender is missing/invalid.
+  const genderFor = (id: string): "MALE" | "FEMALE" | null => {
+    const v = String(formData.get(`gender_${id}`) ?? "").trim().toUpperCase();
+    return v === "MALE" || v === "FEMALE" ? v : null;
+  };
+  if (family.some((m) => !genderFor(m.id))) return back("err=gender");
+
   for (const member of family) {
     await prisma.waiver.create({
       data: {
@@ -81,7 +90,7 @@ export async function POST(req: Request) {
     });
     await prisma.person.update({
       where: { id: member.id },
-      data: { waiverSignedAt: now, waiverRenewalRequiredAt: null, mediaOptOut },
+      data: { waiverSignedAt: now, waiverRenewalRequiredAt: null, mediaOptOut, gender: genderFor(member.id)! },
     });
   }
   // Retain the parent/guardian contact for a minor: store it on the signer
