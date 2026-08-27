@@ -78,20 +78,14 @@ export default async function PaymentsPage({
   // one-time vs installment charges from Stripe, then subtract recorded apparel
   // from the one-time side to show the season-fee line — so the breakdown always
   // adds back up to the Stripe total. Falls back to app records if Stripe is off.
-  // Only count charges from this season's collection window — the Stripe account
-  // holds years of unrelated PURE charges. Cutoff = PAYMENTS_SINCE env override,
-  // else when the season opened for registration, else when it was created.
-  const paySeason = await prisma.season.findFirst({
-    where: { active: true, program: "PURE_ACADEMY" },
-    select: { opensOn: true, createdAt: true },
-  });
+  // Only count charges from the season's collection start — the Stripe account
+  // holds years of unrelated PURE charges. Start line: Aug 26, 2026 (Phoenix),
+  // overridable via the PAYMENTS_SINCE env var.
+  const DEFAULT_PAYMENTS_SINCE = "2026-08-26T00:00:00-07:00";
   const sinceEnv = process.env.PAYMENTS_SINCE ? new Date(process.env.PAYMENTS_SINCE) : null;
   const sinceDate =
-    (sinceEnv && !isNaN(sinceEnv.getTime()) ? sinceEnv : null) ??
-    paySeason?.opensOn ??
-    paySeason?.createdAt ??
-    null;
-  const sinceUnix = sinceDate ? Math.floor(sinceDate.getTime() / 1000) : undefined;
+    sinceEnv && !isNaN(sinceEnv.getTime()) ? sinceEnv : new Date(DEFAULT_PAYMENTS_SINCE);
+  const sinceUnix = Math.floor(sinceDate.getTime() / 1000);
   const stripeCollected = await stripeCollectedBreakdown(sinceUnix).catch(() => null);
   const usingStripe = stripeCollected !== null;
 
