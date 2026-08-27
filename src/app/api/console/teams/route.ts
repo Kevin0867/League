@@ -105,6 +105,79 @@ export async function POST(req: Request) {
       await audit({ actorId: actor.userId, entityType: "Season", entityId: target.id, action: "CONSOLIDATE_SEASON", summary: `Moved ${ids.length} teams into the active season` });
       return NextResponse.redirect(new URL(`/console/teams?ok=consolidated&n=${ids.length}`, origin), 303);
     }
+    // Split Women's 2.5 back out of the 2.5–3.0 band it was consolidated into:
+    // relabel teams whose players are ALL 2.5 to the Women's 2.5 division, and
+    // move 2.5 players off MIXED teams onto their own market 2.5 team. Reversible.
+    case "splitWomens25": {
+      const seasons = await prisma.season.findMany({ orderBy: [{ active: "desc" }, { startDate: "desc" }], select: { id: true, active: true, program: true } });
+      const target = seasons.find((s) => s.active && s.program === "PURE_ACADEMY") ?? seasons.find((s) => s.program === "PURE_ACADEMY") ?? seasons.find((s) => s.active) ?? seasons[0];
+      if (!target) return back("?err=noseason");
+      const seasonId = target.id;
+
+      // The Women's 2.5 division in this season (it exists — registrations use it);
+      // create it if somehow missing so teams have something to link to.
+      const divisions = await prisma.division.findMany({ where: { seasonId }, select: { id: true, name: true } });
+      let div25 = divisions.find((d) => deriveDivisionCode(d.name) === "W2.5");
+      if (!div25) {
+        const created = await prisma.division.create({ data: { seasonId, name: "Women's Elite 2.5", divisionType: "DUPR_BAND", minRating: 2.5, maxRating: 2.5 } });
+        div25 = { id: created.id, name: created.name };
+      }
+
+      // Players registered as Women's 2.5 this season.
+      const regs25 = await prisma.registration.findMany({ where: { seasonId, divisionId: div25.id }, select: { personId: true } });
+      const is25 = new Set(regs25.map((r) => r.personId));
+      if (is25.size === 0) return back("?err=no25");
+
+      const teams = await prisma.team.findMany({
+        where: { seasonId, isTest: false, origin: "PURE_ACADEMY" },
+        select: { id: true, name: true, market: true, divisionId: true, divisionCode: true, members: { select: { personId: true } } },
+      });
+
+      let relabeled = 0, movedPlayers = 0, createdTeams = 0;
+      const marketTeams = new Map<string, { id: string; count: number }>();
+
+      const getOrCreate25Team = async (market: string | null): Promise<string> => {
+        const key = market ?? "";
+        const existing = marketTeams.get(key);
+        if (existing && existing.count < TEAM_CAP) { existing.count++; return existing.id; }
+        // An existing W2.5 team in this market with room?
+        const found = await prisma.team.findFirst({
+          where: { seasonId, divisionId: div25!.id, market, isTest: false },
+          select: { id: true, _count: { select: { members: true } } },
+        });
+        if (found && found._count.members < TEAM_CAP) { marketTeams.set(key, { id: found.id, count: found._count.members + 1 }); return found.id; }
+        const t = await prisma.team.create({
+          data: { name: `PURE ${market ?? "Academy"} W2.5`, seasonId, divisionId: div25!.id, divisionCode: "W2.5", levelBand: "2.5", market, origin: "PURE_ACADEMY", published: false },
+        });
+        createdTeams++;
+        marketTeams.set(key, { id: t.id, count: 1 });
+        return t.id;
+      };
+
+      for (const t of teams) {
+        if (t.divisionId === div25.id || t.divisionCode === "W2.5") continue; // already 2.5
+        const members = t.members.map((m) => m.personId);
+        const t25 = members.filter((id) => is25.has(id));
+        if (t25.length === 0) continue;
+
+        if (t25.length === members.length) {
+          // Pure 2.5 team that was mislabeled → relabel it back.
+          await prisma.team.update({ where: { id: t.id }, data: { divisionId: div25.id, divisionCode: "W2.5", levelBand: "2.5" } });
+          relabeled++;
+        } else {
+          // Mixed team → move only the 2.5 players onto a market 2.5 team.
+          for (const pid of t25) {
+            const destId = await getOrCreate25Team(t.market);
+            await prisma.teamMember.deleteMany({ where: { personId: pid, team: { seasonId } } });
+            await prisma.teamMember.create({ data: { teamId: destId, personId: pid, roleOnTeam: "PLAYER" } });
+            movedPlayers++;
+          }
+        }
+      }
+
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "SPLIT_W25", summary: `Split Women's 2.5 out — relabeled ${relabeled} teams, moved ${movedPlayers} players into ${createdTeams} new 2.5 teams` });
+      return back(`?ok=split25&relabeled=${relabeled}&moved=${movedPlayers}&created=${createdTeams}`);
+    }
     case "createTeam": {
       const name = String(formData.get("name") ?? "").trim();
       const seasonId = String(formData.get("seasonId") ?? "").trim();
