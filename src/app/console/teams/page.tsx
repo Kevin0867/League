@@ -54,10 +54,29 @@ export default async function TeamBuildBoard({
 
   // Diagnostics for "where did my teams go?" — the grid only shows the ONE active
   // PURE Academy season's non-test teams, so surface anything hidden by that.
-  const [activeSeasonCount, otherSeasonTeams, testTeams] = await Promise.all([
+  const activeId = stats.season?.id;
+  const [activeSeasonCount, otherSeasonTeams, testTeams, hiddenTeamsWithMembers, assignedNoTeam] = await Promise.all([
     prisma.season.count({ where: { active: true, program: "PURE_ACADEMY" } }),
-    stats.season ? prisma.team.count({ where: { seasonId: { not: stats.season.id }, isTest: false } }) : prisma.team.count(),
-    stats.season ? prisma.team.count({ where: { seasonId: stats.season.id, isTest: true } }) : Promise.resolve(0),
+    activeId ? prisma.team.count({ where: { seasonId: { not: activeId }, isTest: false } }) : prisma.team.count(),
+    activeId ? prisma.team.count({ where: { seasonId: activeId, isTest: true } }) : Promise.resolve(0),
+    // The smoking gun: teams that HAVE players but are hidden (test-flagged or in
+    // another season). These are the "assigned but missing from Teams" ones.
+    prisma.team.findMany({
+      where: {
+        members: { some: {} },
+        OR: [{ isTest: true }, ...(activeId ? [{ seasonId: { not: activeId } }] : [])],
+      },
+      select: { id: true, name: true, isTest: true, divisionCode: true, season: { select: { name: true, active: true } }, _count: { select: { members: true } } },
+      orderBy: { name: "asc" },
+      take: 50,
+    }),
+    // Registrations marked assigned but whose player is on no team in the active
+    // season — their team was likely deleted (status left stale).
+    activeId
+      ? prisma.registration.count({
+          where: { seasonId: activeId, status: "ASSIGNED", person: { teamMemberships: { none: { team: { seasonId: activeId } } } } },
+        })
+      : Promise.resolve(0),
   ]);
 
   const seasonRows = await prisma.season.findMany({
@@ -279,23 +298,39 @@ export default async function TeamBuildBoard({
       {/* "Where did my teams go?" — this page only shows the ONE active PURE
           Academy season's non-test teams. If teams look missing, this explains
           exactly what's hidden and why. */}
-      {(activeSeasonCount > 1 || otherSeasonTeams > 0 || testTeams > 0) && (
+      {(activeSeasonCount > 1 || otherSeasonTeams > 0 || testTeams > 0 || hiddenTeamsWithMembers.length > 0 || assignedNoTeam > 0) && (
         <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="font-semibold">Not seeing all your teams? This grid shows only the active season&apos;s teams.</p>
+          <p className="font-semibold">Not seeing all your teams? This grid — and the &ldquo;Move to team&rdquo; picker — show only the active season&apos;s teams.</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Showing <strong>{teams.length}</strong> team{teams.length === 1 ? "" : "s"} in the active season{stats.season ? <> — <strong>{stats.season.name}</strong></> : ""}.</li>
             {activeSeasonCount > 1 && (
               <li className="text-rose-800">
-                <strong>{activeSeasonCount} PURE Academy seasons are marked active.</strong> This page picks only one, so the others&apos; teams are hidden. Set the correct one as the only active season in <Link href="/console/setup" className="underline">Season setup</Link> — this is the most likely cause of teams disappearing.
+                <strong>{activeSeasonCount} PURE Academy seasons are marked active.</strong> This page picks only one, so the others&apos; teams are hidden. Set the correct one as the only active season in <Link href="/console/setup" className="underline">Season setup</Link>.
               </li>
             )}
-            {otherSeasonTeams > 0 && (
-              <li><strong>{otherSeasonTeams}</strong> team{otherSeasonTeams === 1 ? "" : "s"} live in a <em>different</em> season. If your Women&apos;s 2.5 (or other) teams are there, the active season isn&apos;t the one they were built in.</li>
-            )}
             {testTeams > 0 && (
-              <li><strong>{testTeams}</strong> team{testTeams === 1 ? "" : "s"} in this season are flagged <em>test</em> and hidden. Un-flag one from its team page if it&apos;s real.</li>
+              <li><strong>{testTeams}</strong> team{testTeams === 1 ? "" : "s"} in this season are flagged <em>test</em> and hidden.</li>
+            )}
+            {assignedNoTeam > 0 && (
+              <li><strong>{assignedNoTeam}</strong> player{assignedNoTeam === 1 ? " is" : "s are"} marked &ldquo;assigned&rdquo; but not on any team in this season — their team may have been deleted or lives in another season.</li>
             )}
           </ul>
+          {hiddenTeamsWithMembers.length > 0 && (
+            <div className="mt-3">
+              <p className="font-medium">Teams with players that are hidden from this season:</p>
+              <ul className="mt-1 space-y-0.5">
+                {hiddenTeamsWithMembers.map((t) => (
+                  <li key={t.id} className="text-xs">
+                    <strong>{t.name}</strong> ({t.divisionCode ?? "—"}, {t._count.members} player{t._count.members === 1 ? "" : "s"}) —{" "}
+                    {t.isTest ? "flagged test" : <>in season <strong>{t.season?.name ?? "—"}</strong>{t.season?.active ? " (also active)" : ""}</>}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-800">
+                Fix: make the season these teams live in the single active PURE Academy season (<Link href="/console/setup" className="underline">Season setup</Link>), or un-flag test teams. Then they&apos;ll reappear here and in the Move picker.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
