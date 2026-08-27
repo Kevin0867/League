@@ -109,8 +109,9 @@ export default async function HomePage() {
               </h2>
               <p className="mt-4 text-slate-600">
                 PURE Academy is led by <span className="font-semibold text-slate-800">Stephanie Newton</span> —
-                a Phoenix Firebirds professional in Major League Pickleball&apos;s Champions Series, RPO Level 1 and
-                Level 2 certified, competing at the top of the sport during the same season she is coaching it.
+                a Phoenix Firebirds professional competing in Major League Pickleball&apos;s Champions Series and an
+                RPO Level 1 &amp; 2 certified coach, bringing professional-level experience and insight directly to the
+                players she coaches and the programs she directs.
               </p>
               <p className="mt-3 text-sm text-slate-500">
                 Every coach completes a background check and PURE curriculum training before Week 1 — without exception.
