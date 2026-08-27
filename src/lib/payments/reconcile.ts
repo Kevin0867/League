@@ -49,6 +49,53 @@ type PaymentRow = {
 const paidAtFromUnix = (secs: number | null | undefined): Date | null =>
   secs ? new Date(secs * 1000) : null;
 
+// The IMPORT FLOOR: the earliest a charge may be *imported* as a new row. This
+// exists so reconciliation can never again pull the historical Stripe backlog
+// into the books (which double-counts payments already recorded from the old
+// system). It is a FIXED instant — the day this guard went live — NOT "start of
+// today recomputed each run", so the nightly cron with a rolling scan window
+// still catches yesterday's charges without ever reaching before the floor.
+// Overridable via env if the floor ever needs to move.
+const IMPORT_FLOOR_ISO = process.env.RECONCILE_IMPORT_FLOOR || "2026-08-27T00:00:00-07:00";
+export const IMPORT_FLOOR_UNIX = Math.floor(new Date(IMPORT_FLOOR_ISO).getTime() / 1000);
+
+/**
+ * Undo the historical over-import: remove the auto-imported PAID rows dated
+ * BEFORE the import floor (the backlog that inflated revenue). Today-and-later
+ * imports are kept. Identified via the audit trail we write on every import, so
+ * it only ever touches rows this tool created. Safe to re-run.
+ */
+export async function undoStripeImport(): Promise<{ removed: number; removedCents: number }> {
+  const logs = await prisma.auditLog.findMany({
+    where: { action: "IMPORTED", entityType: "Payment" },
+    select: { entityId: true },
+  });
+  const ids = [...new Set(logs.map((l) => l.entityId).filter(Boolean))];
+  if (!ids.length) return { removed: 0, removedCents: 0 };
+
+  // Only remove rows this tool imported (method/status/direction guardrails) that
+  // are dated before the floor — i.e. the pre-today backlog, not today's real ones.
+  const rows = await prisma.payment.findMany({
+    where: {
+      id: { in: ids },
+      direction: "IN",
+      method: "STRIPE",
+      status: "PAID",
+      paidAt: { lt: new Date(IMPORT_FLOOR_UNIX * 1000) },
+    },
+    select: { id: true, amountCents: true },
+  });
+  const removedCents = rows.reduce((s, r) => s + r.amountCents, 0);
+  if (rows.length) await prisma.payment.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+  await audit({
+    entityType: "Payment",
+    entityId: "reconcile",
+    action: "IMPORT_REVERTED",
+    summary: `Removed ${rows.length} pre-floor auto-imported Stripe rows ($${(removedCents / 100).toFixed(2)})`,
+  });
+  return { removed: rows.length, removedCents };
+}
+
 /** Inspect one payment against Stripe and update it if Stripe shows more than we have. */
 async function reconcileOne(
   p: PaymentRow,
@@ -155,7 +202,7 @@ async function reconcileOne(
  * is skipped, so re-runs never double-count. Attribution is best-effort — we
  * match the payer to a Person by email when we can.
  */
-async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, activeSeasonId: string | null): Promise<void> {
+async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floorUnix: number, activeSeasonId: string | null): Promise<void> {
   const client = stripe();
   const PAGE_CAP = 25; // ≤ 2,500 charges per run — a hard stop against runaways.
 
@@ -224,6 +271,10 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, acti
         }
 
         // ---- No local row at all: import the charge as a PAID record ----
+        // Floor guard: NEVER import a charge dated before the import floor. This
+        // is what keeps the historical backlog (already in the books from the old
+        // system) out — only today-and-forward orphans are imported.
+        if (charge.created < floorUnix) continue;
         // Idempotency guard: never import a charge whose intent we already hold.
         if (piId) {
           const existing = await prisma.payment.findFirst({ where: { stripePaymentIntentId: piId }, select: { id: true } });
@@ -276,7 +327,13 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
   const res: ReconcileResult = { scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0, imported: 0, importedCents: 0, chargesScanned: 0, importedUnattributed: 0, errors: 0, details: [] };
   if (!isStripeConfigured()) return res;
 
-  const since = new Date(Date.now() - (opts?.sinceDays ?? 365) * 86400_000);
+  // Rolling scan window, but NEVER earlier than the import floor — so no run,
+  // manual or nightly, ever reaches back into the pre-floor backlog. While the
+  // floor is recent this simply means "since the floor"; once time passes it
+  // becomes a true rolling window that always sits at or after the floor.
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const scanSinceUnix = Math.max(nowUnix - (opts?.sinceDays ?? 30) * 86400, IMPORT_FLOOR_UNIX);
+  const since = new Date(scanSinceUnix * 1000);
   const candidates = (await prisma.payment.findMany({
     where: {
       direction: "IN",
@@ -323,7 +380,7 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
     (await prisma.season.findFirst({ where: { active: true }, select: { id: true } })) ??
     (await prisma.season.findFirst({ orderBy: { startDate: "desc" }, select: { id: true } }));
   try {
-    await reconcileFromStripe(res, Math.floor(since.getTime() / 1000), activeSeason?.id ?? null);
+    await reconcileFromStripe(res, scanSinceUnix, IMPORT_FLOOR_UNIX, activeSeason?.id ?? null);
   } catch (e) {
     res.errors++;
     console.error("outside-in reconcile pass failed", e);

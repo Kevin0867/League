@@ -3,7 +3,7 @@ import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { isStripeConfigured } from "@/lib/stripe";
-import { reconcileStripePayments } from "@/lib/payments/reconcile";
+import { reconcileStripePayments, undoStripeImport } from "@/lib/payments/reconcile";
 
 // Reconcile local payments against Stripe: find any payment completed in Stripe
 // but not yet recorded PAID here, and record it. Idempotent — safe to re-run.
@@ -17,6 +17,22 @@ export async function POST(req: Request) {
   const actor = await actorFromForm(fd);
   if (!actor || !can(actor.role, "runPayouts")) return back("?err=auth");
   if (!isStripeConfigured()) return back("?recerr=notconfigured");
+
+  // Revert the historical over-import: remove the pre-floor auto-imported rows
+  // that inflated revenue, without touching today-and-forward imports.
+  if (String(fd.get("op") ?? "") === "undo-import") {
+    try {
+      const u = await undoStripeImport();
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: "reconcile", action: "IMPORT_REVERTED",
+        summary: `Reverted ${u.removed} pre-today imported rows ($${Math.round(u.removedCents / 100)})`,
+      });
+      return back(`?undook=1&removed=${u.removed}&remcents=${u.removedCents}`);
+    } catch (e) {
+      console.error("undo import failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "undo failed")}`);
+    }
+  }
 
   try {
     const r = await reconcileStripePayments();
