@@ -24,13 +24,15 @@ export type CsvReconcileResult = {
   paidRows: number;
   markedById: number;
   markedByEmail: number;
-  createdAttributed: number;
-  createdUnattributed: number;
+  /** Person found but no outstanding fee — already recorded (webhook) or needs a request. */
+  noOutstanding: number;
+  /** No person matched the payer email. */
+  noPersonMatch: number;
   alreadyDone: number;
   skippedFailed: number;
   errors: number;
-  appliedCents: number; // total $ newly reflected (marked + created)
-  unattributed: { email: string; amountCents: number; chargeId: string }[];
+  appliedCents: number; // total $ newly marked paid
+  unmatched: { email: string; amountCents: number; chargeId: string }[];
   problems: { chargeId: string; email: string; note: string }[];
 };
 
@@ -45,17 +47,10 @@ function colFinder(headers: string[]) {
   return (pred: (h: string) => boolean) => H.findIndex(pred);
 }
 
-/** Category for a created row — these CSV rows are season fees. */
-function categoryFor(description: string): string {
-  const d = description.toLowerCase();
-  if (d.includes("reserves a place")) return "PLAYER_FEE";
-  return "PLAYER_FEE";
-}
-
 export async function reconcileFromCsv(text: string, seasonId: string | null): Promise<CsvReconcileResult> {
   const res: CsvReconcileResult = {
-    rows: 0, paidRows: 0, markedById: 0, markedByEmail: 0, createdAttributed: 0, createdUnattributed: 0,
-    alreadyDone: 0, skippedFailed: 0, errors: 0, appliedCents: 0, unattributed: [], problems: [],
+    rows: 0, paidRows: 0, markedById: 0, markedByEmail: 0, noOutstanding: 0, noPersonMatch: 0,
+    alreadyDone: 0, skippedFailed: 0, errors: 0, appliedCents: 0, unmatched: [], problems: [],
   };
 
   const table = parseCsv(text);
@@ -65,11 +60,9 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
 
   const idxId = find((h) => h === "id");
   const idxAmount = find((h) => h === "amount");
-  const idxRefunded = find((h) => h === "amount refunded");
   const idxStatus = find((h) => h === "status");
   const idxEmail = find((h) => h === "customer email");
   const idxPaymentId = find((h) => h.includes("paymentid"));
-  const idxDesc = find((h) => h === "description");
   const idxCreated = find((h) => h.includes("created") && h.includes("date"));
 
   const get = (row: string[], i: number) => (i >= 0 && i < row.length ? (row[i] ?? "").trim() : "");
@@ -84,7 +77,6 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
     const email = get(row, idxEmail).toLowerCase();
     const pid = get(row, idxPaymentId);
     const amountCents = cents(get(row, idxAmount));
-    const description = get(row, idxDesc);
     const createdRaw = get(row, idxCreated);
     let paidAt = new Date();
     if (createdRaw) {
@@ -155,30 +147,19 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
           res.markedByEmail++; res.appliedCents += pick.amountCents;
           continue;
         }
-        // No outstanding request — record the payment against this person.
-        await prisma.payment.create({
-          data: {
-            direction: "IN", method: "STRIPE", status: "PAID",
-            category: categoryFor(description), amountCents, partyId: person.id,
-            seasonId, stripePaymentIntentId: chargeId || undefined,
-            description: description || "Reconciled from Stripe CSV", paidAt,
-          },
-        });
-        res.createdAttributed++; res.appliedCents += amountCents;
+        // Person found but no outstanding fee. MARK-ONLY policy: never invent a
+        // new row here — a full-charge row (fee + apparel) would double-count
+        // against a fee the webhook already recorded, and bundle apparel into the
+        // fee figure. This charge is almost certainly already on the books; if it
+        // truly isn't, it needs a fee request created for them.
+        res.noOutstanding++;
+        res.unmatched.push({ email: email || "(no email)", amountCents, chargeId });
         continue;
       }
 
-      // 3) Unknown email — record it, flagged for manual attach.
-      await prisma.payment.create({
-        data: {
-          direction: "IN", method: "STRIPE", status: "PAID",
-          category: categoryFor(description), amountCents, partyId: null,
-          seasonId, stripePaymentIntentId: chargeId || undefined,
-          description: `${description || "Reconciled from Stripe CSV"}${email ? ` · ${email}` : ""}`, paidAt,
-        },
-      });
-      res.createdUnattributed++; res.appliedCents += amountCents;
-      res.unattributed.push({ email: email || "(no email)", amountCents, chargeId });
+      // 3) No person matched the payer email — report it, don't invent a row.
+      res.noPersonMatch++;
+      res.unmatched.push({ email: email || "(no email)", amountCents, chargeId });
     } catch (e) {
       res.errors++;
       res.problems.push({ chargeId, email, note: e instanceof Error ? e.message.slice(0, 140) : "error" });
@@ -188,7 +169,7 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
 
   await audit({
     entityType: "Payment", entityId: "csv-reconcile", action: "CSV_RECONCILE",
-    summary: `CSV reconcile — ${res.markedById} by id, ${res.markedByEmail} by email, ${res.createdAttributed} created, ${res.createdUnattributed} unattributed, ${res.alreadyDone} already done`,
+    summary: `CSV reconcile (mark-only) — ${res.markedById} by id, ${res.markedByEmail} by email, ${res.alreadyDone} already, ${res.noOutstanding + res.noPersonMatch} unmatched`,
   });
 
   return res;

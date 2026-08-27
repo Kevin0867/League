@@ -198,6 +198,36 @@ async function reconcileOne(
 }
 
 /**
+ * Remove rows the CSV reconciler CREATED (its early versions recorded a full
+ * charge — fee + apparel — as a new fee, which double-counts against a fee the
+ * webhook already recorded). Those rows are identifiable: they carry the Stripe
+ * CHARGE id (ch_/py_) in stripePaymentIntentId and have NO checkout session or
+ * subscription — real app fee payments always have a checkout session (cs_).
+ * This never touches webhook-recorded fees or installment plans.
+ */
+export async function undoCsvImport(): Promise<{ removed: number; removedCents: number }> {
+  const rows = await prisma.payment.findMany({
+    where: {
+      direction: "IN",
+      method: "STRIPE",
+      status: "PAID",
+      installmentPlan: false,
+      stripeCheckoutId: null,
+      stripeSubscriptionId: null,
+      OR: [{ stripePaymentIntentId: { startsWith: "ch_" } }, { stripePaymentIntentId: { startsWith: "py_" } }],
+    },
+    select: { id: true, amountCents: true },
+  });
+  const removedCents = rows.reduce((s, r) => s + r.amountCents, 0);
+  if (rows.length) await prisma.payment.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+  await audit({
+    entityType: "Payment", entityId: "csv-reconcile", action: "CSV_IMPORT_REVERTED",
+    summary: `Removed ${rows.length} CSV-created charge rows ($${(removedCents / 100).toFixed(2)})`,
+  });
+  return { removed: rows.length, removedCents };
+}
+
+/**
  * The OUTSIDE-IN pass. The inside-out reconcile above can only fix rows we
  * already have; it is blind to a Stripe charge that never created a row here
  * (paid via a Stripe Payment Link or dashboard invoice, or charged during a
