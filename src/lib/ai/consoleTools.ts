@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { formatTime12 } from "@/lib/time";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
+import { personSearchOR } from "@/lib/domain/personSearch";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Read-only tools for "Ask the Console" (the admin assistant).
@@ -204,14 +205,7 @@ async function findPeople(input: { query?: string; limit?: number }): Promise<To
   const season = await resolveSeason();
 
   const people = await prisma.person.findMany({
-    where: {
-      OR: [
-        { firstName: { contains: q, mode: "insensitive" } },
-        { lastName: { contains: q, mode: "insensitive" } },
-        { email: { contains: q, mode: "insensitive" } },
-        { phone: { contains: q } },
-      ],
-    },
+    where: { OR: personSearchOR(q) },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     take: limit,
     include: {
@@ -515,13 +509,7 @@ async function personFinancials(input: { query?: string }): Promise<ToolResult> 
   const q = (input.query ?? "").trim();
   if (!q) return { error: "Name a person." };
   const person = await prisma.person.findFirst({
-    where: {
-      OR: [
-        { firstName: { contains: q, mode: "insensitive" } },
-        { lastName: { contains: q, mode: "insensitive" } },
-        { email: { contains: q, mode: "insensitive" } },
-      ],
-    },
+    where: { OR: personSearchOR(q) },
     select: { id: true, firstName: true, lastName: true, email: true },
   });
   if (!person) return { error: `No one matching "${q}".` };
