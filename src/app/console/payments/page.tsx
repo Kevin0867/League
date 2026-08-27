@@ -51,6 +51,18 @@ export default async function PaymentsPage({
   const requested = outstanding.reduce((s, p) => s + p.amountCents, 0);
   const paidOut = paidOutAgg._sum.amountCents ?? 0;
 
+  // Break "Collected" into season fees vs everything else, and compute apparel
+  // separately — apparel is billed as its own line items in the same Stripe
+  // charge and tracked as order items, so it's NOT part of the fee "Collected"
+  // figure; it's money in on top of it.
+  const [seasonFeeAgg, apparelItems] = await Promise.all([
+    prisma.payment.aggregate({ where: { direction: "IN", status: "PAID", category: "PLAYER_FEE" }, _sum: { amountCents: true } }),
+    prisma.apparelOrderItem.findMany({ where: { payment: { direction: "IN", status: "PAID" } }, select: { unitPriceCents: true, quantity: true } }),
+  ]);
+  const seasonFeeCents = seasonFeeAgg._sum.amountCents ?? 0;
+  const apparelCents = apparelItems.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
+  const otherFeeCents = collected - seasonFeeCents;
+
   // Webhook health — the usual reason paid charges don't get recorded here.
   const wh = await getStripeWebhookStatus();
 
@@ -187,6 +199,17 @@ export default async function PaymentsPage({
           />
           <button className="btn-primary text-sm">Reconcile CSV</button>
         </form>
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <ConfirmSubmit
+            action="/api/console/payments-csv"
+            fields={{ ticket, op: "undo-csv" }}
+            confirm="Remove the payment rows that earlier CSV uploads CREATED (the full-charge duplicates that inflated Collected)? Webhook-recorded fees are kept. You can then re-upload the CSV to mark real fees paid cleanly."
+            confirmLabel="Remove CSV-created rows"
+            label="Remove earlier CSV-created rows (fixes double-counting)"
+            className="text-xs font-medium text-rose-700 hover:underline"
+            danger
+          />
+        </div>
       </div>
 
       {sp.csvok && (
@@ -197,14 +220,24 @@ export default async function PaymentsPage({
           <ul className="mt-1 space-y-0.5 text-xs text-emerald-900/80">
             <li>• Matched to the exact fee (by payment id): <strong>{sp.byid ?? 0}</strong></li>
             <li>• Matched to the payer by email: <strong>{sp.byemail ?? 0}</strong></li>
-            <li>• Recorded against the right person (no request on file): <strong>{sp.created ?? 0}</strong></li>
-            {Number(sp.unatt ?? 0) > 0 && (
-              <li className="text-amber-800">• Recorded but email didn&apos;t match anyone — attach manually below: <strong>{sp.unatt}</strong></li>
+            <li>• Already on the books (skipped): <strong>{sp.already ?? 0}</strong></li>
+            {Number(sp.noreq ?? 0) > 0 && (
+              <li>• Payer found but no open fee — already recorded, or needs a fee request: <strong>{sp.noreq}</strong></li>
             )}
-            <li>• Already reconciled (skipped): <strong>{sp.already ?? 0}</strong></li>
+            {Number(sp.noperson ?? 0) > 0 && (
+              <li className="text-amber-800">• Payer email didn&apos;t match anyone here: <strong>{sp.noperson}</strong></li>
+            )}
             {Number(sp.failed ?? 0) > 0 && <li>• Failed/declined rows ignored: <strong>{sp.failed}</strong></li>}
             {sp.csverrs && sp.csverrs !== "0" && <li className="text-rose-700">• Rows with errors: <strong>{sp.csverrs}</strong></li>}
           </ul>
+          <p className="mt-1.5 text-xs text-emerald-900/70">Mark-only: this never creates new rows, so it can&apos;t double-count. Charges with no open fee are reported, not invented.</p>
+        </div>
+      )}
+      {sp.csvundo && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {Number(sp.removed ?? 0) > 0
+            ? <>Removed <strong>{sp.removed} CSV-created row{Number(sp.removed) === 1 ? "" : "s"}</strong> ({formatCents(Number(sp.remcents ?? 0))} taken back out of Collected). Now re-upload the CSV — it will mark the real fees paid without double-counting.</>
+            : "Nothing to remove — no CSV-created rows found."}
         </div>
       )}
       {sp.csverr && (
@@ -366,7 +399,16 @@ export default async function PaymentsPage({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Collected" value={formatCents(collected)} tone="emerald" />
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Collected</div>
+          <div className="mt-1 text-2xl font-extrabold text-emerald-700">{formatCents(collected)}</div>
+          <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
+            <div className="flex justify-between"><dt>Season fees</dt><dd className="font-semibold text-slate-700">{formatCents(seasonFeeCents)}</dd></div>
+            {otherFeeCents !== 0 && <div className="flex justify-between"><dt>Other (ACP, lessons, custom)</dt><dd className="font-semibold text-slate-700">{formatCents(otherFeeCents)}</dd></div>}
+            <div className="flex justify-between"><dt>Apparel <span className="text-slate-400">(billed on top)</span></dt><dd className="font-semibold text-slate-700">{formatCents(apparelCents)}</dd></div>
+            <div className="flex justify-between border-t border-slate-100 pt-1 text-slate-600"><dt>Fees + apparel</dt><dd className="font-bold">{formatCents(collected + apparelCents)}</dd></div>
+          </dl>
+        </div>
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
         <Stat label="Paid out" value={formatCents(paidOut)} tone="slate" />
       </div>

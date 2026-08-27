@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { reconcileFromCsv } from "@/lib/payments/csvReconcile";
+import { undoCsvImport } from "@/lib/payments/reconcile";
 
 // Exact reconciliation from an uploaded Stripe "unified payments" CSV. Native
 // multipart POST (carries the session cookie reliably on this runtime). Gated
@@ -18,6 +19,18 @@ export async function POST(req: Request) {
   const actor = await actorFromForm(fd);
   if (!actor || !can(actor.role, "runPayouts")) return back("?err=auth");
 
+  // Cleanup: remove rows the CSV reconciler CREATED in earlier versions (the
+  // full-charge dupes that inflated Collected). Leaves webhook-recorded fees.
+  if (String(fd.get("op") ?? "") === "undo-csv") {
+    try {
+      const u = await undoCsvImport();
+      return back(`?csvundo=1&removed=${u.removed}&remcents=${u.removedCents}`);
+    } catch (e) {
+      console.error("undo CSV import failed", e);
+      return back(`?csverr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "undo failed")}`);
+    }
+  }
+
   const file = fd.get("file");
   const text = file instanceof File ? await file.text() : String(fd.get("text") ?? "");
   if (!text.trim()) return back("?csverr=empty");
@@ -32,8 +45,8 @@ export async function POST(req: Request) {
       rows: String(r.paidRows),
       byid: String(r.markedById),
       byemail: String(r.markedByEmail),
-      created: String(r.createdAttributed),
-      unatt: String(r.createdUnattributed),
+      noreq: String(r.noOutstanding),
+      noperson: String(r.noPersonMatch),
       already: String(r.alreadyDone),
       failed: String(r.skippedFailed),
       applied: String(r.appliedCents),
