@@ -86,7 +86,11 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
     const amountCents = cents(get(row, idxAmount));
     const description = get(row, idxDesc);
     const createdRaw = get(row, idxCreated);
-    const paidAt = createdRaw ? new Date(createdRaw.replace(" ", "T") + "Z") : new Date();
+    let paidAt = new Date();
+    if (createdRaw) {
+      const d = new Date(createdRaw.replace(" ", "T") + "Z");
+      if (!isNaN(d.getTime())) paidAt = d;
+    }
 
     // Only settled money. Failed/blocked rows never create or clear anything.
     if (status !== "paid" && status !== "succeeded") { res.skippedFailed++; continue; }
