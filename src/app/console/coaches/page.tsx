@@ -5,6 +5,7 @@ import { coachAssignmentGate } from "@/lib/domain/teams";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { can, requireAdmin } from "@/lib/rbac";
 import { StaffForm } from "./StaffForm";
+import { AddCoachForm } from "./AddCoachForm";
 import { TableFilter } from "@/components/TableFilter";
 import { LoginStatus } from "@/components/LoginStatus";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -111,7 +112,12 @@ export default async function CoachesPage({
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>
       )}
-      {session && can(session.role, "manageCoaches") && <StaffForm role={session.role} ticket={ticket} />}
+      {session && can(session.role, "manageCoaches") && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <AddCoachForm ticket={ticket} />
+          <StaffForm role={session.role} ticket={ticket} />
+        </div>
+      )}
 
       {incompleteCount > 0 && (
         <div className="card border-l-4 border-amber-400">

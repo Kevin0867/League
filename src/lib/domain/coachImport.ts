@@ -147,28 +147,51 @@ export function parseCoachRows(text: string): { records: CoachRecord[]; headerRo
 
   const col = {
     name: findCol(headers, (h) => h.includes("full name")) >= 0 ? findCol(headers, (h) => h.includes("full name")) : findCol(headers, (h) => h.includes("name") && !h.includes("parent") && !h.includes("organization")),
+    first: findCol(headers, (h) => h === "first name" || h === "first" || (h.includes("first") && h.includes("name"))),
+    last: findCol(headers, (h) => h === "last name" || h === "last" || (h.includes("last") && h.includes("name"))),
     email: findCol(headers, (h) => h.includes("email")),
-    phone: findCol(headers, (h) => h.includes("phone")),
+    phone: findCol(headers, (h) => h.includes("phone") || h.includes("mobile") || h.includes("cell")),
     address: findCol(headers, (h) => h.includes("mailing")) >= 0 ? findCol(headers, (h) => h.includes("mailing")) : findCol(headers, (h) => h.includes("address")),
-    certOrg: findCol(headers, (h) => h.includes("accredited") || (h.includes("certification") && h.includes("organization"))),
+    // Certifications: accept the application-form columns OR any plain
+    // "certification(s)" / "cert" / "credential" header.
+    certOrg: findCol(headers, (h) => h.includes("accredited") || (h.includes("certification") && h.includes("organization"))) >= 0
+      ? findCol(headers, (h) => h.includes("accredited") || (h.includes("certification") && h.includes("organization")))
+      : findCol(headers, (h) => h.includes("certification") || h.includes("cert") || h.includes("credential")),
     certAdd: findCol(headers, (h) => h.includes("additional") && h.includes("certification")),
-    prefType: findCol(headers, (h) => h.includes("coaching preference") && !h.includes("skill")),
+    // Levels: the application "coaching preference" columns OR a plain
+    // "coaching level(s)" / "level" / "specialt(y|ies)" header.
+    prefType: findCol(headers, (h) => h.includes("coaching preference") && !h.includes("skill")) >= 0
+      ? findCol(headers, (h) => h.includes("coaching preference") && !h.includes("skill"))
+      : findCol(headers, (h) => h.includes("level") || h.includes("specialt")),
     prefSkill: findCol(headers, (h) => h.includes("coaching preference") && h.includes("skill")),
     years: findCol(headers, (h) => h.includes("years") && h.includes("experience")),
     bio: findCol(headers, (h) => h.includes("bio")),
-    days: DAY_NAMES.map((d) => findCol(headers, (h) => h.includes("availability") && h.includes(d))),
+    days: DAY_NAMES.map((d) => findCol(headers, (h) => (h.includes("availability") || h.includes("avail")) && h.includes(d))),
   };
 
   const get = (row: string[], i: number) => (i >= 0 && i < row.length ? (row[i] ?? "").trim() : "");
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const PHONE_RE = /^[+()\d][\d\s().-]{6,}$/;
 
   const records: CoachRecord[] = [];
   for (let r = 1; r < table.length; r++) {
     const row = table[r];
     if (row.every((c) => !c || !c.trim())) continue; // blank line
 
-    const fullName = get(row, col.name);
+    // Name: a single "Full Name" column, else separate First/Last columns.
+    let fullName = get(row, col.name);
+    if (!fullName && (col.first >= 0 || col.last >= 0)) {
+      fullName = [get(row, col.first), get(row, col.last)].filter(Boolean).join(" ");
+    }
     const { first, last } = splitName(fullName);
-    const email = get(row, col.email).toLowerCase() || null;
+
+    // Email / phone: prefer the mapped column, but fall back to detecting them
+    // by content anywhere in the row, so a paste with odd headers still works.
+    let email = get(row, col.email).toLowerCase() || null;
+    if (!email) {
+      const found = row.map((c) => (c ?? "").trim()).find((c) => EMAIL_RE.test(c.toLowerCase()));
+      email = found ? found.toLowerCase() : null;
+    }
 
     const certParts = [get(row, col.certOrg), get(row, col.certAdd)].filter(Boolean);
     const certifications = certParts.join(" · ") || null;
@@ -192,12 +215,18 @@ export function parseCoachRows(text: string): { records: CoachRecord[]; headerRo
       if (blocks.length || note) availability.push({ day: day[0].toUpperCase() + day.slice(1), code: DAY_CODES[i], raw, blocks, note });
     });
 
+    let phone = get(row, col.phone) || null;
+    if (!phone) {
+      const found = row.map((c) => (c ?? "").trim()).find((c) => PHONE_RE.test(c) && !EMAIL_RE.test(c.toLowerCase()));
+      phone = found ?? null;
+    }
+
     const rec: CoachRecord = {
       fullName,
       firstName: first,
       lastName: last,
       email,
-      phone: get(row, col.phone) || null,
+      phone,
       address: get(row, col.address) || null,
       certifications,
       rpoCertLevel,

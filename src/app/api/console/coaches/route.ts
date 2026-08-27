@@ -208,6 +208,68 @@ export async function POST(req: Request) {
       }
       return back("?ok=1");
     }
+    // Add a coach with their full details, WITHOUT necessarily inviting them.
+    // Creates the Person + Coach profile directly (name, contact, credentials,
+    // levels, bio, screening). A login/invite is optional — only when the admin
+    // ticks "create a login". Lands on the profile to add availability/photo.
+    case "createFull": {
+      if (!actor || !can(actor.role, "manageCoaches")) return back("?err=auth");
+      const firstName = String(formData.get("firstName") ?? "").trim();
+      const lastName = String(formData.get("lastName") ?? "").trim();
+      if (!firstName || !lastName) return back("?err=fields");
+      const email = String(formData.get("email") ?? "").toLowerCase().trim() || null;
+      const phone = String(formData.get("phone") ?? "").trim() || null;
+      const address = String(formData.get("address") ?? "").trim() || null;
+      const certifications = String(formData.get("certifications") ?? "").trim() || null;
+      const rpoCertLevel = String(formData.get("rpoCertLevel") ?? "").trim() || null;
+      const coachingLevels = String(formData.get("coachingLevels") ?? "").trim() || null;
+      const bio = String(formData.get("bio") ?? "").trim() || null;
+      const bgCompany = String(formData.get("backgroundCheckCompany") ?? "").trim() || null;
+      const bgDateRaw = String(formData.get("backgroundCheckDate") ?? "").trim();
+      const backgroundCheckDate = bgDateRaw ? new Date(bgDateRaw) : null;
+      const sendInvite = String(formData.get("sendInvite") ?? "") === "on";
+
+      // Reuse a Person with this email if present; otherwise create fresh. An
+      // email-less coach is fine — they just have no login until one's added.
+      const person =
+        (email ? await prisma.person.findFirst({ where: { email } }) : null) ??
+        (await prisma.person.create({ data: { firstName, lastName, email, phone, address } }));
+      // If we matched an existing person, fill in any contact fields provided.
+      if (person.firstName !== firstName || person.lastName !== lastName || phone || address) {
+        await prisma.person.update({
+          where: { id: person.id },
+          data: {
+            firstName: person.firstName || firstName,
+            lastName: person.lastName || lastName,
+            phone: phone ?? person.phone,
+            address: address ?? person.address,
+          },
+        });
+      }
+
+      const coachData = { certifications, rpoCertLevel, coachingLevels, bio, backgroundCheckCompany: bgCompany, backgroundCheckDate };
+      const existingCoach = await prisma.coach.findUnique({ where: { personId: person.id } });
+      await (existingCoach
+        ? prisma.coach.update({ where: { id: existingCoach.id }, data: coachData })
+        : prisma.coach.create({ data: { personId: person.id, ...coachData } }));
+
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "coach.createFull", summary: `Added coach ${firstName} ${lastName}${email ? ` (${email})` : " (no email)"}${sendInvite ? " + invite" : ""}` });
+
+      // Optional login + invite — only when asked, and only if we have an email.
+      if (sendInvite && email) {
+        let user = await prisma.user.findUnique({ where: { email } });
+        if (!user) {
+          user = await prisma.user.create({ data: { email, passwordHash: await hashPassword(crypto.randomBytes(24).toString("hex")), role: "COACH", personId: person.id } });
+        } else if (!user.personId) {
+          await prisma.user.update({ where: { id: user.id }, data: { personId: person.id } });
+        }
+        const inv = await issueInvite(user, firstName, "COACH");
+        return NextResponse.redirect(new URL(`/console/coaches/${person.id}?${inviteQuery({ ok: "account" }, inv)}`, origin), 303);
+      }
+
+      return NextResponse.redirect(new URL(`/console/coaches/${person.id}?ok=added`, origin), 303);
+    }
+
     // Remove a coach: strip their coaching role and delete the Coach profile.
     // The person and their login are KEPT (they may also be a parent/player) —
     // we just unassign them from everything coach-related and drop the COACH
