@@ -100,15 +100,25 @@ export default async function PaymentsPage({
   // Coaches from calculated payout runs, falling back to delivered coach-sessions
   // × the per-session rate before any run is generated; facilities from the
   // amount due on their statements.
-  const [coachPayoutAgg, facilityDueAgg, deliveredCoachSessions] = await Promise.all([
+  // Accrued coach pay = each coach's rate × the 2-hour sessions they've actually
+  // DELIVERED. Rate comes from the coach's profile (season pay ÷ 12 sessions, i.e.
+  // $1,200/season → $100/session), falling back to the default per-session rate.
+  // $0 until practices begin — nothing is owed for sessions that haven't happened.
+  const SESSIONS_PER_SEASON = 12;
+  const [coachPayoutAgg, facilityDueAgg, deliveredByCoach, coachRates] = await Promise.all([
     prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
     prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
-    // Accrued coach pay = only sessions actually DELIVERED. $0 until practices
-    // begin, which is correct — nothing is owed for sessions that haven't happened.
-    prisma.sessionCoach.count({ where: { session: { status: "DELIVERED" } } }),
+    prisma.sessionCoach.groupBy({ by: ["coachId"], where: { session: { status: "DELIVERED" } }, _count: true }),
+    prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
   ]);
+  const rateMap = new Map(coachRates.map((c) => [c.id, c.seasonPayCents]));
+  const perSessionFor = (coachId: string) => {
+    const seasonPay = rateMap.get(coachId);
+    return seasonPay && seasonPay > 0 ? Math.round(seasonPay / SESSIONS_PER_SEASON) : COACH_PER_SESSION_CENTS;
+  };
+  const accruedCoachCents = deliveredByCoach.reduce((s, r) => s + perSessionFor(r.coachId) * r._count, 0);
   const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
-  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : deliveredCoachSessions * COACH_PER_SESSION_CENTS;
+  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : accruedCoachCents;
   const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;
   const estPayoutsCents = coachEstCents + facilityEstCents;
 
