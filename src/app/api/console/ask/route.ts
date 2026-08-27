@@ -19,7 +19,7 @@ export const maxDuration = 60;
 // Overridable so the model can be tuned without a code change. Defaults to the
 // current flagship; the assistant does read-only reporting, so correctness of
 // tool selection matters more than raw cost here.
-const MODEL = process.env.ASK_CONSOLE_MODEL || "claude-opus-5";
+const MODEL = process.env.ASK_CONSOLE_MODEL || "claude-sonnet-5";
 const MAX_STEPS = 8; // hard cap on tool-use round-trips per question (cost guard)
 
 const SYSTEM_PROMPT = [
