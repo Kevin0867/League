@@ -12,6 +12,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
+import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
@@ -62,6 +63,20 @@ export default async function PaymentsPage({
   const seasonFeeCents = seasonFeeAgg._sum.amountCents ?? 0;
   const apparelCents = apparelItems.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
   const otherFeeCents = collected - seasonFeeCents;
+
+  // Estimated payouts (not yet disbursed): what's owed to coaches and facilities.
+  // Coaches from calculated payout runs, falling back to delivered coach-sessions
+  // × the per-session rate before any run is generated; facilities from the
+  // amount due on their statements.
+  const [coachPayoutAgg, facilityDueAgg, deliveredCoachSessions] = await Promise.all([
+    prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
+    prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
+    prisma.sessionCoach.count({ where: { session: { status: "DELIVERED" } } }),
+  ]);
+  const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
+  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : deliveredCoachSessions * COACH_PER_SESSION_CENTS;
+  const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;
+  const estPayoutsCents = coachEstCents + facilityEstCents;
 
   // Webhook health — the usual reason paid charges don't get recorded here.
   const wh = await getStripeWebhookStatus();
@@ -409,7 +424,15 @@ export default async function PaymentsPage({
           </dl>
         </div>
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
-        <Stat label="Paid out" value={formatCents(paidOut)} tone="slate" />
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Payouts (est.)</div>
+          <div className="mt-1 text-2xl font-extrabold text-slate-900">{formatCents(estPayoutsCents)}</div>
+          <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
+            <div className="flex justify-between"><dt>Coaches</dt><dd className="font-semibold text-slate-700">{formatCents(coachEstCents)}</dd></div>
+            <div className="flex justify-between"><dt>Facilities</dt><dd className="font-semibold text-slate-700">{formatCents(facilityEstCents)}</dd></div>
+          </dl>
+          <p className="mt-1 text-[11px] text-slate-400">Estimated — not yet disbursed.</p>
+        </div>
       </div>
 
       {failed.length > 0 && (
