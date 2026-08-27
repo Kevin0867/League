@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Logo, PadelLogo } from "@/components/Brand";
 import { CommandPalette, CommandPaletteButton } from "@/components/CommandPalette";
+import { AskBrett } from "@/components/AskBrett";
 import type { Role } from "@/lib/enums";
 import { ROLE_LABELS } from "@/lib/enums";
 
@@ -12,7 +13,6 @@ type NavItem = { href: string; label: string; roles?: Role[]; match?: string[] }
 type NavSection = { title: string; items: NavItem[] };
 
 const DASHBOARD: NavItem = { href: "/console", label: "Dashboard" };
-const ASK: NavItem = { href: "/console/ask", label: "Ask the Console", roles: ["COO", "CEO", "DIRECTOR"] };
 
 // Grouped into logical clusters so a first-time admin can find where a task
 // lives instead of scanning one long flat list.
@@ -80,10 +80,13 @@ export function ConsoleShell({
   role,
   name,
   children,
+  ask,
 }: {
   role: Role;
   name: string;
   children: React.ReactNode;
+  /** When present (admin only), floats the "Ask Brett" assistant on every page. */
+  ask?: { ticket: string; configured: boolean } | null;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -148,11 +151,6 @@ export function ConsoleShell({
             <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
               {DASHBOARD.label}
             </Link>
-            {roleVisible(ASK) && (
-              <Link href={ASK.href} onClick={() => setOpen(false)} className={`mt-1.5 ${linkClass(isActiveItem(ASK))}`}>
-                {ASK.label}
-              </Link>
-            )}
             {sections.map((section) => (
               <div key={section.title} className="mt-4">
                 <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-300/70">
@@ -191,6 +189,7 @@ export function ConsoleShell({
           <div className="p-4 md:p-6">{children}</div>
         </main>
       </div>
+      {ask && <AskBrett ticket={ask.ticket} configured={ask.configured} />}
     </div>
   );
 }

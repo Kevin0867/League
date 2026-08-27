@@ -59,8 +59,18 @@ export default async function PaymentsPage({
         <div className="flex items-center gap-2">
           <form method="POST" action="/api/console/payments-reconcile">
             <input type="hidden" name="ticket" value={ticket} />
-            <button className="btn-secondary text-sm" title="Check Stripe for any payment that was completed there but not yet recorded here, and record it.">
+            <button className="btn-secondary text-sm" title="Check Stripe for any payment completed there today or later but not yet recorded here, and record it.">
               Reconcile with Stripe
+            </button>
+          </form>
+          <form method="POST" action="/api/console/payments-reconcile">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="undo-import" />
+            <button
+              className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+              title="Remove the payments that reconcile auto-imported from before today (the historical backlog that over-counted revenue). Today-and-forward imports are kept."
+            >
+              Undo pre-today import
             </button>
           </form>
           <PrintButton label="Print" />
@@ -82,6 +92,14 @@ export default async function PaymentsPage({
           {Number(sp.refunds ?? 0) > 0 ? <><strong>{sp.refunds} refund{sp.refunds === "1" ? "" : "s"} recorded</strong> ({formatCents(Number(sp.refcents ?? 0))}). </> : ""}
           {Number(sp.paid ?? 0) === 0 && Number(sp.imported ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? "Everything already matched Stripe — your books are in sync." : ""}
           {sp.recerrs && sp.recerrs !== "0" ? ` (${sp.recerrs} couldn't be checked — try again.)` : ""}
+        </div>
+      )}
+
+      {sp.undook && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {Number(sp.removed ?? 0) > 0
+            ? <>Removed <strong>{sp.removed} auto-imported {Number(sp.removed) === 1 ? "row" : "rows"}</strong> dated before today ({formatCents(Number(sp.remcents ?? 0))} taken back out of Collected). Revenue now reflects only what was actually reconciled from today forward.</>
+            : "Nothing to undo — there were no pre-today auto-imported rows."}
         </div>
       )}
       {sp.recerr === "notconfigured" && (
