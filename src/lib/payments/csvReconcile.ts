@@ -24,7 +24,9 @@ export type CsvReconcileResult = {
   paidRows: number;
   markedById: number;
   markedByEmail: number;
-  /** Person found but no outstanding fee — already recorded (webhook) or needs a request. */
+  /** Person found with no fee on file at all → recorded against them (real money that was missing). */
+  createdAttributed: number;
+  /** Person found who already has a fee on file (webhook got it) — skipped, no double-count. */
   noOutstanding: number;
   /** No person matched the payer email. */
   noPersonMatch: number;
@@ -49,7 +51,7 @@ function colFinder(headers: string[]) {
 
 export async function reconcileFromCsv(text: string, seasonId: string | null): Promise<CsvReconcileResult> {
   const res: CsvReconcileResult = {
-    rows: 0, paidRows: 0, markedById: 0, markedByEmail: 0, noOutstanding: 0, noPersonMatch: 0,
+    rows: 0, paidRows: 0, markedById: 0, markedByEmail: 0, createdAttributed: 0, noOutstanding: 0, noPersonMatch: 0,
     alreadyDone: 0, skippedFailed: 0, errors: 0, appliedCents: 0, unmatched: [], problems: [],
   };
 
@@ -147,13 +149,29 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
           res.markedByEmail++; res.appliedCents += pick.amountCents;
           continue;
         }
-        // Person found but no outstanding fee. MARK-ONLY policy: never invent a
-        // new row here — a full-charge row (fee + apparel) would double-count
-        // against a fee the webhook already recorded, and bundle apparel into the
-        // fee figure. This charge is almost certainly already on the books; if it
-        // truly isn't, it needs a fee request created for them.
-        res.noOutstanding++;
-        res.unmatched.push({ email: email || "(no email)", amountCents, chargeId });
+        // No outstanding fee. Do they already have ANY fee on file (paid by the
+        // webhook, or requested)? If so, this charge is already represented —
+        // skip it, so we never double-count a webhook-recorded fee.
+        const anyFee = await prisma.payment.findFirst({
+          where: { partyId: person.id, direction: "IN", category: "PLAYER_FEE" },
+          select: { id: true },
+        });
+        if (anyFee) {
+          res.noOutstanding++;
+          continue;
+        }
+        // They have NO fee record at all, yet they paid — this is real money that
+        // isn't on the books anywhere. Record it against them so Collected is
+        // complete. (Amount is the full charge; apparel can't be split out here.)
+        await prisma.payment.create({
+          data: {
+            direction: "IN", method: "STRIPE", status: "PAID", category: "PLAYER_FEE",
+            amountCents, partyId: person.id, seasonId,
+            stripePaymentIntentId: chargeId || undefined,
+            description: "Recorded from Stripe CSV (no fee request on file)", paidAt,
+          },
+        });
+        res.createdAttributed++; res.appliedCents += amountCents;
         continue;
       }
 
@@ -169,7 +187,7 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
 
   await audit({
     entityType: "Payment", entityId: "csv-reconcile", action: "CSV_RECONCILE",
-    summary: `CSV reconcile (mark-only) — ${res.markedById} by id, ${res.markedByEmail} by email, ${res.alreadyDone} already, ${res.noOutstanding + res.noPersonMatch} unmatched`,
+    summary: `CSV reconcile — ${res.markedById} by id, ${res.markedByEmail} by email, ${res.createdAttributed} newly recorded, ${res.alreadyDone + res.noOutstanding} already, ${res.noPersonMatch} no-person`,
   });
 
   return res;
