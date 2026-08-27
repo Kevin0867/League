@@ -48,9 +48,11 @@ const ADULT: { key: SizeKey; short: string }[] = [
 /**
  * Season-fee checkout with a tap-friendly team-apparel picker. Each player gets
  * their own section; within it you tap a style (T-shirt / tank), tap a size, set
- * a quantity, and add it. The season fee + apparel is charged in one Stripe
+ * a quantity, and hit the green "Add to Cart" button. You can add as many items
+ * as you like — a second shirt, a different size, or a tank top — and each lands
+ * in that player's cart list. The season fee + apparel is charged in one Stripe
  * checkout. Checkout is blocked (with a specific reason) until every player has
- * at least one item.
+ * at least one item in their cart.
  */
 export function SeasonFeePayForm({
   paymentId,
@@ -110,8 +112,8 @@ export function SeasonFeePayForm({
 
   const blockedReason = firstIncomplete
     ? firstIncomplete.name
-      ? `Add a shirt or tank for ${firstIncomplete.name} to continue`
-      : "Add a shirt or tank to continue"
+      ? `Add a shirt or tank to ${firstIncomplete.name}'s cart to continue`
+      : "Add a shirt or tank to your cart to continue"
     : null;
 
   return (
@@ -122,7 +124,8 @@ export function SeasonFeePayForm({
           <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">Required</span>
         </div>
         <p className="mt-1 text-sm text-slate-600">
-          Every player needs team gear. Pick a T-shirt or a tank top and a size{sections.length > 1 ? " for each player" : ""}.
+          Every player needs team gear. Pick a style and size, then tap <span className="font-semibold text-emerald-700">Add to Cart</span>
+          {sections.length > 1 ? " for each player" : ""}. Want more than one? Add another item — a second shirt, a different size, or a tank top.
         </p>
 
         <SizeGuide />
@@ -206,7 +209,9 @@ export function SeasonFeePayForm({
   );
 }
 
-/** One player's apparel picker: tap a style, tap a size, set quantity, add. */
+/** One player's apparel picker: tap a style, tap a size, set quantity, Add to
+ *  Cart. Items already added show in a cart list above the picker, and the
+ *  picker stays put so you can add more. */
 function PlayerApparel({
   player,
   multi,
@@ -269,29 +274,35 @@ function PlayerApparel({
         <div className="mb-2 flex items-center justify-between">
           <span className="font-medium text-slate-800">Gear for {player.name}</span>
           {done ? (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">✓ added</span>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">✓ in cart</span>
           ) : (
-            <span className="text-xs font-medium text-amber-600">pick a size</span>
+            <span className="text-xs font-medium text-amber-600">add an item</span>
           )}
         </div>
       )}
 
-      {/* Already added */}
+      {/* In the cart */}
       {lines.length > 0 && (
-        <ul className="mb-3 divide-y divide-slate-100 rounded-md bg-slate-50 ring-1 ring-slate-100">
-          {lines.map((l, i) => (
-            <li key={i} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
-              <span className="text-slate-700">{l.quantity} × {garmentLabel(l.garment)} · {sizeLabel(l.size)}</span>
-              <span className="flex items-center gap-3">
-                <span className="text-slate-500">{formatCents(priceOf(l.garment) * l.quantity)}</span>
-                <button type="button" onClick={() => onRemove(l)} className="text-xs text-slate-400 hover:text-rose-600">Remove</button>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="mb-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">In your cart</div>
+          <ul className="divide-y divide-emerald-100 rounded-md bg-emerald-50 ring-1 ring-emerald-100">
+            {lines.map((l, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                <span className="font-medium text-emerald-900">✓ {l.quantity} × {garmentLabel(l.garment)} · {sizeLabel(l.size)}</span>
+                <span className="flex items-center gap-3">
+                  <span className="text-emerald-700">{formatCents(priceOf(l.garment) * l.quantity)}</span>
+                  <button type="button" onClick={() => onRemove(l)} className="text-xs text-slate-400 hover:text-rose-600">Remove</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Builder */}
+      {done && (
+        <div className="mb-2 text-xs font-medium text-slate-500">Add another item</div>
+      )}
       <div className="flex gap-2">{styleBtn("SHIRT", "T-shirt")}{styleBtn("TANK", "Tank top")}</div>
 
       <div className="mt-3">
@@ -321,9 +332,13 @@ function PlayerApparel({
           type="button"
           onClick={add}
           disabled={!size}
-          className="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          {size ? `Add ${garmentLabel(garment)} · ${sizeLabel(size)}` : "Pick a size"}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+            <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+          </svg>
+          {size ? "Add to Cart" : "Pick a size"}
         </button>
       </div>
     </div>
