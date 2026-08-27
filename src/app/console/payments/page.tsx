@@ -167,6 +167,51 @@ export default async function PaymentsPage({
         </div>
       )}
 
+      {/* Exact reconciliation from a Stripe CSV export */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Reconcile from a Stripe CSV (exact)</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Export <strong>Payments</strong> from Stripe (the &ldquo;unified payments&rdquo; CSV) and upload it here. Every paid
+          charge is matched to the exact fee by its <code>paymentId</code>, or by the payer&apos;s email, and applied to the
+          right person — nothing double-counts if you upload overlapping files.
+        </p>
+        <form method="POST" action="/api/console/payments-csv" encType="multipart/form-data" className="mt-3 flex flex-wrap items-center gap-3">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input
+            name="file"
+            type="file"
+            accept=".csv,text/csv"
+            required
+            className="block text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-800 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-900"
+          />
+          <button className="btn-primary text-sm">Reconcile CSV</button>
+        </form>
+      </div>
+
+      {sp.csvok && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="font-semibold">
+            Reconciled {sp.rows ?? "0"} paid {Number(sp.rows ?? 0) === 1 ? "charge" : "charges"} from the CSV — {formatCents(Number(sp.applied ?? 0))} applied.
+          </div>
+          <ul className="mt-1 space-y-0.5 text-xs text-emerald-900/80">
+            <li>• Matched to the exact fee (by payment id): <strong>{sp.byid ?? 0}</strong></li>
+            <li>• Matched to the payer by email: <strong>{sp.byemail ?? 0}</strong></li>
+            <li>• Recorded against the right person (no request on file): <strong>{sp.created ?? 0}</strong></li>
+            {Number(sp.unatt ?? 0) > 0 && (
+              <li className="text-amber-800">• Recorded but email didn&apos;t match anyone — attach manually below: <strong>{sp.unatt}</strong></li>
+            )}
+            <li>• Already reconciled (skipped): <strong>{sp.already ?? 0}</strong></li>
+            {Number(sp.failed ?? 0) > 0 && <li>• Failed/declined rows ignored: <strong>{sp.failed}</strong></li>}
+            {sp.csverrs && sp.csverrs !== "0" && <li className="text-rose-700">• Rows with errors: <strong>{sp.csverrs}</strong></li>}
+          </ul>
+        </div>
+      )}
+      {sp.csverr && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          Couldn&apos;t reconcile the CSV: {sp.csverr === "empty" ? "the file was empty." : sp.csverr}
+        </div>
+      )}
+
       {imported.length > 0 && (
         <div className="card border-amber-200 bg-amber-50/40">
           <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
