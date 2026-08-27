@@ -34,7 +34,7 @@ const HERO_NAME = "Stephanie Newton";
 const HERO_BIO =
   "Professional player — Phoenix Firebirds, Major League Pickleball Champions Series, 40+ Prime Division. " +
   "Competing through the Fall 2026 season. RPO Level 1 and Level 2 certified. 2025 APPL State and National Champion. " +
-  "20+ years coaching Arizona athletes. Director, Arizona High School Pickleball. Director, Arizona Club Pickleball.";
+  "20+ years coaching athletes. Director, Arizona High School Pickleball. Director, Arizona Club Pickleball.";
 const HERO_MARKETS = "Mesa · Youth and adults, beginner through professional.";
 
 export default async function CoachesPage() {
