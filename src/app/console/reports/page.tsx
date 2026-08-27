@@ -5,13 +5,65 @@ import { formatCents } from "@/lib/money";
 import { teamContribution, completionRate, type TeamPnL } from "@/lib/domain/reporting";
 import type { FacilityRates, DeliveredSession } from "@/lib/domain/finance";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
+import { formatTime12 } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
+// Weekday order so the coaching grid reads Mon→Sun, not alphabetically.
+const DAY_ORDER: Record<string, number> = { MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6, SUN: 7 };
+const DAY_LABEL: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
+
+type CoachRow = {
+  coach: string;
+  coachId: string | null;
+  team: string;
+  teamId: string;
+  division: string;
+  location: string;
+  daySort: number;
+  dayTime: string;
+  role: "Head" | "Assistant";
+};
+
 export default async function ReportsPage() {
   await requireAdmin();
   const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });
+
+  // ---- Who's coaching what, where, when ----
+  const coachingTeams = await prisma.team.findMany({
+    where: season ? { seasonId: season.id, isTest: false } : { isTest: false },
+    include: {
+      facility: { select: { name: true } },
+      division: { select: { name: true } },
+      coach: { include: { person: { select: { id: true, firstName: true, lastName: true } } } },
+      assistantCoaches: { include: { coach: { include: { person: { select: { id: true, firstName: true, lastName: true } } } } } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const coachingRows: CoachRow[] = [];
+  let teamsNeedingCoach = 0;
+  for (const t of coachingTeams) {
+    if (!t.coachId) teamsNeedingCoach++;
+    const base = {
+      team: t.name,
+      teamId: t.id,
+      division: t.division?.name ?? t.divisionCode ?? "—",
+      location: t.facility?.name ?? "—",
+      daySort: t.dayOfWeek ? DAY_ORDER[t.dayOfWeek] ?? 99 : 99,
+      dayTime: t.dayOfWeek ? `${DAY_LABEL[t.dayOfWeek] ?? t.dayOfWeek} ${formatTime12(t.startTime)}` : "—",
+    };
+    if (t.coach) {
+      coachingRows.push({ ...base, coach: `${t.coach.person.firstName} ${t.coach.person.lastName}`, coachId: t.coach.person.id, role: "Head" });
+    }
+    for (const ac of t.assistantCoaches) {
+      coachingRows.push({ ...base, coach: `${ac.coach.person.firstName} ${ac.coach.person.lastName}`, coachId: ac.coach.person.id, role: "Assistant" });
+    }
+  }
+  // Sort by coach name, then by day/time within a coach.
+  coachingRows.sort((a, b) => a.coach.localeCompare(b.coach) || a.daySort - b.daySort || a.team.localeCompare(b.team));
+  const distinctCoaches = new Set(coachingRows.map((r) => r.coach)).size;
 
   // ---- Retention funnel (§16) ----
   const [registered, assigned, paidCount, attendedPeople] = await Promise.all([
@@ -76,6 +128,62 @@ export default async function ReportsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Reports" subtitle="The season is judged on retention; the month is judged on facility statements." />
+
+      {/* Coaching assignments — who coaches what, where, when */}
+      <div className="card overflow-x-auto">
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-slate-900">Coaching assignments</h2>
+          <span className="text-xs text-slate-400">
+            {distinctCoaches} coach{distinctCoaches === 1 ? "" : "es"} · {coachingRows.length} assignment{coachingRows.length === 1 ? "" : "s"}
+            {teamsNeedingCoach > 0 ? (
+              <> · <Link href="/console/teams" className="font-medium text-amber-700 hover:underline">{teamsNeedingCoach} team{teamsNeedingCoach === 1 ? "" : "s"} still need a head coach</Link></>
+            ) : ""}
+          </span>
+        </div>
+        <p className="mb-3 text-sm text-slate-500">Every coach and the teams they run this season — with location and practice day &amp; time.</p>
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th className="py-2">Coach</th>
+              <th>Team</th>
+              <th>Division</th>
+              <th>Location</th>
+              <th>Day &amp; time</th>
+              <th>Role</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {coachingRows.map((r, i) => {
+              const firstOfCoach = i === 0 || coachingRows[i - 1].coach !== r.coach;
+              return (
+                <tr key={`${r.coachId}-${r.teamId}-${r.role}`}>
+                  <td className="py-2 font-medium text-slate-800">
+                    {firstOfCoach ? (
+                      r.coachId ? (
+                        <Link href={`/console/coaches/${r.coachId}`} className="hover:text-brand-700 hover:underline">{r.coach}</Link>
+                      ) : r.coach
+                    ) : (
+                      <span className="text-slate-300">↳</span>
+                    )}
+                  </td>
+                  <td className="text-slate-700">
+                    <Link href={`/console/teams/${r.teamId}`} className="hover:text-brand-700 hover:underline">{r.team}</Link>
+                  </td>
+                  <td className="text-slate-500">{r.division}</td>
+                  <td className="text-slate-500">{r.location}</td>
+                  <td className="text-slate-600">{r.dayTime}</td>
+                  <td>
+                    <span className={`badge ${r.role === "Head" ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-600"}`}>{r.role}</span>
+                  </td>
+                </tr>
+              );
+            })}
+            {coachingRows.length === 0 && (
+              <tr><td colSpan={6} className="py-6 text-center text-slate-400">No coaches assigned to teams yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Retention */}
       <div className="card">
