@@ -25,14 +25,17 @@ export async function POST(req: Request) {
       entityType: "Payment",
       entityId: "reconcile",
       action: "RECONCILE_RUN",
-      summary: `Reconciled ${r.scanned} Stripe payments — ${r.nowPaid} newly recorded paid, ${Math.round(r.recoveredCents / 100)} dollars recovered${r.errors ? `, ${r.errors} errors` : ""}`,
+      summary: `Reconciled against Stripe — ${r.chargesScanned} charges scanned, ${r.nowPaid} rows newly paid, ${r.imported} imported (${Math.round((r.recoveredCents + r.importedCents) / 100)} dollars added)${r.errors ? `, ${r.errors} errors` : ""}`,
     });
     const params = new URLSearchParams({
       recok: "1",
-      scanned: String(r.scanned),
+      scanned: String(r.scanned + r.chargesScanned),
       paid: String(r.nowPaid),
       updated: String(r.updated),
       cents: String(r.recoveredCents),
+      imported: String(r.imported),
+      impcents: String(r.importedCents),
+      unattributed: String(r.importedUnattributed),
       refunds: String(r.refundsRecorded),
       refcents: String(r.refundedCents),
     });
