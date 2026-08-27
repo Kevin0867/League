@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { verifyActionTicket, getSession } from "@/lib/auth";
+import { verifyActionTicket, getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin, can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { CONSOLE_TOOLS, CONSOLE_WRITE_TOOLS, runConsoleTool } from "@/lib/ai/consoleTools";
@@ -53,14 +53,19 @@ export async function GET() {
   if (!session || !isAdmin(session.roles ?? [session.role])) {
     return NextResponse.json({ ok: false, error: "Not authorized." }, { status: 403 });
   }
+  // Mint a fresh console ticket on every health check. The page mints one at
+  // render, but its TTL (30 min) can expire while the widget sits open — so the
+  // widget re-fetches this to keep POSTs authorized. The session cookie IS
+  // delivered on GETs, so this is safe to hand back to the same admin.
+  const ticket = await mintConsoleTicket();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ configured: false, model: MODEL, live: { ok: false, reason: "no-key" } });
+    return NextResponse.json({ configured: false, model: MODEL, ticket, live: { ok: false, reason: "no-key" } });
   }
   try {
     const client = new Anthropic({ apiKey });
     await client.messages.create({ model: MODEL, max_tokens: 4, messages: [{ role: "user", content: "ping" }] });
-    return NextResponse.json({ configured: true, model: MODEL, live: { ok: true } });
+    return NextResponse.json({ configured: true, model: MODEL, ticket, live: { ok: true } });
   } catch (e) {
     const status = e instanceof Anthropic.APIError ? e.status : undefined;
     const reason =
@@ -72,6 +77,7 @@ export async function GET() {
     return NextResponse.json({
       configured: true,
       model: MODEL,
+      ticket,
       live: { ok: false, reason, status: status ?? null, message: e instanceof Error ? e.message.slice(0, 200) : "" },
     });
   }

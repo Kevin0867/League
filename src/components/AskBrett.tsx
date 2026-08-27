@@ -63,12 +63,16 @@ function renderText(text: string) {
   });
 }
 
-export function AskBrett({ ticket, configured }: { ticket: string; configured: boolean }) {
+export function AskBrett({ ticket: initialTicket, configured }: { ticket: string; configured: boolean }) {
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // The page mints a ticket at render, but its 30-min TTL can lapse while the
+  // widget sits open. We keep it in state and refresh it from the health GET
+  // (session-cookie-gated) so questions stay authorized without a page reload.
+  const ticketRef = useRef(initialTicket);
   const [health, setHealth] = useState<{ configured: boolean; live?: { ok: boolean; reason?: string; status?: number | null; message?: string } } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -79,17 +83,37 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
 
   // On first open, ping the health endpoint so the header shows Brett's real
   // status (connected / key missing / model unreachable) instead of guessing.
+  // The response also carries a fresh console ticket — grab it so a widget that
+  // has been open a while starts from a non-expired ticket.
   useEffect(() => {
     if (!open || health) return;
     (async () => {
       try {
         const res = await fetch("/api/console/ask", { method: "GET" });
-        setHealth(await res.json());
+        const data = await res.json();
+        if (data?.ticket) ticketRef.current = data.ticket;
+        setHealth(data);
       } catch {
         setHealth({ configured, live: { ok: false, reason: "unreachable" } });
       }
     })();
   }, [open, health, configured]);
+
+  // Fetch a fresh ticket from the health GET (uses the session cookie). Returns
+  // the new ticket, or "" if it couldn't be refreshed.
+  async function refreshTicket(): Promise<string> {
+    try {
+      const res = await fetch("/api/console/ask", { method: "GET" });
+      const data = await res.json();
+      if (data?.ticket) {
+        ticketRef.current = data.ticket;
+        return data.ticket as string;
+      }
+    } catch {
+      /* fall through */
+    }
+    return "";
+  }
 
   const REASONS: Record<string, string> = {
     "no-key": "API key not visible to the server",
@@ -119,11 +143,21 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
     setTurns((prev) => [...prev, { role: "user", text: q }]);
     setBusy(true);
     try {
-      const res = await fetch("/api/console/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticket, question: q, history }),
-      });
+      const post = (tkt: string) =>
+        fetch("/api/console/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticket: tkt, question: q, history }),
+        });
+
+      let res = await post(ticketRef.current);
+      // A 403 almost always means the console ticket expired (its TTL lapsed
+      // while the widget sat open). Silently mint a fresh one and retry once.
+      if (res.status === 403) {
+        const fresh = await refreshTicket();
+        if (fresh) res = await post(fresh);
+      }
+
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean; answer?: string; error?: string; toolsUsed?: string[];
       };
