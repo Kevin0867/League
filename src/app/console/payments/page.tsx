@@ -127,8 +127,29 @@ export default async function PaymentsPage({
             ? <span className="text-amber-800">{sp.unattributed} imported {Number(sp.unattributed) === 1 ? "charge" : "charges"} couldn&apos;t be matched to a person — find {Number(sp.unattributed) === 1 ? "it" : "them"} in the ledger below (payer&apos;s email is in the description) and attach the right family. </span>
             : ""}
           {Number(sp.refunds ?? 0) > 0 ? <><strong>{sp.refunds} refund{sp.refunds === "1" ? "" : "s"} recorded</strong> ({formatCents(Number(sp.refcents ?? 0))}). </> : ""}
-          {Number(sp.paid ?? 0) === 0 && Number(sp.imported ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? "Everything already matched Stripe — your books are in sync." : ""}
+          {Number(sp.paid ?? 0) === 0 && Number(sp.imported ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? "No new changes — everything scanned already matched your books." : ""}
           {sp.recerrs && sp.recerrs !== "0" ? ` (${sp.recerrs} couldn't be checked — try again.)` : ""}
+
+          {(sp.scancents || sp.histn) && (
+            <div className="mt-2 border-t border-emerald-200 pt-2 text-xs text-emerald-900/80">
+              <div className="font-semibold">Where the {formatCents(Number(sp.scancents ?? 0))} of Stripe charges in the last year land:</div>
+              <ul className="mt-1 space-y-0.5">
+                <li>• Already on your books (paid / installments / prior imports): <strong>{formatCents(Number(sp.alreadycents ?? 0))}</strong> ({sp.already ?? 0})</li>
+                <li>• Just matched to outstanding fees & marked paid: <strong>{formatCents(Number(sp.cents ?? 0))}</strong> ({sp.paid ?? 0})</li>
+                <li>• Imported (today-and-forward, had no record here): <strong>{formatCents(Number(sp.impcents ?? 0))}</strong> ({sp.imported ?? 0})</li>
+                <li>
+                  • <span className="text-amber-800">Before today, with no matching request here — <strong>not</strong> imported:</span>{" "}
+                  <strong>{formatCents(Number(sp.histcents ?? 0))}</strong> ({sp.histn ?? 0})
+                </li>
+              </ul>
+              {Number(sp.histn ?? 0) > 0 && (
+                <p className="mt-1.5 text-amber-800">
+                  That last bucket is historical Stripe money (prior activity, ACP/lessons, or fees paid before a record existed here).
+                  It&apos;s deliberately not auto-imported to avoid double-counting. Tell me if any of it is this season&apos;s fees and we&apos;ll bring it in.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

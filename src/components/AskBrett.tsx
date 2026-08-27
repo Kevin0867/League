@@ -17,13 +17,32 @@ const SUGGESTIONS = [
   "Who hasn't signed a waiver?",
 ];
 
-// A simple, intelligent-looking person icon (head + shoulders) used as Brett's
-// avatar — replaces the earlier paddle emoji.
+// Brett's avatar: a side-profile head with a bright idea bulb — the "all-knowing"
+// mark. Two-tone SVG (navy head, yellow bulb) so it reads on a light chip.
 function BrettAvatar({ className = "" }: { className?: string }) {
+  const NAVY = "#0a1626";
+  const BULB = "#FFD400";
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <circle cx="12" cy="8" r="3.6" />
-      <path d="M5 19.5c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6a.9.9 0 0 1-.9.9H5.9a.9.9 0 0 1-.9-.9Z" />
+    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
+      {/* Head profile, facing left */}
+      <path
+        d="M20 5C15 4 11 5.6 9 9c-.9 1.6-2.3 2.8-3.2 3.9-.6.7-.4 1.6.3 2.1l1.4.9c.4.3.6.7.5 1.2l-.4 1.9c-.2 1 .5 1.9 1.5 1.9h1.1v3.4c0 1.4 1.1 2.5 2.5 2.5H19c3.9 0 7-3.1 7-7v-9C26 7.7 23.3 5 20 5Z"
+        fill="#f6d3b3" stroke={NAVY} strokeWidth="1.6" strokeLinejoin="round"
+      />
+      {/* Rays */}
+      <g stroke={NAVY} strokeWidth="1.5" strokeLinecap="round">
+        <line x1="17.5" y1="6.4" x2="17.5" y2="8" />
+        <line x1="13.8" y1="8.1" x2="14.9" y2="9.2" />
+        <line x1="21.2" y1="8.1" x2="20.1" y2="9.2" />
+        <line x1="11.5" y1="12.3" x2="13" y2="12.5" />
+        <line x1="23.5" y1="12.3" x2="22" y2="12.5" />
+      </g>
+      {/* Bulb */}
+      <circle cx="17.5" cy="12.6" r="3.4" fill={BULB} stroke={NAVY} strokeWidth="1.4" />
+      <g stroke={NAVY} strokeWidth="1.3" strokeLinecap="round">
+        <line x1="15.8" y1="15.7" x2="19.2" y2="15.7" />
+        <line x1="16.1" y1="16.9" x2="18.9" y2="16.9" />
+      </g>
     </svg>
   );
 }
@@ -98,8 +117,8 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
         className="fixed bottom-5 right-5 z-50 flex items-center gap-2 whitespace-nowrap rounded-full bg-brand-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 ring-2 ring-accent-500 transition hover:bg-brand-800"
         aria-label="Ask Brett, the all-knowing"
       >
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-accent-500 text-brand-900">
-          <BrettAvatar className="h-4 w-4" />
+        <span className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-white ring-1 ring-white/40">
+          <BrettAvatar className="h-6 w-6" />
         </span>
         {open ? "Close" : "Ask Brett, the all-knowing"}
       </button>
@@ -110,8 +129,8 @@ export function AskBrett({ ticket, configured }: { ticket: string; configured: b
           <div className="flex items-center justify-between border-b border-slate-200 bg-brand-900 px-4 py-3 text-white">
             <div className="leading-tight">
               <div className="flex items-center gap-2 font-bold">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-500 text-brand-900">
-                  <BrettAvatar className="h-4 w-4" />
+                <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-white">
+                  <BrettAvatar className="h-7 w-7" />
                 </span>
                 Ask Brett, the all-knowing
               </div>

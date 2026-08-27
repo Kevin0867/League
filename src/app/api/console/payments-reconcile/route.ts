@@ -87,6 +87,11 @@ export async function POST(req: Request) {
       unattributed: String(r.importedUnattributed),
       refunds: String(r.refundsRecorded),
       refcents: String(r.refundedCents),
+      scancents: String(r.chargesScannedCents),
+      already: String(r.alreadyRecorded),
+      alreadycents: String(r.alreadyRecordedCents),
+      histn: String(r.unmatchedBeforeFloor),
+      histcents: String(r.unmatchedBeforeFloorCents),
     });
     if (r.errors) params.set("recerrs", String(r.errors));
     return back(`?${params.toString()}`);
