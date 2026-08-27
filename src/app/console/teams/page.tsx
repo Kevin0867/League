@@ -52,6 +52,14 @@ export default async function TeamBuildBoard({
     orderBy: [{ market: "asc" }, { name: "asc" }],
   });
 
+  // Diagnostics for "where did my teams go?" — the grid only shows the ONE active
+  // PURE Academy season's non-test teams, so surface anything hidden by that.
+  const [activeSeasonCount, otherSeasonTeams, testTeams] = await Promise.all([
+    prisma.season.count({ where: { active: true, program: "PURE_ACADEMY" } }),
+    stats.season ? prisma.team.count({ where: { seasonId: { not: stats.season.id }, isTest: false } }) : prisma.team.count(),
+    stats.season ? prisma.team.count({ where: { seasonId: stats.season.id, isTest: true } }) : Promise.resolve(0),
+  ]);
+
   const seasonRows = await prisma.season.findMany({
     orderBy: [{ active: "desc" }, { startDate: "desc" }],
     include: { divisions: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
@@ -266,6 +274,29 @@ export default async function TeamBuildBoard({
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {ERRORS[sp.err] ?? "Something went wrong."}
         </p>
+      )}
+
+      {/* "Where did my teams go?" — this page only shows the ONE active PURE
+          Academy season's non-test teams. If teams look missing, this explains
+          exactly what's hidden and why. */}
+      {(activeSeasonCount > 1 || otherSeasonTeams > 0 || testTeams > 0) && (
+        <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">Not seeing all your teams? This grid shows only the active season&apos;s teams.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>Showing <strong>{teams.length}</strong> team{teams.length === 1 ? "" : "s"} in the active season{stats.season ? <> — <strong>{stats.season.name}</strong></> : ""}.</li>
+            {activeSeasonCount > 1 && (
+              <li className="text-rose-800">
+                <strong>{activeSeasonCount} PURE Academy seasons are marked active.</strong> This page picks only one, so the others&apos; teams are hidden. Set the correct one as the only active season in <Link href="/console/setup" className="underline">Season setup</Link> — this is the most likely cause of teams disappearing.
+              </li>
+            )}
+            {otherSeasonTeams > 0 && (
+              <li><strong>{otherSeasonTeams}</strong> team{otherSeasonTeams === 1 ? "" : "s"} live in a <em>different</em> season. If your Women&apos;s 2.5 (or other) teams are there, the active season isn&apos;t the one they were built in.</li>
+            )}
+            {testTeams > 0 && (
+              <li><strong>{testTeams}</strong> team{testTeams === 1 ? "" : "s"} in this season are flagged <em>test</em> and hidden. Un-flag one from its team page if it&apos;s real.</li>
+            )}
+          </ul>
+        </div>
       )}
 
       {/* Duplicate-team detector — same name = almost always a duplicate record,
