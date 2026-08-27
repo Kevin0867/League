@@ -123,6 +123,59 @@ export const CONSOLE_TOOLS: Anthropic.Tool[] = [
       "People with a registration but no signed participation waiver — the compliance gap that blocks the first practice. Returns who they are and how to reach them (capped at 50). Use for 'who still needs a waiver', 'waiver compliance'.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "team_roster",
+    description:
+      "The roster for one team (matched by name): each player with waiver status and whether their season fee is paid, plus the coach, day/time, and location. Use for 'who's on <team>', 'roster for <team>', 'has everyone on <team> paid'.",
+    input_schema: {
+      type: "object",
+      properties: { team: { type: "string", description: "Team name or fragment, e.g. 'Mesa W3.5' or 'Green'." } },
+      required: ["team"],
+    },
+  },
+  {
+    name: "person_financials",
+    description:
+      "One person's complete payment picture: what they've paid, what's still owed (requested/pending), any installments in progress, and refunds. Use for 'has <name> paid', 'what does <name> owe', '<name>'s payment history'.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string", description: "Name or email of the person/family." } },
+      required: ["query"],
+    },
+  },
+  {
+    name: "attendance_summary",
+    description:
+      "Attendance so far — overall present/absent counts and the present rate, optionally for one team. Use for 'how's attendance', 'attendance for <team>', 'who's been showing up'.",
+    input_schema: {
+      type: "object",
+      properties: { team: { type: "string", description: "Optional team name to scope to." } },
+    },
+  },
+  {
+    name: "schedule_upcoming",
+    description:
+      "Upcoming sessions (practices/games) in date order, optionally for one team, over the next N days (default 14). Each with date, time, team(s), and location. Use for 'what's on the schedule', 'when does <team> practice next', 'sessions this week'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        team: { type: "string", description: "Optional team name to scope to." },
+        days: { type: "number", description: "How many days ahead to look (default 14, max 60)." },
+      },
+    },
+  },
+  {
+    name: "coaches_overview",
+    description:
+      "All coaches with how many teams they run, their background-check status, and contact info. Use for 'list coaches', 'which coaches need a background check', 'how many teams does each coach have'.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "apparel_report",
+    description:
+      "Team apparel ordered (from paid orders), totaled by garment and size for fulfillment. Use for 'apparel order totals', 'how many size L', 'what apparel do we need to order'.",
+    input_schema: { type: "object", properties: {} },
+  },
 ];
 
 // ── Tool implementations (what actually runs) ────────────────────────────────
@@ -416,6 +469,201 @@ async function waiverGaps(): Promise<ToolResult> {
   };
 }
 
+async function teamRoster(input: { team?: string }): Promise<ToolResult> {
+  const q = (input.team ?? "").trim();
+  if (!q) return { error: "Name a team." };
+  const season = await resolveSeason();
+  const team = await prisma.team.findFirst({
+    where: { name: { contains: q, mode: "insensitive" }, ...(season ? { seasonId: season.id } : {}) },
+    include: {
+      division: { select: { name: true } },
+      facility: { select: { name: true } },
+      coach: { include: { person: { select: { firstName: true, lastName: true } } } },
+      members: { include: { person: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, waiverSignedAt: true } } } },
+    },
+  });
+  if (!team) return { error: `No team matching "${q}".` };
+
+  const memberIds = team.members.map((m) => m.personId);
+  const paidRows = memberIds.length
+    ? await prisma.payment.findMany({
+        where: { partyId: { in: memberIds }, direction: "IN", category: "PLAYER_FEE", status: "PAID" },
+        select: { partyId: true },
+      })
+    : [];
+  const paidSet = new Set(paidRows.map((p) => p.partyId));
+
+  return {
+    team: team.name,
+    division: team.division?.name ?? team.divisionCode ?? null,
+    coach: team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : null,
+    day: team.dayOfWeek ? DAY_LABEL[team.dayOfWeek] ?? team.dayOfWeek : null,
+    time: team.startTime ? formatTime12(team.startTime) : null,
+    location: team.facility?.name ?? null,
+    rosterSize: team.members.length,
+    players: team.members.map((m) => ({
+      name: `${m.person.firstName} ${m.person.lastName}`,
+      email: m.person.email ?? null,
+      phone: m.person.phone ?? null,
+      waiverSigned: !!m.person.waiverSignedAt,
+      seasonFeePaid: paidSet.has(m.person.id),
+    })),
+  };
+}
+
+async function personFinancials(input: { query?: string }): Promise<ToolResult> {
+  const q = (input.query ?? "").trim();
+  if (!q) return { error: "Name a person." };
+  const person = await prisma.person.findFirst({
+    where: {
+      OR: [
+        { firstName: { contains: q, mode: "insensitive" } },
+        { lastName: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true, firstName: true, lastName: true, email: true },
+  });
+  if (!person) return { error: `No one matching "${q}".` };
+
+  const payments = await prisma.payment.findMany({
+    where: { partyId: person.id, direction: "IN" },
+    orderBy: { createdAt: "desc" },
+    select: { amountCents: true, status: true, category: true, description: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, paidAt: true, createdAt: true },
+  });
+
+  const sum = (st: string[]) => payments.filter((p) => st.includes(p.status)).reduce((s, p) => s + p.amountCents, 0);
+  return {
+    person: `${person.firstName} ${person.lastName}`,
+    email: person.email ?? null,
+    paid: formatCents(sum(["PAID"])),
+    owed: formatCents(sum(["REQUESTED", "PENDING"])),
+    refunded: formatCents(sum(["REFUNDED"])),
+    payments: payments.map((p) => ({
+      amount: formatCents(p.amountCents),
+      status: p.status,
+      category: p.category,
+      description: p.description ?? null,
+      installments: p.installmentPlan ? `${p.installmentsPaid}/${p.installmentsTotal ?? "?"}` : null,
+      paidAt: p.paidAt ? p.paidAt.toISOString().slice(0, 10) : null,
+      requestedAt: p.createdAt.toISOString().slice(0, 10),
+    })),
+  };
+}
+
+async function attendanceSummary(input: { team?: string }): Promise<ToolResult> {
+  const season = await resolveSeason();
+  let teamName: string | null = null;
+  let sessionFilter: Record<string, unknown> = season ? { seasonId: season.id } : {};
+  if (input.team?.trim()) {
+    const team = await prisma.team.findFirst({
+      where: { name: { contains: input.team.trim(), mode: "insensitive" }, ...(season ? { seasonId: season.id } : {}) },
+      select: { id: true, name: true },
+    });
+    if (!team) return { error: `No team matching "${input.team}".` };
+    teamName = team.name;
+    sessionFilter = { ...sessionFilter, teams: { some: { teamId: team.id } } };
+  }
+
+  const sessionIds = (await prisma.session.findMany({ where: sessionFilter, select: { id: true } })).map((s) => s.id);
+  if (!sessionIds.length) return { scope: teamName ?? "all teams", note: "No sessions scheduled yet." };
+
+  const rows = await prisma.attendance.groupBy({ by: ["status"], where: { sessionId: { in: sessionIds } }, _count: true });
+  const byStatus = Object.fromEntries(rows.map((r) => [r.status, r._count]));
+  const present = byStatus["PRESENT"] ?? 0;
+  const total = rows.reduce((s, r) => s + r._count, 0);
+  return {
+    scope: teamName ?? "all teams",
+    sessionsWithAttendance: sessionIds.length,
+    byStatus,
+    presentRate: total ? `${Math.round((present / total) * 100)}%` : "no marks yet",
+  };
+}
+
+async function scheduleUpcoming(input: { team?: string; days?: number }): Promise<ToolResult> {
+  const season = await resolveSeason();
+  const days = Math.min(Math.max(1, Number(input.days ?? 14)), 60);
+  const now = new Date();
+  const until = new Date(now.getTime() + days * 86400_000);
+  const where: Record<string, unknown> = {
+    ...(season ? { seasonId: season.id } : {}),
+    date: { gte: now, lte: until },
+    status: { in: ["SCHEDULED", "RESCHEDULED"] },
+  };
+  let teamName: string | null = null;
+  if (input.team?.trim()) {
+    const team = await prisma.team.findFirst({
+      where: { name: { contains: input.team.trim(), mode: "insensitive" }, ...(season ? { seasonId: season.id } : {}) },
+      select: { id: true, name: true },
+    });
+    if (!team) return { error: `No team matching "${input.team}".` };
+    teamName = team.name;
+    where.teams = { some: { teamId: team.id } };
+  }
+
+  const sessions = await prisma.session.findMany({
+    where,
+    orderBy: { date: "asc" },
+    take: 60,
+    include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } },
+  });
+
+  return {
+    scope: teamName ?? "all teams",
+    windowDays: days,
+    count: sessions.length,
+    sessions: sessions.map((s) => ({
+      date: s.date.toISOString().slice(0, 10),
+      type: s.type,
+      time: `${formatTime12(s.startTime)}–${formatTime12(s.endTime)}`,
+      teams: s.teams.map((t) => t.team.name),
+      location: s.facility?.name ?? null,
+    })),
+  };
+}
+
+async function coachesOverview(): Promise<ToolResult> {
+  const coaches = await prisma.coach.findMany({
+    include: {
+      person: { select: { firstName: true, lastName: true, email: true, phone: true } },
+      _count: { select: { teams: true, assistantTeams: true } },
+    },
+  });
+  return {
+    count: coaches.length,
+    coaches: coaches
+      .map((c) => ({
+        name: `${c.person.firstName} ${c.person.lastName}`,
+        email: c.person.email ?? null,
+        phone: c.person.phone ?? null,
+        teams: c._count.teams,
+        assistantTeams: c._count.assistantTeams,
+        backgroundCheck: c.backgroundCheckDate ? "on file" : "missing",
+      }))
+      .sort((a, b) => b.teams - a.teams || a.name.localeCompare(b.name)),
+  };
+}
+
+async function apparelReport(): Promise<ToolResult> {
+  const items = await prisma.apparelOrderItem.findMany({
+    include: { payment: { select: { status: true } } },
+  });
+  const paid = items.filter((i) => i.payment?.status === "PAID");
+  const byGarment: Record<string, Record<string, number>> = {};
+  let totalQty = 0;
+  for (const i of paid) {
+    const g = (byGarment[i.garment] ??= {});
+    g[i.size] = (g[i.size] ?? 0) + i.quantity;
+    totalQty += i.quantity;
+  }
+  return {
+    paidOrderItems: paid.length,
+    totalPieces: totalQty,
+    unpaidPending: items.length - paid.length,
+    byGarment: Object.entries(byGarment).map(([garment, sizes]) => ({ garment, sizes })),
+  };
+}
+
 /** Dispatch a tool call by name. Unknown / failed calls return an error object
  *  (never throw) so the model can recover and tell the user what happened. */
 export async function runConsoleTool(name: string, input: Record<string, unknown>): Promise<ToolResult> {
@@ -428,6 +676,12 @@ export async function runConsoleTool(name: string, input: Record<string, unknown
       case "list_payments": return await listPayments(input);
       case "teams_overview": return await teamsOverview(input);
       case "waiver_gaps": return await waiverGaps();
+      case "team_roster": return await teamRoster(input);
+      case "person_financials": return await personFinancials(input);
+      case "attendance_summary": return await attendanceSummary(input);
+      case "schedule_upcoming": return await scheduleUpcoming(input);
+      case "coaches_overview": return await coachesOverview();
+      case "apparel_report": return await apparelReport();
       default: return { error: `Unknown tool: ${name}` };
     }
   } catch (e) {

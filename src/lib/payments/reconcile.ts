@@ -27,6 +27,15 @@ export type ReconcileResult = {
   importedCents: number;
   /** Charges read directly from Stripe during the outside-in pass. */
   chargesScanned: number;
+  /** Total $ of all succeeded charges scanned (gross Stripe volume in window). */
+  chargesScannedCents: number;
+  /** Charges already represented here (matched a PAID row or already imported). */
+  alreadyRecorded: number;
+  alreadyRecordedCents: number;
+  /** Succeeded charges with no local match, dated BEFORE the floor — NOT imported.
+   *  This is the "unaccounted historical Stripe money" bucket. */
+  unmatchedBeforeFloor: number;
+  unmatchedBeforeFloorCents: number;
   /** Imported charges we couldn't attribute to a known person (need a name). */
   importedUnattributed: number;
   errors: number;
@@ -219,6 +228,7 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
       res.chargesScanned++;
       // Only real money in: a succeeded, captured charge.
       if (charge.status !== "succeeded" || !charge.paid) continue;
+      res.chargesScannedCents += charge.amount;
 
       try {
         const pi = (typeof charge.payment_intent === "object" ? charge.payment_intent : null) as Stripe.PaymentIntent | null;
@@ -287,18 +297,27 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
               res.details.push({ paymentId: matched.id, note: "charge found in Stripe", amountCents: matched.amountCents, nowPaid: true });
             }
           }
+          if (matched.status === "PAID" || matched.installmentPlan) {
+            res.alreadyRecorded++;
+            res.alreadyRecordedCents += charge.amount;
+          }
           continue;
         }
 
         // ---- No local row at all: import the charge as a PAID record ----
         // Floor guard: NEVER import a charge dated before the import floor. This
         // is what keeps the historical backlog (already in the books from the old
-        // system) out — only today-and-forward orphans are imported.
-        if (charge.created < floorUnix) continue;
+        // system) out — only today-and-forward orphans are imported. Count it so
+        // the report can show how much historical Stripe money is unaccounted.
+        if (charge.created < floorUnix) {
+          res.unmatchedBeforeFloor++;
+          res.unmatchedBeforeFloorCents += charge.amount;
+          continue;
+        }
         // Idempotency guard: never import a charge whose intent we already hold.
         if (piId) {
           const existing = await prisma.payment.findFirst({ where: { stripePaymentIntentId: piId }, select: { id: true } });
-          if (existing) continue;
+          if (existing) { res.alreadyRecorded++; res.alreadyRecordedCents += charge.amount; continue; }
         }
 
         const email =
@@ -347,7 +366,12 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
  * Returns a summary of what changed. Safe to run repeatedly.
  */
 export async function reconcileStripePayments(opts?: { sinceDays?: number; limit?: number }): Promise<ReconcileResult> {
-  const res: ReconcileResult = { scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0, imported: 0, importedCents: 0, chargesScanned: 0, importedUnattributed: 0, errors: 0, details: [] };
+  const res: ReconcileResult = {
+    scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0,
+    imported: 0, importedCents: 0, chargesScanned: 0, chargesScannedCents: 0,
+    alreadyRecorded: 0, alreadyRecordedCents: 0, unmatchedBeforeFloor: 0, unmatchedBeforeFloorCents: 0,
+    importedUnattributed: 0, errors: 0, details: [],
+  };
   if (!isStripeConfigured()) return res;
 
   // TWO windows, deliberately different:

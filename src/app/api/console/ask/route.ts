@@ -20,7 +20,7 @@ export const maxDuration = 60;
 // current flagship; the assistant does read-only reporting, so correctness of
 // tool selection matters more than raw cost here.
 const MODEL = process.env.ASK_CONSOLE_MODEL || "claude-opus-5";
-const MAX_STEPS = 6; // hard cap on tool-use round-trips per question (cost guard)
+const MAX_STEPS = 8; // hard cap on tool-use round-trips per question (cost guard)
 
 const SYSTEM_PROMPT = [
   "You are \"Brett, the all-knowing\", a friendly, sharp read-only assistant embedded in the admin console of PURE Academy, a youth & adult pickleball club running a season of teams.",
