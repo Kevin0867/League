@@ -240,8 +240,11 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
         let matched = hintedPaymentId
           ? await prisma.payment.findUnique({ where: { id: hintedPaymentId } })
           : null;
-        if (!matched && piId) {
-          matched = await prisma.payment.findFirst({ where: { stripePaymentIntentId: piId } });
+        // Match a stored Stripe id — the PaymentIntent id, or the charge id that
+        // the CSV reconciler stores for dedup across the two tools.
+        const stripeIds = [piId, charge.id].filter(Boolean) as string[];
+        if (!matched && stripeIds.length) {
+          matched = await prisma.payment.findFirst({ where: { stripePaymentIntentId: { in: stripeIds } } });
         }
         // Subscription/installment charges: match the plan row by its subscription.
         if (!matched && charge.invoice) {
@@ -314,9 +317,10 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
           res.unmatchedBeforeFloorCents += charge.amount;
           continue;
         }
-        // Idempotency guard: never import a charge whose intent we already hold.
-        if (piId) {
-          const existing = await prisma.payment.findFirst({ where: { stripePaymentIntentId: piId }, select: { id: true } });
+        // Idempotency guard: never import a charge we already hold — by its
+        // PaymentIntent id or its charge id (the CSV reconciler stores the latter).
+        if (stripeIds.length) {
+          const existing = await prisma.payment.findFirst({ where: { stripePaymentIntentId: { in: stripeIds } }, select: { id: true } });
           if (existing) { res.alreadyRecorded++; res.alreadyRecordedCents += charge.amount; continue; }
         }
 
@@ -454,6 +458,10 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
   });
   for (const p of paidCharges) {
     try {
+      // Only PaymentIntent ids can be retrieved as PIs. CSV-reconciled rows store
+      // a charge id (ch_/py_) here for dedup — the API-based refund check doesn't
+      // apply to them, so skip rather than error.
+      if (!p.stripePaymentIntentId!.startsWith("pi_")) continue;
       const pi = await stripe().paymentIntents.retrieve(p.stripePaymentIntentId!, { expand: ["latest_charge"] });
       const charge = pi.latest_charge as { id: string; amount: number; amount_refunded: number } | null;
       if (charge && charge.amount_refunded > 0) {
