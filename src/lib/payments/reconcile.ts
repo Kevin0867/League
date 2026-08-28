@@ -197,6 +197,18 @@ async function reconcileOne(
   return { updated: false, nowPaid: false, recoveredCents: 0, note: "no change (Stripe not paid)" };
 }
 
+// The season's COLLECTION START — the instant from which Stripe charges count as
+// this season's revenue. The Stripe account holds years of unrelated PURE
+// charges, so every "Collected" figure is scoped to this line. Single source of
+// truth for the Payments page AND Ask Brett, so both always agree. Start line:
+// Aug 26, 2026 (Phoenix); overridable via the PAYMENTS_SINCE env var.
+const PAYMENTS_SINCE_DEFAULT = "2026-08-26T00:00:00-07:00";
+export function paymentsSince(): { unix: number; date: Date } {
+  const env = process.env.PAYMENTS_SINCE ? new Date(process.env.PAYMENTS_SINCE) : null;
+  const date = env && !isNaN(env.getTime()) ? env : new Date(PAYMENTS_SINCE_DEFAULT);
+  return { unix: Math.floor(date.getTime() / 1000), date };
+}
+
 /**
  * The authoritative "collected" figure: the actual sum of succeeded Stripe
  * charges (net of refunds), straight from Stripe — so Collected always equals

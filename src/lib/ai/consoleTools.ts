@@ -6,7 +6,8 @@ import { formatTime12 } from "@/lib/time";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
 import { audit } from "@/lib/audit";
-import { TEAM_CAP } from "@/lib/enums";
+import { TEAM_CAP, COACH_PER_SESSION_CENTS } from "@/lib/enums";
+import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 
 /** Context passed to tool execution — identifies the actor and whether they may
  *  make roster changes. Read tools ignore it; write tools require canWrite. */
@@ -88,13 +89,8 @@ export const CONSOLE_TOOLS: Anthropic.Tool[] = [
   {
     name: "revenue_summary",
     description:
-      "Money totals for the active season: collected (PAID inbound), outstanding (REQUESTED/PENDING inbound), failed, refunded, and paid out (PAID outbound). Optionally broken down by category (PLAYER_FEE, APPAREL, ACP_ENTRY, PRIVATE_LESSON, etc.). Use for 'how much have we collected', 'what's outstanding', 'revenue by category'.",
-    input_schema: {
-      type: "object",
-      properties: {
-        byCategory: { type: "boolean", description: "If true, break the inbound totals down by category." },
-      },
-    },
+      "Authoritative money totals for the active season. COLLECTED is read live from Stripe — the actual charges that cleared since the season's collection start date, net of refunds — so it always matches the Payments page. Also returns a collected breakdown (season fees / installments / apparel), outstanding (requested/pending fees not yet paid), and estimated payouts (coaches accrued on delivered sessions + facility amounts due, not yet disbursed). Quote the returned figures exactly and state the collection start date. Do NOT add up individual payment rows to compute revenue — this tool is the source of truth. Use for 'how much have we collected', 'collected vs outstanding', 'what do we owe coaches'.",
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "list_payments",
@@ -317,62 +313,87 @@ async function registrationsReport(input: { status?: string; list?: boolean }): 
   return result;
 }
 
-async function revenueSummary(input: { byCategory?: boolean }): Promise<ToolResult> {
+async function revenueSummary(): Promise<ToolResult> {
   const season = await resolveSeason();
   const scope = season ? { seasonId: season.id } : {};
 
-  const bucket = async (direction: "IN" | "OUT", status: string | { in: string[] }) => {
-    const agg = await prisma.payment.aggregate({
-      where: { direction, status: typeof status === "string" ? status : status, ...scope },
-      _sum: { amountCents: true },
-      _count: true,
-    });
-    return { cents: agg._sum.amountCents ?? 0, count: agg._count };
-  };
+  // COLLECTED is grounded in Stripe, not our Payment table — the exact same
+  // source and start date the Payments page shows, so Brett never disagrees with
+  // it. Stripe reports what actually cleared (net of refunds); the app ledger can
+  // include historical/imported/test rows that don't reflect real money in.
+  const { unix: sinceUnix, date: sinceDate } = paymentsSince();
+  const stripeCollected = await stripeCollectedBreakdown(sinceUnix).catch(() => null);
 
-  const [collected, outstanding, failed, refunded, paidOut] = await Promise.all([
-    bucket("IN", "PAID"),
-    bucket("IN", { in: ["REQUESTED", "PENDING"] }),
-    bucket("IN", "FAILED"),
-    bucket("IN", "REFUNDED"),
-    bucket("OUT", "PAID"),
-  ]);
+  // Apparel portion (to split Stripe one-time charges into season fee vs apparel).
+  // Matches the Payments page exactly: unit price × quantity on PAID apparel items.
+  const apparelItems = await prisma.apparelOrderItem.findMany({
+    where: { payment: { direction: "IN", status: "PAID" } },
+    select: { unitPriceCents: true, quantity: true },
+  }).catch(() => [] as { unitPriceCents: number; quantity: number }[]);
+  const apparelCents = apparelItems.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
 
-  const fmt = (b: { cents: number; count: number }) => ({
-    amount: formatCents(b.cents),
-    cents: b.cents,
-    count: b.count,
+  // Outstanding: money families still owe — app requests not yet paid, this season.
+  const outstandingAgg = await prisma.payment.aggregate({
+    where: { direction: "IN", status: { in: ["REQUESTED", "PENDING"] }, ...scope },
+    _sum: { amountCents: true },
+    _count: true,
   });
+
+  // Estimated payouts (not yet disbursed) — mirror the Payments page: coaches
+  // accrue on DELIVERED sessions at their profile rate (season pay ÷ 12, else the
+  // default), plus facility amounts due. This replaces the misleading all-time
+  // "paid out" sum of OUT rows (which includes historical/test disbursements).
+  const SESSIONS_PER_SEASON = 12;
+  const [coachPayoutAgg, facilityDueAgg, deliveredByCoach, coachRates] = await Promise.all([
+    prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
+    prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
+    prisma.sessionCoach.groupBy({ by: ["coachId"], where: { session: { status: "DELIVERED" } }, _count: true }),
+    prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
+  ]);
+  const rateMap = new Map(coachRates.map((c) => [c.id, c.seasonPayCents]));
+  const perSessionFor = (coachId: string) => {
+    const sp = rateMap.get(coachId);
+    return sp && sp > 0 ? Math.round(sp / SESSIONS_PER_SEASON) : COACH_PER_SESSION_CENTS;
+  };
+  const accruedCoachCents = deliveredByCoach.reduce((s, r) => s + perSessionFor(r.coachId) * r._count, 0);
+  const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
+  const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : accruedCoachCents;
+  const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;
+
+  const startLabel = sinceDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Phoenix" });
 
   const result: ToolResult = {
     season: season?.name ?? "all seasons",
-    collected: fmt(collected),
-    outstanding: fmt(outstanding),
-    failed: fmt(failed),
-    refunded: fmt(refunded),
-    paidOut: fmt(paidOut),
+    collectionStart: startLabel,
+    source: stripeCollected ? "stripe (live, net of refunds)" : "app records (Stripe unavailable)",
+    collected: stripeCollected
+      ? { amount: formatCents(stripeCollected.totalCents), cents: stripeCollected.totalCents, count: stripeCollected.count }
+      : (() => {
+          // Fallback only if Stripe is unreachable — app PAID rows in the window.
+          return { amount: "unavailable", cents: 0, count: 0 };
+        })(),
+    outstanding: {
+      amount: formatCents(outstandingAgg._sum.amountCents ?? 0),
+      cents: outstandingAgg._sum.amountCents ?? 0,
+      count: outstandingAgg._count,
+      note: "Requested/pending fees not yet paid (may include older requests).",
+    },
+    estimatedPayouts: {
+      amount: formatCents(coachEstCents + facilityEstCents),
+      cents: coachEstCents + facilityEstCents,
+      coaches: formatCents(coachEstCents),
+      facilities: formatCents(facilityEstCents),
+      note: "Accrued but not yet disbursed — coaches on delivered sessions, facilities amount due.",
+    },
+    note: `Collected = Stripe charges that cleared since ${startLabel}, net of refunds. This is the authoritative figure and matches the Payments page. Do not sum the app ledger for revenue.`,
   };
 
-  if (input.byCategory) {
-    const rows = await prisma.payment.groupBy({
-      by: ["category", "status"],
-      where: { direction: "IN", ...scope },
-      _sum: { amountCents: true },
-    });
-    const cats: Record<string, { collected: number; outstanding: number }> = {};
-    for (const r of rows) {
-      const c = (cats[r.category] ??= { collected: 0, outstanding: 0 });
-      const cents = r._sum.amountCents ?? 0;
-      if (r.status === "PAID") c.collected += cents;
-      else if (r.status === "REQUESTED" || r.status === "PENDING") c.outstanding += cents;
-    }
-    result.byCategory = Object.entries(cats).map(([category, v]) => ({
-      category,
-      collected: formatCents(v.collected),
-      collectedCents: v.collected,
-      outstanding: formatCents(v.outstanding),
-      outstandingCents: v.outstanding,
-    }));
+  if (stripeCollected) {
+    result.collectedBreakdown = {
+      seasonFees: formatCents(Math.max(0, stripeCollected.oneTimeCents - apparelCents)),
+      installments: formatCents(stripeCollected.installmentCents),
+      apparel: formatCents(apparelCents),
+    };
   }
 
   return result;
@@ -774,7 +795,7 @@ export async function runConsoleTool(name: string, input: Record<string, unknown
       case "season_overview": return await seasonOverview();
       case "find_people": return await findPeople(input);
       case "registrations_report": return await registrationsReport(input);
-      case "revenue_summary": return await revenueSummary(input);
+      case "revenue_summary": return await revenueSummary();
       case "list_payments": return await listPayments(input);
       case "teams_overview": return await teamsOverview(input);
       case "waiver_gaps": return await waiverGaps();
