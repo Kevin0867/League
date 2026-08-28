@@ -12,7 +12,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
-import { stripeCollectedBreakdown } from "@/lib/payments/reconcile";
+import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -79,13 +79,9 @@ export default async function PaymentsPage({
   // from the one-time side to show the season-fee line — so the breakdown always
   // adds back up to the Stripe total. Falls back to app records if Stripe is off.
   // Only count charges from the season's collection start — the Stripe account
-  // holds years of unrelated PURE charges. Start line: Aug 26, 2026 (Phoenix),
-  // overridable via the PAYMENTS_SINCE env var.
-  const DEFAULT_PAYMENTS_SINCE = "2026-08-26T00:00:00-07:00";
-  const sinceEnv = process.env.PAYMENTS_SINCE ? new Date(process.env.PAYMENTS_SINCE) : null;
-  const sinceDate =
-    sinceEnv && !isNaN(sinceEnv.getTime()) ? sinceEnv : new Date(DEFAULT_PAYMENTS_SINCE);
-  const sinceUnix = Math.floor(sinceDate.getTime() / 1000);
+  // holds years of unrelated PURE charges. Start line is the single source of
+  // truth in reconcile.ts (shared with Ask Brett), overridable via PAYMENTS_SINCE.
+  const { unix: sinceUnix, date: sinceDate } = paymentsSince();
   const stripeCollected = await stripeCollectedBreakdown(sinceUnix).catch(() => null);
   const usingStripe = stripeCollected !== null;
 
