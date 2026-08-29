@@ -11,6 +11,8 @@ import {
   type EnrolledPlayer,
 } from "@/lib/domain/registrationEmail";
 import { pushContactToZoho } from "@/lib/integrations/zoho";
+import { placementPayLink } from "@/lib/payments/familyFee";
+import { TEAM_CAP } from "@/lib/enums";
 
 export type RegisterState = { error?: string };
 
@@ -107,7 +109,10 @@ async function enrollPlayer(opts: {
   preferredFacilityMarket?: string | null;
   // Past the registration deadline: file the registration on the waitlist.
   waitlisted?: boolean;
-}): Promise<void> {
+  // A "fill this team" link tagged the whole signup to a specific team; recorded
+  // on the registration so staff see who was recruited for which team.
+  targetTeamId?: string | null;
+}): Promise<{ personId: string; registrationId: string }> {
   const { player } = opts;
   const dob = player.dob ? new Date(player.dob) : null;
   const isMinor = player.isChild;
@@ -170,6 +175,7 @@ async function enrollPlayer(opts: {
       partnerRequests: opts.comments || null,
       mediaOptOut: opts.mediaOptOut,
       status: opts.waitlisted ? "WAITLISTED" : "SUBMITTED",
+      targetTeamId: opts.targetTeamId ?? null,
     },
   });
 
@@ -187,6 +193,8 @@ async function enrollPlayer(opts: {
       data: { registrationId: registration.id, marketName: market, rank: rank++ },
     });
   }
+
+  return { personId, registrationId: registration.id };
 }
 
 // PURE Academy enrollment — mirrors the public PURE website form. One waiver
@@ -268,6 +276,17 @@ export async function registerAction(
     : null;
   const preferredFacilityMarket = preferredFacility?.market ?? null;
 
+  // "Fill this team" link — the signup is tagged to a specific team (?team=<id>).
+  // We auto-place the recruit on it if a spot is open, then send them straight to
+  // pay + apparel. Validate it belongs to this season and isn't a test team.
+  const targetTeamIdRaw = g("targetTeamId") || null;
+  const targetTeam = targetTeamIdRaw
+    ? await prisma.team
+        .findFirst({ where: { id: targetTeamIdRaw, seasonId, isTest: false }, select: { id: true } })
+        .catch(() => null)
+    : null;
+  const targetTeamId = targetTeam?.id ?? null;
+
   // Reuse an existing adult person by email so families don't create duplicates.
   // Scoped to non-minors: a child may now carry the guardian's email as a
   // secondary address, and the primary contact here is always an adult.
@@ -315,12 +334,15 @@ export async function registerAction(
   }
 
   const enrolled: EnrolledPlayer[] = [];
+  // The recruit to auto-place on a "fill this team" link: the adult if they're
+  // playing, otherwise the first enrolled child.
+  let recruit: { personId: string; registrationId: string } | null = null;
 
   // The adult (contact) plays: enroll them, reusing the primary Person.
   if (adultPlaying) {
     const team = g("primaryTeam");
     const skill = g("primarySkill");
-    await enrollPlayer({
+    const res = await enrollPlayer({
       player: { firstName, lastName, dob: g("primaryDob"), team, skill, isChild: false },
       seasonId,
       divisions,
@@ -338,7 +360,9 @@ export async function registerAction(
       preferredFacilityId: preferredFacility?.id ?? null,
       preferredFacilityMarket,
       waitlisted,
+      targetTeamId,
     });
+    recruit = res;
     enrolled.push({ name: `${firstName} ${lastName}`, program: programLabel(team, skill) || preferredDivisionName || "" });
   }
 
@@ -365,7 +389,7 @@ export async function registerAction(
       return { error: "Add at least one player (first and last name)." };
 
     for (const kid of kids) {
-      await enrollPlayer({
+      const res = await enrollPlayer({
         player: kid,
         seasonId,
         divisions,
@@ -388,7 +412,10 @@ export async function registerAction(
       preferredFacilityId: preferredFacility?.id ?? null,
       preferredFacilityMarket,
       waitlisted,
+      targetTeamId,
       });
+      // First enrolled player becomes the recruit when no adult is playing.
+      if (!recruit) recruit = res;
       enrolled.push({ name: `${kid.firstName} ${kid.lastName}`, program: programLabel(kid.team, kid.skill) || preferredDivisionName || "" });
     }
   }
@@ -441,6 +468,45 @@ export async function registerAction(
       }
     } catch (e) {
       console.warn("[zoho] push threw:", e);
+    }
+  }
+
+  // "Fill this team" auto-placement. If the signup came through a team link and a
+  // spot is genuinely open, place the recruit on that team and send them straight
+  // to pay + apparel (waiver was signed above). If the team filled up first, they
+  // stay on the waitlist for it — with no charge — and we say so.
+  if (targetTeamId && recruit) {
+    const placed = await prisma
+      .$transaction(async (tx) => {
+        const team = await tx.team.findUnique({
+          where: { id: targetTeamId },
+          select: { id: true, coachPlays: true, _count: { select: { members: true } } },
+        });
+        if (!team) return false;
+        const already = await tx.teamMember.findUnique({
+          where: { teamId_personId: { teamId: team.id, personId: recruit!.personId } },
+        });
+        const effective = team._count.members + (team.coachPlays ? 1 : 0);
+        if (!already && effective >= TEAM_CAP) return false; // full — waitlist instead
+        await tx.teamMember.upsert({
+          where: { teamId_personId: { teamId: team.id, personId: recruit!.personId } },
+          create: { teamId: team.id, personId: recruit!.personId, roleOnTeam: "PLAYER" },
+          update: {},
+        });
+        await tx.registration.update({ where: { id: recruit!.registrationId }, data: { status: "ASSIGNED" } });
+        return true;
+      })
+      .catch(() => false);
+
+    if (placed) {
+      // Create/reuse the season-fee invoice and send them to the pay + apparel page.
+      const link = await placementPayLink(recruit.personId, seasonId).catch(() => null);
+      if (link?.payUrl) redirect(link.payUrl);
+      redirect("/register/thanks?placed=1"); // fee waived → nothing to pay
+    } else {
+      // Team filled before they finished — keep them on that team's waitlist, no charge.
+      await prisma.registration.update({ where: { id: recruit.registrationId }, data: { status: "WAITLISTED" } }).catch(() => {});
+      redirect("/register/thanks?full=1");
     }
   }
 

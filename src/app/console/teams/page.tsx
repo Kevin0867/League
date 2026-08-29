@@ -17,6 +17,7 @@ import { deriveDivisionCode } from "@/lib/domain/teamName";
 import { TeamColorDot } from "@/components/TeamColorDot";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TableFilter } from "@/components/TableFilter";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -676,6 +677,23 @@ export default async function TeamBuildBoard({
                     <p className="text-emerald-700">✓ Eligible to publish to families</p>
                   )}
                 </div>
+
+                {/* Recruit link — market a specific team's open spots to the public.
+                    Anyone who signs up via this link is auto-placed here and taken
+                    to pay + apparel; past the cap they land on the waitlist. */}
+                {!t.isTest && TEAM_CAP - roster.effective > 0 && (
+                  <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-emerald-800">
+                        {TEAM_CAP - roster.effective} open spot{TEAM_CAP - roster.effective === 1 ? "" : "s"} — recruit the public
+                      </span>
+                      <CopyLinkButton path={`/register?team=${t.id}`} label="Copy signup link" />
+                    </div>
+                    <p className="mt-1 text-[11px] text-emerald-700/80">
+                      They&apos;ll sign up, sign the waiver, pick apparel, and pay — and land on this team automatically.
+                    </p>
+                  </div>
+                )}
 
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2">
                   {publish.ok && !t.published ? (

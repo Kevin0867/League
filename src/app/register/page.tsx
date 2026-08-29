@@ -4,8 +4,9 @@ import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { RegisterForm } from "@/components/RegisterForm";
 import { prisma } from "@/lib/db";
-import { ACADEMY_MARKETS } from "@/lib/enums";
-import { formatDate } from "@/lib/time";
+import { ACADEMY_MARKETS, TEAM_CAP } from "@/lib/enums";
+import { formatDate, formatTime12 } from "@/lib/time";
+import { teamDisplayName } from "@/lib/domain/teamName";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,9 @@ export const metadata: Metadata = {
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ division?: string; location?: string; facility?: string }>;
+  searchParams: Promise<{ division?: string; location?: string; facility?: string; team?: string }>;
 }) {
-  const { division: preselectedDivision, location: preselectedLocation, facility: facilityParam } = await searchParams;
+  const { division: preselectedDivision, location: preselectedLocation, facility: facilityParam, team: teamParam } = await searchParams;
 
   // A specific facility can be preselected from the Locations page. Resolve it to
   // a public-safe label (private courts never expose name/address) + its market.
@@ -42,6 +43,33 @@ export default async function RegisterPage({
     orderBy: { startDate: "desc" },
     include: { divisions: { orderBy: { name: "asc" } } },
   });
+
+  // A "fill this team" link (?team=<id>). Resolve the team so we can show which
+  // spot they're filling, prefill its division + location, and pass it through so
+  // the signup auto-places them there and takes payment.
+  const teamRow = teamParam && season
+    ? await prisma.team
+        .findFirst({
+          where: { id: teamParam, seasonId: season.id, isTest: false },
+          select: {
+            id: true, club: true, market: true, divisionCode: true, color: true,
+            dayOfWeek: true, startTime: true, coachPlays: true,
+            division: { select: { name: true } },
+            _count: { select: { members: true } },
+          },
+        })
+        .catch(() => null)
+    : null;
+  const targetTeam = teamRow
+    ? {
+        id: teamRow.id,
+        label: teamDisplayName(teamRow),
+        divisionName: teamRow.division?.name ?? null,
+        market: teamRow.market ?? null,
+        dayTime: teamRow.dayOfWeek ? `${teamRow.dayOfWeek}${teamRow.startTime ? ` ${formatTime12(teamRow.startTime)}` : ""}`.trim() : null,
+        spotsLeft: Math.max(0, TEAM_CAP - (teamRow._count.members + (teamRow.coachPlays ? 1 : 0))),
+      }
+    : null;
 
   const facilities = await prisma.facility.findMany({
     where: { archived: false },
@@ -114,7 +142,26 @@ export default async function RegisterPage({
             one waiver covers one adult and up to four kids.
           </p>
         </div>
-        {(preselectedDivision || effectiveLocation || facilityLabel) && (
+        {targetTeam ? (
+          <div className="mb-6 rounded-xl border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              {targetTeam.spotsLeft > 0 ? "Filling a spot on" : "Join the waitlist for"}
+            </p>
+            <p className="text-lg font-bold text-emerald-900">
+              {targetTeam.label}
+              {targetTeam.dayTime || targetTeam.market ? (
+                <span className="font-semibold text-emerald-700">
+                  {" · "}{[targetTeam.dayTime, targetTeam.market].filter(Boolean).join(" · ")}
+                </span>
+              ) : null}
+            </p>
+            <p className="mt-0.5 text-sm text-slate-600">
+              {targetTeam.spotsLeft > 0
+                ? `${targetTeam.spotsLeft} spot${targetTeam.spotsLeft === 1 ? "" : "s"} left. Complete signup and you'll be placed on this team and taken straight to pay your season fee and pick your gear.`
+                : "This team is full right now — sign up and we'll add you to its waitlist. You won't be charged unless a spot opens and you're placed."}
+            </p>
+          </div>
+        ) : (preselectedDivision || effectiveLocation || facilityLabel) ? (
           <div className="mb-6 rounded-xl border-l-4 border-brand-500 bg-brand-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Signing up for</p>
             <p className="text-lg font-bold text-brand-900">
@@ -131,13 +178,14 @@ export default async function RegisterPage({
               You can still adjust your {preselectedDivision ? "track and " : ""}preferences below.
             </p>
           </div>
-        )}
+        ) : null}
         <RegisterForm
           seasonId={season.id}
           locations={locations}
-          preselectedDivision={preselectedDivision ?? null}
-          preselectedLocation={effectiveLocation}
+          preselectedDivision={targetTeam?.divisionName ?? preselectedDivision ?? null}
+          preselectedLocation={targetTeam?.market ?? effectiveLocation}
           preferredFacility={preferredFacility ? { id: preferredFacility.id, label: facilityLabel ?? "" } : null}
+          targetTeamId={targetTeam?.id ?? null}
           waitlist={!!alreadyClosed}
         />
       </div>

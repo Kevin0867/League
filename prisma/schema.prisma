@@ -295,6 +295,12 @@ model Registration {
   /// Duplicate detection (§3): points at the surviving record after a merge
   mergedIntoId       String?
 
+  /// A public "fill this team" signup link tagged this registration to a specific
+  /// team. When a spot is open we auto-place the player there and take payment;
+  /// this is recorded even for a waitlisted overflow so staff see which team the
+  /// person was recruited for. Not a hard FK (a team may later be deleted).
+  targetTeamId       String?
+
   locationPrefs      LocationPreference[]
 
   submittedAt        DateTime  @default(now())

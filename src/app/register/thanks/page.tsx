@@ -5,10 +5,15 @@ import { SiteFooter } from "@/components/SiteFooter";
 export default async function ThanksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ waitlist?: string }>;
+  searchParams: Promise<{ waitlist?: string; full?: string; placed?: string }>;
 }) {
-  const { waitlist } = await searchParams;
-  const isWaitlist = waitlist === "1";
+  const { waitlist, full, placed } = await searchParams;
+  // A team fill-link that filled up before this person finished → waitlisted for
+  // that specific team, no charge.
+  const isTeamFull = full === "1";
+  // Fee-waived recruit placed on a team (nothing to pay).
+  const isPlaced = placed === "1";
+  const isWaitlist = waitlist === "1" || isTeamFull;
 
   return (
     <div>
@@ -18,9 +23,21 @@ export default async function ThanksPage({
           {isWaitlist ? "★" : "✓"}
         </div>
         <h1 className="display mt-6 text-3xl text-brand-900 sm:text-4xl">
-          {isWaitlist ? "You're on the waitlist" : "Registration received"}
+          {isTeamFull ? "That spot just filled" : isWaitlist ? "You're on the waitlist" : isPlaced ? "You're on the team!" : "Registration received"}
         </h1>
-        {isWaitlist ? (
+        {isTeamFull ? (
+          <p className="mt-3 text-slate-600">
+            Someone grabbed the last spot on that team just before you finished, so
+            we&apos;ve added you to its <strong>waitlist</strong>. If a spot reopens,
+            the Academy Director will reach out — and <strong>you haven&apos;t been
+            charged</strong>. We&apos;ve emailed you a confirmation.
+          </p>
+        ) : isPlaced ? (
+          <p className="mt-3 text-slate-600">
+            You&apos;re all set and placed on your team — welcome! We&apos;ve emailed
+            you a confirmation with your team, day, time, and location.
+          </p>
+        ) : isWaitlist ? (
           <p className="mt-3 text-slate-600">
             Registration has closed, so we&apos;ve added you to the waitlist. If a spot
             opens up, the Academy Director will reach out to place you on a team.
