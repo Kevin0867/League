@@ -20,6 +20,7 @@ export function RegisterForm({
   preselectedDivision = null,
   preselectedLocation = null,
   preferredFacility = null,
+  targetTeamId = null,
   waitlist = false,
 }: {
   seasonId: string;
@@ -27,6 +28,7 @@ export function RegisterForm({
   preselectedDivision?: string | null;
   preselectedLocation?: string | null;
   preferredFacility?: { id: string; label: string } | null;
+  targetTeamId?: string | null;
   waitlist?: boolean;
 }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, {});
@@ -44,6 +46,7 @@ export function RegisterForm({
       <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
       {preselectedDivision && <input type="hidden" name="preferredDivision" value={preselectedDivision} />}
       {preferredFacility && <input type="hidden" name="preferredFacilityId" value={preferredFacility.id} />}
+      {targetTeamId && <input type="hidden" name="targetTeamId" value={targetTeamId} />}
 
       {/* 01 — Who's playing */}
       <Section n="01" title="Who's playing?">
