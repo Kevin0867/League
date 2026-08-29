@@ -678,22 +678,37 @@ export default async function TeamBuildBoard({
                   )}
                 </div>
 
-                {/* Recruit link — market a specific team's open spots to the public.
-                    Anyone who signs up via this link is auto-placed here and taken
-                    to pay + apparel; past the cap they land on the waitlist. */}
-                {!t.isTest && TEAM_CAP - roster.effective > 0 && (
-                  <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-emerald-800">
-                        {TEAM_CAP - roster.effective} open spot{TEAM_CAP - roster.effective === 1 ? "" : "s"} — recruit the public
-                      </span>
-                      <CopyLinkButton path={`/register?team=${t.id}`} label="Copy signup link" />
+                {/* Signup link — every formed team has one (it's just its id), so
+                    it's always ready: share it to fill open spots now, or to collect
+                    waitlist names on a full team for when someone drops out. Open
+                    spots auto-place + pay; a full team lands them on the waitlist,
+                    no charge. */}
+                {!t.isTest && (() => {
+                  const open = TEAM_CAP - roster.effective;
+                  return open > 0 ? (
+                    <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-emerald-800">
+                          {open} open spot{open === 1 ? "" : "s"} — share signup link
+                        </span>
+                        <CopyLinkButton path={`/register?team=${t.id}`} label="Copy signup link" />
+                      </div>
+                      <p className="mt-1 text-[11px] text-emerald-700/80">
+                        They&apos;ll sign up, sign the waiver, pick apparel, and pay — and land on this team automatically.
+                      </p>
                     </div>
-                    <p className="mt-1 text-[11px] text-emerald-700/80">
-                      They&apos;ll sign up, sign the waiver, pick apparel, and pay — and land on this team automatically.
-                    </p>
-                  </div>
-                )}
+                  ) : (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-600">Team full — waitlist link</span>
+                        <CopyLinkButton path={`/register?team=${t.id}`} label="Copy waitlist link" />
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Share to collect waitlist names — they sign up with no charge, and we place them here the moment a spot opens.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2">
                   {publish.ok && !t.published ? (
