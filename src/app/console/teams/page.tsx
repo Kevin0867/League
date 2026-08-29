@@ -53,6 +53,25 @@ export default async function TeamBuildBoard({
     orderBy: [{ market: "asc" }, { name: "asc" }],
   });
 
+  // Per-team waitlist: people who signed up through a team link while it was full
+  // (WAITLISTED + tagged to that team). Shown on the card so staff can place them
+  // the moment a spot opens. Ordered oldest-first (first in line first).
+  const teamIds = teams.map((t) => t.id);
+  const waitlistRows = stats.season && teamIds.length
+    ? await prisma.registration.findMany({
+        where: { seasonId: stats.season.id, status: "WAITLISTED", targetTeamId: { in: teamIds } },
+        select: { targetTeamId: true, person: { select: { id: true, firstName: true, lastName: true } } },
+        orderBy: { submittedAt: "asc" },
+      })
+    : [];
+  const waitlistByTeam = new Map<string, { id: string; name: string }[]>();
+  for (const r of waitlistRows) {
+    if (!r.targetTeamId) continue;
+    const arr = waitlistByTeam.get(r.targetTeamId) ?? [];
+    arr.push({ id: r.person.id, name: `${r.person.firstName} ${r.person.lastName}` });
+    waitlistByTeam.set(r.targetTeamId, arr);
+  }
+
   // Diagnostics for "where did my teams go?" — the grid only shows the ONE active
   // PURE Academy season's non-test teams, so surface anything hidden by that.
   const activeId = stats.season?.id;
@@ -706,6 +725,45 @@ export default async function TeamBuildBoard({
                       <p className="mt-1 text-[11px] text-slate-500">
                         Share to collect waitlist names — they sign up with no charge, and we place them here the moment a spot opens.
                       </p>
+                    </div>
+                  );
+                })()}
+
+                {/* Waitlist for this team — people who signed up while it was full.
+                    When a spot opens (open > 0), each can be placed with one click
+                    (reuses the addPlayer op: rosters them and marks them assigned;
+                    request their fee afterward as usual). */}
+                {(() => {
+                  const wl = waitlistByTeam.get(t.id) ?? [];
+                  if (wl.length === 0) return null;
+                  const open = TEAM_CAP - roster.effective;
+                  return (
+                    <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
+                      <div className="text-xs font-semibold text-amber-800">
+                        Waitlist ({wl.length}){open > 0 ? ` · ${open} spot${open === 1 ? "" : "s"} open` : ""}
+                      </div>
+                      <ul className="mt-1 space-y-1">
+                        {wl.map((p, i) => (
+                          <li key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                            <Link href={`/console/people/${p.id}`} className="text-slate-700 hover:text-brand-700 hover:underline">
+                              <span className="text-slate-400">{i + 1}.</span> {p.name}
+                            </Link>
+                            {open > 0 ? (
+                              <form method="POST" action="/api/console/teams">
+                                <input type="hidden" name="ticket" value={ticket} />
+                                <input type="hidden" name="op" value="addPlayer" />
+                                <input type="hidden" name="teamId" value={t.id} />
+                                <input type="hidden" name="personId" value={p.id} />
+                                <button className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700">
+                                  Place on team
+                                </button>
+                              </form>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">waiting for a spot</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   );
                 })()}
