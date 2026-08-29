@@ -5,8 +5,9 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { RegisterForm } from "@/components/RegisterForm";
 import { prisma } from "@/lib/db";
 import { ACADEMY_MARKETS, TEAM_CAP } from "@/lib/enums";
-import { formatDate, formatTime12 } from "@/lib/time";
-import { teamDisplayName } from "@/lib/domain/teamName";
+import { formatDate } from "@/lib/time";
+import { teamDisplayName, teamCategoryLabel } from "@/lib/domain/teamName";
+import { practiceTimeRange, dayOfWeekPlural } from "@/lib/domain/practiceInfo";
 
 export const dynamic = "force-dynamic";
 
@@ -52,21 +53,28 @@ export default async function RegisterPage({
         .findFirst({
           where: { id: teamParam, seasonId: season.id, isTest: false },
           select: {
-            id: true, club: true, market: true, divisionCode: true, color: true,
+            id: true, club: true, market: true, divisionCode: true, color: true, gender: true,
             dayOfWeek: true, startTime: true, coachPlays: true,
             division: { select: { name: true } },
+            facility: { select: { name: true, isPrivate: true, generalArea: true } },
             _count: { select: { members: true } },
           },
         })
         .catch(() => null)
     : null;
+  // A full, plain-language summary so a family knows exactly what they're joining:
+  // category (Men's/Women's/Youth Boys/Girls + level), the day with start–end
+  // time (practices run two hours), and the location (city + court).
   const targetTeam = teamRow
     ? {
         id: teamRow.id,
         label: teamDisplayName(teamRow),
-        divisionName: teamRow.division?.name ?? null,
-        market: teamRow.market ?? null,
-        dayTime: teamRow.dayOfWeek ? `${teamRow.dayOfWeek}${teamRow.startTime ? ` ${formatTime12(teamRow.startTime)}` : ""}`.trim() : null,
+        category: teamCategoryLabel({ divisionCode: teamRow.divisionCode, gender: teamRow.gender, divisionName: teamRow.division?.name ?? null }),
+        dayTime: [dayOfWeekPlural(teamRow.dayOfWeek), practiceTimeRange(teamRow.startTime)].filter(Boolean).join(", ") || null,
+        location: [
+          teamRow.market,
+          teamRow.facility && !teamRow.facility.isPrivate ? teamRow.facility.name : teamRow.facility?.generalArea ?? null,
+        ].filter((v, i, a) => v && a.indexOf(v) === i).join(" · ") || null,
         spotsLeft: Math.max(0, TEAM_CAP - (teamRow._count.members + (teamRow.coachPlays ? 1 : 0))),
       }
     : null;
@@ -143,21 +151,37 @@ export default async function RegisterPage({
           </p>
         </div>
         {targetTeam ? (
-          <div className="mb-6 rounded-xl border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3">
+          <div className="mb-6 rounded-xl border-l-4 border-emerald-500 bg-emerald-50 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-              {targetTeam.spotsLeft > 0 ? "Filling a spot on" : "Join the waitlist for"}
+              {targetTeam.spotsLeft > 0 ? "You're joining" : "Join the waitlist for"}
             </p>
-            <p className="text-lg font-bold text-emerald-900">
-              {targetTeam.label}
-              {targetTeam.dayTime || targetTeam.market ? (
-                <span className="font-semibold text-emerald-700">
-                  {" · "}{[targetTeam.dayTime, targetTeam.market].filter(Boolean).join(" · ")}
-                </span>
-              ) : null}
-            </p>
-            <p className="mt-0.5 text-sm text-slate-600">
+            <p className="text-xl font-bold text-emerald-900">{targetTeam.label}</p>
+
+            {/* What you're joining — category, day & time, location. */}
+            <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+              {targetTeam.category && (
+                <>
+                  <dt className="font-semibold text-emerald-800">Team</dt>
+                  <dd className="text-slate-700">{targetTeam.category}</dd>
+                </>
+              )}
+              {targetTeam.dayTime && (
+                <>
+                  <dt className="font-semibold text-emerald-800">When</dt>
+                  <dd className="text-slate-700">{targetTeam.dayTime}</dd>
+                </>
+              )}
+              {targetTeam.location && (
+                <>
+                  <dt className="font-semibold text-emerald-800">Where</dt>
+                  <dd className="text-slate-700">{targetTeam.location}</dd>
+                </>
+              )}
+            </dl>
+
+            <p className="mt-3 border-t border-emerald-200 pt-2 text-sm text-slate-600">
               {targetTeam.spotsLeft > 0
-                ? `${targetTeam.spotsLeft} spot${targetTeam.spotsLeft === 1 ? "" : "s"} left. Complete signup and you'll be placed on this team and taken straight to pay your season fee and pick your gear.`
+                ? `${targetTeam.spotsLeft} spot${targetTeam.spotsLeft === 1 ? "" : "s"} left. Complete signup and you'll join this team and go straight to pay your season fee and pick your gear.`
                 : "This team is full right now — sign up and we'll add you to its waitlist. You won't be charged unless a spot opens and you're placed."}
             </p>
           </div>
@@ -182,8 +206,8 @@ export default async function RegisterPage({
         <RegisterForm
           seasonId={season.id}
           locations={locations}
-          preselectedDivision={targetTeam?.divisionName ?? preselectedDivision ?? null}
-          preselectedLocation={targetTeam?.market ?? effectiveLocation}
+          preselectedDivision={teamRow?.division?.name ?? preselectedDivision ?? null}
+          preselectedLocation={teamRow?.market ?? effectiveLocation}
           preferredFacility={preferredFacility ? { id: preferredFacility.id, label: facilityLabel ?? "" } : null}
           targetTeamId={targetTeam?.id ?? null}
           waitlist={!!alreadyClosed}

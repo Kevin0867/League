@@ -12,6 +12,12 @@ const DAY_PLURAL: Record<string, string> = {
   FRI: "Fridays", SAT: "Saturdays", SUN: "Sundays",
 };
 
+/** "WED" → "Wednesdays" (the day code the Team stores). Returns the code itself if unknown. */
+export function dayOfWeekPlural(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return DAY_PLURAL[code.toUpperCase()] ?? code;
+}
+
 // Sun=0 … Sat=6, to match JS getUTCDay().
 const DOW_INDEX: Record<string, number> = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
 

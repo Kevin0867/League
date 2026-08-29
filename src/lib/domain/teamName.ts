@@ -34,6 +34,30 @@ export function teamShortName(t: TeamParts): string {
   return [t.market, t.divisionCode, t.color].filter(Boolean).join(" ") || (t.club ?? "Team");
 }
 
+/// A plain-language category so a family knows exactly what they're joining —
+/// "Men's 4.5", "Women's 3.0", "High School Boys", "Middle School Girls",
+/// "Elementary". Adult bands come from the M/W division code; youth level from
+/// ELE/MID/HS with the boys/girls split from the team's stored gender (the only
+/// place youth gender lives). Falls back to the division name or code.
+const YOUTH_LEVEL: Record<string, string> = { ELE: "Elementary", MID: "Middle School", HS: "High School" };
+export function teamCategoryLabel(t: {
+  divisionCode?: string | null;
+  gender?: string | null;
+  divisionName?: string | null;
+}): string {
+  const code = (t.divisionCode ?? "").toUpperCase();
+  // Adult gendered band, e.g. M4.5 → "Men's 4.5", W5.0+ → "Women's 5.0+".
+  const adult = /^([MW])(\d.*)$/.exec(code);
+  if (adult) return `${adult[1] === "M" ? "Men's" : "Women's"} ${adult[2]}`;
+  // Youth level + boys/girls from the stored gender.
+  const level = YOUTH_LEVEL[code];
+  if (level) {
+    const g = t.gender === "MALE" ? "Boys" : t.gender === "FEMALE" ? "Girls" : null;
+    return g ? `${level} ${g}` : level;
+  }
+  return t.divisionName || t.divisionCode || "Team";
+}
+
 /// URL slug: pure-{market}-{division}[-{color}], lowercased, dots stripped.
 export function teamSlug(t: TeamParts): string {
   const clubSlug = (t.club || "PURE").toLowerCase().replace(/[^a-z0-9]+/g, "");
