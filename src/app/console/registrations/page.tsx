@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { StatusBadge } from "@/components/StatusBadge";
+import { formatTime12 } from "@/lib/time";
 import { findDuplicateGroups } from "@/lib/domain/registrations";
 import { AddPlayerForm } from "./AddPlayerForm";
 import { RowActions } from "@/components/RowActions";
@@ -154,14 +155,23 @@ export default async function RegistrationsPage({
     : [];
 
   const [teamRows, memberships, payments] = await Promise.all([
-    prisma.team.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, seasonId: true } }),
+    prisma.team.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, seasonId: true, dayOfWeek: true, startTime: true } }),
     prisma.teamMember.findMany({ where: { personId: { in: personIds } }, select: { personId: true, teamId: true, team: { select: { seasonId: true } } } }),
     prisma.payment.findMany({ where: { partyId: { in: personIds }, category: "PLAYER_FEE" }, select: { partyId: true, seasonId: true, status: true } }),
   ]);
-  const teamsBySeason = new Map<string, { id: string; name: string }[]>();
+  // Short day + time so each team option reads e.g. "PURE Scottsdale W3.0 · Wed
+  // 5:00 PM" — staff can see a player's current day/time and compare the others
+  // before moving them.
+  const SHORT_DAY: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
+  const teamDayTime = (t: { dayOfWeek: string | null; startTime: string | null }): string | null => {
+    const day = t.dayOfWeek ? SHORT_DAY[t.dayOfWeek] ?? t.dayOfWeek : null;
+    const time = t.startTime ? formatTime12(t.startTime) : null;
+    return [day, time].filter(Boolean).join(" ") || null;
+  };
+  const teamsBySeason = new Map<string, { id: string; name: string; dayTime: string | null }[]>();
   for (const t of teamRows) {
     const list = teamsBySeason.get(t.seasonId) ?? [];
-    list.push({ id: t.id, name: t.name });
+    list.push({ id: t.id, name: t.name, dayTime: teamDayTime(t) });
     teamsBySeason.set(t.seasonId, list);
   }
   const teamByPersonSeason = new Map<string, string>();
