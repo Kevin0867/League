@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Team = { id: string; name: string };
+type Team = { id: string; name: string; dayTime?: string | null };
 
 export function RowActions({
   ticket,
@@ -85,10 +85,19 @@ export function RowActions({
               <form method="POST" action="/api/console/registrations" className="space-y-2">
                 <Hidden op="assignToTeam" />
                 <label className="block text-xs font-medium text-slate-500">{assigned ? "Move to team" : "Assign to team"}</label>
+                {(() => {
+                  const cur = teams.find((t) => t.id === currentTeamId);
+                  return cur ? (
+                    <p className="text-[11px] text-slate-500">
+                      Currently on <span className="font-medium text-slate-700">{cur.name}</span>
+                      {cur.dayTime ? <span className="text-slate-500"> · {cur.dayTime}</span> : null}
+                    </p>
+                  ) : null;
+                })()}
                 <select name="teamId" defaultValue={currentTeamId ?? ""} className="input py-1 text-sm">
                   <option value="">— Select a team —</option>
                   {teams.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                    <option key={t.id} value={t.id}>{t.name}{t.dayTime ? ` · ${t.dayTime}` : ""}</option>
                   ))}
                 </select>
                 <button className="btn-primary w-full py-1 text-xs">{assigned ? "Move" : "Assign"}</button>

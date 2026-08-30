@@ -16,7 +16,7 @@ import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal
 import { appUrl } from "@/lib/stripe";
 import { describeTeamPractice } from "@/lib/domain/practiceInfo";
 import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
-import { TEAM_CAP } from "@/lib/enums";
+import { TEAM_CAP, TEAM_MAX } from "@/lib/enums";
 import { personEmails } from "@/lib/domain/audience";
 
 /** Colors used by OTHER teams in the same gender+level group (divisionCode) —
@@ -538,8 +538,12 @@ export async function POST(req: Request) {
 
       const team = await prisma.team.findUnique({ where: { id: teamId }, include: { _count: { select: { members: true } } } });
       if (!team) return back("?err=notfound");
-      const effective = team._count.members + (team.coachPlays ? 1 : 0) + 1;
-      if (effective > TEAM_CAP) return back("?err=cap");
+      // Admins may add over the target of 8 up to the hard ceiling of 10, so they
+      // can add a player and then move another off. Only 11+ is refused.
+      const already = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId, personId } } });
+      const effective = team._count.members + (team.coachPlays ? 1 : 0) + (already ? 0 : 1);
+      if (effective > TEAM_MAX) return back("?err=cap");
+      const overCap = effective > TEAM_CAP;
 
       // One team per season: pull them off any other team first.
       const otherTeamIds = (
@@ -554,8 +558,8 @@ export async function POST(req: Request) {
       });
       await prisma.registration.updateMany({ where: { personId, seasonId: team.seasonId }, data: { status: "ASSIGNED" } });
 
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster` });
-      return back("?ok=addPlayer");
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster${overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
+      return back(overCap ? "?ok=addPlayerOver" : "?ok=addPlayer");
     }
 
     case "publishTeam": {

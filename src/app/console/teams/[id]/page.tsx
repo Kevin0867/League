@@ -4,9 +4,10 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
 import { rosterStatus, canPublishTeam, teamMissingFields, coachAssignmentGate } from "@/lib/domain/teams";
-import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
+import { TEAM_CAP, TEAM_MAX, WEEKDAYS } from "@/lib/enums";
 import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
 import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
+import { coveredIds } from "@/lib/payments/familyFee";
 import { TeamColorDot } from "@/components/TeamColorDot";
 import { TeamScheduleFields } from "./TeamScheduleFields";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
@@ -35,6 +36,7 @@ function hasFamilyEmail(person: WithEmails & { guardian?: WithEmails | null }): 
 const OK_MSG: Record<string, string> = {
   updateTeam: "Team fields saved.",
   addPlayer: "Player added to the roster.",
+  addPlayerOver: `Player added — this team is now over the target of ${TEAM_CAP}. Move a player to another team to get back to ${TEAM_CAP}.`,
   removePlayer: "Player removed back to the pool.",
   publishTeam: "Team published to families.",
   unpublishTeam: "Team unpublished.",
@@ -58,7 +60,7 @@ const ERR_MSG: Record<string, string> = {
   slot: "That day/time isn't available at the selected facility. Pick one of the facility's available times.",
   dupname: "A team with that name already exists this season — here it is. Give the new team a distinct name (e.g. a different color).",
   player: "Missing player.",
-  cap: "That team is already at capacity — remove a player before adding another.",
+  cap: `That team is at the maximum of ${TEAM_MAX} — remove a player before adding another.`,
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",
   op: "Unknown action.",
@@ -162,6 +164,33 @@ export default async function TeamDetailPage({
         orderBy: { createdAt: "desc" },
       })
     : [];
+
+  // Per-player fee status for the roster panel — matched by the player the fee
+  // COVERS (so a youth fee paid by a guardian still shows against the child),
+  // keeping the most significant status: PAID > REFUNDED > REQUESTED/PENDING.
+  const seasonFees = memberIds.length
+    ? await prisma.payment.findMany({
+        where: { seasonId: team.seasonId, category: "PLAYER_FEE", status: { in: ["PAID", "REFUNDED", "REQUESTED", "PENDING"] } },
+        select: { partyId: true, coveredPersonIds: true, status: true },
+      })
+    : [];
+  const memberIdSet = new Set(memberIds);
+  const feeStatusByPerson = new Map<string, string>();
+  const feeRank = (s: string) => (s === "PAID" ? 3 : s === "REFUNDED" ? 2 : 1);
+  for (const p of seasonFees) {
+    for (const pid of coveredIds(p)) {
+      if (!memberIdSet.has(pid)) continue;
+      const cur = feeStatusByPerson.get(pid);
+      if (!cur || feeRank(p.status) > feeRank(cur)) feeStatusByPerson.set(pid, p.status);
+    }
+  }
+  const feeBadge = (personId: string) => {
+    const s = feeStatusByPerson.get(personId);
+    if (s === "PAID") return <span className="ml-2 text-emerald-700">✓ paid</span>;
+    if (s === "REFUNDED") return <span className="ml-2 text-slate-500">refunded</span>;
+    if (s === "REQUESTED" || s === "PENDING") return <span className="ml-2 text-amber-600">fee due</span>;
+    return <span className="ml-2 text-slate-400">no fee yet</span>;
+  };
 
   // Colors used by OTHER teams in this team's gender+level group (divisionCode) —
   // shown as taken in the picker so every team in a division stays a distinct color.
@@ -444,8 +473,15 @@ export default async function TeamDetailPage({
           <div className="card">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="font-semibold text-slate-900">Roster</h2>
-              <span className="text-sm text-slate-500">{roster.effective}/{TEAM_CAP}{team.coachPlays ? " (coach plays)" : ""}</span>
+              <span className={`text-sm ${roster.overCap ? "font-semibold text-amber-700" : "text-slate-500"}`}>
+                {roster.effective}/{TEAM_CAP}{team.coachPlays ? " (coach plays)" : ""}{roster.overCap ? " · over cap" : ""}
+              </span>
             </div>
+            {roster.overCap && (
+              <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                This team is over the target of {TEAM_CAP} (admin max {TEAM_MAX}). Move a player to another team to get back to {TEAM_CAP}.
+              </p>
+            )}
             {team.members.length > 0 && (
               <Link href={`/console/teams/${team.id}/progress`} className="mb-3 inline-flex items-center gap-1 rounded-md bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-100 hover:bg-brand-100">
                 Progress reports →
@@ -470,6 +506,7 @@ export default async function TeamDetailPage({
                       </Link>
                       <div className="text-xs text-slate-400">
                         {m.person.duprRating ? `DUPR ${m.person.duprRating}` : "no rating"}
+                        {feeBadge(m.personId)}
                         {!hasFamilyEmail(m.person) && <span className="ml-2 text-amber-600">⚠ no email</span>}
                         {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
                       </div>
@@ -492,7 +529,7 @@ export default async function TeamDetailPage({
                 ))}
               </ul>
             )}
-            {admin && <AddPlayerToTeam ticket={ticket} teamId={team.id} candidates={candidates} atCap={roster.atCap} />}
+            {admin && <AddPlayerToTeam ticket={ticket} teamId={team.id} candidates={candidates} atCap={roster.atMax} overCap={roster.overCap} />}
           </div>
 
           {/* Publish gate + payment tools — admin only */}

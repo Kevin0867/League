@@ -1,6 +1,6 @@
 // Team completeness & assignment gates — the custom logic the spec says nothing
 // off-the-shelf does (§4, §20).
-import { TEAM_CAP, TEAM_MIN } from "../enums";
+import { TEAM_CAP, TEAM_MAX, TEAM_MIN } from "../enums";
 
 export type TeamLike = {
   divisionId: string | null;
@@ -48,6 +48,10 @@ export function rosterStatus(playerCount: number, coachPlays: boolean) {
     playerCount,
     effective,
     atCap: effective >= TEAM_CAP,
+    // Over the target of 8 but within the admin ceiling of 10 — a temporary
+    // add-then-move state the board flags.
+    overCap: effective > TEAM_CAP,
+    atMax: effective >= TEAM_MAX,
     meetsMinimum: effective >= TEAM_MIN,
     needed: Math.max(0, TEAM_MIN - effective),
   };

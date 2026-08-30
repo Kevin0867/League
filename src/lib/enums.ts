@@ -145,7 +145,13 @@ export const TEAM_COMPLETION_FIELDS = [
   "dayOfWeek",
 ] as const;
 
+// Target roster size — what open-spot counts, public signup links, and the
+// waitlist gate use. A team "fills" at 8.
 export const TEAM_CAP = 8;
+// Admin hard ceiling. Staff can manually push a roster to 10 (over the target)
+// so they can add a player and then move another off — a temporary overage the
+// board flags as "over cap". Public/self-serve signups never exceed TEAM_CAP.
+export const TEAM_MAX = 10;
 export const TEAM_MIN = 6;
 export const SEASON_FEE_CENTS = 49500;
 export const COACH_PER_SESSION_CENTS = 10000;

@@ -6,7 +6,7 @@ import { formatTime12 } from "@/lib/time";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
 import { audit } from "@/lib/audit";
-import { TEAM_CAP, COACH_PER_SESSION_CENTS } from "@/lib/enums";
+import { TEAM_CAP, TEAM_MAX, COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 
 /** Context passed to tool execution — identifies the actor and whether they may
@@ -766,9 +766,12 @@ async function assignPlayerToTeam(input: { person?: string; team?: string; confi
   const full = await prisma.team.findUnique({ where: { id: team.id }, include: { _count: { select: { members: true } } } });
   if (!full) return { error: "Team not found." };
   const alreadyOn = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId: team.id, personId: person.id } } });
-  if (!alreadyOn && full._count.members + (full.coachPlays ? 1 : 0) + 1 > TEAM_CAP) {
-    return { error: `${team.name} is at capacity (${TEAM_CAP}).` };
+  const newEffective = full._count.members + (full.coachPlays ? 1 : 0) + (alreadyOn ? 0 : 1);
+  // Target is 8; admins may go up to 10 (over cap) to add-then-move. Only 11+ blocks.
+  if (newEffective > TEAM_MAX) {
+    return { error: `${team.name} is at the maximum of ${TEAM_MAX}. Move a player off first.` };
   }
+  const overCap = newEffective > TEAM_CAP;
   const otherTeams = season
     ? (await prisma.team.findMany({ where: { seasonId: season.id, id: { not: team.id } }, select: { id: true } })).map((t) => t.id)
     : [];
@@ -781,9 +784,12 @@ async function assignPlayerToTeam(input: { person?: string; team?: string; confi
   if (season) {
     await prisma.registration.updateMany({ where: { personId: person.id, seasonId: season.id }, data: { status: "ASSIGNED" } });
   }
-  await audit({ actorId: ctx.actorId ?? null, entityType: "Team", entityId: team.id, action: "ASSIGN", summary: `Ask Brett: assigned ${person.firstName} ${person.lastName} to ${team.name}` });
+  await audit({ actorId: ctx.actorId ?? null, entityType: "Team", entityId: team.id, action: "ASSIGN", summary: `Ask Brett: assigned ${person.firstName} ${person.lastName} to ${team.name}${overCap ? ` (over target — ${newEffective}/${TEAM_CAP})` : ""}` });
 
-  return { ok: true, message: `Done — ${person.firstName} ${person.lastName} is now on ${team.name}.` };
+  return {
+    ok: true,
+    message: `Done — ${person.firstName} ${person.lastName} is now on ${team.name}.${overCap ? ` Heads up: this team is now ${newEffective}/${TEAM_CAP} — over the target of ${TEAM_CAP}. Move a player to another team to get back to ${TEAM_CAP}.` : ""}`,
+  };
 }
 
 /** Dispatch a tool call by name. Unknown / failed calls return an error object

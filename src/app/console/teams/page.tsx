@@ -8,7 +8,7 @@ import {
   rosterStatus,
   canPublishTeam,
 } from "@/lib/domain/teams";
-import { TEAM_CAP, WEEKDAYS } from "@/lib/enums";
+import { TEAM_CAP, TEAM_MAX, WEEKDAYS } from "@/lib/enums";
 import { getSeasonStats } from "@/lib/domain/seasonStats";
 import { RosteringTabs } from "@/components/RosteringTabs";
 import { TeamCreateForm } from "./TeamCreateForm";
@@ -303,7 +303,7 @@ export default async function TeamBuildBoard({
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Teams</h1>
           <p className="text-slate-500">
-            Every team&apos;s six fields and completion status. Cap {TEAM_CAP} per team.
+            Every team&apos;s six fields and completion status. Target {TEAM_CAP} per team (admins can add up to {TEAM_MAX} to shuffle rosters).
           </p>
         </div>
         <div className="flex items-center gap-3 text-sm">
@@ -658,12 +658,14 @@ export default async function TeamBuildBoard({
                 {/* Roster meter */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>Roster {roster.effective}/{TEAM_CAP}{t.coachPlays ? " (coach plays)" : ""}</span>
+                    <span className={roster.overCap ? "font-semibold text-amber-700" : ""}>
+                      Roster {roster.effective}/{TEAM_CAP}{t.coachPlays ? " (coach plays)" : ""}{roster.overCap ? " · over cap" : ""}
+                    </span>
                     <span>{roster.effective === 0 ? "no players yet" : ""}</span>
                   </div>
                   <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className={`h-full ${roster.effective > 0 ? "bg-emerald-500" : "bg-slate-300"}`}
+                      className={`h-full ${roster.overCap ? "bg-amber-500" : roster.effective > 0 ? "bg-emerald-500" : "bg-slate-300"}`}
                       style={{ width: `${Math.min(100, (roster.effective / TEAM_CAP) * 100)}%` }}
                     />
                   </div>
