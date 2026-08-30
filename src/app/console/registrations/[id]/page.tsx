@@ -6,8 +6,17 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { decryptField } from "@/lib/crypto";
 import { ACADEMY_MARKETS } from "@/lib/enums";
-import { formatDate } from "@/lib/time";
+import { formatDate, formatTime12 } from "@/lib/time";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
+
+// Short day + start time for a team, e.g. "Wed 5:00 PM", so staff can pick a
+// team whose schedule works for the player when assigning/moving them.
+const SHORT_DAY: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
+function teamDayTime(t: { dayOfWeek: string | null; startTime: string | null }): string | null {
+  const day = t.dayOfWeek ? SHORT_DAY[t.dayOfWeek] ?? t.dayOfWeek : null;
+  const time = t.startTime ? formatTime12(t.startTime) : null;
+  return [day, time].filter(Boolean).join(" ") || null;
+}
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { RecipientChecklist } from "@/components/RecipientChecklist";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -70,7 +79,7 @@ export default async function RegistrationDetail({
   const p = reg.person;
   const guardian = p.isMinor ? p.guardian : null;
   const [teams, membership, payments, sharedRegs] = await Promise.all([
-    prisma.team.findMany({ where: { seasonId: reg.seasonId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.team.findMany({ where: { seasonId: reg.seasonId }, orderBy: { name: "asc" }, select: { id: true, name: true, dayOfWeek: true, startTime: true } }),
     prisma.teamMember.findFirst({ where: { personId: p.id, team: { seasonId: reg.seasonId } }, include: { team: true } }),
     prisma.payment.findMany({ where: { partyId: p.id, seasonId: reg.seasonId }, orderBy: { createdAt: "desc" } }),
     // Other registrations on the SAME person record — renaming this person would
@@ -270,13 +279,21 @@ export default async function RegistrationDetail({
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">Team</p>
-            <p className="text-sm font-medium text-slate-800">{membership?.team?.name ?? "Unassigned"}</p>
+            <p className="text-sm font-medium text-slate-800">
+              {membership?.team?.name ?? "Unassigned"}
+              {membership?.team && teamDayTime(membership.team) ? (
+                <span className="ml-2 font-normal text-slate-500">· {teamDayTime(membership.team)}</span>
+              ) : null}
+            </p>
             <form method="POST" action="/api/console/registrations" className="mt-2 flex gap-2">
               {hidden}
               <input type="hidden" name="op" value="assignToTeam" />
               <select name="teamId" defaultValue={membership?.teamId ?? ""} className="input py-1 text-sm">
                 <option value="">— Select a team —</option>
-                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {teams.map((t) => {
+                  const dt = teamDayTime(t);
+                  return <option key={t.id} value={t.id}>{t.name}{dt ? ` · ${dt}` : ""}</option>;
+                })}
               </select>
               <button className="btn-primary py-1 text-xs whitespace-nowrap">{membership ? "Move" : "Assign"}</button>
             </form>
