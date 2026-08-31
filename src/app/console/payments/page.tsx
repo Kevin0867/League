@@ -542,15 +542,10 @@ export default async function PaymentsPage({
             <h2 className="font-semibold text-slate-900">Fee reminders</h2>
             <p className="text-sm text-slate-500">
               {outstanding.length > 0
-                ? `${outstanding.length} unpaid request${outstanding.length === 1 ? "" : "s"} (${formatCents(requested)}). Choose who to remind — these are real emails.`
+                ? `${outstanding.length} unpaid ${outstanding.length === 1 ? "family" : "families"} (${formatCents(requested)}). These send a real email + text — write your note, test it to yourself, then send.`
                 : "No outstanding fee requests right now."}
             </p>
           </div>
-          <form method="POST" action="/api/console/registrations">
-            <input type="hidden" name="ticket" value={ticket} />
-            <input type="hidden" name="op" value="sendTestPayment" />
-            <button className="btn-ghost text-sm">Send me a preview</button>
-          </form>
         </div>
         {outstanding.length > 0 && (
           <FeeReminderList

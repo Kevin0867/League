@@ -5,7 +5,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { ingestRegistration } from "@/lib/domain/intake";
 import { dispatchMessage } from "@/lib/messaging";
-import { sendEmail } from "@/lib/notify";
+import { sendEmail, sendSms } from "@/lib/notify";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { customPaymentEmailContent } from "@/lib/payments/customPaymentEmail";
@@ -355,8 +355,22 @@ export async function POST(req: Request) {
       description: "Sample — season fee preview",
       paymentId: "sample",
     });
-    const res = await sendEmail(me.email, `[Preview] ${sample.subject}`, sample.text, sample.html);
-    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "preview", action: "TEST_EMAIL", summary: res.ok ? (res.simulated ? `Preview simulated (provider unconfigured) for ${me.email}` : `Sent preview fee request to ${me.email}`) : `Preview to ${me.email} failed: ${res.error}` });
+    // Prepend the urgent note (if typed) so the preview shows the EXACT message
+    // families will get — email banner + text — before sending to everyone.
+    const note = String(fd.get("note") ?? "").trim().slice(0, 400);
+    const text = note ? `${note}\n\n${sample.text}` : sample.text;
+    const html = note
+      ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 14px;margin:0 0 16px;color:#9a3412;font-weight:600">${escapeHtml(note)}</div>${sample.html}`
+      : sample.html;
+    const res = await sendEmail(me.email, `[Preview] ${sample.subject}`, text, html);
+    // Also text the preview to the admin's own phone, so the SMS version can be
+    // checked too (the real blast sends email + SMS).
+    const myPhone = me.person?.phone?.trim();
+    if (myPhone) {
+      const sms = note ? `${note} ${sample.sms}`.slice(0, 480) : sample.sms;
+      await sendSms(myPhone, `[Preview] ${sms}`).catch(() => {});
+    }
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "preview", action: "TEST_EMAIL", summary: res.ok ? (res.simulated ? `Preview simulated (provider unconfigured) for ${me.email}` : `Sent preview fee request to ${me.email}${myPhone ? " (+SMS)" : ""}`) : `Preview to ${me.email} failed: ${res.error}` });
     if (!res.ok) {
       return NextResponse.redirect(new URL(`/console/payments?err=sendfail&reason=${encodeURIComponent((res.error ?? "send failed").slice(0, 180))}`, origin), 303);
     }

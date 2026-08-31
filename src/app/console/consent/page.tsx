@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { formatDateTime12 } from "@/lib/time";
 import { CONSENT_VERSION } from "@/lib/consent";
 import { requireAdmin } from "@/lib/rbac";
+import { mintConsoleTicket } from "@/lib/auth";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 // Auditable messaging-consent log — the defensible record of who opted in to
 // email/SMS, when, in what language, and from where. This is what we show a
@@ -21,8 +23,20 @@ export default async function ConsentLogPage({
 }) {
   await requireAdmin();
   const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const channel = sp.channel === "email" || sp.channel === "sms" ? sp.channel : null;
   const source = sp.source && sp.source !== "all" ? sp.source : null;
+
+  // How many contacts still aren't recorded as opted-in (have an address/phone
+  // but no consent timestamp) — the count the bulk action would cover.
+  const needsOptIn = await prisma.person.count({
+    where: {
+      OR: [
+        { AND: [{ email: { not: null } }, { emailConsentAt: null }] },
+        { AND: [{ phone: { not: null } }, { smsConsentAt: null }] },
+      ],
+    },
+  });
 
   const where = {
     ...(channel === "email" ? { emailOptIn: true } : {}),
@@ -57,12 +71,40 @@ export default async function ConsentLogPage({
         </a>
       </div>
 
+      {sp.ok === "bulk" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Recorded opt-in for <strong>{sp.e ?? "0"}</strong> email and <strong>{sp.s ?? "0"}</strong> SMS contact(s). Each has an auditable consent record.
+        </div>
+      )}
+      {sp.err && <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">Couldn&apos;t complete that — please try again.</div>}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Total consent records" value={total} />
         <Metric label="Email opt-ins" value={emailCount} />
         <Metric label="SMS opt-ins" value={smsCount} />
         <Metric label="Both channels" value={bothCount} />
       </div>
+
+      {/* Bulk opt-in — for consent gathered off-platform (e.g. at registration).
+          Only offered when there are contacts still missing a consent record. */}
+      {needsOptIn > 0 && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Record opt-in for existing contacts</h2>
+            <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
+              <strong>{needsOptIn}</strong> {needsOptIn === 1 ? "contact has" : "contacts have"} an email or phone on file but no consent record yet.
+              If everyone consented to email/SMS at registration, record it here — each gets an auditable consent row (source &ldquo;admin-bulk&rdquo;). Anyone who later replies STOP is still honored.
+            </p>
+          </div>
+          <ConfirmSubmit
+            action="/api/console/consent"
+            fields={{ ticket, op: "bulkOptIn" }}
+            confirm={`Record email + SMS opt-in for ${needsOptIn} contact(s)? Only do this if they consented (e.g. during registration) — it writes a consent record for each.`}
+            label="Mark all as opted-in"
+            className="btn-primary whitespace-nowrap text-sm"
+          />
+        </div>
+      )}
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
