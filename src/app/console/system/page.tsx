@@ -77,37 +77,69 @@ export default async function SystemPage({
             {sp.failed && sp.failed !== "0" ? ` · ${sp.failed} failed` : ""}
             {sp.remaining && sp.remaining !== "0" ? ` · ${sp.remaining} still to go — run again to continue` : " · all caught up"}.
           </p>
-          {sp.failinfo && (
-            <div className="mt-2">
-              <p className="font-medium">Why the failures (Zoho&apos;s reason):</p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                {sp.failinfo.split(" | ").map((r, i) => {
-                  // Each item is "email — reason". Link the email straight to the
-                  // person's record (registrations search) so it's one click to fix.
-                  const dash = r.indexOf(" — ");
-                  const email = dash > 0 ? r.slice(0, dash) : "";
-                  const reason = dash > 0 ? r.slice(dash + 3) : r;
-                  return (
-                    <li key={i} className="text-xs">
-                      {email ? (
-                        <Link href={`/console/registrations?q=${encodeURIComponent(email)}`} className="font-mono font-semibold text-amber-900 underline hover:text-amber-700">
-                          {email}
+          {sp.failrows && (() => {
+            let rows: { id: string; email: string; reason: string }[] = [];
+            try { rows = JSON.parse(sp.failrows); } catch { rows = []; }
+            if (!rows.length) return null;
+            return (
+              <div className="mt-2">
+                <p className="font-medium">Fix &amp; re-sync (Zoho&apos;s reason shown):</p>
+                <ul className="mt-1 space-y-2">
+                  {rows.map((row) => (
+                    <li key={row.id} className="rounded-md bg-white/60 p-2 ring-1 ring-amber-100">
+                      <div className="font-mono text-xs text-amber-900">{row.email} — {row.reason}</div>
+                      {/* Inline fix: correct the email and re-push this one contact
+                          to Zoho immediately, without leaving this page. */}
+                      <form method="POST" action="/api/console/zoho-backfill" className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="fixEmail" />
+                        <input type="hidden" name="personId" value={row.id} />
+                        <input type="hidden" name="failrows" value={sp.failrows} />
+                        <input
+                          name="email"
+                          defaultValue={row.email}
+                          type="email"
+                          className="input min-w-0 flex-1 py-1 text-xs"
+                          aria-label={`Corrected email for ${row.email}`}
+                        />
+                        <button className="btn-primary py-1 text-xs whitespace-nowrap">Fix &amp; re-sync</button>
+                        <Link href={`/console/registrations?q=${encodeURIComponent(row.email)}`} className="text-xs text-amber-800 underline hover:text-amber-600">
+                          open record
                         </Link>
-                      ) : null}
-                      <span className="font-mono"> — {reason}</span>
+                      </form>
                     </li>
-                  );
-                })}
-              </ul>
-              <p className="mt-2 text-xs text-amber-800">
-                Click an email to open that person&apos;s record, fix the email field, and save — then press{" "}
-                <strong>Sync registrations to Zoho</strong> below again. It only retries contacts not yet synced, so it&apos;s safe to run repeatedly.
-                Common causes: a typo in the domain (e.g. <span className="font-mono">.fom</span> → <span className="font-mono">.com</span>,
-                {" "}<span className="font-mono">.nwt</span> → <span className="font-mono">.net</span>), a blank email, a bad phone format, or a
-                contact Zoho has marked unsubscribed / do-not-mail (those you clear on the Zoho side).
-              </p>
-            </div>
-          )}
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-amber-800">
+                  Edit an address and press <strong>Fix &amp; re-sync</strong> — it saves the email and immediately re-pushes that
+                  contact to Zoho. Common causes: a domain typo (<span className="font-mono">.fom</span> → <span className="font-mono">.com</span>,
+                  {" "}<span className="font-mono">.nwt</span> → <span className="font-mono">.net</span>), a blank email, or a contact Zoho has
+                  marked unsubscribed / do-not-mail (clear that on the Zoho side, then re-sync).
+                </p>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+      {sp.fixok && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Saved <span className="font-mono">{sp.fixemail}</span> and synced to Zoho. ✓
+        </div>
+      )}
+      {sp.fixfail && (
+        <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Saved <span className="font-mono">{sp.fixemail}</span>, but Zoho still rejected it{sp.fixwhy ? ` — ${sp.fixwhy}` : ""}. If the
+          address is correct, Zoho likely has it on its unsubscribed / do-not-mail list — clear it in Zoho Campaigns, then re-sync.
+        </div>
+      )}
+      {sp.fixerr === "badformat" && (
+        <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <span className="font-mono">{sp.fixemail}</span> isn&apos;t a valid email address — check for a typo and try again.
+        </div>
+      )}
+      {(sp.fixerr === "missing" || sp.fixerr === "notfound") && (
+        <div className="rounded-lg border-l-4 border-rose-400 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          Couldn&apos;t fix that contact — please try again from a fresh sync.
         </div>
       )}
       {sp.bferr === "notconfigured" && (
