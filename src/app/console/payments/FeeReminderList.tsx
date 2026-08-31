@@ -38,6 +38,17 @@ export function FeeReminderList({ ticket, recipients }: { ticket: string; recipi
       <input type="hidden" name="ticket" value={ticket} />
       <input type="hidden" name="op" value="resendSelectedFees" />
 
+      {/* Optional urgent note, added to the top of every reminder (email + text).
+          Great for a deadline push, e.g. "Your season fee is due tomorrow." */}
+      <label className="mb-1 block text-xs font-medium text-slate-500">Add an urgent note (optional) — shown at the top of the email &amp; text</label>
+      <textarea
+        name="note"
+        rows={2}
+        defaultValue="Reminder: your season fee is due tomorrow. Please use your secure link below to pay — reply to this message if you need a payment plan or have a question."
+        placeholder="e.g. Your season fee is due tomorrow…"
+        className="input mb-3 w-full text-sm"
+      />
+
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs text-slate-500">{selected.size} of {recipients.length} selected</span>
         <button type="button" onClick={() => setAll(!allOn)} className="text-xs font-medium text-brand-600 hover:underline">

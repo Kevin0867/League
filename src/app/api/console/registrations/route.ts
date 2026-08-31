@@ -28,6 +28,11 @@ import { decryptField } from "@/lib/crypto";
 // 303-redirect pattern (see /api/console/facilities).
 export const dynamic = "force-dynamic";
 
+/** Minimal HTML escaper for admin-supplied text injected into an email body. */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
 /** Team ids for a season (used to enforce one-team-per-season on assign/move). */
 async function seasonTeamIds(seasonId: string): Promise<string[]> {
   const teams = await prisma.team.findMany({ where: { seasonId }, select: { id: true } });
@@ -237,6 +242,8 @@ export async function POST(req: Request) {
     if (!can(actor.role, "manageTeams")) return back("?err=auth");
     const ids = fd.getAll("paymentId").map((v) => String(v)).filter(Boolean);
     if (ids.length === 0) return NextResponse.redirect(new URL("/console/payments?ok=resentAll&n=0", origin), 303);
+    // Optional urgent note prepended to every reminder (e.g. a deadline push).
+    const note = String(fd.get("note") ?? "").trim().slice(0, 400);
     const payments = await prisma.payment.findMany({
       where: {
         id: { in: ids },
@@ -251,12 +258,18 @@ export async function POST(req: Request) {
       const person = await prisma.person.findUnique({ where: { id: pay.partyId } });
       if (!person) { tally.skipped++; if (!tally.reason) tally.reason = "a payer record was missing"; continue; }
       const email = reminderEmailFor(pay, person);
+      // Prepend the urgent note (if any) to each channel so it leads the message.
+      const text = note ? `${note}\n\n${email.text}` : email.text;
+      const sms = note ? `${note} ${email.sms}`.slice(0, 480) : email.sms;
+      const html = note
+        ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 14px;margin:0 0 16px;color:#9a3412;font-weight:600">${escapeHtml(note)}</div>${email.html}`
+        : email.html;
       // Per-payment address picks from the reminder list (name="to_<paymentId>").
       // Empty → fan out to all of the payer's addresses.
       const { picked } = await pickedRecipients(pay.partyId, fd.getAll(`to_${pay.id}`).map((v) => String(v)));
       const res = await dispatchMessage({
         senderId: actor.userId, seasonId: pay.seasonId ?? "", audienceType: "SINGLE_PERSON", audienceRef: pay.partyId,
-        channels: ["EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
+        channels: ["EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: text, html, smsBody: sms,
         ...(picked.length ? { toEmails: picked } : {}),
       });
       if (res.failures > 0) {
