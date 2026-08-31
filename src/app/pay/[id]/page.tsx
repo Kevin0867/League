@@ -96,13 +96,18 @@ export default async function PublicPayPage({
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-slate-800">Can&apos;t pay by the deadline?</p>
+              {payment!.category === "PLAYER_FEE" && (
+                <div className="mb-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-900">
+                  <span className="font-semibold">Want to spread it out?</span> You can split your dues into <strong>3 monthly payments</strong> — just choose <strong>&ldquo;Pay in 3&rdquo;</strong> above. No approval needed.
+                </div>
+              )}
+              <p className="text-sm font-semibold text-slate-800">Still can&apos;t pay by the deadline?</p>
               <p className="mt-0.5 text-xs text-slate-500">Tell us why in one tap — we&apos;ll reach out to help. No payment needed to send this.</p>
               <form method="POST" action="/api/pay/reason" className="mt-3 space-y-2">
                 <input type="hidden" name="paymentId" value={payment!.id} />
                 <div className="grid gap-1.5">
                   {[
-                    ["PAYMENT_PLAN", "I need a payment plan / more time"],
+                    ["PAYMENT_PLAN", "I need more time or a different arrangement"],
                     ["HARDSHIP", "Financial hardship"],
                     ["TEAM_QUESTION", "I have a question about my team/placement"],
                     ["NOT_PLAYING", "We&#39;re not playing this season"],
