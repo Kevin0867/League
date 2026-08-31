@@ -15,10 +15,10 @@ export default async function PublicPayPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ plan?: string; canceled?: string; err?: string; test?: string }>;
+  searchParams: Promise<{ plan?: string; canceled?: string; err?: string; test?: string; heard?: string }>;
 }) {
   const { id } = await params;
-  const { plan, canceled, err, test } = await searchParams;
+  const { plan, canceled, err, test, heard } = await searchParams;
 
   // Admin test mode (?test=1): an admin can click all the way through with no
   // real charge. Never available to a public payer.
@@ -84,6 +84,41 @@ export default async function PublicPayPage({
           <OneOffPayCard payment={payment!} title="Complete your payment" fallbackDesc="PURE Academy payment" canceled={canceled} err={err} />
         ) : (
           <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} testMode={testMode} />
+        )}
+
+        {/* Can't pay by the deadline? Let the family tell us why in one tap — it
+            routes to staff for a personal follow-up. Only while still unpaid. */}
+        {!invalid && payment!.status !== "PAID" && (
+          heard === "1" ? (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm text-emerald-800">
+              <div className="mx-auto mb-1 grid h-8 w-8 place-items-center rounded-full bg-emerald-100">✓</div>
+              Thank you — we&apos;ve got it and someone from PURE will reach out. You can still pay anytime using the link above.
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-800">Can&apos;t pay by the deadline?</p>
+              <p className="mt-0.5 text-xs text-slate-500">Tell us why in one tap — we&apos;ll reach out to help. No payment needed to send this.</p>
+              <form method="POST" action="/api/pay/reason" className="mt-3 space-y-2">
+                <input type="hidden" name="paymentId" value={payment!.id} />
+                <div className="grid gap-1.5">
+                  {[
+                    ["PAYMENT_PLAN", "I need a payment plan / more time"],
+                    ["HARDSHIP", "Financial hardship"],
+                    ["TEAM_QUESTION", "I have a question about my team/placement"],
+                    ["NOT_PLAYING", "We&#39;re not playing this season"],
+                    ["OTHER", "Something else"],
+                  ].map(([val, label]) => (
+                    <label key={val} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:border-brand-300 hover:bg-brand-50/40">
+                      <input type="radio" name="reason" value={val} required className="h-4 w-4" />
+                      <span dangerouslySetInnerHTML={{ __html: label }} />
+                    </label>
+                  ))}
+                </div>
+                <textarea name="note" rows={2} placeholder="Add anything you'd like us to know (optional)…" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+                <button className="btn-secondary w-full text-sm">Send to PURE</button>
+              </form>
+            </div>
+          )
         )}
 
         <p className="mt-6 text-center text-xs text-slate-400">

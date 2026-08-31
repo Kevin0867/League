@@ -157,6 +157,15 @@ export default async function PaymentsPage({
   });
   const importedTotal = imported.reduce((s, p) => s + p.amountCents, 0);
 
+  // Replies from families who told us why they can't pay by the deadline (from
+  // the pay page). Most recent first — a call list for staff follow-up.
+  const payerResponses = await prisma.auditLog.findMany({
+    where: { action: "PAYER_RESPONSE" },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+    select: { id: true, summary: true, createdAt: true },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -558,6 +567,24 @@ export default async function PaymentsPage({
           />
         )}
       </div>
+
+      {/* Why families haven't paid — replies captured from the pay page. */}
+      {payerResponses.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-slate-900">Why families haven&apos;t paid</h2>
+          <p className="text-sm text-slate-500">
+            {payerResponses.length} {payerResponses.length === 1 ? "reply" : "replies"} from the pay page — call these families back.
+          </p>
+          <ul className="mt-3 divide-y divide-slate-100">
+            {payerResponses.map((r) => (
+              <li key={r.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                <span className="text-slate-700">{r.summary}</span>
+                <span className="shrink-0 text-xs text-slate-400">{formatDate(r.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Coach payout register (§9) */}
       <div className="card">
