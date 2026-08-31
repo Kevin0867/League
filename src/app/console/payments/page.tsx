@@ -16,6 +16,7 @@ import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcil
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { smsConfigured, emailConfigured } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -551,6 +552,23 @@ export default async function PaymentsPage({
                 ? `${outstanding.length} unpaid ${outstanding.length === 1 ? "family" : "families"} (${formatCents(requested)}). These send a real email + text — write your note, test it to yourself, then send.`
                 : "No outstanding fee requests right now."}
             </p>
+            {/* Live delivery status — so you know before sending whether email
+                and text will ACTUALLY be delivered vs. simulated (provider off). */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${emailConfigured() ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-amber-50 text-amber-700 ring-1 ring-amber-100"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${emailConfigured() ? "bg-emerald-500" : "bg-amber-500"}`} />
+                Email: {emailConfigured() ? "connected" : "not configured"}
+              </span>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${smsConfigured() ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-amber-50 text-amber-700 ring-1 ring-amber-100"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${smsConfigured() ? "bg-emerald-500" : "bg-amber-500"}`} />
+                Text: {smsConfigured() ? "connected" : "not configured"}
+              </span>
+            </div>
+            {!smsConfigured() && (
+              <p className="mt-1.5 text-xs text-amber-700">
+                Texts won&apos;t actually send until Twilio is set in the environment (<code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_FROM</code>). Email still sends if it&apos;s connected.
+              </p>
+            )}
           </div>
         </div>
         {outstanding.length > 0 && (
