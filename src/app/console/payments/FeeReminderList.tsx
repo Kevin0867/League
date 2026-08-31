@@ -42,11 +42,16 @@ export function FeeReminderList({ ticket, recipients }: { ticket: string; recipi
           className="input w-full text-sm"
           placeholder="e.g. Your season fee is due tomorrow…"
         />
-        <form method="POST" action="/api/console/registrations" className="mt-2">
+        <form method="POST" action="/api/console/registrations" className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-medium text-slate-500">Send a test first — it delivers the exact email &amp; text below.</p>
           <input type="hidden" name="ticket" value={ticket} />
           <input type="hidden" name="op" value="sendTestPayment" />
           <input type="hidden" name="note" value={note} />
-          <button className="btn-ghost text-sm">Send a test to myself first →</button>
+          <div className="flex flex-wrap gap-2">
+            <input name="testEmail" type="email" placeholder="Test email (defaults to your login)" className="input min-w-0 flex-1 text-sm" />
+            <input name="testPhone" type="tel" placeholder="Test mobile for the text" className="input min-w-0 flex-1 text-sm" />
+          </div>
+          <button className="btn-secondary mt-2 text-sm">Send test to me →</button>
         </form>
       </div>
 

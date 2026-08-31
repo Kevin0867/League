@@ -362,22 +362,25 @@ export async function POST(req: Request) {
     const html = note
       ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 14px;margin:0 0 16px;color:#9a3412;font-weight:600">${escapeHtml(note)}</div>${sample.html}`
       : sample.html;
-    const res = await sendEmail(me.email, `[Preview] ${sample.subject}`, text, html);
-    // Also text the preview to the admin's own phone, so the SMS version can be
-    // checked too (the real blast sends email + SMS).
-    const myPhone = me.person?.phone?.trim();
-    if (myPhone) {
-      const sms = note ? `${note} ${sample.sms}`.slice(0, 480) : sample.sms;
-      await sendSms(myPhone, `[Preview] ${sms}`).catch(() => {});
+    // Send to the addresses the admin typed, falling back to their own account.
+    const testEmail = String(fd.get("testEmail") ?? "").trim().toLowerCase() || me.email;
+    const testPhone = String(fd.get("testPhone") ?? "").trim() || (me.person?.phone?.trim() ?? "");
+    const res = await sendEmail(testEmail, `[Preview] ${sample.subject}`, text, html);
+    // Text the SMS version too, so the whole message can be verified (the real
+    // blast sends email + SMS). Report exactly what happened per channel.
+    let sms: "sent" | "sim" | "none" | "fail" = "none";
+    if (testPhone) {
+      const smsText = note ? `${note} ${sample.sms}`.slice(0, 480) : sample.sms;
+      const r = await sendSms(testPhone, `[Preview] ${smsText}`).catch(() => ({ ok: false, simulated: false } as { ok: boolean; simulated: boolean }));
+      sms = r.ok ? (r.simulated ? "sim" : "sent") : "fail";
     }
-    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "preview", action: "TEST_EMAIL", summary: res.ok ? (res.simulated ? `Preview simulated (provider unconfigured) for ${me.email}` : `Sent preview fee request to ${me.email}${myPhone ? " (+SMS)" : ""}`) : `Preview to ${me.email} failed: ${res.error}` });
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: "preview", action: "TEST_EMAIL", summary: res.ok ? (res.simulated ? `Preview simulated for ${testEmail}` : `Sent preview to ${testEmail}`) + ` · text: ${sms}` : `Preview to ${testEmail} failed: ${res.error}` });
     if (!res.ok) {
       return NextResponse.redirect(new URL(`/console/payments?err=sendfail&reason=${encodeURIComponent((res.error ?? "send failed").slice(0, 180))}`, origin), 303);
     }
-    if (res.simulated) {
-      return NextResponse.redirect(new URL(`/console/payments?ok=testsim`, origin), 303);
-    }
-    return NextResponse.redirect(new URL(`/console/payments?ok=testsent`, origin), 303);
+    const qs = new URLSearchParams({ ok: res.simulated ? "testsim" : "testsent", to: testEmail, sms });
+    if (testPhone) qs.set("tel", testPhone);
+    return NextResponse.redirect(new URL(`/console/payments?${qs.toString()}`, origin), 303);
   }
 
   // The roster quick-actions require team-management rights.
