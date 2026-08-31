@@ -29,12 +29,29 @@ export default async function OrganizationsPage({
 
   const orgs = await prisma.organization.findMany({ orderBy: [{ isPrimary: "desc" }, { name: "asc" }] });
 
+  // Setup health per org — computed from its own config fields (truthful today,
+  // no per-tenant business data required). Green when the piece is configured.
+  const health = (o: (typeof orgs)[number]) => [
+    { label: "Branding", ok: !!(o.logoUrl && o.primaryColor) },
+    { label: "Domain", ok: !!o.primaryHost },
+    { label: "Email identity", ok: !!o.fromEmail },
+    { label: "Payments", ok: !!o.stripeAccountId },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Organizations"
-        subtitle="Each licensed customer runs on this same platform — one deployment, updated for everyone at once. PURE is the primary org; add a school, club, or company as a new self-branded org."
+        title="Mission Control"
+        subtitle="Every licensed organization runs on this one platform. Click into any org to manage its branding, domain, and identity."
       />
+
+      {/* The core SaaS promise: one codebase, one deploy — every feature and fix
+          ships to all orgs at once. */}
+      <div className="rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-3 text-sm text-brand-900">
+        <span className="font-semibold">One platform, every org.</span>{" "}
+        These are all the organizations licensed on PURE Play OS. There&apos;s a single shared codebase — every update
+        and fix you ship reaches all of them automatically. Each org keeps its own branding, domain, and data.
+      </div>
 
       {sp.ok && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
@@ -43,38 +60,59 @@ export default async function OrganizationsPage({
       )}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
-      <div className="card">
-        <h2 className="mb-3 font-semibold text-slate-900">Licensed organizations</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-              <tr><th className="py-2">Organization</th><th>Slug</th><th>Domain</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orgs.map((o) => (
-                <tr key={o.id}>
-                  <td className="py-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block h-3 w-3 rounded-full ring-1 ring-slate-200" style={{ background: o.primaryColor ?? "#2c4670" }} />
-                      <Link href={`/console/organizations/${o.id}`} className="font-medium text-brand-700 hover:underline">{o.name}</Link>
-                      {o.isPrimary && <span className="badge bg-brand-100 text-brand-800">Primary</span>}
-                    </div>
-                  </td>
-                  <td className="text-slate-500">{o.slug}</td>
-                  <td className="text-slate-500">{o.primaryHost ?? <span className="text-slate-300">{o.slug}.·</span>}</td>
-                  <td>
-                    <span className={`badge ${o.status === "ACTIVE" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{o.status.toLowerCase()}</span>
-                  </td>
-                  <td className="text-right"><Link href={`/console/organizations/${o.id}`} className="text-sm text-brand-700 hover:underline">Edit</Link></td>
-                </tr>
+      {/* Org cards — click any to open its detail/config. */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {orgs.map((o) => (
+          <Link
+            key={o.id}
+            href={`/console/organizations/${o.id}`}
+            className="group card flex flex-col gap-3 transition-shadow hover:shadow-md"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <span
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold text-white ring-1 ring-black/5"
+                  style={{ background: o.primaryColor ?? "#2c4670" }}
+                >
+                  {o.name.slice(0, 2).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-semibold text-slate-900 group-hover:text-brand-700">{o.name}</span>
+                    {o.isPrimary && <span className="badge bg-brand-100 text-brand-800">Primary</span>}
+                  </div>
+                  <div className="truncate text-xs text-slate-400">{o.slug}</div>
+                </div>
+              </div>
+              <span className={`badge ${o.status === "ACTIVE" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                {o.status.toLowerCase()}
+              </span>
+            </div>
+
+            <div className="text-xs text-slate-500">
+              <span className="font-medium text-slate-600">Routing:</span>{" "}
+              {o.primaryHost ? o.primaryHost : <span className="text-slate-400">{o.slug}.pureplayos.app (default)</span>}
+            </div>
+
+            <div className="mt-auto flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
+              {health(o).map((h) => (
+                <span
+                  key={h.label}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    h.ok ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-slate-50 text-slate-400 ring-1 ring-slate-100"
+                  }`}
+                >
+                  {h.ok ? "✓" : "○"} {h.label}
+                </span>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </Link>
+        ))}
       </div>
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">Add an organization</h2>
+        <h2 className="mb-1 text-lg font-semibold text-slate-900">Add an organization</h2>
+        <p className="mb-3 text-sm text-slate-500">Spin up a new self-branded tenant — a school, club, or company. It inherits every feature on the platform; you just set its branding, domain, and identity.</p>
         <OrgForm ticket={ticket} />
       </div>
     </div>
