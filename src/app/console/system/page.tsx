@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { requireAdmin } from "@/lib/rbac";
@@ -80,13 +81,30 @@ export default async function SystemPage({
             <div className="mt-2">
               <p className="font-medium">Why the failures (Zoho&apos;s reason):</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                {sp.failinfo.split(" | ").map((r, i) => (
-                  <li key={i} className="font-mono text-xs">{r}</li>
-                ))}
+                {sp.failinfo.split(" | ").map((r, i) => {
+                  // Each item is "email — reason". Link the email straight to the
+                  // person's record (registrations search) so it's one click to fix.
+                  const dash = r.indexOf(" — ");
+                  const email = dash > 0 ? r.slice(0, dash) : "";
+                  const reason = dash > 0 ? r.slice(dash + 3) : r;
+                  return (
+                    <li key={i} className="text-xs">
+                      {email ? (
+                        <Link href={`/console/registrations?q=${encodeURIComponent(email)}`} className="font-mono font-semibold text-amber-900 underline hover:text-amber-700">
+                          {email}
+                        </Link>
+                      ) : null}
+                      <span className="font-mono"> — {reason}</span>
+                    </li>
+                  );
+                })}
               </ul>
               <p className="mt-2 text-xs text-amber-800">
-                Common causes: an invalid/blank email, a bad phone format, or a contact Zoho has marked unsubscribed / do-not-mail.
-                Fix the field on the person&apos;s record and run the sync again — it retries anyone not yet synced.
+                Click an email to open that person&apos;s record, fix the email field, and save — then press{" "}
+                <strong>Sync registrations to Zoho</strong> below again. It only retries contacts not yet synced, so it&apos;s safe to run repeatedly.
+                Common causes: a typo in the domain (e.g. <span className="font-mono">.fom</span> → <span className="font-mono">.com</span>,
+                {" "}<span className="font-mono">.nwt</span> → <span className="font-mono">.net</span>), a blank email, a bad phone format, or a
+                contact Zoho has marked unsubscribed / do-not-mail (those you clear on the Zoho side).
               </p>
             </div>
           )}
