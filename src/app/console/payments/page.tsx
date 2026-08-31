@@ -417,12 +417,18 @@ export default async function PaymentsPage({
       )}
       {sp.ok === "testsent" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
-          Preview sent — check your inbox for the sample fee-request email.
+          Preview <strong>emailed</strong> to {sp.to ?? "you"}.{" "}
+          {sp.sms === "sent" ? <>Text <strong>sent</strong> to {sp.tel}.</>
+            : sp.sms === "sim" ? <>Text was <strong>simulated</strong> (SMS provider not configured) — the email is real, the text wasn&apos;t delivered.</>
+            : sp.sms === "fail" ? <>The text <strong>failed</strong> to {sp.tel} — check the number.</>
+            : <>No test mobile entered, so no text was sent — add one above to test the text too.</>}
+          {" "}Check both before sending to families.
         </div>
       )}
       {sp.ok === "testsim" && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Preview was <strong>simulated</strong> — the email provider isn&apos;t configured, so nothing was actually delivered. Set <code>RESEND_API_KEY</code> to send real email.
+          The email was <strong>simulated</strong> — the email provider isn&apos;t configured, so it wasn&apos;t actually delivered (set <code>RESEND_API_KEY</code>).{" "}
+          {sp.sms === "sent" ? <>The text <strong>did send</strong> to {sp.tel}.</> : sp.sms === "sim" ? <>The text was simulated too.</> : ""}
         </div>
       )}
       {sp.err === "sendfail" && (
