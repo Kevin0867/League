@@ -29,6 +29,7 @@ const ACADEMY_LINKS = [
   { label: "Schedule", href: "/schedule" },
   { label: "Standings", href: "/standings" },
   { label: "Clinics", href: "/clinics" },
+  { label: "Order Apparel", href: "/order-apparel" },
 ];
 const ACADEMY_LEGAL = [
   { label: "Season Terms & Refunds", href: "/season-terms" },
