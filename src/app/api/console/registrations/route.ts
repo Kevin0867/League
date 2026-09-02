@@ -16,6 +16,7 @@ import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
 import { accruePlayerSeasonFee, placementPayLink, splitFamilyFee } from "@/lib/payments/familyFee";
+import { feeStateOf } from "@/lib/domain/feeStatus";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
@@ -199,7 +200,7 @@ export async function POST(req: Request) {
       seasonScope = team.seasonId;
       if (partyIds.length === 0) return NextResponse.redirect(new URL(`/console/teams/${teamId}?ok=resentAll&n=0`, origin), 303);
     }
-    const payments = await prisma.payment.findMany({
+    const payments = (await prisma.payment.findMany({
       where: {
         direction: "IN",
         category: { in: [...REMINDABLE_CATEGORIES] },
@@ -207,7 +208,9 @@ export async function POST(req: Request) {
         ...(partyIds ? { partyId: { in: partyIds } } : {}),
         ...(seasonScope ? { seasonId: seasonScope } : {}),
       },
-    });
+      // Don't dun a family that's on the 3-payment plan and paying on schedule —
+      // an active subscription is not an unpaid fee.
+    })).filter((pay) => feeStateOf(pay) !== "subscription");
     const tally = newTally();
     for (const pay of payments) {
       if (!pay.partyId) { tally.skipped++; if (!tally.reason) tally.reason = "a charge had no payer on file"; continue; }

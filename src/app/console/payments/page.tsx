@@ -17,6 +17,7 @@ import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
+import { feeStateOf } from "@/lib/domain/feeStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,14 @@ export default async function PaymentsPage({
 
   const collected = (collectedAgg._sum.amountCents ?? 0) + installmentPaidCents;
   const requested = Math.max(0, outstanding.reduce((s, p) => s + p.amountCents, 0) - installmentPaidCents);
+  // Families to actually remind: exclude active 3-payment subscriptions (paying
+  // on schedule — not an unpaid fee), so we never dun someone mid-plan.
+  const remindable = outstanding.filter((p) => feeStateOf(p) !== "subscription");
+  const remindableDue = Math.max(0, remindable.reduce((s, p) => s + p.amountCents, 0) - remindable.reduce((s, p) => {
+    if (!p.installmentPlan || !p.installmentsPaid) return s;
+    const total = p.installmentsTotal ?? 3;
+    return s + Math.round((p.amountCents / total) * Math.min(p.installmentsPaid, total));
+  }, 0));
   const paidOut = paidOutAgg._sum.amountCents ?? 0;
 
   // Break "Collected" into season fees vs everything else, and compute apparel
@@ -548,9 +557,9 @@ export default async function PaymentsPage({
           <div>
             <h2 className="font-semibold text-slate-900">Fee reminders</h2>
             <p className="text-sm text-slate-500">
-              {outstanding.length > 0
-                ? `${outstanding.length} unpaid ${outstanding.length === 1 ? "family" : "families"} (${formatCents(requested)}). These send a real email + text — write your note, test it to yourself, then send.`
-                : "No outstanding fee requests right now."}
+              {remindable.length > 0
+                ? `${remindable.length} unpaid ${remindable.length === 1 ? "family" : "families"} (${formatCents(remindableDue)}). Families on the 3-payment plan are excluded — they're paying on schedule. These send a real email + text — write your note, test it to yourself, then send.`
+                : "No outstanding fee requests right now (anyone on the payment plan is paying on schedule)."}
             </p>
             {/* Live delivery status — so you know before sending whether email
                 and text will ACTUALLY be delivered vs. simulated (provider off). */}
@@ -571,10 +580,10 @@ export default async function PaymentsPage({
             )}
           </div>
         </div>
-        {outstanding.length > 0 && (
+        {remindable.length > 0 && (
           <FeeReminderList
             ticket={ticket}
-            recipients={outstanding.map((p) => ({
+            recipients={remindable.map((p) => ({
               id: p.id,
               name: p.party ? `${p.party.firstName} ${p.party.lastName}` : "Unknown payer",
               amount: formatCents(p.amountCents),

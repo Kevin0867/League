@@ -9,6 +9,7 @@ import { ACADEMY_MARKETS } from "@/lib/enums";
 import { formatDate, formatTime12 } from "@/lib/time";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { ApparelRequestForm } from "@/components/ApparelRequestForm";
+import { feeStateOf } from "@/lib/domain/feeStatus";
 
 // Short day + start time for a team, e.g. "Wed 5:00 PM", so staff can pick a
 // team whose schedule works for the player when assigning/moving them.
@@ -84,7 +85,17 @@ export default async function RegistrationDetail({
   const [teams, membership, payments, sharedRegs] = await Promise.all([
     prisma.team.findMany({ where: { seasonId: reg.seasonId }, orderBy: { name: "asc" }, select: { id: true, name: true, dayOfWeek: true, startTime: true } }),
     prisma.teamMember.findFirst({ where: { personId: p.id, team: { seasonId: reg.seasonId } }, include: { team: true } }),
-    prisma.payment.findMany({ where: { partyId: p.id, seasonId: reg.seasonId }, orderBy: { createdAt: "desc" } }),
+    // Season fee(s) for THIS player — matched by who the fee covers (a minor is
+    // billed through a guardian, so partyId alone would miss it) as well as
+    // partyId for legacy single-player rows.
+    prisma.payment.findMany({
+      where: {
+        seasonId: reg.seasonId,
+        category: "PLAYER_FEE",
+        OR: [{ partyId: p.id }, { coveredPersonIds: { array_contains: p.id } }],
+      },
+      orderBy: { createdAt: "desc" },
+    }),
     // Other registrations on the SAME person record — renaming this person would
     // rename those too, so surface a "split onto its own record" fix when present.
     prisma.registration.findMany({
@@ -93,8 +104,10 @@ export default async function RegistrationDetail({
       include: { division: { select: { name: true } }, season: { select: { name: true } } },
     }),
   ]);
-  const outstanding = payments.find((x) => x.category === "PLAYER_FEE" && ["REQUESTED", "PENDING"].includes(x.status));
-  const paid = payments.find((x) => x.category === "PLAYER_FEE" && x.status === "PAID");
+  const paid = payments.find((x) => x.status === "PAID");
+  // On the 3-payment plan, signed up and paying — distinct from an unpaid fee.
+  const subscription = !paid ? payments.find((x) => feeStateOf(x) === "subscription") : undefined;
+  const outstanding = !paid && !subscription ? payments.find((x) => ["REQUESTED", "PENDING"].includes(x.status)) : undefined;
 
   // When each thing was last sent — read from the message log (audienceRef is the
   // player or, for fee/launch, the paying guardian), so admins can see the
@@ -231,12 +244,20 @@ export default async function RegistrationDetail({
           <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">2 · Season fee + apparel</div>
             <p className="mb-2 mt-0.5 text-xs text-slate-500">
-              {paid ? "✓ Paid." : outstanding ? `${outstanding.status.toLowerCase()} — not yet paid.` : "Not requested yet."}
+              {paid
+                ? "✓ Paid in full."
+                : subscription
+                ? `✓ Subscription — paying in ${subscription.installmentsTotal ?? 3} (${subscription.installmentsPaid ?? 1} in).`
+                : outstanding
+                ? `${outstanding.status.toLowerCase()} — not yet paid.`
+                : "Not requested yet."}
               {lastSent.fee ? ` Last sent ${formatDate(lastSent.fee)}.` : ""}
             </p>
             <div className="mt-auto">
               {paid ? (
                 <span className="text-xs text-emerald-600">Paid — nothing to send.</span>
+              ) : subscription ? (
+                <span className="text-xs text-emerald-600">On the payment plan — nothing to send.</span>
               ) : outstanding ? (
                 <ConfirmSubmit
                   action="/api/console/registrations"
@@ -316,10 +337,16 @@ export default async function RegistrationDetail({
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">Season fee</p>
             <p className="text-sm font-medium text-slate-800">
-              {paid ? `Paid ${formatCents(paid.amountCents)}` : outstanding ? `${outstanding.status.toLowerCase()} · ${formatCents(outstanding.amountCents)}` : "Not requested"}
+              {paid
+                ? `Paid ${formatCents(paid.amountCents)}`
+                : subscription
+                ? `Subscription · ${subscription.installmentsPaid ?? 1} of ${subscription.installmentsTotal ?? 3} paid`
+                : outstanding
+                ? `${outstanding.status.toLowerCase()} · ${formatCents(outstanding.amountCents)}`
+                : "Not requested"}
             </p>
             <div className="mt-2 flex flex-wrap gap-3">
-              {!outstanding && !paid && (
+              {!outstanding && !paid && !subscription && (
                 <form method="POST" action="/api/console/registrations">
                   {hidden}<input type="hidden" name="op" value="requestFee" />
                   <button className="btn-secondary py-1 text-xs">Request season fee</button>

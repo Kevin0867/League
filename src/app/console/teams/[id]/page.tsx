@@ -8,6 +8,7 @@ import { TEAM_CAP, TEAM_MAX, WEEKDAYS } from "@/lib/enums";
 import { TEAM_COLOR_PALETTE } from "@/lib/domain/teamName";
 import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
 import { coveredIds } from "@/lib/payments/familyFee";
+import { feeStateOf, feeStateRank, feeStateDisplay, type FeeState } from "@/lib/domain/feeStatus";
 import { TeamColorDot } from "@/components/TeamColorDot";
 import { TeamScheduleFields } from "./TeamScheduleFields";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
@@ -171,25 +172,24 @@ export default async function TeamDetailPage({
   const seasonFees = memberIds.length
     ? await prisma.payment.findMany({
         where: { seasonId: team.seasonId, category: "PLAYER_FEE", status: { in: ["PAID", "REFUNDED", "REQUESTED", "PENDING"] } },
-        select: { partyId: true, coveredPersonIds: true, status: true },
+        select: { partyId: true, coveredPersonIds: true, status: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true },
       })
     : [];
   const memberIdSet = new Set(memberIds);
-  const feeStatusByPerson = new Map<string, string>();
-  const feeRank = (s: string) => (s === "PAID" ? 3 : s === "REFUNDED" ? 2 : 1);
+  // Most significant fee state per rostered player, matched by who the fee COVERS.
+  const feeStateByPerson = new Map<string, FeeState>();
   for (const p of seasonFees) {
+    const s = feeStateOf(p);
     for (const pid of coveredIds(p)) {
       if (!memberIdSet.has(pid)) continue;
-      const cur = feeStatusByPerson.get(pid);
-      if (!cur || feeRank(p.status) > feeRank(cur)) feeStatusByPerson.set(pid, p.status);
+      const cur = feeStateByPerson.get(pid);
+      if (!cur || feeStateRank(s) > feeStateRank(cur)) feeStateByPerson.set(pid, s);
     }
   }
   const feeBadge = (personId: string) => {
-    const s = feeStatusByPerson.get(personId);
-    if (s === "PAID") return <span className="ml-2 text-emerald-700">✓ paid</span>;
-    if (s === "REFUNDED") return <span className="ml-2 text-slate-500">refunded</span>;
-    if (s === "REQUESTED" || s === "PENDING") return <span className="ml-2 text-amber-600">fee due</span>;
-    return <span className="ml-2 text-slate-400">no fee yet</span>;
+    const d = feeStateDisplay(feeStateByPerson.get(personId) ?? "none");
+    const tone = d.tone === "emerald" ? "text-emerald-700" : d.tone === "amber" ? "text-amber-600" : "text-slate-400";
+    return <span className={`ml-2 ${tone}`}>{d.check ? "✓ " : ""}{d.label}</span>;
   };
 
   // Colors used by OTHER teams in this team's gender+level group (divisionCode) —

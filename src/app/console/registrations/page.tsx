@@ -12,6 +12,7 @@ import { requireAdmin } from "@/lib/rbac";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
 import { coveredIds } from "@/lib/payments/familyFee";
+import { feeStateOf, feeStateRank, type FeeState } from "@/lib/domain/feeStatus";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -165,7 +166,7 @@ export default async function RegistrationsPage({
     // (a minor's invoice is billed to a guardian, so keying on partyId would
     // never match the child). coveredPersonIds also reveals a consolidated
     // family invoice (one row covering several players) that can be split.
-    prisma.payment.findMany({ where: { seasonId: scopeSeasonId, category: "PLAYER_FEE" }, select: { id: true, partyId: true, seasonId: true, status: true, coveredPersonIds: true } }),
+    prisma.payment.findMany({ where: { seasonId: scopeSeasonId, category: "PLAYER_FEE" }, select: { id: true, partyId: true, seasonId: true, status: true, coveredPersonIds: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true } }),
   ]);
   // Short day + time so each team option reads e.g. "PURE Scottsdale W3.0 · Wed
   // 5:00 PM" — staff can see a player's current day/time and compare the others
@@ -184,15 +185,16 @@ export default async function RegistrationsPage({
   }
   const teamByPersonSeason = new Map<string, string>();
   for (const m of memberships) teamByPersonSeason.set(`${m.personId}:${m.team.seasonId}`, m.teamId);
-  const payByPersonSeason = new Map<string, string>();
-  const statusRank = (s: string) => (s === "PAID" ? 3 : s === "REFUNDED" ? 2 : 1);
+  const payByPersonSeason = new Map<string, FeeState>();
   // Attribute each invoice to every player it covers (not the paying adult), so a
-  // child billed through a guardian shows the right fee status.
+  // child billed through a guardian shows the right fee status. Keep the most
+  // significant state (paid > subscription > refunded > unpaid).
   for (const p of payments) {
+    const s = feeStateOf(p);
     for (const pid of coveredIds(p)) {
       const key = `${pid}:${p.seasonId}`;
       const cur = payByPersonSeason.get(key);
-      if (!cur || statusRank(p.status) > statusRank(cur)) payByPersonSeason.set(key, p.status);
+      if (!cur || feeStateRank(s) > feeStateRank(cur)) payByPersonSeason.set(key, s);
     }
   }
   // Players sharing ONE not-yet-paid invoice with someone else — a legacy
@@ -202,13 +204,8 @@ export default async function RegistrationsPage({
     const ids = coveredIds(p);
     if (p.status === "REQUESTED" && ids.length > 1) ids.forEach((id) => sharedCoveredIds.add(id));
   }
-  const payStatusOf = (personId: string, seasonId: string): "none" | "requested" | "paid" | "refunded" => {
-    const s = payByPersonSeason.get(`${personId}:${seasonId}`);
-    if (s === "PAID") return "paid";
-    if (s === "REFUNDED") return "refunded";
-    if (s === "REQUESTED" || s === "PENDING") return "requested";
-    return "none";
-  };
+  const payStatusOf = (personId: string, seasonId: string): FeeState =>
+    payByPersonSeason.get(`${personId}:${seasonId}`) ?? "none";
 
   const people = registrations.map((r) => ({
     id: r.person.id,
