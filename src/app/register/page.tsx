@@ -5,7 +5,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { RegisterForm } from "@/components/RegisterForm";
 import { prisma } from "@/lib/db";
 import { ACADEMY_MARKETS, TEAM_CAP } from "@/lib/enums";
-import { formatDate } from "@/lib/time";
+import { formatDate, closeDayLabel } from "@/lib/time";
 import { teamDisplayName, teamCategoryLabel } from "@/lib/domain/teamName";
 import { practiceTimeRange, dayOfWeekPlural } from "@/lib/domain/practiceInfo";
 
@@ -129,7 +129,7 @@ export default async function RegisterPage({
       <div className="mx-auto max-w-3xl px-4 py-10">
         {alreadyClosed && (
           <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
-            <p className="font-semibold text-amber-900">Registration for {season.name} has closed{season.closesOn ? ` (${formatDate(season.closesOn)})` : ""}.</p>
+            <p className="font-semibold text-amber-900">Registration for {season.name} has closed{season.closesOn ? ` (${closeDayLabel(season.closesOn)})` : ""}.</p>
             <p className="mt-1 text-sm text-amber-800">
               You can still sign up below to join the <strong>waitlist</strong> — we&apos;ll reach out if a spot opens up. No payment is due unless you&apos;re placed.
             </p>
