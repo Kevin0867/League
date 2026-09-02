@@ -13,6 +13,7 @@ export function RowActions({
   teams,
   payStatus,
   waiverSigned,
+  sharedInvoice = false,
 }: {
   ticket: string;
   personId: string;
@@ -22,6 +23,9 @@ export function RowActions({
   teams: Team[];
   payStatus: "none" | "requested" | "paid" | "refunded";
   waiverSigned: boolean;
+  /** This player shares one not-yet-paid invoice with others (a consolidated
+   *  family fee) — offer to split them onto their own per-player invoice. */
+  sharedInvoice?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -110,6 +114,20 @@ export function RowActions({
                     Send back to pool
                   </button>
                 </form>
+              )}
+
+              {sharedInvoice && (
+                <div className="border-t border-slate-100 pt-2">
+                  <p className="mb-1 text-[11px] text-slate-500">
+                    On one shared family invoice. Split so this player has their own fee &amp; pay link.
+                  </p>
+                  <form method="POST" action="/api/console/registrations" onSubmit={confirmSend("Split this family's fee into a separate invoice for each player? Each player will then have their own pay link.")}>
+                    <Hidden op="splitFee" />
+                    <button className="w-full rounded-md border border-brand-200 bg-brand-50 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
+                      Split into separate fees
+                    </button>
+                  </form>
+                </div>
               )}
 
               {payStatus === "paid" && (
