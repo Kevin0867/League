@@ -41,9 +41,10 @@ export function registrationConfirmationContent(s: RegistrationSummary): { subje
 
   const wl = !!s.waitlisted;
   const waitBanner = wl
-    ? `<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:12px 16px;margin-bottom:14px">` +
-      `<p style="margin:0;font-size:14px;color:#92400e"><strong>Registration for ${esc(s.seasonName)} has closed.</strong> ` +
-      `You're on the <strong>waitlist</strong> — we'll be in touch if a spot opens up. No payment is due unless you're placed.</p></div>`
+    ? `<div style="border:2px solid #f59e0b;background:#fffbeb;border-radius:12px;padding:16px 18px;margin-bottom:16px;text-align:center">` +
+      `<div style="display:inline-block;background:#f59e0b;color:#ffffff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;margin-bottom:8px">★ You're on the waitlist</div>` +
+      `<p style="margin:0;font-size:15px;color:#92400e;font-weight:600">Registration for ${esc(s.seasonName)} is closed, so you have not been placed on a team yet.</p>` +
+      `<p style="margin:6px 0 0;font-size:13px;color:#b45309">We'll email you if a spot opens up. <strong>No payment is due, and your spot is not reserved,</strong> unless we place you.</p></div>`
     : "";
   const followUp = wl
     ? `<p style="margin:16px 0 12px;font-size:14px;color:#475569">We've added ${

@@ -148,6 +148,17 @@ export default async function RegistrationDetail({
           <p className="text-sm text-slate-500">{reg.season?.name} · <StatusBadge status={reg.status} /></p>
         </div>
       </div>
+
+      {reg.status === "WAITLISTED" && (
+        <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3">
+          <p className="font-semibold text-amber-900">★ On the waitlist — not placed yet.</p>
+          <p className="mt-0.5 text-sm text-amber-800">
+            To take {p.firstName} off the waitlist: <strong>assign a team below</strong> — that moves them to Placed. Then hit
+            <strong> &ldquo;Send all&rdquo;</strong> to email the welcome, the pay link (fee + apparel), and the waiver in one go —
+            or send each from the checklist below.
+          </p>
+        </div>
+      )}
       {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok]}</p>}
       {sp.ok === "requested" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
