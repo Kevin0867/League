@@ -102,6 +102,49 @@ export async function accruePlayerSeasonFee(opts: {
   return { paymentId: created.id, payerId, amountCents: feeCents, coveredCount: 1, created: true };
 }
 
+export type SplitResult =
+  | { ok: true; created: number; players: number }
+  | { ok: false; reason: "notfound" | "single" | "inflight" };
+
+/**
+ * Split a consolidated season-fee invoice (one payment covering several players —
+ * a legacy "one total per family" charge) into a separate per-player invoice for
+ * each covered player, so a father and son on two different teams each get their
+ * own invoice, pay link, and clean per-team revenue.
+ *
+ * Safe by construction: only a REQUESTED invoice (no money moved yet, no apparel
+ * bundled at checkout) is split. A PENDING or PAID invoice is left untouched and
+ * reported back as "inflight" — that has to be refunded before it can be split.
+ * The consolidated row is deleted FIRST so the per-player accrual below creates
+ * fresh invoices instead of finding and reusing the very row we're replacing.
+ */
+export async function splitFamilyFee(opts: {
+  playerId: string;
+  seasonId: string;
+  feeCents: number;
+  seasonName: string;
+}): Promise<SplitResult> {
+  const { playerId, seasonId, feeCents, seasonName } = opts;
+  const open = await prisma.payment.findMany({
+    where: { seasonId, category: "PLAYER_FEE", status: { in: OPEN_STATUSES } },
+    select: { id: true, coveredPersonIds: true, partyId: true, status: true },
+  });
+  const inv = open.find((p) => coveredIds(p).includes(playerId));
+  if (!inv) return { ok: false, reason: "notfound" };
+
+  const covered = coveredIds(inv);
+  if (covered.length <= 1) return { ok: false, reason: "single" };
+  if (inv.status !== "REQUESTED") return { ok: false, reason: "inflight" };
+
+  await prisma.payment.delete({ where: { id: inv.id } });
+  let created = 0;
+  for (const pid of covered) {
+    const res = await accruePlayerSeasonFee({ playerId: pid, seasonId, feeCents, seasonName });
+    if (res.created) created++;
+  }
+  return { ok: true, created, players: covered.length };
+}
+
 /**
  * For a placed player, ensure the season fee is invoiced and return the secure
  * pay link + fee amount, so placement / welcome / launch emails can carry a

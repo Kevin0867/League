@@ -11,6 +11,7 @@ import { RegistrationsBulkBar } from "@/components/RegistrationsBulkBar";
 import { requireAdmin } from "@/lib/rbac";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
+import { coveredIds } from "@/lib/payments/familyFee";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ const OK: Record<string, string> = {
   merged: "Records merged into one.",
   bulkWaiver: "Waiver sent to the selected players.",
   bulkFee: "Season fee requested for the selected players.",
+  split: "Fee split into a separate invoice per player — each can now be paid and moved on its own.",
 };
 const ERRORS: Record<string, string> = {
   pickpair: "Pick two different records to merge.",
@@ -43,6 +45,8 @@ const ERRORS: Record<string, string> = {
   refundfail: "The refund could not be processed — check Stripe.",
   fields: "Missing information.",
   op: "Unknown action.",
+  splitpaid: "That fee is already paid or in progress — refund it first, then split.",
+  splitsingle: "That player already has their own separate invoice — nothing to split.",
 };
 
 export default async function RegistrationsPage({
@@ -157,7 +161,11 @@ export default async function RegistrationsPage({
   const [teamRows, memberships, payments] = await Promise.all([
     prisma.team.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, seasonId: true, dayOfWeek: true, startTime: true } }),
     prisma.teamMember.findMany({ where: { personId: { in: personIds } }, select: { personId: true, teamId: true, team: { select: { seasonId: true } } } }),
-    prisma.payment.findMany({ where: { partyId: { in: personIds }, category: "PLAYER_FEE" }, select: { partyId: true, seasonId: true, status: true } }),
+    // Season-fee invoices for this season, attributed by the PLAYER they cover
+    // (a minor's invoice is billed to a guardian, so keying on partyId would
+    // never match the child). coveredPersonIds also reveals a consolidated
+    // family invoice (one row covering several players) that can be split.
+    prisma.payment.findMany({ where: { seasonId: scopeSeasonId, category: "PLAYER_FEE" }, select: { id: true, partyId: true, seasonId: true, status: true, coveredPersonIds: true } }),
   ]);
   // Short day + time so each team option reads e.g. "PURE Scottsdale W3.0 · Wed
   // 5:00 PM" — staff can see a player's current day/time and compare the others
@@ -177,12 +185,22 @@ export default async function RegistrationsPage({
   const teamByPersonSeason = new Map<string, string>();
   for (const m of memberships) teamByPersonSeason.set(`${m.personId}:${m.team.seasonId}`, m.teamId);
   const payByPersonSeason = new Map<string, string>();
+  const statusRank = (s: string) => (s === "PAID" ? 3 : s === "REFUNDED" ? 2 : 1);
+  // Attribute each invoice to every player it covers (not the paying adult), so a
+  // child billed through a guardian shows the right fee status.
   for (const p of payments) {
-    // Prefer the most significant status (PAID > REFUNDED > REQUESTED/PENDING).
-    const key = `${p.partyId}:${p.seasonId}`;
-    const rank = (s: string) => (s === "PAID" ? 3 : s === "REFUNDED" ? 2 : 1);
-    const cur = payByPersonSeason.get(key);
-    if (!cur || rank(p.status) > rank(cur)) payByPersonSeason.set(key, p.status);
+    for (const pid of coveredIds(p)) {
+      const key = `${pid}:${p.seasonId}`;
+      const cur = payByPersonSeason.get(key);
+      if (!cur || statusRank(p.status) > statusRank(cur)) payByPersonSeason.set(key, p.status);
+    }
+  }
+  // Players sharing ONE not-yet-paid invoice with someone else — a legacy
+  // consolidated family fee. Each can be split onto their own per-player invoice.
+  const sharedCoveredIds = new Set<string>();
+  for (const p of payments) {
+    const ids = coveredIds(p);
+    if (p.status === "REQUESTED" && ids.length > 1) ids.forEach((id) => sharedCoveredIds.add(id));
   }
   const payStatusOf = (personId: string, seasonId: string): "none" | "requested" | "paid" | "refunded" => {
     const s = payByPersonSeason.get(`${personId}:${seasonId}`);
@@ -457,6 +475,7 @@ export default async function RegistrationsPage({
                     teams={teamsBySeason.get(r.seasonId) ?? []}
                     payStatus={payStatusOf(r.person.id, r.seasonId)}
                     waiverSigned={!!r.person.waiverSignedAt}
+                    sharedInvoice={sharedCoveredIds.has(r.person.id)}
                   />
                 </td>
               </tr>

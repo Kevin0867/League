@@ -15,7 +15,7 @@ import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal
 import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
-import { accruePlayerSeasonFee, placementPayLink } from "@/lib/payments/familyFee";
+import { accruePlayerSeasonFee, placementPayLink, splitFamilyFee } from "@/lib/payments/familyFee";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
@@ -517,6 +517,30 @@ export async function POST(req: Request) {
       }
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: res.paymentId, action: "REQUESTED", summary: `Fee ${res.created ? "requested" : "re-sent"} for ${person.firstName} ${person.lastName}` });
       return back("?ok=fee");
+    }
+
+    // Split a consolidated family fee (one invoice covering several players) into
+    // a separate per-player invoice for each — e.g. a father and son on two
+    // different teams. Only a not-yet-paid (REQUESTED) invoice can be split.
+    case "splitFee": {
+      if (!reg) return back("?err=fields");
+      const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } });
+      const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      const feeCents = rate?.seasonFeeCents ?? 49500;
+      const season = await prisma.season.findUnique({ where: { id: reg.seasonId }, select: { name: true } });
+      const res = await splitFamilyFee({ playerId: personId, seasonId: reg.seasonId, feeCents, seasonName: season?.name ?? "Season" });
+      if (!res.ok) {
+        const code = res.reason === "inflight" ? "splitpaid" : res.reason === "single" ? "splitsingle" : "fields";
+        return back(`?err=${code}`);
+      }
+      await audit({
+        actorId: actor.userId,
+        entityType: "Registration",
+        entityId: reg.id,
+        action: "payment.split",
+        summary: `Split family fee into ${res.players} per-player invoices${person ? ` (via ${person.firstName} ${person.lastName})` : ""}`,
+      });
+      return back("?ok=split");
     }
 
     // Email the player (or a minor's parent/guardian) a tokenized, no-login link
