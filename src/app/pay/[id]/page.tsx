@@ -82,13 +82,15 @@ export default async function PublicPayPage({
           <OneOffPayCard payment={payment!} title="Confirm your spot" fallbackDesc="PURE Academy clinic" canceled={canceled} err={err} />
         ) : payment!.category === "CUSTOM" || payment!.category === "ACP_ENTRY" ? (
           <OneOffPayCard payment={payment!} title="Complete your payment" fallbackDesc="PURE Academy payment" canceled={canceled} err={err} />
+        ) : payment!.category === "APPAREL" ? (
+          <ApparelOrderCard payment={payment!} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} testMode={testMode} />
         ) : (
           <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} testMode={testMode} />
         )}
 
         {/* Can't pay by the deadline? Let the family tell us why in one tap — it
             routes to staff for a personal follow-up. Only while still unpaid. */}
-        {!invalid && payment!.status !== "PAID" && (
+        {!invalid && payment!.status !== "PAID" && payment!.category !== "APPAREL" && (
           heard === "1" ? (
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm text-emerald-800">
               <div className="mx-auto mb-1 grid h-8 w-8 place-items-center rounded-full bg-emerald-100">✓</div>
@@ -193,6 +195,74 @@ function OneOffPayCard({
         <input type="hidden" name="plan" value="full" />
         <button className="btn-primary w-full py-3 text-base">Pay {formatCents(payment.amountCents)} now</button>
       </form>
+    </div>
+  );
+}
+
+// Standalone team-apparel order — no season fee. Reuses the apparel picker in
+// "apparel-only" mode: the apparel items are the whole charge.
+function ApparelOrderCard({
+  payment,
+  canceled,
+  err,
+  shirtCents,
+  tankCents,
+  players,
+  testMode,
+}: {
+  payment: { id: string; amountCents: number; description: string | null; party: { firstName: string } | null };
+  canceled?: string;
+  err?: string;
+  shirtCents: number;
+  tankCents: number;
+  players: { id: string; name: string }[];
+  testMode: boolean;
+}) {
+  const forWho = payment.party?.firstName ? ` for ${payment.party.firstName}` : "";
+  return (
+    <div className="card">
+      <h1 className="text-2xl font-bold text-slate-900">Order team apparel{forWho}</h1>
+      <p className="mt-1 text-sm text-slate-500">{payment.description ?? "PURE Academy team apparel"}</p>
+
+      {testMode && (
+        <p className="mt-3 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+          <strong>Admin test mode.</strong> Completing checkout records the apparel order <em>without any real charge</em>.
+        </p>
+      )}
+      {canceled && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Checkout was canceled — no charge was made. You can try again below.
+        </p>
+      )}
+      {err === "apparel" && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Please add at least one team T-shirt or tank top to your order before checking out.
+        </p>
+      )}
+      {err === "stripe" && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          Our payment provider didn&apos;t respond, so checkout couldn&apos;t start. <strong>No charge was made.</strong> Please try again in a moment.
+        </p>
+      )}
+
+      <p className="mt-4 text-xs text-slate-500">
+        Secure checkout is hosted by Stripe — we never see your card details. No account or login required.
+      </p>
+
+      <div className="mt-4">
+        <SeasonFeePayForm
+          paymentId={payment.id}
+          seasonFeeCents={0}
+          shirtCents={shirtCents}
+          tankCents={tankCents}
+          recommendInstall={false}
+          perInstallmentCents={0}
+          installmentCount={0}
+          players={players}
+          apparelOnly
+          extraFields={testMode ? { test: "1" } : undefined}
+        />
+      </div>
     </div>
   );
 }

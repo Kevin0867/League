@@ -8,6 +8,7 @@ import { decryptField } from "@/lib/crypto";
 import { ACADEMY_MARKETS } from "@/lib/enums";
 import { formatDate, formatTime12 } from "@/lib/time";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
+import { ApparelRequestForm } from "@/components/ApparelRequestForm";
 
 // Short day + start time for a team, e.g. "Wed 5:00 PM", so staff can pick a
 // team whose schedule works for the player when assigning/moving them.
@@ -42,6 +43,7 @@ const OK: Record<string, string> = {
   welcomeSent: "Welcome sent.",
   feeexists: "This player's season fee was already invoiced — nothing new sent.",
   split: "Split onto its own record. This registration now has its own contact info — edit the name and details below so they're correct.",
+  apparelReq: "Apparel order link created and emailed — they pick their gear and pay from the link.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -49,6 +51,7 @@ const ERR: Record<string, string> = {
   fields: "Missing information.",
   noemail: "No email on file for this player — add one before sending the waiver.",
   nosplit: "This registration already has its own record — nothing to split.",
+  apemail: "Enter a valid email to send the apparel order link.",
 };
 
 const STATUSES = ["SUBMITTED", "ASSIGNED", "WAITLISTED", "WITHDRAWN", "DUPLICATE"];
@@ -356,6 +359,23 @@ export default async function RegistrationDetail({
           ticket={ticket}
           returnTo={`/console/registrations/${reg.id}`}
           category="CUSTOM"
+          defaults={{ name: `${p.firstName} ${p.lastName}`.trim(), email: p.email ?? "" }}
+        />
+      </div>
+
+      {/* Send an apparel-only order link — for additional or replacement gear
+          after the season fee is paid, or gear on its own. The family picks
+          items and sees the total at checkout; no fixed amount here. */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Send an apparel order link</h2>
+        <p className="mb-3 mt-0.5 text-sm text-slate-500">
+          Let {p.firstName} order team apparel on its own — extra shirts, a tank, a replacement size. They pick styles
+          and sizes and pay securely; it lands on the same fulfillment report as season-fee apparel.
+        </p>
+        <ApparelRequestForm
+          ticket={ticket}
+          personId={p.id}
+          returnTo={`/console/registrations/${reg.id}`}
           defaults={{ name: `${p.firstName} ${p.lastName}`.trim(), email: p.email ?? "" }}
         />
       </div>

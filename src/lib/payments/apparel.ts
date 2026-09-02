@@ -8,9 +8,23 @@ export async function apparelPrices(): Promise<{ shirtCents: number; tankCents: 
   return { shirtCents: rate?.shirtPriceCents ?? 2500, tankCents: rate?.tankPriceCents ?? 2500 };
 }
 
-/** Team-assigned players must buy apparel; a season fee (PLAYER_FEE) requires it. */
+/** Payments that carry an apparel picker and need at least one item: the bundled
+ *  season fee (PLAYER_FEE) and a standalone apparel-only order (APPAREL). */
 export function apparelRequiredFor(category: string): boolean {
-  return category === "PLAYER_FEE";
+  return category === "PLAYER_FEE" || category === "APPAREL";
+}
+
+/** An apparel-only order — apparel IS the whole charge (no season fee line). */
+export function isApparelOnly(category: string): boolean {
+  return category === "APPAREL";
+}
+
+/** Total for an apparel order (subtotal + 8% tax), in cents. Used to keep an
+ *  apparel-only payment's amountCents in sync with what Stripe will charge. */
+export async function apparelTotalCents(paymentId: string): Promise<number> {
+  const rows = await prisma.apparelOrderItem.findMany({ where: { paymentId } });
+  const subtotal = rows.reduce((s, a) => s + a.unitPriceCents * a.quantity, 0);
+  return subtotal + apparelTaxCents(subtotal);
 }
 
 /**
