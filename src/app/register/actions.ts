@@ -217,10 +217,10 @@ export async function registerAction(
   if (!windowSeason || !windowSeason.active) return { error: "This season is no longer accepting registrations." };
   const nowTs = new Date();
   if (windowSeason.opensOn && windowSeason.opensOn > nowTs) return { error: `Registration opens on ${formatDate(windowSeason.opensOn)}.` };
-  // Past the deadline we don't turn people away — we accept them onto the
-  // WAITLIST and tell them registration has closed. Only the "not open yet"
-  // window above is a hard stop.
-  const waitlisted = !!(windowSeason.closesOn && windowSeason.closesOn < nowTs);
+  // Past the deadline — OR whenever waitlist mode is switched on — we don't turn
+  // people away: we accept them onto the WAITLIST and tell them registration has
+  // closed. Only the "not open yet" window above is a hard stop.
+  const waitlisted = !!windowSeason.waitlistMode || !!(windowSeason.closesOn && windowSeason.closesOn < nowTs);
 
   const mode = g("mode") || "adult"; // "adult" | "child" | "both"
   const adultPlaying = mode === "adult" || mode === "both";

@@ -102,10 +102,16 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
   return sendEmail(s.toEmail, c.subject, c.text, c.html);
 }
 
-/** Internal heads-up to the team inbox that a new registration came in. */
+/** Internal heads-up to the team inbox that a new registration came in. When the
+ *  registrant landed on the waitlist (registration closed / waitlist mode on),
+ *  the notice says so up top so staff triage it as a waitlist add, not a
+ *  to-be-placed signup. */
 export async function notifyTeamOfRegistration(s: RegistrationSummary) {
+  const wl = !!s.waitlisted;
   const lines = [
-    `New ${s.seasonName} registration from ${s.recipientName} (${s.toEmail}).`,
+    wl
+      ? `WAITLIST — new ${s.seasonName} waitlist signup from ${s.recipientName} (${s.toEmail}).`
+      : `New ${s.seasonName} registration from ${s.recipientName} (${s.toEmail}).`,
     ``,
     ...s.players.map((p) => `  - ${p.name}${p.program ? ` — ${p.program}` : ""}`),
     ``,
@@ -113,7 +119,13 @@ export async function notifyTeamOfRegistration(s: RegistrationSummary) {
     s.practiceTimes.length ? `Practice times: ${s.practiceTimes.join(", ")}` : "",
   ].filter(Boolean);
 
+  const waitBanner = wl
+    ? `<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:10px 14px;margin-bottom:12px">` +
+      `<p style="margin:0;font-size:13px;color:#92400e"><strong>On the waitlist.</strong> Registration is closed, so this signup was filed as WAITLISTED — no payment was requested.</p></div>`
+    : "";
+
   const contentHtml =
+    waitBanner +
     `<p style="margin:0 0 8px;font-size:14px;color:#475569">Contact: ${esc(s.recipientName)} — ${esc(s.toEmail)}</p>` +
     `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px">` +
     `<table style="width:100%;border-collapse:collapse">${playerRows(s.players)}</table>` +
@@ -128,8 +140,8 @@ export async function notifyTeamOfRegistration(s: RegistrationSummary) {
 
   return sendEmail(
     SUPPORT_EMAIL,
-    `New registration — ${s.recipientName}`,
+    wl ? `Waitlist signup — ${s.recipientName}` : `New registration — ${s.recipientName}`,
     lines.join("\n"),
-    brandedEmailHtml({ heading: "New registration", intro: `${s.seasonName}`, contentHtml })
+    brandedEmailHtml({ heading: wl ? "New waitlist signup" : "New registration", intro: `${s.seasonName}`, contentHtml })
   );
 }
