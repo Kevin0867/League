@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { FeeState } from "@/lib/domain/feeStatus";
 
 type Team = { id: string; name: string; dayTime?: string | null };
 
@@ -21,7 +22,7 @@ export function RowActions({
   assigned: boolean;
   currentTeamId: string | null;
   teams: Team[];
-  payStatus: "none" | "requested" | "paid" | "refunded";
+  payStatus: FeeState;
   waiverSigned: boolean;
   /** This player shares one not-yet-paid invoice with others (a consolidated
    *  family fee) — offer to split them onto their own per-player invoice. */
@@ -46,19 +47,21 @@ export function RowActions({
     <div className="flex items-center justify-end gap-1.5">
       {/* Fee — the most common next action, one click */}
       {payStatus === "paid" ? (
-        <span className="badge bg-emerald-100 text-emerald-800">paid</span>
+        <span className="badge bg-emerald-100 text-emerald-800">✓ paid</span>
+      ) : payStatus === "subscription" ? (
+        <span className="badge bg-emerald-100 text-emerald-800" title="On the 3-payment plan — signed up and first payment made.">✓ subscription</span>
       ) : payStatus === "refunded" ? (
         <span className="badge bg-slate-100 text-slate-500">refunded</span>
       ) : (
         <form
           method="POST"
           action="/api/console/registrations"
-          onSubmit={confirmSend(payStatus === "requested" ? "Resend the fee request email to this family?" : "Email the season fee request to this family?")}
+          onSubmit={confirmSend(payStatus === "unpaid" ? "Resend the fee request email to this family?" : "Email the season fee request to this family?")}
         >
-          <Hidden op={payStatus === "requested" ? "resendPayment" : "requestFee"} />
-          {payStatus === "requested" && <input type="hidden" name="from" value="list" />}
+          <Hidden op={payStatus === "unpaid" ? "resendPayment" : "requestFee"} />
+          {payStatus === "unpaid" && <input type="hidden" name="from" value="list" />}
           <button className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
-            {payStatus === "requested" ? "Resend fee" : "Request fee"}
+            {payStatus === "unpaid" ? "Resend fee" : "Request fee"}
           </button>
         </form>
       )}
