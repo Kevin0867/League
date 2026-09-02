@@ -19,7 +19,7 @@ export async function POST(req: Request) {
 
   // Validate the chosen team belongs to the live season and isn't a test team.
   const team = teamId
-    ? await prisma.team.findFirst({ where: { id: teamId, isTest: false, published: true }, select: { id: true, name: true } }).catch(() => null)
+    ? await prisma.team.findFirst({ where: { id: teamId, isTest: false }, select: { id: true, name: true } }).catch(() => null)
     : null;
 
   // Reuse an existing adult contact by email (the buyer / paying adult), else
