@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dollarsToCents, formatCents } from "@/lib/money";
 import { sendCustomPaymentEmail } from "@/lib/payments/customPaymentEmail";
+import { sendApparelRequestEmail } from "@/lib/payments/apparelEmail";
 import {
   computeStatement,
   coachSessionPayCents,
@@ -52,7 +53,66 @@ export async function POST(req: Request) {
     return customPaymentRequest(formData, actor, back);
   }
 
+  if (op === "apparelRequest") {
+    return apparelOrderRequest(formData, actor, back);
+  }
+
   return back("?err=op");
+}
+
+/**
+ * Admin-created apparel-only order request: a pay link to the public apparel
+ * picker, no fixed amount (the family chooses their items and sees the total at
+ * checkout). Used to sell additional / replacement gear after the season fee is
+ * paid, or to anyone who wants team apparel on its own.
+ */
+async function apparelOrderRequest(
+  formData: FormData,
+  actor: { userId: string; role: string },
+  back: (qs: string) => NextResponse
+) {
+  const g = (k: string) => String(formData.get(k) ?? "").trim();
+  const personId = g("personId");
+  const name = g("name");
+  const email = g("email").toLowerCase();
+
+  if (!email || !/.+@.+\..+/.test(email)) return back("?err=apemail");
+
+  // Prefer a named existing person; otherwise link by email or create a contact.
+  let party = personId ? await prisma.person.findUnique({ where: { id: personId } }) : null;
+  if (!party) {
+    const [firstName, ...rest] = (name || email.split("@")[0]).split(/\s+/);
+    party =
+      (await prisma.person.findFirst({ where: { email } })) ??
+      (await prisma.person.create({ data: { firstName: firstName || "PURE", lastName: rest.join(" ") || "—", email } }));
+  }
+
+  const payment = await prisma.payment.create({
+    data: {
+      direction: "IN",
+      partyId: party.id,
+      amountCents: 0, // set to the apparel total when the cart is saved at checkout
+      method: "STRIPE",
+      status: "REQUESTED",
+      category: "APPAREL",
+      coveredPersonIds: [party.id],
+      description: "Team apparel order",
+    },
+  });
+
+  const sendRes = await sendApparelRequestEmail({ toEmail: email, name: party.firstName, paymentId: payment.id });
+
+  await audit({
+    actorId: actor.userId,
+    entityType: "Payment",
+    entityId: payment.id,
+    action: "payment.apparelRequest",
+    summary: `Apparel order request to ${email}${sendRes.ok && !sendRes.simulated ? " — emailed" : " — email not delivered"}`,
+  });
+
+  const qs = new URLSearchParams({ ok: "apparelReq", pid: payment.id });
+  if (!(sendRes.ok && !sendRes.simulated)) qs.set("apunsent", "1");
+  return back(`?${qs.toString()}`);
 }
 
 /**

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { createCheckoutRedirect } from "@/lib/payments/checkout";
-import { saveApparelForPayment, apparelRequiredFor } from "@/lib/payments/apparel";
+import { saveApparelForPayment, apparelRequiredFor, isApparelOnly, apparelTotalCents } from "@/lib/payments/apparel";
 import { normalizeCart } from "@/lib/domain/apparel";
 
 // PUBLIC season-fee checkout — no login required. The payment id (an unguessable
@@ -32,6 +32,12 @@ export async function POST(req: Request) {
     const lines = normalizeCart(form.get("cart"), allowed);
     if (lines.length === 0) return NextResponse.redirect(new URL(`/pay/${paymentId}?err=apparel`, origin), 303);
     await saveApparelForPayment(paymentId, lines, { personId: payment.partyId, allowedPersonIds: allowed });
+    // An apparel-only order has no season fee — its amount IS the apparel total,
+    // so keep amountCents in sync with what Stripe will charge (for receipts /
+    // the ledger). The season-fee case keeps its fixed amount untouched.
+    if (isApparelOnly(payment.category)) {
+      await prisma.payment.update({ where: { id: paymentId }, data: { amountCents: await apparelTotalCents(paymentId) } });
+    }
   }
 
   // Admin test: complete without charging. Only honored for a signed-in admin —

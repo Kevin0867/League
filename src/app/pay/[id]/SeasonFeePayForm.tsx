@@ -65,6 +65,7 @@ export function SeasonFeePayForm({
   action = "/api/pay",
   extraFields,
   players = [],
+  apparelOnly = false,
 }: {
   paymentId: string;
   seasonFeeCents: number;
@@ -76,6 +77,9 @@ export function SeasonFeePayForm({
   action?: string;
   extraFields?: Record<string, string>;
   players?: Player[];
+  /** Apparel-only order (no season fee): hide the fee line + installments and
+   *  make the apparel the whole charge. */
+  apparelOnly?: boolean;
 }) {
   const [lines, setLines] = useState<Line[]>([]);
 
@@ -88,7 +92,7 @@ export function SeasonFeePayForm({
   const apparelCents = lines.reduce((s, l) => s + priceOf(l.garment) * l.quantity, 0);
   // 8% sales tax on apparel only (never the season fee).
   const taxCents = apparelTaxCents(apparelCents);
-  const totalCents = seasonFeeCents + apparelCents + taxCents;
+  const totalCents = (apparelOnly ? 0 : seasonFeeCents) + apparelCents + taxCents;
 
   const linesFor = (pid: string | null) => lines.filter((l) => (l.personId ?? null) === (pid ?? null));
   const sectionDone = (pid: string | null) => linesFor(pid).length > 0;
@@ -116,15 +120,19 @@ export function SeasonFeePayForm({
       : "Add a shirt or tank to your cart to continue"
     : null;
 
+  const feeHeading = apparelOnly ? "Order team apparel" : "Team apparel";
+  const feeBadge = apparelOnly ? "Your order" : "Required";
+
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold text-slate-900">Team apparel</h2>
-          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">Required</span>
+          <h2 className="font-semibold text-slate-900">{feeHeading}</h2>
+          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">{feeBadge}</span>
         </div>
         <p className="mt-1 text-sm text-slate-600">
-          Every player needs team gear. Pick a style and size, then tap <span className="font-semibold text-emerald-700">Add to Cart</span>
+          {apparelOnly ? "Pick a style and size, then tap " : "Every player needs team gear. Pick a style and size, then tap "}
+          <span className="font-semibold text-emerald-700">Add to Cart</span>
           {sections.length > 1 ? " for each player" : ""}. Want more than one? Add another item — a second shirt, a different size, or a tank top.
         </p>
 
@@ -148,11 +156,13 @@ export function SeasonFeePayForm({
 
       {/* Order summary */}
       <dl className="rounded-lg bg-slate-50 p-4 text-sm ring-1 ring-slate-200">
-        <div className="flex items-center justify-between">
-          <dt className="text-slate-500">Season fee</dt>
-          <dd className="text-slate-700">{formatCents(seasonFeeCents)}</dd>
-        </div>
-        <div className="mt-1 flex items-center justify-between">
+        {!apparelOnly && (
+          <div className="flex items-center justify-between">
+            <dt className="text-slate-500">Season fee</dt>
+            <dd className="text-slate-700">{formatCents(seasonFeeCents)}</dd>
+          </div>
+        )}
+        <div className={`${apparelOnly ? "" : "mt-1 "}flex items-center justify-between`}>
           <dt className="text-slate-500">Team apparel</dt>
           <dd className="text-slate-700">{formatCents(apparelCents)}</dd>
         </div>
@@ -174,36 +184,49 @@ export function SeasonFeePayForm({
         {extraFields &&
           Object.entries(extraFields).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
 
-        <button
-          name="plan"
-          value="full"
-          disabled={!canCheckout}
-          className={`w-full rounded-xl border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
-            recommendInstall ? "border-slate-200 bg-white hover:border-slate-300" : "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
-          }`}
-        >
-          <span className="block font-semibold text-slate-900">Pay in full — {formatCents(totalCents)}</span>
-          <span className="block text-xs text-slate-500">One secure payment now (season fee + apparel{taxCents > 0 ? " + tax" : ""}).</span>
-        </button>
+        {apparelOnly ? (
+          <button
+            name="plan"
+            value="full"
+            disabled={!canCheckout}
+            className="w-full rounded-xl border border-brand-500 bg-brand-50 px-4 py-3 text-center font-semibold text-slate-900 ring-1 ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Pay {formatCents(totalCents)} now
+          </button>
+        ) : (
+          <>
+            <button
+              name="plan"
+              value="full"
+              disabled={!canCheckout}
+              className={`w-full rounded-xl border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
+                recommendInstall ? "border-slate-200 bg-white hover:border-slate-300" : "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
+              }`}
+            >
+              <span className="block font-semibold text-slate-900">Pay in full — {formatCents(totalCents)}</span>
+              <span className="block text-xs text-slate-500">One secure payment now (season fee + apparel{taxCents > 0 ? " + tax" : ""}).</span>
+            </button>
 
-        <button
-          name="plan"
-          value="installments"
-          disabled={!canCheckout}
-          className={`w-full rounded-xl border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
-            recommendInstall ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
-          }`}
-        >
-          <span className="block font-semibold text-slate-900">
-            Pay in {installmentCount} — {formatCents(perInstallmentCents + apparelCents + taxCents)} today, then 2 more
-          </span>
-          <span className="block text-xs text-slate-500">
-            The season fee splits into {installmentCount} equal payments 30 days apart; apparel{taxCents > 0 ? " and tax are" : " is"} included in
-            today&apos;s first payment.
-          </span>
-        </button>
+            <button
+              name="plan"
+              value="installments"
+              disabled={!canCheckout}
+              className={`w-full rounded-xl border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
+                recommendInstall ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <span className="block font-semibold text-slate-900">
+                Pay in {installmentCount} — {formatCents(perInstallmentCents + apparelCents + taxCents)} today, then 2 more
+              </span>
+              <span className="block text-xs text-slate-500">
+                The season fee splits into {installmentCount} equal payments 30 days apart; apparel{taxCents > 0 ? " and tax are" : " is"} included in
+                today&apos;s first payment.
+              </span>
+            </button>
+          </>
+        )}
 
-        {blockedReason && <p className="text-center text-sm font-medium text-amber-600">{blockedReason}</p>}
+        {blockedReason && <p className="text-center text-sm font-medium text-amber-600">{apparelOnly ? "Add an item to your cart to continue" : blockedReason}</p>}
       </form>
     </div>
   );

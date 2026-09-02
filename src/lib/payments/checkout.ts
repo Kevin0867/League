@@ -30,7 +30,10 @@ export async function createCheckoutRedirect(opts: {
   if (!payment || payment.direction !== "IN") return { ok: false, error: "notfound" };
   if (payment.status === "PAID") return { ok: false, error: "paid" };
 
-  const installments = plan === "installments";
+  // An apparel-only order has no season-fee line — the apparel items ARE the
+  // charge — and never installments.
+  const isApparelOnly = payment.category === "APPAREL";
+  const installments = plan === "installments" && !isApparelOnly;
   const base = appUrl();
   const success = `${base}/pay/success?session_id={CHECKOUT_SESSION_ID}`;
   const cancel = `${base}/pay/${payment.id}?canceled=1`;
@@ -70,6 +73,10 @@ export async function createCheckoutRedirect(opts: {
   // Team apparel bought with this fee — one-time line items charged once, added
   // to both the pay-in-full checkout and the FIRST invoice of the payment plan.
   const apparel = await apparelLineItems(payment.id);
+
+  // An apparel-only order is nothing but its apparel lines — guard against an
+  // empty cart reaching Stripe (the pay route already rejects this upstream).
+  if (isApparelOnly && apparel.length === 0) return { ok: false, error: "notfound" };
 
   try {
     if (installments) {
