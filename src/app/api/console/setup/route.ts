@@ -203,6 +203,18 @@ export async function POST(req: Request) {
       return back("?ok=toggleSeasonTest");
     }
 
+    // Flip "all new sign-ups go to the waitlist" on/off for a season, independent
+    // of the close date.
+    case "setWaitlistMode": {
+      const id = String(formData.get("seasonId") ?? "");
+      const on = String(formData.get("on") ?? "") === "1";
+      const season = await prisma.season.findUnique({ where: { id } });
+      if (!season) return back("?err=notfound");
+      await prisma.season.update({ where: { id }, data: { waitlistMode: on } });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: id, action: "season.waitlistMode", summary: `${on ? "Enabled" : "Disabled"} waitlist mode for ${season.name}` });
+      return back(on ? "?ok=waitlistOn" : "?ok=waitlistOff");
+    }
+
     case "addDivision": {
       const seasonId = String(formData.get("seasonId") ?? "");
       const name = String(formData.get("name") ?? "").trim();

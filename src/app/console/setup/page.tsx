@@ -23,6 +23,8 @@ const OK_MESSAGE: Record<string, string> = {
   deleteSeason: "Season deleted.",
   activateSeason: "Season activated.",
   toggleSeasonTest: "Season test flag updated.",
+  waitlistOn: "Waitlist mode ON — every new sign-up now goes to the waitlist, and the public form says registration is closed.",
+  waitlistOff: "Registration reopened — new sign-ups are placed as normal again.",
   addDivision: "Division added.",
   editDivision: "Division updated.",
   deleteDivision: "Division removed.",
@@ -220,6 +222,31 @@ export default async function SetupPage({
                   <input name="tankPrice" type="number" min={0} step="1" defaultValue={(tankCents / 100).toFixed(0)} className="input w-24 py-1.5 text-sm" />
                 </div>
                 <button className="btn-secondary text-sm">Save prices</button>
+              </form>
+            </div>
+          )}
+
+          {s.active && (
+            <div className={`flex flex-wrap items-center justify-between gap-3 rounded-lg p-3 ring-1 ${s.waitlistMode ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-200"}`}>
+              <div className="text-sm">
+                <span className="text-slate-500">New sign-ups</span>{" "}
+                <span className={`font-semibold ${s.waitlistMode ? "text-amber-800" : "text-slate-800"}`}>
+                  {s.waitlistMode ? "Going to the WAITLIST" : "Open — placed as normal"}
+                </span>
+                <span className="ml-1 block text-xs text-slate-400 sm:ml-1 sm:inline">
+                  {s.waitlistMode
+                    ? "Every new registration is filed as waitlisted, and the public form says registration is closed."
+                    : "Turn on to close enrollment now — everyone new lands on the waitlist, no charge."}
+                </span>
+              </div>
+              <form method="POST" action="/api/console/setup">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="setWaitlistMode" />
+                <input type="hidden" name="seasonId" value={s.id} />
+                <input type="hidden" name="on" value={s.waitlistMode ? "0" : "1"} />
+                <button className={s.waitlistMode ? "btn-secondary text-sm" : "btn-primary text-sm"}>
+                  {s.waitlistMode ? "Reopen registration" : "Switch to waitlist"}
+                </button>
               </form>
             </div>
           )}

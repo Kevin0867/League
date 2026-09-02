@@ -923,6 +923,10 @@ model Season {
   /// Optional registration-close date. After this, the public form stops
   /// accepting new signups (null = open until the season is deactivated).
   closesOn   DateTime?
+  /// Explicit "everyone new goes to the waitlist" switch, independent of the
+  /// close date. When true, every new registration is filed as WAITLISTED right
+  /// away — used to close enrollment on demand without date arithmetic.
+  waitlistMode Boolean @default(false)
   /// When the year-end championship tournament begins (one event; individual
   /// bracket matches aren't separately scheduled).
   championshipStartsAt DateTime?

@@ -89,7 +89,7 @@ export default async function RegisterPage({
   // yet open (opensOn in the future) or already closed (closesOn in the past).
   const now = new Date();
   const notYetOpen = season?.opensOn && season.opensOn > now;
-  const alreadyClosed = season?.closesOn && season.closesOn < now;
+  const alreadyClosed = season?.waitlistMode || (season?.closesOn && season.closesOn < now);
 
   // Past the deadline we keep the form OPEN for waitlist sign-ups (handled
   // below). Only "no season" or "not open yet" fully closes the page.
