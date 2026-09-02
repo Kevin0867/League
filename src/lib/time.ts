@@ -98,3 +98,60 @@ export function formatDateRange(a: Date | string | null | undefined, b: Date | s
   if (s && e) return `${s} – ${e}`;
   return s || e || "";
 }
+
+// --- Registration-window anchoring -------------------------------------------
+// Arizona has no DST, so local midnight is a fixed UTC−07:00 offset. Registration
+// window dates come from <input type="date"> as a bare "YYYY-MM-DD" with no time.
+// Anchor them to Phoenix local time so the cutoff lands at the intended local
+// instant — NOT UTC midnight, which is 5:00 PM the previous day in Arizona.
+const PHOENIX_UTC_OFFSET = "-07:00";
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Opens-on → 12:00 AM Phoenix on the given day. A full datetime passes through. */
+export function phoenixWindowStart(dateStr: string | null | undefined): Date | null {
+  const s = String(dateStr ?? "").trim();
+  if (!s) return null;
+  if (!BARE_DATE.test(s)) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(`${s}T00:00:00${PHOENIX_UTC_OFFSET}`);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Closes-on → END of the given day: 12:00 AM Phoenix the FOLLOWING day, so a
+ *  family can register through the whole close date and the waitlist begins at
+ *  midnight. A full datetime passes through unchanged. */
+export function phoenixWindowEnd(dateStr: string | null | undefined): Date | null {
+  const s = String(dateStr ?? "").trim();
+  const start = phoenixWindowStart(s);
+  if (!start) return null;
+  if (!BARE_DATE.test(s)) return start;
+  return new Date(start.getTime() + 24 * 60 * 60 * 1000);
+}
+
+/** "YYYY-MM-DD" for the Phoenix calendar day of an instant — for <input type="date">
+ *  defaultValue so a saved window date round-trips to the same day it was entered. */
+export function phoenixDateInput(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  return dt.toLocaleDateString("en-CA", { timeZone: BUSINESS_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+/** The last day registration is open, from a closes-on instant (stored as the
+ *  following midnight). MM/DD/YYYY in the academy's timezone. */
+export function closeDayLabel(closesOn: Date | string | null | undefined): string {
+  if (!closesOn) return "";
+  const dt = typeof closesOn === "string" ? new Date(closesOn) : closesOn;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  return formatStamp(new Date(dt.getTime() - 1));
+}
+
+/** "YYYY-MM-DD" a closes-on instant maps back to for a date input (the last open day). */
+export function closeDayInput(closesOn: Date | string | null | undefined): string {
+  if (!closesOn) return "";
+  const dt = typeof closesOn === "string" ? new Date(closesOn) : closesOn;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  return phoenixDateInput(new Date(dt.getTime() - 1));
+}

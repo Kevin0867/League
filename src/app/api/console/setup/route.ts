@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { SEASON_WEEKS, getSeasonWeeks } from "@/lib/domain/seasonCalendar";
+import { phoenixWindowStart, phoenixWindowEnd } from "@/lib/time";
 
 // Season setup mutations as native-form-POST route handlers with ticket auth.
 // Route handlers 303-redirect to a fresh GET (which carries the session cookie),
@@ -41,8 +42,11 @@ export async function POST(req: Request) {
       const program = String(formData.get("program") ?? "PURE_ACADEMY");
       const startDate = toDate(formData.get("startDate"));
       const endDate = toDate(formData.get("endDate"));
-      const opensOn = toDate(formData.get("opensOn"));
-      const closesOn = toDate(formData.get("closesOn"));
+      // Registration window: anchor to Phoenix local time. Opens at 12:00 AM on
+      // the open date; closes at the end of the close date (families can register
+      // through that whole day; the waitlist begins at midnight).
+      const opensOn = phoenixWindowStart(String(formData.get("opensOn") ?? ""));
+      const closesOn = phoenixWindowEnd(String(formData.get("closesOn") ?? ""));
       const active = formData.get("active") === "on";
 
       if (!name || !startDate || !endDate) return back("?err=fields");
@@ -69,8 +73,8 @@ export async function POST(req: Request) {
       const program = String(formData.get("program") ?? "").trim() || undefined;
       const startDate = toDate(formData.get("startDate"));
       const endDate = toDate(formData.get("endDate"));
-      const opensOn = toDate(formData.get("opensOn"));
-      const closesOn = toDate(formData.get("closesOn"));
+      const opensOn = phoenixWindowStart(String(formData.get("opensOn") ?? ""));
+      const closesOn = phoenixWindowEnd(String(formData.get("closesOn") ?? ""));
       if (!id || !name) return back("?err=fields");
       const season = await prisma.season.findUnique({ where: { id } });
       if (!season) return back("?err=notfound");

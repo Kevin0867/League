@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
-import { formatDate, formatDateRange } from "@/lib/time";
+import { formatDate, formatDateRange, closeDayLabel, closeDayInput } from "@/lib/time";
 import { redirect } from "next/navigation";
 import {
   CreateSeasonForm,
@@ -54,9 +54,9 @@ function regWindowState(s: { opensOn: Date | null; closesOn: Date | null; active
 function regWindowLabel(s: { opensOn: Date | null; closesOn: Date | null; active: boolean }) {
   switch (regWindowState(s)) {
     case "inactive": return "Closed — season is inactive";
-    case "scheduled": return `Opens ${fmt(s.opensOn!)}${s.closesOn ? ` · closes ${fmt(s.closesOn)}` : ""}`;
-    case "closed": return `Closed ${fmt(s.closesOn!)}`;
-    default: return s.closesOn ? `Open until ${fmt(s.closesOn)}` : "Open (no close date)";
+    case "scheduled": return `Opens ${fmt(s.opensOn!)}${s.closesOn ? ` · closes ${closeDayLabel(s.closesOn)}` : ""}`;
+    case "closed": return `Closed after ${closeDayLabel(s.closesOn!)}`;
+    default: return s.closesOn ? `Open through ${closeDayLabel(s.closesOn)}` : "Open (no close date)";
   }
 }
 function regWindowTone(s: { opensOn: Date | null; closesOn: Date | null; active: boolean }) {
@@ -185,7 +185,7 @@ export default async function SetupPage({
                 <input type="hidden" name="seasonId" value={s.id} />
                 <button className="text-xs font-medium text-slate-500 hover:underline">{s.isTest ? "Unmark test" : "Mark as test"}</button>
               </form>
-              <EditSeasonForm ticket={ticket} season={{ id: s.id, name: s.name, program: s.program, startDate: iso(s.startDate), endDate: iso(s.endDate), opensOn: iso(s.opensOn), closesOn: iso(s.closesOn) }} />
+              <EditSeasonForm ticket={ticket} season={{ id: s.id, name: s.name, program: s.program, startDate: iso(s.startDate), endDate: iso(s.endDate), opensOn: iso(s.opensOn), closesOn: closeDayInput(s.closesOn) }} />
               <DeleteSeasonButton seasonId={s.id} ticket={ticket} disabled={s._count.registrations > 0} />
             </div>
           </div>
