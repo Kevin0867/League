@@ -18,7 +18,17 @@ export default async function ApparelReportPage({
   const showAll = sp.all === "1";
 
   const items = await prisma.apparelOrderItem.findMany({
-    include: { payment: { select: { status: true, party: { select: { firstName: true, lastName: true } } } } },
+    include: {
+      payment: {
+        select: {
+          status: true,
+          party: { select: { firstName: true, lastName: true } },
+          // Standalone apparel orders carry the team they're for directly, since
+          // the buyer may not be on that roster.
+          apparelTeam: { select: { name: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -50,7 +60,7 @@ export default async function ApparelReportPage({
     id: i.id,
     player: i.personId ? nameById.get(i.personId) ?? "" : "",
     payer: i.payment.party ? `${i.payment.party.firstName} ${i.payment.party.lastName}` : "",
-    team: i.personId ? teamById.get(i.personId) ?? "—" : "—",
+    team: (i.personId ? teamById.get(i.personId) : null) ?? i.payment.apparelTeam?.name ?? "—",
     garment: garmentLabel(i.garment),
     size: sizeLabel(i.size),
     qty: i.quantity,

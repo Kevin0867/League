@@ -63,6 +63,21 @@ export function RowActions({
         </form>
       )}
 
+      {/* Split — visible when this player shares one unpaid family invoice with
+          someone else (e.g. a father and son on two different teams). */}
+      {sharedInvoice && (
+        <form
+          method="POST"
+          action="/api/console/registrations"
+          onSubmit={confirmSend("Split this family's fee into a separate invoice for each player? Each player will then have their own pay link.")}
+        >
+          <Hidden op="splitFee" />
+          <button className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100" title="This player shares one invoice with another family member — split them apart.">
+            Split fee
+          </button>
+        </form>
+      )}
+
       {/* Waiver — direct when outstanding */}
       {!waiverSigned && (
         <form method="POST" action="/api/console/registrations" onSubmit={confirmSend("Email the waiver link to this family?")}>
@@ -114,20 +129,6 @@ export function RowActions({
                     Send back to pool
                   </button>
                 </form>
-              )}
-
-              {sharedInvoice && (
-                <div className="border-t border-slate-100 pt-2">
-                  <p className="mb-1 text-[11px] text-slate-500">
-                    On one shared family invoice. Split so this player has their own fee &amp; pay link.
-                  </p>
-                  <form method="POST" action="/api/console/registrations" onSubmit={confirmSend("Split this family's fee into a separate invoice for each player? Each player will then have their own pay link.")}>
-                    <Hidden op="splitFee" />
-                    <button className="w-full rounded-md border border-brand-200 bg-brand-50 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
-                      Split into separate fees
-                    </button>
-                  </form>
-                </div>
               )}
 
               {payStatus === "paid" && (

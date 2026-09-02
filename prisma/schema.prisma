@@ -419,6 +419,7 @@ model Team {
   assistantCoaches TeamCoach[]
   leagueEntries LeagueTeam[]
   coachingNotes CoachingNote[]
+  apparelPayments Payment[] @relation("ApparelTeam")
 
   @@index([seasonId, divisionId])
   @@index([coachId])
@@ -788,6 +789,13 @@ model Payment {
   /// payment covers (partyId is the paying adult). Null on legacy single-player
   /// payments, which implicitly cover just their partyId.
   coveredPersonIds Json?
+
+  /// For a standalone apparel order (self-serve /order-apparel or an admin-sent
+  /// apparel link): the team the gear is for, so the fulfillment report shows
+  /// who and where even when the buyer isn't on that roster. Null for season-fee
+  /// apparel, where the team comes from the player's TeamMember instead.
+  apparelTeamId String?
+  apparelTeam   Team?    @relation("ApparelTeam", fields: [apparelTeamId], references: [id])
 
   description   String?
   paidAt        DateTime?
