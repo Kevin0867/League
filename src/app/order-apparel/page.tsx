@@ -22,16 +22,23 @@ export default async function OrderApparelPage({
   const shirt = rate?.shirtPriceCents ?? 2500;
   const tank = rate?.tankPriceCents ?? 2500;
 
-  // Published, non-test teams the buyer can attach their order to — grouped by
-  // market so the picker reads "Scottsdale › PURE Scottsdale W3.0".
-  const season = await prisma.season.findFirst({
-    where: { active: true, isTest: false, program: "PURE_ACADEMY" },
-    orderBy: { startDate: "desc" },
-    select: { id: true },
-  });
+  // Real (non-test) teams the buyer can attach their order to — grouped by market
+  // so the picker reads "Scottsdale › PURE Scottsdale W3.0". Not gated on
+  // `published`, so the list is populated even before teams are made public.
+  const season =
+    (await prisma.season.findFirst({
+      where: { active: true, isTest: false, program: "PURE_ACADEMY" },
+      orderBy: { startDate: "desc" },
+      select: { id: true },
+    })) ??
+    (await prisma.season.findFirst({
+      where: { isTest: false, program: "PURE_ACADEMY" },
+      orderBy: { startDate: "desc" },
+      select: { id: true },
+    }));
   const teams = season
     ? await prisma.team.findMany({
-        where: { seasonId: season.id, isTest: false, published: true },
+        where: { seasonId: season.id, isTest: false },
         orderBy: [{ market: "asc" }, { name: "asc" }],
         select: { id: true, name: true, market: true },
       })
