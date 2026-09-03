@@ -66,10 +66,14 @@ export default async function ReportsPage() {
   const distinctCoaches = new Set(coachingRows.map((r) => r.coach)).size;
 
   // ---- Retention funnel (§16) ----
-  const [registered, assigned, paidCount, attendedPeople] = await Promise.all([
+  // "Paid" splits two ways: paid IN FULL, and ON PLAN — a 3-payment subscription
+  // that's begun (first installment cleared) and is in good standing. Both are
+  // paying customers; keeping them separate shows fully-settled vs. still-billing.
+  const [registered, assigned, paidCount, subCount, attendedPeople] = await Promise.all([
     prisma.registration.count({ where: season ? { seasonId: season.id } : {} }),
     prisma.registration.count({ where: { status: "ASSIGNED", ...(season ? { seasonId: season.id } : {}) } }),
     prisma.payment.count({ where: { category: "PLAYER_FEE", status: "PAID", ...(season ? { seasonId: season.id } : {}) } }),
+    prisma.payment.count({ where: { category: "PLAYER_FEE", installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 }, ...(season ? { seasonId: season.id } : {}) } }),
     prisma.attendance.findMany({ where: { status: "PRESENT" }, distinct: ["personId"], select: { personId: true } }),
   ]);
   const attended = attendedPeople.length;
@@ -88,12 +92,30 @@ export default async function ReportsPage() {
   const pnls: TeamPnL[] = [];
   for (const t of teams) {
     const memberIds = t.members.map((m) => m.personId);
-    const revenue = memberIds.length
-      ? (await prisma.payment.aggregate({
-          where: { partyId: { in: memberIds }, category: "PLAYER_FEE", status: "PAID" },
-          _sum: { amountCents: true },
-        }))._sum.amountCents ?? 0
-      : 0;
+    // Revenue is cash actually collected: fees paid in full, PLUS the collected
+    // portion of active subscriptions (per-installment × installments cleared).
+    // A subscription-heavy team no longer reads $0 — it earns credit as each
+    // 30-day charge lands.
+    let revenue = 0;
+    if (memberIds.length) {
+      const pays = await prisma.payment.findMany({
+        where: {
+          partyId: { in: memberIds },
+          category: "PLAYER_FEE",
+          OR: [{ status: "PAID" }, { installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 } }],
+        },
+        select: { amountCents: true, status: true, installmentsPaid: true, installmentsTotal: true },
+      });
+      for (const p of pays) {
+        if (p.status === "PAID") {
+          revenue += p.amountCents;
+        } else {
+          const total = p.installmentsTotal ?? 3;
+          const perCharge = Math.round(p.amountCents / total); // matches Stripe's per-installment charge
+          revenue += perCharge * (p.installmentsPaid ?? 0);
+        }
+      }
+    }
 
     const delivered = t.sessions.map((st) => st.session).filter((s) => s.status === "DELIVERED");
     const coachCost = delivered.length * COACH_PER_SESSION_CENTS;
@@ -188,13 +210,15 @@ export default async function ReportsPage() {
       {/* Retention */}
       <div className="card">
         <h2 className="mb-3 font-semibold text-slate-900">Retention funnel</h2>
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Funnel label="Registered" value={registered} />
           <Funnel label="Assigned" value={assigned} pct={registered ? assigned / registered : 0} />
-          <Funnel label="Paid" value={paidCount} pct={registered ? paidCount / registered : 0} />
+          <Funnel label="Paid in full" value={paidCount} pct={registered ? paidCount / registered : 0} tone="emerald" />
+          <Funnel label="On plan" value={subCount} pct={registered ? subCount / registered : 0} tone="emerald" sub="subscriptions, paying" />
           <Funnel label="Attended ≥1" value={attended} pct={rate} />
         </div>
         <p className="mt-3 text-xs text-slate-400">
+          {paidCount + subCount} paying ({paidCount} paid in full, {subCount} on the 3-payment plan and in good standing).
           Registration-to-completion proxy: {(rate * 100).toFixed(0)}%. Season-to-season return rates
           populate once a second season is on record.
         </p>
@@ -239,6 +263,10 @@ export default async function ReportsPage() {
             </tfoot>
           )}
         </table>
+        <p className="mt-3 text-xs text-slate-400">
+          Revenue is cash collected to date — fees paid in full plus the cleared installments of
+          active 3-payment subscriptions. The remaining scheduled installments are counted as they charge.
+        </p>
       </div>
 
       {/* CSV exports */}
@@ -272,12 +300,13 @@ export default async function ReportsPage() {
   );
 }
 
-function Funnel({ label, value, pct }: { label: string; value: number; pct?: number }) {
+function Funnel({ label, value, pct, tone, sub }: { label: string; value: number; pct?: number; tone?: "emerald"; sub?: string }) {
   return (
     <div className="rounded-lg border border-slate-200 p-3">
       <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-2xl font-extrabold text-slate-900">{value}</div>
+      <div className={`mt-1 text-2xl font-extrabold ${tone === "emerald" ? "text-emerald-700" : "text-slate-900"}`}>{value}</div>
       {pct !== undefined && <div className="text-xs text-slate-500">{(pct * 100).toFixed(0)}% of registered</div>}
+      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
     </div>
   );
 }
