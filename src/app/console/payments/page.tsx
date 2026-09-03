@@ -77,11 +77,17 @@ export default async function PaymentsPage({
   // separately — apparel is billed as its own line items in the same Stripe
   // charge and tracked as order items, so it's NOT part of the fee "Collected"
   // figure; it's money in on top of it.
-  const [seasonFeeAgg, apparelItems] = await Promise.all([
+  const [seasonFeeAgg, apparelItems, manualAgg, manualFeeAgg] = await Promise.all([
     prisma.payment.aggregate({ where: { direction: "IN", status: "PAID", category: "PLAYER_FEE" }, _sum: { amountCents: true } }),
     prisma.apparelOrderItem.findMany({ where: { payment: { direction: "IN", status: "PAID" } }, select: { unitPriceCents: true, quantity: true } }),
+    // Offline payments (check, Class Wallet, cash, in-kind) never hit Stripe, so
+    // the Stripe-derived "Collected" total misses them. Sum them here to fold in.
+    prisma.payment.aggregate({ where: { direction: "IN", status: "PAID", method: "MANUAL" }, _sum: { amountCents: true } }),
+    prisma.payment.aggregate({ where: { direction: "IN", status: "PAID", method: "MANUAL", category: "PLAYER_FEE" }, _sum: { amountCents: true } }),
   ]);
   const apparelCents = apparelItems.reduce((s, i) => s + i.unitPriceCents * i.quantity, 0);
+  const manualCollected = manualAgg._sum.amountCents ?? 0;
+  const manualSeasonFee = manualFeeAgg._sum.amountCents ?? 0;
 
   // Authoritative Collected: the real sum of Stripe charges (net refunds). This
   // is what actually cleared, so it never drifts from Stripe. We split it into
@@ -95,12 +101,14 @@ export default async function PaymentsPage({
   const stripeCollected = await stripeCollectedBreakdown(sinceUnix).catch(() => null);
   const usingStripe = stripeCollected !== null;
 
-  const collectedTotal = usingStripe ? stripeCollected!.totalCents : collected + apparelCents;
+  // The non-Stripe fallback ("collected"/seasonFeeAgg) already sums ALL PAID rows,
+  // so manual payments are counted there; only the Stripe branch must add them.
+  const collectedTotal = usingStripe ? stripeCollected!.totalCents + manualCollected : collected + apparelCents;
   const installmentLineCents = usingStripe ? stripeCollected!.installmentCents : installmentPaidCents;
   const seasonFeeCents = usingStripe
-    ? Math.max(0, stripeCollected!.oneTimeCents - apparelCents)
+    ? Math.max(0, stripeCollected!.oneTimeCents - apparelCents) + manualSeasonFee
     : (seasonFeeAgg._sum.amountCents ?? 0);
-  const otherFeeCents = usingStripe ? 0 : collected - (seasonFeeAgg._sum.amountCents ?? 0) - installmentPaidCents;
+  const otherFeeCents = usingStripe ? manualCollected - manualSeasonFee : collected - (seasonFeeAgg._sum.amountCents ?? 0) - installmentPaidCents;
 
   // Estimated payouts (not yet disbursed): what's owed to coaches and facilities.
   // Coaches from calculated payout runs, falling back to delivered coach-sessions
