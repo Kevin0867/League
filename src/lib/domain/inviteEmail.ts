@@ -50,3 +50,38 @@ export async function sendConsoleInvite(opts: {
     })
   );
 }
+
+/** Emails a player or parent a link to set their password and activate their
+ *  family portal — where they see practice times & locations, payments, and
+ *  messages from coaches. Portal-oriented wording (not "Console"). */
+export async function sendPortalInvite(opts: {
+  toEmail: string;
+  name: string;
+  role: string; // PLAYER | PARENT
+  link: string;
+}) {
+  const forParent = (ROLE_WORD[opts.role] ?? opts.role) === "Parent";
+  const contentHtml =
+    `<p style="margin:0 0 14px;font-size:14px;color:#475569">Set your password to activate your PURE Academy account. ` +
+    `Inside you can see ${forParent ? "your player's" : "your"} practice times &amp; locations, pay season fees, and read messages from ${forParent ? "coaches and admins" : "your coach"}.</p>` +
+    emailButton(opts.link, "Set my password", { primary: true }) +
+    `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8">This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`;
+
+  const text = [
+    `Hi ${opts.name},`,
+    ``,
+    `Activate your PURE Academy account to see ${forParent ? "your player's" : "your"} practice times & locations, pay fees, and get messages from ${forParent ? "coaches and admins" : "your coach"}.`,
+    `Set your password:`,
+    opts.link,
+    ``,
+    `This link expires in 7 days.`,
+    `Questions? Contact us at ${SUPPORT_ADDRESS}.`,
+  ].join("\n");
+
+  return sendEmail(
+    opts.toEmail,
+    "Activate your PURE Academy account",
+    text,
+    brandedEmailHtml({ heading: "Activate your account", intro: `Hi ${opts.name},`, contentHtml })
+  );
+}

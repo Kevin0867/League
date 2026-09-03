@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { canUseMessaging, canReachPerson } from "@/lib/domain/messaging-acl";
+import { canUseMessagingPerson, canReachPerson } from "@/lib/domain/messaging-acl";
 
 // Direct-messaging mutations (start / reply / delete a message / archive a
 // thread) as native-form POSTs with ticket auth, shared by the console (admin,
@@ -24,11 +24,12 @@ export async function POST(req: Request) {
 
   const actor = await actorFromForm(fd);
   if (!actor) return back("/login");
-  if (!canUseMessaging(actor.role)) return back(`${base}?err=perm`);
 
   const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
   const myPersonId = me?.personId ?? "";
   if (!myPersonId) return back(`${base}?err=perm`);
+  // Age-aware gate: staff/parents always; a player only if 12+.
+  if (!(await canUseMessagingPerson(myPersonId, actor.role))) return back(`${base}?err=perm`);
 
   const op = String(fd.get("op") ?? "");
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Logo, PadelLogo } from "@/components/Brand";
 import { requireUser } from "@/lib/rbac";
-import { canUseMessaging } from "@/lib/domain/messaging-acl";
+import { canUseMessagingPerson } from "@/lib/domain/messaging-acl";
 
 export default async function PortalLayout({
   children,
@@ -9,7 +9,7 @@ export default async function PortalLayout({
   children: React.ReactNode;
 }) {
   const session = await requireUser();
-  const showMessages = canUseMessaging(session.role);
+  const showMessages = await canUseMessagingPerson(session.personId ?? "", session.role);
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">

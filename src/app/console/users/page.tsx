@@ -7,6 +7,8 @@ import { ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES, effectiveRoles, type Role }
 import { LoginStatus } from "@/components/LoginStatus";
 import { requireAdmin } from "@/lib/rbac";
 import { AccessRolesProvider, RoleCell } from "./AccessRoles";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { familyInviteCandidates } from "@/lib/domain/familyInvites";
 
 // De-duplicated, human labels for a role set (legacy COO/CEO/DIRECTOR all show
 // as "Admin", so collapse duplicates).
@@ -26,6 +28,7 @@ const ERRORS: Record<string, string> = {
   "invite-send": "The account was created, but the invitation email could not be sent. Check email settings, then re-send the invite.",
   lastadmin: "That's the last admin login — assign admin to someone else before removing it.",
   delete: "Couldn't delete that login. It may still be referenced elsewhere.",
+  nofamilies: "No active PURE Academy season found to invite families from.",
 };
 const OKS: Record<string, string> = {
   role: "Role updated.",
@@ -54,6 +57,14 @@ export default async function UsersPage({
     orderBy: [{ role: "asc" }, { email: "asc" }],
   });
 
+  // How many family portal logins the bulk-invite would create right now.
+  const activeSeason = await prisma.season.findFirst({
+    where: { active: true, isTest: false, program: "PURE_ACADEMY" },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true },
+  });
+  const familyCandidates = activeSeason ? await familyInviteCandidates(activeSeason.id) : [];
+
   const assignableRoles = ASSIGNABLE_ROLES;
   // Starting role selection per user for the shared dirty-set editor: the
   // assignable roles they currently hold.
@@ -64,7 +75,15 @@ export default async function UsersPage({
   return (
     <div className="space-y-6">
       <PageHeader title="Access" subtitle="Invite people and assign roles. Admins can do anything; coaches are scoped to their own teams; players and parents use the family portal." />
-      {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OKS[sp.ok] ?? "Done."}</p>}
+      {sp.ok === "families" ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Created <strong>{sp.created ?? "0"}</strong> portal login(s): {sp.emailed ?? "0"} emailed
+          {Number(sp.sim ?? 0) > 0 ? `, ${sp.sim} simulated (email not configured)` : ""}
+          {Number(sp.failed ?? 0) > 0 ? `, ${sp.failed} email(s) failed` : ""}. Families set their own password from the link.
+        </p>
+      ) : sp.ok ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OKS[sp.ok] ?? "Done."}</p>
+      ) : null}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
       {/* A freshly generated set-password link, shown once for the admin to copy
@@ -100,6 +119,32 @@ export default async function UsersPage({
         </div>
         <button type="submit" className="btn-primary">Send invite</button>
       </form>
+
+      {/* Bulk: give every family a portal login in one step. */}
+      <div className="card flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-2xl">
+          <h2 className="font-semibold text-slate-900">Give families portal access</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Create a login for everyone in <strong>{activeSeason?.name ?? "the active season"}</strong> who doesn&apos;t have one yet —
+            each parent, and each player 12+ with their own email — and email them a &ldquo;set your password&rdquo; link. Kids under 12
+            (and anyone without their own email) are covered by their parent&apos;s login. People who already have an account are skipped.
+          </p>
+          <p className="mt-1 text-sm font-medium text-slate-700">
+            {familyCandidates.length > 0
+              ? `${familyCandidates.length} new login${familyCandidates.length === 1 ? "" : "s"} will be created and emailed.`
+              : "Everyone eligible already has a login — nothing to send."}
+          </p>
+        </div>
+        {familyCandidates.length > 0 && (
+          <ConfirmSubmit
+            action="/api/console/users"
+            fields={{ ticket, op: "inviteFamilies" }}
+            confirm={`Create ${familyCandidates.length} portal login(s) and email each a set-password link now?`}
+            label="Invite all families"
+            className="btn-primary whitespace-nowrap"
+          />
+        )}
+      </div>
 
       <div className="max-w-md">
         <TableFilter targetId="users-table" placeholder="Search by name or email…" />

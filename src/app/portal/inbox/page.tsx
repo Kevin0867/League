@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
-import { allowedContacts, canUseMessaging } from "@/lib/domain/messaging-acl";
+import { allowedContacts, canUseMessagingPerson } from "@/lib/domain/messaging-acl";
 import { inboxItems } from "@/lib/domain/messaging-store";
 import { Composer, InboxList } from "@/components/messaging/Messaging";
 
@@ -20,9 +20,9 @@ export default async function PortalInboxPage({
 }) {
   const sp = await searchParams;
   const session = await requireUser();
-  if (!canUseMessaging(session.role)) redirect("/portal");
-  const ticket = await mintConsoleTicket();
   const personId = session.personId ?? "";
+  if (!(await canUseMessagingPerson(personId, session.role))) redirect("/portal");
+  const ticket = await mintConsoleTicket();
 
   const [items, contacts] = await Promise.all([
     personId ? inboxItems(personId) : Promise.resolve([]),

@@ -5,7 +5,8 @@ import { can } from "@/lib/rbac";
 import { ASSIGNABLE_ROLES, ADMIN_ROLES, splitRoles, type Role } from "@/lib/enums";
 import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
-import { sendConsoleInvite } from "@/lib/domain/inviteEmail";
+import { sendConsoleInvite, sendPortalInvite } from "@/lib/domain/inviteEmail";
+import { familyInviteCandidates } from "@/lib/domain/familyInvites";
 import { appUrl } from "@/lib/stripe";
 import crypto from "crypto";
 
@@ -65,6 +66,37 @@ export async function POST(req: Request) {
     if (!sent.ok) return back("?err=invite-send");
     if (sent.simulated) return back("?ok=invited-sim");
     return back("?ok=invited");
+  }
+
+  // Provision portal logins for a whole season at once — every parent (with an
+  // email) and every player who has their OWN email and is an adult or 12+.
+  // Under-12 players and anyone without their own email are skipped: their
+  // parent's account covers them. Skips people who already have a login.
+  if (op === "inviteFamilies") {
+    const season = await prisma.season.findFirst({
+      where: { active: true, isTest: false, program: "PURE_ACADEMY" },
+      orderBy: { startDate: "desc" },
+      select: { id: true },
+    });
+    if (!season) return back("?err=nofamilies");
+
+    const cands = await familyInviteCandidates(season.id);
+    let created = 0, emailed = 0, simulated = 0, failed = 0;
+    for (const c of cands) {
+      const user = await prisma.user.create({
+        data: { email: c.email, passwordHash: await hashPassword(crypto.randomBytes(24).toString("hex")), role: c.role, personId: c.personId, active: true },
+      });
+      created++;
+      const token = await createResetToken(user.id, INVITE_TTL_MS);
+      const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
+      const sent = await sendPortalInvite({ toEmail: c.email, name: c.firstName, role: c.role, link });
+      if (!sent.ok) failed++;
+      else if (sent.simulated) simulated++;
+      else emailed++;
+    }
+    await audit({ actorId: actor.userId, entityType: "User", entityId: "bulk", action: "user.inviteFamilies", summary: `Provisioned ${created} portal logins (${emailed} emailed, ${simulated} simulated, ${failed} failed)` });
+    const qs = new URLSearchParams({ ok: "families", created: String(created), emailed: String(emailed), sim: String(simulated), failed: String(failed) });
+    return back(`?${qs.toString()}`);
   }
 
   // Bulk role assignment from the Access page — every changed row's role set in

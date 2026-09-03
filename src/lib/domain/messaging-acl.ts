@@ -4,14 +4,37 @@ import { ADMIN_ROLES } from "@/lib/enums";
 
 // Who-can-message-whom for on-platform direct messaging.
 //   ADMIN  ↔ anyone (also the moderator: can read every conversation)
-//   COACH  ↔ other coaches, admins, and parents of players on their teams
+//   COACH  ↔ other coaches, admins, parents of players on their teams, and the
+//            players 12+ on their teams
 //   PARENT ↔ admins, their children's coaches, and other parents on those teams
-//   PLAYER → no messaging (minors excluded for now)
-// Only people with an active account in {ADMIN, COACH, PARENT} are reachable —
-// a player has no inbox to read, so they never appear as a contact.
+//   PLAYER (12+) ↔ admins and their own team's coaches
+//   PLAYER (under 12) → no direct messages; their parent is the contact instead
+// A person is reachable only if they have an active account AND (for a player)
+// are at least MESSAGING_MIN_AGE, so a young child never appears as a contact.
+
+export const MESSAGING_MIN_AGE = 12;
 
 export type MsgRole = "ADMIN" | "COACH" | "PARENT" | "PLAYER" | "NONE";
 export type Contact = { personId: string; name: string; role: MsgRole };
+
+/** Whole years old as of today, or null when no birthdate is on file. */
+export function ageFromDob(dob: Date | null | undefined): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age;
+}
+
+/** A player is old enough to hold their own conversations when their age is
+ *  unknown (adult players carry no DOB) or at least MESSAGING_MIN_AGE. Only a
+ *  confirmed under-12 is excluded. */
+export function playerOldEnough(age: number | null): boolean {
+  return age === null || age >= MESSAGING_MIN_AGE;
+}
 
 export function normalizeMsgRole(role: string | null | undefined): MsgRole {
   if (!role) return "NONE";
@@ -22,34 +45,52 @@ export function normalizeMsgRole(role: string | null | undefined): MsgRole {
   return "NONE";
 }
 
+/** Role-only gate: staff and parents always; a PLAYER's eligibility depends on
+ *  age (see canUseMessagingPerson), so this returns false for PLAYER. */
 export function canUseMessaging(role: string | null | undefined): boolean {
   const r = normalizeMsgRole(role);
   return r === "ADMIN" || r === "COACH" || r === "PARENT";
+}
+
+/** Age-aware gate for a specific account holder — the one the portal uses so a
+ *  player 12+ gets messaging while an under-12 does not. */
+export async function canUseMessagingPerson(personId: string, role: string | null | undefined): Promise<boolean> {
+  const r = normalizeMsgRole(role);
+  if (r === "ADMIN" || r === "COACH" || r === "PARENT") return true;
+  if (r !== "PLAYER" || !personId) return false;
+  const person = await prisma.person.findUnique({ where: { id: personId }, select: { dob: true } });
+  return playerOldEnough(ageFromDob(person?.dob));
 }
 
 export function isAdminRole(role: string | null | undefined): boolean {
   return normalizeMsgRole(role) === "ADMIN";
 }
 
-/** Everyone with an active login who can hold a conversation, keyed by personId. */
+/** Everyone with an active login who can hold a conversation, keyed by personId.
+ *  Includes players 12+ (an under-12 is left out, so they never appear as a
+ *  contact and their parent is messaged instead). */
 async function eligibleUniverse(): Promise<Map<string, Contact>> {
   const users = await prisma.user.findMany({
     where: { active: true, personId: { not: null } },
-    select: { role: true, person: { select: { id: true, firstName: true, lastName: true } } },
+    select: { role: true, person: { select: { id: true, firstName: true, lastName: true, dob: true } } },
   });
   const map = new Map<string, Contact>();
   for (const u of users) {
     if (!u.person) continue;
     const r = normalizeMsgRole(u.role);
     if (r === "ADMIN" || r === "COACH" || r === "PARENT") {
-      map.set(u.person.id, {
-        personId: u.person.id,
-        name: `${u.person.firstName} ${u.person.lastName}`,
-        role: r,
-      });
+      map.set(u.person.id, { personId: u.person.id, name: `${u.person.firstName} ${u.person.lastName}`, role: r });
+    } else if (r === "PLAYER" && playerOldEnough(ageFromDob(u.person.dob))) {
+      map.set(u.person.id, { personId: u.person.id, name: `${u.person.firstName} ${u.person.lastName}`, role: r });
     }
   }
   return map;
+}
+
+/** Team ids a player is rostered on. */
+async function playerTeamIds(playerPersonId: string): Promise<string[]> {
+  const members = await prisma.teamMember.findMany({ where: { personId: playerPersonId }, select: { teamId: true } });
+  return [...new Set(members.map((m) => m.teamId))];
 }
 
 /** Team ids a coach is on (head coach or assistant). */
@@ -74,25 +115,31 @@ async function parentTeamIds(parentPersonId: string): Promise<string[]> {
   return [...new Set(members.map((m) => m.teamId))];
 }
 
-/** The coaches and parents (guardians of players) attached to a set of teams. */
-async function teamContacts(teamIds: string[]): Promise<{ parents: Set<string>; coaches: Set<string> }> {
+/** The coaches, parents (guardians of players), and the players themselves
+ *  attached to a set of teams. Players are surfaced too so a coach can message
+ *  a 12+ player directly (the universe filter keeps under-12s out). */
+async function teamContacts(teamIds: string[]): Promise<{ parents: Set<string>; coaches: Set<string>; players: Set<string> }> {
   const parents = new Set<string>();
   const coaches = new Set<string>();
-  if (!teamIds.length) return { parents, coaches };
+  const players = new Set<string>();
+  if (!teamIds.length) return { parents, coaches, players };
   const teams = await prisma.team.findMany({
     where: { id: { in: teamIds } },
     select: {
       coach: { select: { personId: true } },
       assistantCoaches: { select: { coach: { select: { personId: true } } } },
-      members: { select: { person: { select: { guardianId: true } } } },
+      members: { select: { personId: true, person: { select: { guardianId: true } } } },
     },
   });
   for (const t of teams) {
     if (t.coach?.personId) coaches.add(t.coach.personId);
     for (const a of t.assistantCoaches) if (a.coach?.personId) coaches.add(a.coach.personId);
-    for (const m of t.members) if (m.person.guardianId) parents.add(m.person.guardianId);
+    for (const m of t.members) {
+      players.add(m.personId);
+      if (m.person.guardianId) parents.add(m.person.guardianId);
+    }
   }
-  return { parents, coaches };
+  return { parents, coaches, players };
 }
 
 async function allowedIds(
@@ -111,11 +158,17 @@ async function allowedIds(
 
   if (role === "COACH") {
     for (const [pid, c] of universe) if (c.role === "COACH") ids.add(pid);
-    const { parents } = await teamContacts(await coachTeamIds(actorPersonId));
+    // Parents and the 12+ players on the coach's teams.
+    const { parents, players } = await teamContacts(await coachTeamIds(actorPersonId));
     for (const p of parents) if (universe.has(p)) ids.add(p);
+    for (const p of players) if (universe.has(p)) ids.add(p);
   } else if (role === "PARENT") {
     const { parents, coaches } = await teamContacts(await parentTeamIds(actorPersonId));
     for (const p of parents) if (universe.has(p)) ids.add(p);
+    for (const c of coaches) if (universe.has(c)) ids.add(c);
+  } else if (role === "PLAYER") {
+    // A player (12+) reaches admins and the coaches of their own teams.
+    const { coaches } = await teamContacts(await playerTeamIds(actorPersonId));
     for (const c of coaches) if (universe.has(c)) ids.add(c);
   }
   ids.delete(actorPersonId);
@@ -125,7 +178,9 @@ async function allowedIds(
 /** People this actor may start a conversation with, sorted by name. */
 export async function allowedContacts(actorPersonId: string, role: string): Promise<Contact[]> {
   const r = normalizeMsgRole(role);
-  if (r === "NONE" || r === "PLAYER") return [];
+  if (r === "NONE") return [];
+  // An under-12 player has no direct messaging — their parent is the contact.
+  if (r === "PLAYER" && !(await canUseMessagingPerson(actorPersonId, role))) return [];
   const universe = await eligibleUniverse();
   const ids = await allowedIds(universe, actorPersonId, r);
   return [...ids]
