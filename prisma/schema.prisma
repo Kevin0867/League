@@ -798,6 +798,10 @@ model Payment {
   apparelTeam   Team?    @relation("ApparelTeam", fields: [apparelTeamId], references: [id])
 
   description   String?
+  /// For a payment marked paid OUTSIDE Stripe (a check, Class Wallet, cash, an
+  /// in-kind credit): the admin's free-text note of how it was paid. Set only on
+  /// manual (method = MANUAL) settlements; null for Stripe-cleared payments.
+  manualNote    String?
   paidAt        DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
