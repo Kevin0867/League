@@ -63,6 +63,8 @@ export default async function ApparelReportPage({
     team: (i.personId ? teamById.get(i.personId) : null) ?? i.payment.apparelTeam?.name ?? "—",
     garment: garmentLabel(i.garment),
     size: sizeLabel(i.size),
+    garmentKey: i.garment,
+    sizeKey: i.size,
     qty: i.quantity,
     paid: i.payment.status === "PAID",
     fulfillment: i.fulfillment,
@@ -86,7 +88,7 @@ export default async function ApparelReportPage({
 
       {sp.ok && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {sp.ok === "advanced" ? `${sp.n ?? ""} item(s) updated.` : "Updated."}
+          {sp.ok === "advanced" ? `${sp.n ?? ""} item(s) updated.` : sp.ok === "itemedited" ? "Apparel choice updated." : "Updated."}
         </p>
       )}
 
@@ -157,7 +159,25 @@ export default async function ApparelReportPage({
               <tr key={r.id}>
                 <td className="py-2 font-medium text-slate-800">{r.player || <span className="text-slate-400">{r.payer}</span>}</td>
                 <td className="text-slate-600">{r.team}</td>
-                <td className="text-slate-600">{r.garment} · {r.size}</td>
+                <td className="text-slate-600">
+                  <details>
+                    <summary className="cursor-pointer hover:text-brand-700" title="Change garment or size">{r.garment} · {r.size}</summary>
+                    <form method="POST" action="/api/console/apparel" className="mt-1.5 flex flex-wrap items-end gap-1.5">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="editItem" />
+                      <input type="hidden" name="id" value={r.id} />
+                      <select name="garment" defaultValue={r.garmentKey} className="input py-1 text-xs">
+                        {APPAREL_GARMENTS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                      </select>
+                      <select name="size" defaultValue={r.sizeKey} className="input py-1 text-xs">
+                        <optgroup label="Youth">{APPAREL_SIZES.filter((s) => s.key.startsWith("Y")).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</optgroup>
+                        <optgroup label="Adult">{APPAREL_SIZES.filter((s) => s.key.startsWith("A")).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</optgroup>
+                      </select>
+                      <input name="quantity" type="number" min={1} max={20} defaultValue={r.qty} className="input w-14 py-1 text-xs" />
+                      <button className="btn-secondary py-1 text-xs">Save</button>
+                    </form>
+                  </details>
+                </td>
                 <td className="text-right text-slate-600">{r.qty}</td>
                 <td>{r.paid ? <span className="badge bg-emerald-100 text-emerald-800">paid</span> : <span className="badge bg-amber-100 text-amber-800">unpaid</span>}</td>
                 <td>
