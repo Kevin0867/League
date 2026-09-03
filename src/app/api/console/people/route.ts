@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { encryptField } from "@/lib/crypto";
+import { ageFromDob } from "@/lib/domain/messaging-acl";
 
 // Person operations. Currently: merge a duplicate person record into a
 // surviving one, moving every reference (registrations, teams, payments,
@@ -25,6 +27,39 @@ export async function POST(req: Request) {
   if (!actor || !can(actor.role, "managePlayers")) return back("?err=auth");
 
   const op = String(formData.get("op") ?? "");
+
+  // Admin edit of a person's record — name (coaches included), contact, DOB, and
+  // the protected emergency/medical fields (re-encrypted on save). Gated by
+  // managePlayers, same as viewing this profile.
+  if (op === "editPerson") {
+    const g = (k: string) => String(formData.get(k) ?? "").trim();
+    const personId = g("personId");
+    const firstName = g("firstName");
+    const lastName = g("lastName");
+    if (!personId || !firstName || !lastName) return back("?err=fields");
+    const dobStr = g("dob");
+    const dob = dobStr ? new Date(dobStr) : null;
+    const age = dob && !isNaN(dob.getTime()) ? ageFromDob(dob) : null;
+    await prisma.person.update({
+      where: { id: personId },
+      data: {
+        firstName,
+        lastName,
+        email: g("email").toLowerCase() || null,
+        phone: g("phone") || null,
+        dob: dob && !isNaN(dob.getTime()) ? dob : null,
+        // Keep the minor flag in step with the birthdate when one is set.
+        ...(age !== null ? { isMinor: age < 18 } : {}),
+        emergencyName: encryptField(g("emergencyName") || null),
+        emergencyPhone: encryptField(g("emergencyPhone") || null),
+        emergencyRelation: encryptField(g("emergencyRelation") || null),
+        medicalNotes: encryptField(g("medicalNotes") || null),
+      },
+    });
+    await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "person.edit", summary: `Edited ${firstName} ${lastName}` });
+    return back("?ok=personedit");
+  }
+
   if (op !== "mergePeople") return back("?err=op");
 
   const survivorId = String(formData.get("survivorId") ?? "");
