@@ -32,11 +32,37 @@ export default async function PaymentsPage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const now = new Date();
-  // The ledgers below show the 50 most recent rows, but every headline figure and
-  // the outstanding/failed lists are computed from ALL payments so the numbers are
-  // accurate no matter how many payments exist.
+
+  // "Fees in" search: filter by payer name and/or paid-vs-unpaid, so an admin can
+  // look up exactly who has or hasn't paid. "Paid" counts a fully-cleared fee OR
+  // an active payment plan (first installment in); "unpaid" is everyone else.
+  const qRaw = (sp.q ?? "").trim();
+  const payView = sp.pay === "paid" || sp.pay === "unpaid" ? sp.pay : "all";
+  const nameFilter = qRaw
+    ? { party: { is: { OR: [{ firstName: { contains: qRaw, mode: "insensitive" as const } }, { lastName: { contains: qRaw, mode: "insensitive" as const } }] } } }
+    : {};
+  const PAID_OR = [{ status: "PAID" }, { AND: [{ installmentPlan: true }, { installmentsPaid: { gte: 1 } }] }];
+  const statusFilter =
+    payView === "paid"
+      ? { OR: PAID_OR }
+      : payView === "unpaid"
+      ? { AND: [{ status: { not: "PAID" } }, { NOT: { AND: [{ installmentPlan: true }, { installmentsPaid: { gte: 1 } }] } }] }
+      : {};
+  const searchingFees = !!qRaw || payView !== "all";
+  const inboundWhere = { direction: "IN", ...nameFilter, ...statusFilter };
+
+  // The ledgers below show the 50 most recent rows (200 when a search is active),
+  // but every headline figure and the outstanding/failed lists are computed from
+  // ALL payments so the numbers are accurate no matter how many payments exist.
   const [inbound, outbound, payoutRuns, statements, failed, outstanding, collectedAgg, paidOutAgg] = await Promise.all([
-    prisma.payment.findMany({ where: { direction: "IN" }, include: { party: true }, orderBy: { createdAt: "desc" }, take: 50 }),
+    // Most-recently-PAID first so the latest money in is at the top; unpaid rows
+    // (no paidAt) fall to the bottom, newest request first.
+    prisma.payment.findMany({
+      where: inboundWhere,
+      include: { party: true },
+      orderBy: [{ paidAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: searchingFees ? 200 : 50,
+    }),
     prisma.payment.findMany({ where: { direction: "OUT" }, include: { party: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.payoutRun.findMany({
       orderBy: { createdAt: "desc" }, take: 3,
@@ -703,19 +729,58 @@ export default async function PaymentsPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Ledger title="Fees in" rows={inbound} />
+        <Ledger title="Fees in" rows={inbound} search={{ q: qRaw, payView }} />
         <Ledger title="Payments out" rows={outbound} />
       </div>
     </div>
   );
 }
 
-function Ledger({ title, rows }: { title: string; rows: Array<{ id: string; amountCents: number; status: string; category: string; party: { firstName: string; lastName: string } | null }> }) {
+function Ledger({
+  title,
+  rows,
+  search,
+}: {
+  title: string;
+  rows: Array<{ id: string; partyId?: string | null; amountCents: number; status: string; category: string; paidAt?: Date | null; party: { firstName: string; lastName: string } | null }>;
+  search?: { q: string; payView: "all" | "paid" | "unpaid" };
+}) {
+  const pill = (label: string, value: string, active: boolean) => (
+    <Link
+      href={`/console/payments?${value ? `pay=${value}&` : ""}${search?.q ? `q=${encodeURIComponent(search.q)}&` : ""}v=fees#fees-in`}
+      className={`rounded-full px-3 py-1 text-xs font-medium ${active ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+    >
+      {label}
+    </Link>
+  );
   return (
-    <div className="card">
+    <div className="card" id={search ? "fees-in" : undefined}>
       <h2 className="mb-3 font-semibold text-slate-900">{title}</h2>
+      {search && (
+        <div className="mb-3 space-y-2">
+          <form method="GET" action="/console/payments" className="flex gap-2">
+            <input
+              type="search"
+              name="q"
+              defaultValue={search.q}
+              placeholder="Search a payer by name…"
+              className="input py-1 text-sm"
+            />
+            {search.payView !== "all" && <input type="hidden" name="pay" value={search.payView} />}
+            <button className="btn-secondary py-1 text-xs">Search</button>
+            {(search.q || search.payView !== "all") && (
+              <Link href="/console/payments#fees-in" className="btn-secondary py-1 text-xs">Clear</Link>
+            )}
+          </form>
+          <div className="flex flex-wrap gap-1.5">
+            {pill("All", "", search.payView === "all")}
+            {pill("Paid", "paid", search.payView === "paid")}
+            {pill("Unpaid", "unpaid", search.payView === "unpaid")}
+          </div>
+        </div>
+      )}
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-400">Nothing yet.</p>
+        <p className="text-sm text-slate-400">{search && (search.q || search.payView !== "all") ? "No payments match." : "Nothing yet."}</p>
       ) : (
         <ul className="divide-y divide-slate-100 text-sm">
           {rows.map((p) => (
@@ -723,7 +788,15 @@ function Ledger({ title, rows }: { title: string; rows: Array<{ id: string; amou
               <div>
                 <div className="font-medium text-slate-800">{formatCents(p.amountCents)}</div>
                 <div className="text-xs text-slate-400">
-                  {p.party ? `${p.party.firstName} ${p.party.lastName} · ` : ""}{p.category.replace(/_/g, " ")}
+                  {p.party ? (
+                    p.partyId ? (
+                      <Link href={`/console/people/${p.partyId}`} className="hover:text-brand-700 hover:underline">{p.party.firstName} {p.party.lastName}</Link>
+                    ) : (
+                      `${p.party.firstName} ${p.party.lastName}`
+                    )
+                  ) : null}
+                  {p.party ? " · " : ""}{p.category.replace(/_/g, " ")}
+                  {p.paidAt ? ` · paid ${formatDate(p.paidAt)}` : ""}
                 </div>
               </div>
               <StatusBadge status={p.status} />
