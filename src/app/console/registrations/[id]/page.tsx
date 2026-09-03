@@ -47,6 +47,7 @@ const OK: Record<string, string> = {
   split: "Split onto its own record. This registration now has its own contact info — edit the name and details below so they're correct.",
   apparelReq: "Apparel order link created and emailed — they pick their gear and pay from the link.",
   itemedited: "Apparel choice updated.",
+  paidoffline: "Marked paid. Recorded how it was paid.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -55,6 +56,8 @@ const ERR: Record<string, string> = {
   noemail: "No email on file for this player — add one before sending the waiver.",
   nosplit: "This registration already has its own record — nothing to split.",
   apemail: "Enter a valid email to send the apparel order link.",
+  nonote: "Add a short note of how they paid (check, Class Wallet, cash…) before marking paid.",
+  alreadypaid: "This player's season fee is already marked paid.",
 };
 
 const STATUSES = ["SUBMITTED", "ASSIGNED", "WAITLISTED", "WITHDRAWN", "DUPLICATE"];
@@ -359,13 +362,16 @@ export default async function RegistrationDetail({
             <p className="text-xs uppercase tracking-wide text-slate-400">Season fee</p>
             <p className="text-sm font-medium text-slate-800">
               {paid
-                ? `Paid ${formatCents(paid.amountCents)}`
+                ? `Paid ${formatCents(paid.amountCents)}${paid.method === "MANUAL" ? " · offline" : ""}`
                 : subscription
                 ? `Subscription · ${subscription.installmentsPaid ?? 1} of ${subscription.installmentsTotal ?? 3} paid`
                 : outstanding
                 ? `${outstanding.status.toLowerCase()} · ${formatCents(outstanding.amountCents)}`
                 : "Not requested"}
             </p>
+            {paid?.manualNote && (
+              <p className="mt-0.5 text-xs text-slate-500">Paid by: {paid.manualNote}</p>
+            )}
             <div className="mt-2 flex flex-wrap gap-3">
               {!outstanding && !paid && !subscription && (
                 <form method="POST" action="/api/console/registrations">
@@ -380,6 +386,31 @@ export default async function RegistrationDetail({
                     {hidden}<input type="hidden" name="op" value="resendPayment" />
                     <RecipientChecklist person={p} guardian={guardian} purpose="all" legend="Send reminder to" />
                     <button className="btn-secondary py-1 text-xs">Send reminder</button>
+                  </form>
+                </details>
+              )}
+              {/* Mark paid outside Stripe — check, Class Wallet, cash, in-kind.
+                  Available until the fee is settled in full; records HOW it was paid. */}
+              {!paid && (
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs font-semibold text-emerald-700 hover:underline">Mark paid (offline)…</summary>
+                  <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-emerald-50 p-3">
+                    {hidden}<input type="hidden" name="op" value="markPaidOffline" />
+                    <label className="block text-xs font-medium text-emerald-900">
+                      How did they pay?
+                      <input
+                        name="note"
+                        required
+                        maxLength={300}
+                        placeholder="e.g. Check #1042 · Class Wallet · Cash"
+                        className="input mt-1 py-1 text-sm"
+                      />
+                    </label>
+                    <p className="text-[11px] text-emerald-800/80">
+                      Records the fee as paid in the roster, reports and reminders. No card is charged and no email is sent.
+                      {subscription ? " This settles the remaining subscription balance." : ""}
+                    </p>
+                    <button className="btn-secondary py-1 text-xs">Mark paid</button>
                   </form>
                 </details>
               )}

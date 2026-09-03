@@ -522,6 +522,57 @@ export async function POST(req: Request) {
       return back("?ok=fee");
     }
 
+    // Mark a fee PAID outside Stripe — a check, Class Wallet, cash, or an in-kind
+    // credit. Records HOW it was paid from a free-text note. Settles the player's
+    // outstanding (or partially-paid subscription) invoice; if no fee has been
+    // invoiced yet, one is accrued first so the payment has something to land on.
+    case "markPaidOffline": {
+      if (!reg) return back("?err=fields");
+      const note = String(fd.get("note") ?? "").trim().slice(0, 300);
+      if (!note) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nonote`, origin), 303);
+      const person = await prisma.person.findUnique({ where: { id: personId } });
+      if (!person) return back("?err=fields");
+
+      // Find the fee covering this player that isn't already settled/refunded —
+      // an outstanding request, a failed charge, or a subscription still paying.
+      const covering = await prisma.payment.findMany({
+        where: {
+          seasonId: reg.seasonId,
+          category: "PLAYER_FEE",
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (covering.some((x) => x.status === "PAID")) {
+        return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=alreadypaid`, origin), 303);
+      }
+      let target = covering.find((x) => ["REQUESTED", "PENDING", "FAILED"].includes(x.status));
+      if (!target) {
+        // No invoice yet — accrue one (get-or-create, consolidated per payer) so
+        // the offline payment records against a real fee.
+        const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+        const feeCents = rate?.seasonFeeCents ?? 49500;
+        const season = await prisma.season.findUnique({ where: { id: reg.seasonId }, select: { name: true } });
+        const res = await accruePlayerSeasonFee({ playerId: personId, seasonId: reg.seasonId, feeCents, seasonName: season?.name ?? "Season" });
+        target = (await prisma.payment.findUnique({ where: { id: res.paymentId } })) ?? undefined;
+      }
+      if (!target) return back("?err=fields");
+
+      await prisma.payment.update({
+        where: { id: target.id },
+        data: {
+          status: "PAID",
+          method: "MANUAL",
+          paidAt: new Date(),
+          manualNote: note,
+          // If this was on the 3-payment plan, settling it offline completes it.
+          ...(target.installmentPlan ? { installmentsPaid: target.installmentsTotal ?? 3 } : {}),
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: target.id, action: "PAID", summary: `Marked paid offline (${note}) for ${person.firstName} ${person.lastName}` });
+      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=paidoffline`, origin), 303);
+    }
+
     // Split a consolidated family fee (one invoice covering several players) into
     // a separate per-player invoice for each — e.g. a father and son on two
     // different teams. Only a not-yet-paid (REQUESTED) invoice can be split.
