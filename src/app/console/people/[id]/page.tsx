@@ -2,7 +2,7 @@ import Link from "next/link";
 import { formatDate } from "@/lib/time";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { decryptField } from "@/lib/crypto";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -12,11 +12,19 @@ export const dynamic = "force-dynamic";
 // Minors' data, medical disclosures, and emergency contacts are access-controlled
 // (§17/§18). Only staff who manage players (COO / Director) may view them; coaches
 // see their own roster elsewhere, without medical/emergency detail.
-export default async function PersonDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function PersonDetail({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ ok?: string; err?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login");
   if (!can(session.role, "managePlayers")) redirect("/console");
+  const ticket = await mintConsoleTicket();
 
   const person = await prisma.person.findUnique({
     where: { id },
@@ -48,6 +56,38 @@ export default async function PersonDetail({ params }: { params: Promise<{ id: s
             : <span className="badge bg-rose-100 text-rose-800">no waiver</span>}
         </div>
       </div>
+
+      {sp.ok === "personedit" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
+      {sp.err && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{sp.err === "fields" ? "First and last name are required." : "Couldn't save — please try again."}</div>}
+
+      {/* Admin edit — name (coaches included), contact, birthdate, and the
+          protected emergency/medical fields, all in one place. */}
+      <details className="card">
+        <summary className="cursor-pointer font-semibold text-slate-900">Edit this record</summary>
+        <form method="POST" action="/api/console/people" className="mt-4 space-y-4">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="op" value="editPerson" />
+          <input type="hidden" name="personId" value={person.id} />
+          <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><label className="label">First name</label><input name="firstName" className="input" defaultValue={person.firstName} required /></div>
+            <div><label className="label">Last name</label><input name="lastName" className="input" defaultValue={person.lastName} required /></div>
+            <div><label className="label">Email</label><input name="email" type="email" className="input" defaultValue={person.email ?? ""} /></div>
+            <div><label className="label">Phone</label><input name="phone" type="tel" className="input" defaultValue={person.phone ?? ""} /></div>
+            <div><label className="label">Date of birth</label><input name="dob" type="date" className="input" defaultValue={person.dob ? new Date(person.dob).toISOString().slice(0, 10) : ""} /></div>
+          </div>
+          <div className="rounded-lg border-l-4 border-brand-300 bg-slate-50 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Protected — encrypted at rest</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div><label className="label">Emergency contact name</label><input name="emergencyName" className="input" defaultValue={emergencyName ?? ""} /></div>
+              <div><label className="label">Relationship</label><input name="emergencyRelation" className="input" defaultValue={emergencyRelation ?? ""} /></div>
+              <div><label className="label">Emergency phone</label><input name="emergencyPhone" type="tel" className="input" defaultValue={emergencyPhone ?? ""} /></div>
+            </div>
+            <div className="mt-3"><label className="label">Medical disclosures</label><textarea name="medicalNotes" rows={2} className="input" defaultValue={medicalNotes ?? ""} /></div>
+          </div>
+          <button className="btn-primary">Save changes</button>
+        </form>
+      </details>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card">
