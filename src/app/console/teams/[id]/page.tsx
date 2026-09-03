@@ -294,6 +294,28 @@ export default async function TeamDetailPage({
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{imgerr === "auth" ? "Not authorized to change this team's photo." : imgerr}</div>
       )}
 
+      {/* Coach tools — the day-to-day actions, up top so they're never buried:
+          practice notes / progress reports, a note to the whole team, and 1:1
+          messages with a family. */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Coach tools</h2>
+        <p className="mt-0.5 text-sm text-slate-500">Notes, homework, and messages for {team.name}.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <Link href={`/console/teams/${team.id}/progress`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
+            <div className="text-sm font-semibold text-brand-800">Practice notes &amp; progress →</div>
+            <div className="mt-0.5 text-xs text-slate-500">Weekly notes and homework per player — strengths, growth, a coach&apos;s note — then send the report to the parent.</div>
+          </Link>
+          <Link href={`/console/teams/${team.id}/progress#message`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
+            <div className="text-sm font-semibold text-brand-800">Message the whole team →</div>
+            <div className="mt-0.5 text-xs text-slate-500">Post one update (practice reminder, homework, schedule note) to every player and parent at once.</div>
+          </Link>
+          <Link href="/console/inbox" className="rounded-lg border border-slate-200 px-3 py-3 hover:bg-slate-50">
+            <div className="text-sm font-semibold text-slate-800">Messages (Inbox) →</div>
+            <div className="mt-0.5 text-xs text-slate-500">A private, back-and-forth conversation with one parent, player, or another coach.</div>
+          </Link>
+        </div>
+      </div>
+
       {/* LAUNCH — the deliberate go-live. Assigning players messages no one;
           families hear from us only when an admin sends from here. Admin only. */}
       {admin && (<>
