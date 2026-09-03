@@ -22,6 +22,10 @@ export default async function ApparelReportPage({
       payment: {
         select: {
           status: true,
+          // Apparel rides on the FIRST installment of a payment plan, so a plan
+          // that's started (installmentsPaid ≥ 1) counts as paid for fulfillment.
+          installmentPlan: true,
+          installmentsPaid: true,
           party: { select: { firstName: true, lastName: true } },
           // Standalone apparel orders carry the team they're for directly, since
           // the buyer may not be on that roster.
@@ -41,7 +45,11 @@ export default async function ApparelReportPage({
   const nameById = new Map(people.map((p) => [p.id, `${p.firstName} ${p.lastName}`]));
   const teamById = new Map(memberships.map((m) => [m.personId, m.team.name]));
 
-  const paid = items.filter((i) => i.payment.status === "PAID");
+  // "Paid" for fulfillment = a completed payment OR a payment plan whose first
+  // installment (which carries the apparel charge) has cleared.
+  const apparelPaid = (p: { status: string; installmentPlan?: boolean | null; installmentsPaid?: number | null }) =>
+    p.status === "PAID" || (!!p.installmentPlan && (p.installmentsPaid ?? 0) >= 1);
+  const paid = items.filter((i) => apparelPaid(i.payment));
 
   // Printer tally — paid only, grouped garment → size → qty.
   const tally: Record<string, Record<string, number>> = {};
@@ -66,7 +74,7 @@ export default async function ApparelReportPage({
     garmentKey: i.garment,
     sizeKey: i.size,
     qty: i.quantity,
-    paid: i.payment.status === "PAID",
+    paid: apparelPaid(i.payment),
     fulfillment: i.fulfillment,
   }));
 

@@ -161,7 +161,7 @@ export default async function TeamDetailPage({
   const feePayments = memberIds.length
     ? await prisma.payment.findMany({
         where: { partyId: { in: memberIds }, seasonId: team.seasonId, category: "PLAYER_FEE" },
-        select: { id: true, partyId: true, status: true },
+        select: { id: true, partyId: true, status: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true },
         orderBy: { createdAt: "desc" },
       })
     : [];
@@ -615,7 +615,14 @@ export default async function TeamDetailPage({
                   <ul className="space-y-1">
                     {feePayments.map((fp) => (
                       <li key={fp.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="text-slate-600">{nameById.get(fp.partyId ?? "") ?? "Player"}{fp.status === "PAID" ? <span className="ml-1 text-xs text-emerald-600">paid</span> : null}</span>
+                        <span className="text-slate-600">
+                          {nameById.get(fp.partyId ?? "") ?? "Player"}
+                          {(() => {
+                            const d = feeStateDisplay(feeStateOf(fp));
+                            const c = d.tone === "emerald" ? "text-emerald-600" : d.tone === "amber" ? "text-amber-600" : "text-slate-400";
+                            return <span className={`ml-1 text-xs ${c}`}>{d.check ? "✓ " : ""}{d.label}</span>;
+                          })()}
+                        </span>
                         <a href={`/pay/${fp.id}?test=1`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700 hover:underline">Open pay page ↗</a>
                       </li>
                     ))}
