@@ -530,6 +530,13 @@ export async function POST(req: Request) {
       if (!reg) return back("?err=fields");
       const note = String(fd.get("note") ?? "").trim().slice(0, 300);
       if (!note) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nonote`, origin), 303);
+      // The dollar amount actually received offline. Blank falls back to the
+      // invoice amount; a bad or non-positive figure is rejected.
+      const amountRaw = String(fd.get("amount") ?? "").trim();
+      const enteredCents = amountRaw ? Math.round(parseFloat(amountRaw) * 100) : null;
+      if (amountRaw && (!Number.isFinite(enteredCents) || (enteredCents ?? 0) <= 0)) {
+        return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=amount`, origin), 303);
+      }
       const person = await prisma.person.findUnique({ where: { id: personId } });
       if (!person) return back("?err=fields");
 
@@ -558,6 +565,7 @@ export async function POST(req: Request) {
       }
       if (!target) return back("?err=fields");
 
+      const settledCents = enteredCents ?? target.amountCents;
       await prisma.payment.update({
         where: { id: target.id },
         data: {
@@ -565,11 +573,14 @@ export async function POST(req: Request) {
           method: "MANUAL",
           paidAt: new Date(),
           manualNote: note,
+          // Record the actual amount received, so the Payments "Collected" total
+          // reflects what was really paid (may differ from the invoiced amount).
+          amountCents: settledCents,
           // If this was on the 3-payment plan, settling it offline completes it.
           ...(target.installmentPlan ? { installmentsPaid: target.installmentsTotal ?? 3 } : {}),
         },
       });
-      await audit({ actorId: actor.userId, entityType: "Payment", entityId: target.id, action: "PAID", summary: `Marked paid offline (${note}) for ${person.firstName} ${person.lastName}` });
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: target.id, action: "PAID", summary: `Marked paid offline — ${(settledCents / 100).toFixed(2)} (${note}) for ${person.firstName} ${person.lastName}` });
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=paidoffline`, origin), 303);
     }
 

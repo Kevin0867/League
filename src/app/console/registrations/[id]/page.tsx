@@ -57,6 +57,7 @@ const ERR: Record<string, string> = {
   nosplit: "This registration already has its own record — nothing to split.",
   apemail: "Enter a valid email to send the apparel order link.",
   nonote: "Add a short note of how they paid (check, Class Wallet, cash…) before marking paid.",
+  amount: "Enter a valid dollar amount they paid.",
   alreadypaid: "This player's season fee is already marked paid.",
 };
 
@@ -396,6 +397,18 @@ export default async function RegistrationDetail({
                   <summary className="cursor-pointer text-xs font-semibold text-emerald-700 hover:underline">Mark paid (offline)…</summary>
                   <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-emerald-50 p-3">
                     {hidden}<input type="hidden" name="op" value="markPaidOffline" />
+                    <label className="block text-xs font-medium text-emerald-900">
+                      Amount paid ($)
+                      <input
+                        name="amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        defaultValue={((outstanding?.amountCents ?? subscription?.amountCents ?? 0) / 100 || "").toString()}
+                        placeholder="e.g. 495.00"
+                        className="input mt-1 py-1 text-sm"
+                      />
+                    </label>
                     <label className="block text-xs font-medium text-emerald-900">
                       How did they pay?
                       <input
