@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { TimeSelect } from "@/components/TimeSelect";
 import { useState } from "react";
 import { formatTime12 } from "@/lib/time";
@@ -137,7 +138,7 @@ export function BulkScheduleEditor({
                 return (
                   <tr key={t.id}>
                     <td className="py-2 pr-3">
-                      <span className="font-medium text-slate-800">{t.name}</span>
+                      <Link href={`/console/teams/${t.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline" title={`Open ${t.name}`}>{t.name}</Link>
                       {t.market && <span className="ml-1 text-xs text-slate-400">{t.market}</span>}
                     </td>
                     <td className="pr-3">
