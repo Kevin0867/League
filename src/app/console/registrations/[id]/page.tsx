@@ -9,6 +9,7 @@ import { ACADEMY_MARKETS } from "@/lib/enums";
 import { formatDate, formatTime12 } from "@/lib/time";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { ApparelRequestForm } from "@/components/ApparelRequestForm";
+import { ApparelItemEditor } from "@/components/ApparelItemEditor";
 import { feeStateOf } from "@/lib/domain/feeStatus";
 
 // Short day + start time for a team, e.g. "Wed 5:00 PM", so staff can pick a
@@ -45,6 +46,7 @@ const OK: Record<string, string> = {
   feeexists: "This player's season fee was already invoiced — nothing new sent.",
   split: "Split onto its own record. This registration now has its own contact info — edit the name and details below so they're correct.",
   apparelReq: "Apparel order link created and emailed — they pick their gear and pay from the link.",
+  itemedited: "Apparel choice updated.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -108,6 +110,14 @@ export default async function RegistrationDetail({
   // On the 3-payment plan, signed up and paying — distinct from an unpaid fee.
   const subscription = !paid ? payments.find((x) => feeStateOf(x) === "subscription") : undefined;
   const outstanding = !paid && !subscription ? payments.find((x) => ["REQUESTED", "PENDING"].includes(x.status)) : undefined;
+
+  // Apparel this player ordered (tagged to them, or paid on their behalf) — so a
+  // wrong size/garment can be corrected right here.
+  const apparelItems = await prisma.apparelOrderItem.findMany({
+    where: { OR: [{ personId: p.id }, { payment: { partyId: p.id } }] },
+    select: { id: true, garment: true, size: true, quantity: true, payment: { select: { status: true } } },
+    orderBy: { createdAt: "asc" },
+  });
 
   // When each thing was last sent — read from the message log (audienceRef is the
   // player or, for fee/launch, the paying guardian), so admins can see the
@@ -400,6 +410,26 @@ export default async function RegistrationDetail({
           defaults={{ name: `${p.firstName} ${p.lastName}`.trim(), email: p.email ?? "" }}
         />
       </div>
+
+      {/* This player's apparel — fix a wrong size/garment right here. */}
+      {apparelItems.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-slate-900">Team apparel</h2>
+          <p className="mb-2 mt-0.5 text-sm text-slate-500">Picked the wrong size? Tap an item to change the garment, size (youth ↔ adult), or quantity.</p>
+          <ul className="divide-y divide-slate-100">
+            {apparelItems.map((a) => (
+              <li key={a.id} className="py-2">
+                <ApparelItemEditor
+                  ticket={ticket}
+                  item={{ id: a.id, garment: a.garment, size: a.size, quantity: a.quantity }}
+                  paid={a.payment.status === "PAID"}
+                  returnTo={`/console/registrations/${reg.id}`}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Send an apparel-only order link — for additional or replacement gear
           after the season fee is paid, or gear on its own. The family picks

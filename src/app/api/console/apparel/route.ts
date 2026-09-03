@@ -14,7 +14,9 @@ const STATUSES = new Set(["PENDING", "ORDERED", "DELIVERED"]);
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const formData = await req.formData();
-  const back = (qs: string) => NextResponse.redirect(new URL(`/console/apparel${qs}`, origin), 303);
+  const rawReturn = String(formData.get("returnTo") ?? "");
+  const base = rawReturn.startsWith("/console/") ? rawReturn : "/console/apparel";
+  const back = (qs: string) => NextResponse.redirect(new URL(`${base}${qs}`, origin), 303);
 
   const actor = await actorFromForm(formData);
   if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
