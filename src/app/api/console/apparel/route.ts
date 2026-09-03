@@ -26,10 +26,11 @@ export async function POST(req: Request) {
     const from = String(formData.get("from") ?? "");
     const to = String(formData.get("to") ?? "");
     if (!STATUSES.has(from) || !STATUSES.has(to)) return back("?err=fields");
-    // Only paid orders are fulfilled.
+    // Only paid orders are fulfilled — including a payment plan whose first
+    // installment (which carries the apparel charge) has cleared.
     const ids = (
       await prisma.apparelOrderItem.findMany({
-        where: { fulfillment: from, payment: { status: "PAID" } },
+        where: { fulfillment: from, payment: { OR: [{ status: "PAID" }, { installmentPlan: true, installmentsPaid: { gte: 1 } }] } },
         select: { id: true },
       })
     ).map((r) => r.id);
