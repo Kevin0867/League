@@ -38,8 +38,26 @@ export default async function PaymentsPage({
   // an active payment plan (first installment in); "unpaid" is everyone else.
   const qRaw = (sp.q ?? "").trim();
   const payView = sp.pay === "paid" || sp.pay === "unpaid" ? sp.pay : "all";
+  // Resolve the search to matching people, so a payment is found by its PAYER or
+  // by a PLAYER it covers. A family invoice is billed to the guardian (e.g. a kid
+  // paid under a parent, or via Class Wallet), so the player it's for must still
+  // turn up when you search that player's name.
+  const matchIds = qRaw
+    ? (
+        await prisma.person.findMany({
+          where: { OR: [{ firstName: { contains: qRaw, mode: "insensitive" } }, { lastName: { contains: qRaw, mode: "insensitive" } }] },
+          select: { id: true },
+          take: 500,
+        })
+      ).map((p) => p.id)
+    : [];
   const nameFilter = qRaw
-    ? { party: { is: { OR: [{ firstName: { contains: qRaw, mode: "insensitive" as const } }, { lastName: { contains: qRaw, mode: "insensitive" as const } }] } } }
+    ? {
+        OR: [
+          { party: { is: { OR: [{ firstName: { contains: qRaw, mode: "insensitive" as const } }, { lastName: { contains: qRaw, mode: "insensitive" as const } }] } } },
+          ...matchIds.map((id) => ({ coveredPersonIds: { array_contains: id } })),
+        ],
+      }
     : {};
   const statusFilter =
     payView === "paid"
@@ -92,6 +110,29 @@ export default async function PaymentsPage({
     orderBy: { updatedAt: "desc" },
     take: 200,
   });
+
+  // Resolve the players a shown payment COVERS (family invoices bill the guardian),
+  // so each row can name who it's actually for — that's how a payment made under a
+  // parent shows up as the child's paid fee.
+  const coveredIdSet = new Set<string>();
+  for (const p of [...inbound, ...subscriptions]) {
+    if (Array.isArray(p.coveredPersonIds)) for (const id of p.coveredPersonIds) if (typeof id === "string") coveredIdSet.add(id);
+  }
+  const coveredPeople = coveredIdSet.size
+    ? await prisma.person.findMany({ where: { id: { in: [...coveredIdSet] } }, select: { id: true, firstName: true, lastName: true } })
+    : [];
+  const coveredNameById = new Map(coveredPeople.map((p) => [p.id, `${p.firstName} ${p.lastName}`]));
+  // Attach a "for <players>" label to each row (only when the covered player is
+  // someone other than the payer, e.g. a kid billed to a parent).
+  const withCovered = <T extends { coveredPersonIds: unknown; party: { firstName: string; lastName: string } | null }>(rows: T[]) =>
+    rows.map((p) => {
+      const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as string[]) : [];
+      const payerName = p.party ? `${p.party.firstName} ${p.party.lastName}` : "";
+      const names = ids.map((id) => coveredNameById.get(id)).filter((n): n is string => !!n && n !== payerName);
+      return { ...p, coveredNames: names.length ? [...new Set(names)].join(", ") : null };
+    });
+  const inboundRows = withCovered(inbound);
+  const subscriptionRows = withCovered(subscriptions);
 
   // Installment plans are PENDING (so counted as "requested") until all 3 charges
   // clear — but the portion already paid IS collected money sitting in Stripe.
@@ -265,7 +306,11 @@ export default async function PaymentsPage({
             : ""}
           {Number(sp.refunds ?? 0) > 0 ? <><strong>{sp.refunds} refund{sp.refunds === "1" ? "" : "s"} recorded</strong> ({formatCents(Number(sp.refcents ?? 0))}). </> : ""}
           {Number(sp.paid ?? 0) === 0 && Number(sp.imported ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? "No new changes — everything scanned already matched your books." : ""}
-          {sp.recerrs && sp.recerrs !== "0" ? ` (${sp.recerrs} couldn't be checked — try again.)` : ""}
+          {sp.recerrs && sp.recerrs !== "0" ? (
+            <span className="mt-1 block text-amber-800">
+              {sp.recerrs} charge{sp.recerrs === "1" ? "" : "s"} couldn&apos;t be checked{sp.recerrwhy ? <> — <span className="font-mono text-xs">{sp.recerrwhy}</span></> : ""}. If this keeps happening, it usually means the Stripe key can&apos;t read charges/invoices (a restricted key) — use a key with read access, or check the webhook banner below.
+            </span>
+          ) : ""}
 
           {(sp.scancents || sp.histn) && (
             <div className="mt-2 border-t border-emerald-200 pt-2 text-xs text-emerald-900/80">
@@ -745,8 +790,8 @@ export default async function PaymentsPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Ledger title="Fees in" rows={inbound} search={{ q: qRaw, payView }} />
-        <SubscriptionsLedger rows={subscriptions} />
+        <Ledger title="Fees in" rows={inboundRows} search={{ q: qRaw, payView }} />
+        <SubscriptionsLedger rows={subscriptionRows} />
         <Ledger title="Payments out" rows={outbound} />
       </div>
     </div>
@@ -759,7 +804,7 @@ function Ledger({
   search,
 }: {
   title: string;
-  rows: Array<{ id: string; partyId?: string | null; amountCents: number; status: string; category: string; paidAt?: Date | null; party: { firstName: string; lastName: string } | null }>;
+  rows: Array<{ id: string; partyId?: string | null; amountCents: number; status: string; category: string; paidAt?: Date | null; coveredNames?: string | null; party: { firstName: string; lastName: string } | null }>;
   search?: { q: string; payView: "all" | "paid" | "unpaid" };
 }) {
   const pill = (label: string, value: string, active: boolean) => (
@@ -813,6 +858,7 @@ function Ledger({
                     )
                   ) : null}
                   {p.party ? " · " : ""}{p.category.replace(/_/g, " ")}
+                  {p.coveredNames ? ` · for ${p.coveredNames}` : ""}
                   {p.paidAt ? ` · paid ${formatDate(p.paidAt)}` : ""}
                 </div>
               </div>
@@ -832,7 +878,7 @@ function Ledger({
 function SubscriptionsLedger({
   rows,
 }: {
-  rows: Array<{ id: string; partyId: string | null; amountCents: number; installmentsPaid: number; installmentsTotal: number | null; category: string; party: { firstName: string; lastName: string } | null }>;
+  rows: Array<{ id: string; partyId: string | null; amountCents: number; installmentsPaid: number; installmentsTotal: number | null; category: string; coveredNames?: string | null; party: { firstName: string; lastName: string } | null }>;
 }) {
   return (
     <div className="card">
@@ -858,7 +904,7 @@ function SubscriptionsLedger({
                         `${p.party.firstName} ${p.party.lastName}`
                       )
                     ) : null}
-                    {p.party ? " · " : ""}{p.category.replace(/_/g, " ")} · {paidN} of {total} paid · {formatCents(p.amountCents)} total
+                    {p.party ? " · " : ""}{p.coveredNames ? `for ${p.coveredNames} · ` : ""}{paidN} of {total} paid · {formatCents(p.amountCents)} total
                   </div>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">✓ subscription</span>

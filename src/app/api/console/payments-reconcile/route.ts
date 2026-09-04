@@ -113,6 +113,7 @@ export async function POST(req: Request) {
       histcents: String(r.unmatchedBeforeFloorCents),
     });
     if (r.errors) params.set("recerrs", String(r.errors));
+    if (r.firstError) params.set("recerrwhy", r.firstError.slice(0, 160));
     return back(`?${params.toString()}`);
   } catch (e) {
     console.error("payments reconcile failed", e);
