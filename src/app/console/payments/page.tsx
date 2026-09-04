@@ -388,21 +388,22 @@ export default async function PaymentsPage({
           </div>
           <ul className="mt-1 space-y-0.5 text-xs text-emerald-900/80">
             <li>• Matched to the exact fee (by payment id): <strong>{sp.byid ?? 0}</strong></li>
-            <li>• Matched to the payer by email: <strong>{sp.byemail ?? 0}</strong></li>
-            {Number(sp.created ?? 0) > 0 && (
-              <li>• Newly recorded (payer had no fee on file): <strong>{sp.created}</strong></li>
+            <li>• Matched to the player by name: <strong>{sp.byname ?? 0}</strong></li>
+            {Number(sp.byemail ?? 0) > 0 && <li>• Matched to the payer by email: <strong>{sp.byemail}</strong></li>}
+            {Number(sp.subsset ?? 0) > 0 && (
+              <li>• Subscriptions (3-payment plans) set to their true installment count: <strong>{sp.subsset}</strong></li>
             )}
-            <li>• Already on the books (skipped): <strong>{Number(sp.already ?? 0) + Number(sp.noreq ?? 0)}</strong></li>
+            {Number(sp.created ?? 0) > 0 && (
+              <li>• Newly recorded (player had no fee on file): <strong>{sp.created}</strong></li>
+            )}
+            <li>• Already on the books (skipped): <strong>{sp.already ?? 0}</strong></li>
             {Number(sp.noperson ?? 0) > 0 && (
-              <li className="text-amber-800">• Payer email didn&apos;t match anyone here: <strong>{sp.noperson}</strong></li>
+              <li className="text-amber-800">• Charge named a player we couldn&apos;t find here: <strong>{sp.noperson}</strong> (check the name spelling on their record)</li>
             )}
             {Number(sp.failed ?? 0) > 0 && <li>• Failed/declined rows ignored: <strong>{sp.failed}</strong></li>}
-            {Number(sp.subs ?? 0) > 0 && (
-              <li>• Subscription installment charges left to &ldquo;Reconcile with Stripe&rdquo;: <strong>{sp.subs}</strong></li>
-            )}
             {sp.csverrs && sp.csverrs !== "0" && <li className="text-rose-700">• Rows with errors: <strong>{sp.csverrs}</strong></li>}
           </ul>
-          <p className="mt-1.5 text-xs text-emerald-900/70">Records a payment only when the payer has NO fee on file, so it can&apos;t double-count what the webhook already recorded.</p>
+          <p className="mt-1.5 text-xs text-emerald-900/70">Matches each charge to its player by the name on the Stripe line item, so a payment lands on the right person even when billed to a parent. Idempotent — paid stays paid and plan counts only move forward, so re-uploading never double-counts.</p>
         </div>
       )}
       {sp.csvundo && (

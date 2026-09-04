@@ -46,13 +46,13 @@ export async function POST(req: Request) {
       csvok: "1",
       rows: String(r.paidRows),
       byid: String(r.markedById),
+      byname: String(r.markedByName),
       byemail: String(r.markedByEmail),
+      subsset: String(r.subscriptionsSet),
       created: String(r.createdAttributed),
-      noreq: String(r.noOutstanding),
       noperson: String(r.noPersonMatch),
       already: String(r.alreadyDone),
       failed: String(r.skippedFailed),
-      subs: String(r.subscriptionRows),
       applied: String(r.appliedCents),
     });
     if (r.errors) {
