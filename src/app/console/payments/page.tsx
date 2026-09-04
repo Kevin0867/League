@@ -362,7 +362,7 @@ export default async function PaymentsPage({
           <input
             name="file"
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,application/csv,application/vnd.ms-excel,text/plain"
             required
             className="block text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-800 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-brand-900"
           />
