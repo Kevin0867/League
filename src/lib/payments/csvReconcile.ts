@@ -3,43 +3,45 @@ import { prisma } from "@/lib/db";
 import { parseCsv } from "@/lib/domain/enrollmentImport";
 import { audit } from "@/lib/audit";
 
-// EXACT reconciliation from a Stripe "unified payments" CSV export. This is the
-// authoritative path: the file is the same list of charges the admin sees in
-// Stripe, and each app-created charge carries our own Payment id in the
-// `paymentId (metadata)` column — so we can match a charge to the exact fee
-// request (and therefore the exact person/family) with zero guessing. Rows
-// without that id fall back to the Customer Email.
-//
-// For every Paid row we guarantee one correctly-attributed PAID record:
-//   1. paymentId (metadata) → our Payment.id → mark that row PAID (its party is
-//      already the right family).
-//   2. else Customer Email → the person → their outstanding fee → mark PAID;
-//      if they have none outstanding, create a PAID record attributed to them.
-//   3. else (unknown email) → create a PAID record flagged for manual attach.
-// Idempotent: every processed charge stores its Stripe charge id, so re-running
-// the same (or an overlapping) export never double-counts.
+// EXACT reconciliation from a Stripe "unified payments" CSV export — the
+// authoritative path. Every academy charge in the file names its player in the
+// "Checkout Line Item Summary" ("… season fee — Otto White · PURE Mesa MID Blue
+// — 3-payment plan"), so we match a charge to the exact player by NAME — which
+// never breaks the way a webhook, a metadata id, or an amount can. Matching, in
+// order of confidence:
+//   1. paymentId (metadata) → our Payment.id (one-time app checkouts).
+//   2. player NAME from the summary → the Person → their season-fee row.
+//   3. Customer Email → the Person → their season-fee row.
+// A 3-payment plan (the row carries an Invoice ID / says "3-payment plan") sets
+// the player's fee to an active subscription with installmentsPaid = the number
+// of that player's cleared installments in the file. A one-time charge marks the
+// fee paid in full. Fully idempotent: re-running (or an overlapping file) never
+// double-counts — paid stays paid, and a plan's installment count only ever moves
+// forward (max of what we already have and what the file shows).
 
 export type CsvReconcileResult = {
   rows: number;
   paidRows: number;
+  /** One-time fees matched to the exact Payment by our metadata id. */
   markedById: number;
+  /** One-time fees matched to the player by the name in the line-item summary. */
+  markedByName: number;
+  /** One-time fees matched to the payer by email. */
   markedByEmail: number;
-  /** Person found with no fee on file at all → recorded against them (real money that was missing). */
+  /** Subscriptions (3-payment plans) set/advanced to their true installment count. */
+  subscriptionsSet: number;
+  /** Person found with no fee on file at all → recorded against them. */
   createdAttributed: number;
-  /** Person found who already has a fee on file (webhook got it) — skipped, no double-count. */
-  noOutstanding: number;
-  /** No person matched the payer email. */
-  noPersonMatch: number;
+  /** Charge already represented here (paid, or plan already at that count) — skipped. */
   alreadyDone: number;
+  /** Failed/declined rows — ignored, never create or clear anything. */
   skippedFailed: number;
-  /** Subscription installment charges (rows with an Invoice ID) — left to the
-   *  API reconcile, which advances the plan precisely. A one-time-payment CSV
-   *  match here would wrongly mark a full fee paid. */
-  subscriptionRows: number;
+  /** A player named in a charge couldn't be found here (needs a record). */
+  noPersonMatch: number;
   errors: number;
-  appliedCents: number; // total $ newly marked paid
-  unmatched: { email: string; amountCents: number; chargeId: string }[];
-  problems: { chargeId: string; email: string; note: string }[];
+  appliedCents: number; // total $ newly marked paid / newly collected
+  unmatched: { who: string; amountCents: number; chargeId: string }[];
+  problems: { chargeId: string; who: string; note: string }[];
 };
 
 const cents = (s: string): number => {
@@ -53,169 +55,252 @@ function colFinder(headers: string[]) {
   return (pred: (h: string) => boolean) => H.findIndex(pred);
 }
 
+const lc = (s: string) => (s ?? "").trim().toLowerCase();
+
+/** Pull the player's name out of a Stripe line-item summary. */
+function playerFromSummary(d: string): string {
+  if (!d) return "";
+  // "PURE Academy — Fall 2026 season fee — Otto White · PURE Mesa MID Blue (1); …"
+  const m = d.match(/season fee\s*[—-]\s*([^·(;]+?)\s*(?:·|\(|;|$)/i);
+  return m ? m[1].trim() : "";
+}
+const isPlanSummary = (d: string) => /3-?\s*payment plan|payment plan/i.test(d ?? "");
+
+/** Covered players of a fee row: the coveredPersonIds list, or its own payer. */
+function coversOf(p: { partyId: string | null; coveredPersonIds: unknown }): string[] {
+  const arr = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  return arr.length ? arr : p.partyId ? [p.partyId] : [];
+}
+
+type FeeRow = {
+  id: string; partyId: string | null; coveredPersonIds: unknown; amountCents: number;
+  status: string; category: string; installmentPlan: boolean; installmentsPaid: number;
+  installmentsTotal: number | null; stripePaymentIntentId: string | null; paidAt: Date | null;
+};
+
+/** Choose the fee row to act on for a player: prefer one that isn't settled, and
+ *  an existing plan over a plain request. */
+function pickFee(fees: FeeRow[]): FeeRow | null {
+  if (!fees.length) return null;
+  return (
+    fees.find((f) => f.installmentPlan && f.status !== "PAID") ??
+    fees.find((f) => ["REQUESTED", "PENDING", "FAILED"].includes(f.status)) ??
+    fees.find((f) => f.status !== "REFUNDED") ??
+    fees[0]
+  );
+}
+
 export async function reconcileFromCsv(text: string, seasonId: string | null): Promise<CsvReconcileResult> {
   const res: CsvReconcileResult = {
-    rows: 0, paidRows: 0, markedById: 0, markedByEmail: 0, createdAttributed: 0, noOutstanding: 0, noPersonMatch: 0,
-    alreadyDone: 0, skippedFailed: 0, subscriptionRows: 0, errors: 0, appliedCents: 0, unmatched: [], problems: [],
+    rows: 0, paidRows: 0, markedById: 0, markedByName: 0, markedByEmail: 0, subscriptionsSet: 0,
+    createdAttributed: 0, alreadyDone: 0, skippedFailed: 0, noPersonMatch: 0, errors: 0,
+    appliedCents: 0, unmatched: [], problems: [],
   };
 
   const table = parseCsv(text);
   if (table.length < 2) return res;
-  const headers = table[0];
-  const find = colFinder(headers);
-
+  const find = colFinder(table[0]);
   const idxId = find((h) => h === "id");
   const idxAmount = find((h) => h === "amount");
   const idxStatus = find((h) => h === "status");
   const idxEmail = find((h) => h === "customer email");
   const idxPaymentId = find((h) => h.includes("paymentid"));
   const idxInvoice = find((h) => h === "invoice id");
+  const idxSummary = find((h) => h.includes("line item summary"));
   const idxCreated = find((h) => h.includes("created") && h.includes("date"));
-
   const get = (row: string[], i: number) => (i >= 0 && i < row.length ? (row[i] ?? "").trim() : "");
 
+  // ---- Pass 1: parse every paid row into a normalized record. ----
+  type Rec = { chargeId: string; email: string; pid: string; invoiceId: string; name: string; isPlan: boolean; amountCents: number; paidAt: Date };
+  const recs: Rec[] = [];
   for (let r = 1; r < table.length; r++) {
     const row = table[r];
     if (row.every((c) => !c || !c.trim())) continue;
     res.rows++;
-
-    const status = get(row, idxStatus).toLowerCase();
-    const chargeId = get(row, idxId);
-    const email = get(row, idxEmail).toLowerCase();
-    const pid = get(row, idxPaymentId);
-    const invoiceId = get(row, idxInvoice);
-    const amountCents = cents(get(row, idxAmount));
-    const createdRaw = get(row, idxCreated);
-    let paidAt = new Date();
-    if (createdRaw) {
-      const d = new Date(createdRaw.replace(" ", "T") + "Z");
-      if (!isNaN(d.getTime())) paidAt = d;
-    }
-
-    // Only settled money. Failed/blocked rows never create or clear anything.
-    // Some Stripe exports (the "unified payments" successful-charges report) omit
-    // a Status column entirely — every row is a settled charge — so when there's
-    // no status column at all, treat rows as paid rather than skipping everything.
+    const status = lc(get(row, idxStatus));
     if (idxStatus >= 0 && status !== "paid" && status !== "succeeded") { res.skippedFailed++; continue; }
     res.paidRows++;
+    const summary = get(row, idxSummary);
+    const createdRaw = get(row, idxCreated);
+    let paidAt = new Date();
+    if (createdRaw) { const d = new Date(createdRaw.replace(" ", "T") + "Z"); if (!isNaN(d.getTime())) paidAt = d; }
+    recs.push({
+      chargeId: get(row, idxId), email: lc(get(row, idxEmail)), pid: get(row, idxPaymentId),
+      invoiceId: get(row, idxInvoice), name: playerFromSummary(summary),
+      isPlan: !!get(row, idxInvoice) || isPlanSummary(summary),
+      amountCents: cents(get(row, idxAmount)), paidAt,
+    });
+  }
+  if (!recs.length) return res;
 
+  // ---- Bulk pre-load everything we match against (a handful of queries, not
+  //      thousands) so a full-season file reconciles fast and never times out. ----
+  const pids = [...new Set(recs.map((r) => r.pid).filter(Boolean))];
+  const chargeIds = [...new Set(recs.map((r) => r.chargeId).filter(Boolean))];
+  const feeSelect = { id: true, partyId: true, coveredPersonIds: true, amountCents: true, status: true, category: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, stripePaymentIntentId: true, paidAt: true } as const;
+
+  const [byPidRows, byChargeRows, people, seasonFees] = await Promise.all([
+    pids.length ? prisma.payment.findMany({ where: { id: { in: pids } }, select: feeSelect }) : Promise.resolve([] as FeeRow[]),
+    chargeIds.length ? prisma.payment.findMany({ where: { stripePaymentIntentId: { in: chargeIds } }, select: feeSelect }) : Promise.resolve([] as FeeRow[]),
+    // All people — matched by name (case-insensitively) and by any email on file.
+    prisma.person.findMany({ select: { id: true, firstName: true, lastName: true, email: true, email2: true, email3: true } }),
+    // Every season fee row, so we can find a player's fee in memory.
+    prisma.payment.findMany({
+      where: { direction: "IN", category: "PLAYER_FEE", ...(seasonId ? { seasonId } : {}) },
+      select: feeSelect,
+    }),
+  ]);
+
+  const byPid = new Map(byPidRows.map((p) => [p.id, p]));
+  const byCharge = new Map(byChargeRows.filter((p) => p.stripePaymentIntentId).map((p) => [p.stripePaymentIntentId as string, p]));
+
+  // Name / email → person id.
+  const personByName = new Map<string, string[]>();
+  const personByEmail = new Map<string, string>();
+  for (const p of people) {
+    const full = lc(`${p.firstName} ${p.lastName}`);
+    if (full.trim()) { const a = personByName.get(full) ?? []; a.push(p.id); personByName.set(full, a); }
+    for (const e of [p.email, p.email2, p.email3]) if (e) personByEmail.set(lc(e), p.id);
+  }
+  // Also index by first+last token, so "Mary Jo Smith" ↔ firstName "Mary Jo".
+  const personByTokens = new Map<string, string[]>();
+  for (const p of people) {
+    const t = lc(`${(p.firstName ?? "").split(/\s+/)[0]} ${(p.lastName ?? "").split(/\s+/).pop() ?? ""}`);
+    if (t.trim()) { const a = personByTokens.get(t) ?? []; a.push(p.id); personByTokens.set(t, a); }
+  }
+
+  // Person id → their season-fee rows.
+  const feesByPerson = new Map<string, FeeRow[]>();
+  for (const f of seasonFees) for (const pid of coversOf(f)) {
+    const a = feesByPerson.get(pid) ?? []; a.push(f); feesByPerson.set(pid, a);
+  }
+
+  // Resolve a record to a person id: by summary name, then by email.
+  const resolvePerson = (rec: Rec): string | null => {
+    if (rec.name) {
+      const full = lc(rec.name);
+      let hit = personByName.get(full);
+      if (!hit || hit.length !== 1) {
+        const toks = rec.name.trim().split(/\s+/);
+        const key = lc(`${toks[0]} ${toks[toks.length - 1]}`);
+        hit = personByTokens.get(key);
+      }
+      if (hit && hit.length === 1) return hit[0];
+      // Ambiguous name — try email to disambiguate.
+      if (hit && hit.length > 1 && rec.email) {
+        const byEmail = personByEmail.get(rec.email);
+        if (byEmail && hit.includes(byEmail)) return byEmail;
+      }
+    }
+    if (rec.email) return personByEmail.get(rec.email) ?? null;
+    return null;
+  };
+
+  // ---- Split into subscription installments and one-time charges. ----
+  const subs = recs.filter((r) => r.isPlan);
+  const oneTime = recs.filter((r) => !r.isPlan);
+
+  // ---- One-time charges: mark the exact fee paid in full. ----
+  for (const rec of oneTime) {
     try {
-      // Idempotency: if we've already recorded this exact Stripe charge, done.
-      if (chargeId) {
-        const seen = await prisma.payment.findFirst({ where: { stripePaymentIntentId: chargeId } });
-        if (seen) {
-          if (seen.status !== "PAID" && !seen.installmentPlan) {
-            await prisma.payment.update({ where: { id: seen.id }, data: { status: "PAID", paidAt: seen.paidAt ?? paidAt } });
-            res.markedById++; res.appliedCents += seen.amountCents;
-          } else {
-            res.alreadyDone++;
-          }
-          continue;
-        }
-      }
-
-      // 1) EXACT: match our own Payment id from the charge metadata.
-      if (pid) {
-        const pay = await prisma.payment.findUnique({ where: { id: pid } });
-        if (pay && pay.direction === "IN") {
-          if (pay.status === "PAID") {
-            if (pay.stripePaymentIntentId !== chargeId && chargeId) {
-              await prisma.payment.update({ where: { id: pay.id }, data: { stripePaymentIntentId: chargeId } });
-            }
-            res.alreadyDone++;
-          } else if (pay.installmentPlan) {
-            // An installment plan row: leave the plan accounting alone, just link it.
-            if (chargeId) await prisma.payment.update({ where: { id: pay.id }, data: { stripePaymentIntentId: chargeId } });
-            res.alreadyDone++;
-          } else {
-            await prisma.payment.update({ where: { id: pay.id }, data: { status: "PAID", paidAt: pay.paidAt ?? paidAt, stripePaymentIntentId: chargeId || pay.stripePaymentIntentId } });
-            res.markedById++; res.appliedCents += pay.amountCents;
-          }
-          continue;
-        }
-        // pid present but not found here — fall through to email matching.
-      }
-
-      // A subscription installment charge (has an Invoice ID, no app paymentId):
-      // this is ONE of a plan's 3 charges, not a one-time full payment. Matching
-      // it by email below would mark a whole fee PAID — and can't tell a parent's
-      // fee from a child's when they share an email. Leave it to the API
-      // "Reconcile with Stripe" pass, which advances the exact plan via the
-      // subscription's stamped paymentId.
-      if (invoiceId) { res.subscriptionRows++; continue; }
-
-      // 2) Match by payer email → their outstanding fee, else create attributed.
-      const person = email
-        ? await prisma.person.findFirst({
-            where: { OR: [{ email: { equals: email, mode: "insensitive" } }, { email2: { equals: email, mode: "insensitive" } }, { email3: { equals: email, mode: "insensitive" } }] },
-            select: { id: true },
-          })
-        : null;
-
-      if (person) {
-        const outstanding = await prisma.payment.findMany({
-          where: { partyId: person.id, direction: "IN", status: { in: ["REQUESTED", "PENDING"] } },
-          orderBy: { createdAt: "desc" },
-        });
-        const pick =
-          outstanding.find((p) => p.amountCents === amountCents) ??
-          outstanding.find((p) => p.category === "PLAYER_FEE") ??
-          outstanding[0];
-        if (pick && !pick.installmentPlan) {
-          await prisma.payment.update({ where: { id: pick.id }, data: { status: "PAID", paidAt: pick.paidAt ?? paidAt, stripePaymentIntentId: chargeId || pick.stripePaymentIntentId } });
-          res.markedByEmail++; res.appliedCents += pick.amountCents;
-          continue;
-        }
-        // No outstanding fee. Do they already have ANY fee on file (paid by the
-        // webhook, or requested)? If so, this charge is already represented —
-        // skip it, so we never double-count a webhook-recorded fee.
-        const anyFee = await prisma.payment.findFirst({
-          where: { partyId: person.id, direction: "IN", category: "PLAYER_FEE" },
-          select: { id: true },
-        });
-        if (anyFee) {
-          res.noOutstanding++;
-          continue;
-        }
-        // They have NO fee record at all, yet they paid — this is real money that
-        // isn't on the books anywhere. Record it against them so Collected is
-        // complete. (Amount is the full charge; apparel can't be split out here.)
-        await prisma.payment.create({
-          data: {
-            direction: "IN", method: "STRIPE", status: "PAID", category: "PLAYER_FEE",
-            amountCents, partyId: person.id, seasonId,
-            stripePaymentIntentId: chargeId || undefined,
-            description: "Recorded from Stripe CSV (no fee request on file)", paidAt,
-          },
-        });
-        res.createdAttributed++; res.appliedCents += amountCents;
+      // Idempotency: this exact charge already recorded.
+      if (rec.chargeId && byCharge.has(rec.chargeId)) {
+        const seen = byCharge.get(rec.chargeId)!;
+        if (seen.status !== "PAID" && !seen.installmentPlan) {
+          await prisma.payment.update({ where: { id: seen.id }, data: { status: "PAID", paidAt: seen.paidAt ?? rec.paidAt } });
+          seen.status = "PAID"; res.markedById++; res.appliedCents += seen.amountCents;
+        } else res.alreadyDone++;
         continue;
       }
-
-      // 3) No person matched the payer email. Record it so the money counts, but
-      // tag it STRIPE_IMPORT and leave it unattributed so it shows in the
-      // "Imported — needs filing" card for you to attach to the right family.
-      await prisma.payment.create({
-        data: {
-          direction: "IN", method: "STRIPE", status: "PAID", category: "STRIPE_IMPORT",
-          amountCents, partyId: null, seasonId,
-          stripePaymentIntentId: chargeId || undefined,
-          description: `Stripe CSV — unmatched payer${email ? ` · ${email}` : ""}`, paidAt,
-        },
-      });
-      res.noPersonMatch++; res.appliedCents += amountCents;
-      res.unmatched.push({ email: email || "(no email)", amountCents, chargeId });
+      // 1) Exact by our payment id.
+      if (rec.pid) {
+        const pay = byPid.get(rec.pid);
+        if (pay) {
+          if (pay.status === "PAID" || pay.installmentPlan) res.alreadyDone++;
+          else {
+            await prisma.payment.update({ where: { id: pay.id }, data: { status: "PAID", paidAt: pay.paidAt ?? rec.paidAt, stripePaymentIntentId: rec.chargeId || pay.stripePaymentIntentId } });
+            pay.status = "PAID"; res.markedById++; res.appliedCents += pay.amountCents;
+          }
+          continue;
+        }
+      }
+      // 2/3) By player name, then email → their fee row.
+      const personId = resolvePerson(rec);
+      if (!personId) { res.noPersonMatch++; res.unmatched.push({ who: rec.name || rec.email || "(unknown)", amountCents: rec.amountCents, chargeId: rec.chargeId }); continue; }
+      const fee = pickFee(feesByPerson.get(personId) ?? []);
+      if (fee) {
+        if (fee.status === "PAID") { res.alreadyDone++; continue; }
+        await prisma.payment.update({ where: { id: fee.id }, data: { status: "PAID", paidAt: fee.paidAt ?? rec.paidAt, stripePaymentIntentId: rec.chargeId || fee.stripePaymentIntentId } });
+        fee.status = "PAID";
+        (rec.name && personByName.get(lc(rec.name))?.length === 1) ? res.markedByName++ : res.markedByEmail++;
+        res.appliedCents += fee.amountCents;
+        continue;
+      }
+      // No fee on file — record the money against them so it's not lost.
+      await prisma.payment.create({ data: { direction: "IN", method: "STRIPE", status: "PAID", category: "PLAYER_FEE", amountCents: rec.amountCents, partyId: personId, seasonId, stripePaymentIntentId: rec.chargeId || undefined, description: "Recorded from Stripe CSV (no fee request on file)", paidAt: rec.paidAt } });
+      res.createdAttributed++; res.appliedCents += rec.amountCents;
     } catch (e) {
       res.errors++;
-      res.problems.push({ chargeId, email, note: e instanceof Error ? e.message.slice(0, 140) : "error" });
-      console.error(`CSV reconcile row failed (${chargeId})`, e);
+      res.problems.push({ chargeId: rec.chargeId, who: rec.name || rec.email, note: e instanceof Error ? e.message.slice(0, 140) : "error" });
     }
+  }
+
+  // ---- Subscription installments: group by player, set the plan's true count. ----
+  const subCount = new Map<string, { count: number; paidAt: Date; rec: Rec }>();
+  const subUnresolved: Rec[] = [];
+  for (const rec of subs) {
+    const personId = resolvePerson(rec);
+    if (!personId) { subUnresolved.push(rec); continue; }
+    const cur = subCount.get(personId);
+    if (cur) { cur.count++; if (rec.paidAt > cur.paidAt) cur.paidAt = rec.paidAt; }
+    else subCount.set(personId, { count: 1, paidAt: rec.paidAt, rec });
+  }
+  for (const [personId, info] of subCount) {
+    try {
+      const total = 3;
+      const paidN = Math.min(total, info.count);
+      const fee = pickFee(feesByPerson.get(personId) ?? []);
+      if (!fee) {
+        // No fee row yet — create the plan against them (billed amount unknown here,
+        // so use the season fee if we can infer it; otherwise leave amount at the
+        // installment total × 3 is not knowable, so record a placeholder full fee).
+        await prisma.payment.create({ data: { direction: "IN", method: "STRIPE", status: paidN >= total ? "PAID" : "PENDING", category: "PLAYER_FEE", amountCents: info.rec.amountCents * total, partyId: personId, seasonId, installmentPlan: true, installmentsTotal: total, installmentsPaid: paidN, description: "Subscription recorded from Stripe CSV (no fee request on file)", paidAt: paidN >= total ? info.paidAt : null } });
+        res.subscriptionsSet++; res.appliedCents += info.rec.amountCents * paidN;
+        continue;
+      }
+      if (fee.status === "PAID") { res.alreadyDone++; continue; }
+      // Only ever move forward: never lower a plan the API reconcile already advanced.
+      const newPaid = Math.max(fee.installmentsPaid ?? 0, paidN);
+      const done = newPaid >= (fee.installmentsTotal ?? total);
+      const changed = !fee.installmentPlan || (fee.installmentsPaid ?? 0) !== newPaid || (done && fee.status !== "PAID");
+      if (!changed) { res.alreadyDone++; continue; }
+      await prisma.payment.update({
+        where: { id: fee.id },
+        data: {
+          installmentPlan: true,
+          installmentsTotal: fee.installmentsTotal ?? total,
+          installmentsPaid: newPaid,
+          status: done ? "PAID" : "PENDING",
+          ...(done ? { paidAt: fee.paidAt ?? info.paidAt } : {}),
+        },
+      });
+      res.subscriptionsSet++;
+      // Newly-collected share = per-installment × how many we just added.
+      const perInstallment = Math.round(fee.amountCents / (fee.installmentsTotal ?? total));
+      res.appliedCents += perInstallment * (newPaid - (fee.installmentsPaid ?? 0));
+    } catch (e) {
+      res.errors++;
+      res.problems.push({ chargeId: info.rec.chargeId, who: info.rec.name || info.rec.email, note: e instanceof Error ? e.message.slice(0, 140) : "error" });
+    }
+  }
+  for (const rec of subUnresolved) {
+    res.noPersonMatch++;
+    res.unmatched.push({ who: rec.name || rec.email || "(unknown)", amountCents: rec.amountCents, chargeId: rec.chargeId });
   }
 
   await audit({
     entityType: "Payment", entityId: "csv-reconcile", action: "CSV_RECONCILE",
-    summary: `CSV reconcile — ${res.markedById} by id, ${res.markedByEmail} by email, ${res.createdAttributed} newly recorded, ${res.alreadyDone + res.noOutstanding} already, ${res.noPersonMatch} no-person`,
+    summary: `CSV reconcile — ${res.markedById} by id, ${res.markedByName} by name, ${res.markedByEmail} by email, ${res.subscriptionsSet} subscriptions set, ${res.createdAttributed} newly recorded, ${res.noPersonMatch} unmatched`,
   });
-
   return res;
 }
