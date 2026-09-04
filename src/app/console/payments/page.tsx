@@ -496,6 +496,9 @@ export default async function PaymentsPage({
               {wh.endpoints.filter((e) => e.pointsHere && e.status === "enabled" && !e.coversRequired).map((e) => (
                 <li key={`ev${e.id}`}><strong>Missing the completion event.</strong> <A href={e.dashboardUrl}>Open the endpoint ↗</A> and subscribe it to <span className="font-mono text-xs">checkout.session.completed</span>{e.missingHelpful.length ? ` (also recommended: ${e.missingHelpful.filter((x) => x !== "checkout.session.completed").join(", ")})` : ""}.</li>
               ))}
+              {wh.endpoints.filter((e) => e.pointsHere && e.status === "enabled" && e.coversRequired && !e.coversInvoicePaid).map((e) => (
+                <li key={`inv${e.id}`}><strong>Subscriptions aren&apos;t recording — the endpoint isn&apos;t subscribed to <span className="font-mono text-xs">invoice.paid</span>.</strong> That&apos;s the event that records each installment of a 3-payment plan, so every subscription is stuck showing unpaid. <A href={e.dashboardUrl}>Open the endpoint ↗</A> and add <span className="font-mono text-xs">invoice.paid</span> (and <span className="font-mono text-xs">invoice.payment_failed</span>), then click &ldquo;Reconcile with Stripe&rdquo; above to catch up the plans already paid.</li>
+              ))}
               {!wh.listed && (
                 <li>Couldn&apos;t read your webhooks from Stripe{wh.listError ? ` (${wh.listError})` : ""} — check <A href={wh.webhooksUrl}>Stripe → Webhooks ↗</A>. Expected URL: <span className="font-mono text-xs">{wh.expectedUrl}</span>.</li>
               )}
