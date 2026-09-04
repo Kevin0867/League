@@ -41,15 +41,22 @@ export default async function PaymentsPage({
   const nameFilter = qRaw
     ? { party: { is: { OR: [{ firstName: { contains: qRaw, mode: "insensitive" as const } }, { lastName: { contains: qRaw, mode: "insensitive" as const } }] } } }
     : {};
-  const PAID_OR = [{ status: "PAID" }, { AND: [{ installmentPlan: true }, { installmentsPaid: { gte: 1 } }] }];
   const statusFilter =
     payView === "paid"
-      ? { OR: PAID_OR }
+      ? { status: "PAID" }
       : payView === "unpaid"
-      ? { AND: [{ status: { not: "PAID" } }, { NOT: { AND: [{ installmentPlan: true }, { installmentsPaid: { gte: 1 } }] } }] }
+      ? { status: { in: ["REQUESTED", "PENDING", "FAILED"] } }
       : {};
   const searchingFees = !!qRaw || payView !== "all";
-  const inboundWhere = { direction: "IN", ...nameFilter, ...statusFilter };
+  // Active payment plans (a subscription with its first installment in, still
+  // running) get their OWN "Subscriptions" column, so keep them out of "Fees in"
+  // — otherwise they'd sit at the bottom mislabeled "pending".
+  const ACTIVE_SUB = { installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 } };
+  const inboundWhere = {
+    direction: "IN",
+    ...nameFilter,
+    AND: [statusFilter, { NOT: ACTIVE_SUB }].filter((o) => Object.keys(o).length),
+  };
 
   // The ledgers below show the 50 most recent rows (200 when a search is active),
   // but every headline figure and the outstanding/failed lists are computed from
@@ -76,6 +83,15 @@ export default async function PaymentsPage({
     prisma.payment.aggregate({ where: { direction: "IN", status: "PAID" }, _sum: { amountCents: true } }),
     prisma.payment.aggregate({ where: { direction: "OUT", status: "PAID" }, _sum: { amountCents: true } }),
   ]);
+
+  // Active subscriptions (3-payment plans that have begun and are still paying),
+  // shown in their own column. Honors the same name search as "Fees in".
+  const subscriptions = await prisma.payment.findMany({
+    where: { direction: "IN", ...nameFilter, installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 } },
+    include: { party: true },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+  });
 
   // Installment plans are PENDING (so counted as "requested") until all 3 charges
   // clear — but the portion already paid IS collected money sitting in Stripe.
@@ -728,8 +744,9 @@ export default async function PaymentsPage({
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <Ledger title="Fees in" rows={inbound} search={{ q: qRaw, payView }} />
+        <SubscriptionsLedger rows={subscriptions} />
         <Ledger title="Payments out" rows={outbound} />
       </div>
     </div>
@@ -802,6 +819,51 @@ function Ledger({
               <StatusBadge status={p.status} />
             </li>
           ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Active 3-payment subscriptions — signed up and paying on schedule (first
+// installment in, plan still running). Shown alongside "Fees in" so this
+// recurring revenue is visible, not buried. Amount is the full plan total; the
+// sub-line shows how many of the 3 charges have cleared and the collected share.
+function SubscriptionsLedger({
+  rows,
+}: {
+  rows: Array<{ id: string; partyId: string | null; amountCents: number; installmentsPaid: number; installmentsTotal: number | null; category: string; party: { firstName: string; lastName: string } | null }>;
+}) {
+  return (
+    <div className="card">
+      <h2 className="mb-3 font-semibold text-slate-900">Subscriptions</h2>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-400">No active payment plans.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 text-sm">
+          {rows.map((p) => {
+            const total = p.installmentsTotal ?? 3;
+            const paidN = p.installmentsPaid ?? 1;
+            const collected = Math.round(p.amountCents / total) * paidN;
+            return (
+              <li key={p.id} className="flex items-center justify-between py-2">
+                <div>
+                  <div className="font-medium text-slate-800">{formatCents(p.amountCents)}</div>
+                  <div className="text-xs text-slate-400">
+                    {p.party ? (
+                      p.partyId ? (
+                        <Link href={`/console/people/${p.partyId}`} className="hover:text-brand-700 hover:underline">{p.party.firstName} {p.party.lastName}</Link>
+                      ) : (
+                        `${p.party.firstName} ${p.party.lastName}`
+                      )
+                    ) : null}
+                    {p.party ? " · " : ""}{p.category.replace(/_/g, " ")} · {paidN} of {total} paid · {formatCents(collected)} in
+                  </div>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">✓ subscription</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
