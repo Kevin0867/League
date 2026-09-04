@@ -397,6 +397,9 @@ export default async function PaymentsPage({
               <li className="text-amber-800">• Payer email didn&apos;t match anyone here: <strong>{sp.noperson}</strong></li>
             )}
             {Number(sp.failed ?? 0) > 0 && <li>• Failed/declined rows ignored: <strong>{sp.failed}</strong></li>}
+            {Number(sp.subs ?? 0) > 0 && (
+              <li>• Subscription installment charges left to &ldquo;Reconcile with Stripe&rdquo;: <strong>{sp.subs}</strong></li>
+            )}
             {sp.csverrs && sp.csverrs !== "0" && <li className="text-rose-700">• Rows with errors: <strong>{sp.csverrs}</strong></li>}
           </ul>
           <p className="mt-1.5 text-xs text-emerald-900/70">Records a payment only when the payer has NO fee on file, so it can&apos;t double-count what the webhook already recorded.</p>

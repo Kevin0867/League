@@ -32,6 +32,10 @@ export type CsvReconcileResult = {
   noPersonMatch: number;
   alreadyDone: number;
   skippedFailed: number;
+  /** Subscription installment charges (rows with an Invoice ID) — left to the
+   *  API reconcile, which advances the plan precisely. A one-time-payment CSV
+   *  match here would wrongly mark a full fee paid. */
+  subscriptionRows: number;
   errors: number;
   appliedCents: number; // total $ newly marked paid
   unmatched: { email: string; amountCents: number; chargeId: string }[];
@@ -52,7 +56,7 @@ function colFinder(headers: string[]) {
 export async function reconcileFromCsv(text: string, seasonId: string | null): Promise<CsvReconcileResult> {
   const res: CsvReconcileResult = {
     rows: 0, paidRows: 0, markedById: 0, markedByEmail: 0, createdAttributed: 0, noOutstanding: 0, noPersonMatch: 0,
-    alreadyDone: 0, skippedFailed: 0, errors: 0, appliedCents: 0, unmatched: [], problems: [],
+    alreadyDone: 0, skippedFailed: 0, subscriptionRows: 0, errors: 0, appliedCents: 0, unmatched: [], problems: [],
   };
 
   const table = parseCsv(text);
@@ -65,6 +69,7 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
   const idxStatus = find((h) => h === "status");
   const idxEmail = find((h) => h === "customer email");
   const idxPaymentId = find((h) => h.includes("paymentid"));
+  const idxInvoice = find((h) => h === "invoice id");
   const idxCreated = find((h) => h.includes("created") && h.includes("date"));
 
   const get = (row: string[], i: number) => (i >= 0 && i < row.length ? (row[i] ?? "").trim() : "");
@@ -78,6 +83,7 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
     const chargeId = get(row, idxId);
     const email = get(row, idxEmail).toLowerCase();
     const pid = get(row, idxPaymentId);
+    const invoiceId = get(row, idxInvoice);
     const amountCents = cents(get(row, idxAmount));
     const createdRaw = get(row, idxCreated);
     let paidAt = new Date();
@@ -87,7 +93,10 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
     }
 
     // Only settled money. Failed/blocked rows never create or clear anything.
-    if (status !== "paid" && status !== "succeeded") { res.skippedFailed++; continue; }
+    // Some Stripe exports (the "unified payments" successful-charges report) omit
+    // a Status column entirely — every row is a settled charge — so when there's
+    // no status column at all, treat rows as paid rather than skipping everything.
+    if (idxStatus >= 0 && status !== "paid" && status !== "succeeded") { res.skippedFailed++; continue; }
     res.paidRows++;
 
     try {
@@ -126,6 +135,14 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
         }
         // pid present but not found here — fall through to email matching.
       }
+
+      // A subscription installment charge (has an Invoice ID, no app paymentId):
+      // this is ONE of a plan's 3 charges, not a one-time full payment. Matching
+      // it by email below would mark a whole fee PAID — and can't tell a parent's
+      // fee from a child's when they share an email. Leave it to the API
+      // "Reconcile with Stripe" pass, which advances the exact plan via the
+      // subscription's stamped paymentId.
+      if (invoiceId) { res.subscriptionRows++; continue; }
 
       // 2) Match by payer email → their outstanding fee, else create attributed.
       const person = email

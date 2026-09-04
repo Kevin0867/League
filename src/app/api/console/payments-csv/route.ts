@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       noperson: String(r.noPersonMatch),
       already: String(r.alreadyDone),
       failed: String(r.skippedFailed),
+      subs: String(r.subscriptionRows),
       applied: String(r.appliedCents),
     });
     if (r.errors) {
