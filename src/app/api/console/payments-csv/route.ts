@@ -9,7 +9,9 @@ import { undoCsvImport } from "@/lib/payments/reconcile";
 // multipart POST (carries the session cookie reliably on this runtime). Gated
 // to runPayouts like the other reconcile actions.
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// A full-season Stripe export is a few hundred rows; give the reconcile room so
+// it never times out mid-file on a slower database connection.
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
