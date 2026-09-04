@@ -48,6 +48,7 @@ const OK: Record<string, string> = {
   apparelReq: "Apparel order link created and emailed — they pick their gear and pay from the link.",
   itemedited: "Apparel choice updated.",
   paidoffline: "Marked paid. Recorded how it was paid.",
+  subscription: "Marked as paying by plan — shows as an active subscription now.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -424,6 +425,29 @@ export default async function RegistrationDetail({
                       {subscription ? " This settles the remaining subscription balance." : ""}
                     </p>
                     <button className="btn-secondary py-1 text-xs">Mark paid</button>
+                  </form>
+                </details>
+              )}
+              {/* Paying by a Stripe 3-payment plan the app lost the link to — record
+                  it as a subscription so it reads "✓ subscription" everywhere. */}
+              {!paid && !subscription && (
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs font-semibold text-emerald-700 hover:underline">Mark as paying by plan…</summary>
+                  <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-emerald-50 p-3">
+                    {hidden}<input type="hidden" name="op" value="markSubscription" />
+                    <label className="block text-xs font-medium text-emerald-900">
+                      Installments cleared (of 3)
+                      <select name="installmentsPaid" defaultValue="1" className="input mt-1 py-1 text-sm">
+                        <option value="1">1 of 3 paid</option>
+                        <option value="2">2 of 3 paid</option>
+                        <option value="3">3 of 3 — paid in full</option>
+                      </select>
+                    </label>
+                    <p className="text-[11px] text-emerald-800/80">
+                      For a Stripe 3-payment plan the app isn&apos;t tracking. Marks the fee as an active
+                      subscription (green ✓) so it matches the money in Stripe.
+                    </p>
+                    <button className="btn-secondary py-1 text-xs">Mark as subscription</button>
                   </form>
                 </details>
               )}

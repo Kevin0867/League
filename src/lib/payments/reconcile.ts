@@ -331,12 +331,56 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
         if (!matched && stripeIds.length) {
           matched = await prisma.payment.findFirst({ where: { stripePaymentIntentId: { in: stripeIds } } });
         }
-        // Subscription/installment charges: match the plan row by its subscription.
+        // Subscription/installment charges: match the plan's fee row and advance
+        // it right here. This is what fixes a 3-payment plan whose fee row lost
+        // its Stripe link (a split/re-request replaced it, or the webhook never
+        // fired) — the inside-out pass can't see it because the row carries no
+        // Stripe id, so we reconnect it by the paymentId we stamped on the
+        // subscription at checkout, count its paid invoices, and stamp the sub id
+        // back on so future installments record automatically.
         if (!matched && charge.invoice) {
           try {
             const inv = await client.invoices.retrieve(typeof charge.invoice === "string" ? charge.invoice : charge.invoice.id);
             const sub = typeof inv.subscription === "string" ? inv.subscription : inv.subscription?.id ?? null;
-            if (sub) matched = await prisma.payment.findFirst({ where: { stripeSubscriptionId: sub } });
+            if (sub) {
+              let planRow = await prisma.payment.findFirst({ where: { stripeSubscriptionId: sub } });
+              if (!planRow) {
+                const s = await client.subscriptions.retrieve(sub);
+                const pid = (s.metadata as Record<string, string> | undefined)?.paymentId;
+                if (pid) planRow = await prisma.payment.findUnique({ where: { id: pid } });
+              }
+              if (planRow && planRow.direction === "IN") {
+                const invs = await client.invoices.list({ subscription: sub, limit: 100 });
+                const paidCount = invs.data.filter((i) => i.status === "paid").length;
+                const total = planRow.installmentsTotal ?? 3;
+                const isDone = total > 0 && paidCount >= total;
+                const changed =
+                  !planRow.installmentPlan ||
+                  planRow.installmentsPaid !== paidCount ||
+                  planRow.stripeSubscriptionId !== sub ||
+                  (isDone && planRow.status !== "PAID");
+                if (changed) {
+                  const lastPaidAt = paidAtFromUnix(invs.data.filter((i) => i.status === "paid").pop()?.status_transitions?.paid_at ?? null);
+                  await prisma.payment.update({
+                    where: { id: planRow.id },
+                    data: {
+                      installmentPlan: true,
+                      installmentsTotal: total,
+                      installmentsPaid: paidCount,
+                      stripeSubscriptionId: sub,
+                      ...(isDone ? { status: "PAID", paidAt: planRow.paidAt ?? lastPaidAt ?? new Date() } : { status: "PENDING" }),
+                    },
+                  });
+                  await audit({ entityType: "Payment", entityId: planRow.id, action: "RECONCILED", summary: `Reconciled subscription (outside-in) — installments ${paidCount}/${total}${isDone ? " (paid in full)" : ""}` });
+                  res.updated++;
+                  if (isDone && planRow.status !== "PAID") { res.nowPaid++; res.recoveredCents += planRow.amountCents; }
+                  res.details.push({ paymentId: planRow.id, note: `subscription ${paidCount}/${total}`, amountCents: planRow.amountCents, nowPaid: isDone });
+                }
+                res.alreadyRecorded++;
+                res.alreadyRecordedCents += charge.amount;
+                continue; // subscription charge fully handled
+              }
+            }
           } catch { /* fall through to import */ }
         }
         // Payment-Link / dashboard-invoice charges carry no app metadata, so the
