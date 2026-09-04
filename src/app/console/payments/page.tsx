@@ -848,7 +848,8 @@ function SubscriptionsLedger({
             return (
               <li key={p.id} className="flex items-center justify-between py-2">
                 <div>
-                  <div className="font-medium text-slate-800">{formatCents(p.amountCents)}</div>
+                  {/* Headline = collected so far (money actually in), not the plan total. */}
+                  <div className="font-medium text-slate-800">{formatCents(collected)}</div>
                   <div className="text-xs text-slate-400">
                     {p.party ? (
                       p.partyId ? (
@@ -857,7 +858,7 @@ function SubscriptionsLedger({
                         `${p.party.firstName} ${p.party.lastName}`
                       )
                     ) : null}
-                    {p.party ? " · " : ""}{p.category.replace(/_/g, " ")} · {paidN} of {total} paid · {formatCents(collected)} in
+                    {p.party ? " · " : ""}{p.category.replace(/_/g, " ")} · {paidN} of {total} paid · {formatCents(p.amountCents)} total
                   </div>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">✓ subscription</span>
