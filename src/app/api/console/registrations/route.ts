@@ -584,6 +584,54 @@ export async function POST(req: Request) {
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=paidoffline`, origin), 303);
     }
 
+    // Mark a fee as PAYING BY PLAN (subscription) — for a player who set up a
+    // Stripe 3-payment plan that the app lost the link to (e.g. the fee row was
+    // re-created by a split/re-request while the Stripe subscription kept billing).
+    // Records installmentPlan + how many of the 3 have cleared, so the player
+    // reads "✓ subscription" everywhere, matching the money in Stripe.
+    case "markSubscription": {
+      if (!reg) return back("?err=fields");
+      const paidN = Math.max(1, Math.min(3, parseInt(String(fd.get("installmentsPaid") ?? "1"), 10) || 1));
+      const person = await prisma.person.findUnique({ where: { id: personId } });
+      if (!person) return back("?err=fields");
+
+      const covering = await prisma.payment.findMany({
+        where: {
+          seasonId: reg.seasonId,
+          category: "PLAYER_FEE",
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (covering.some((x) => x.status === "PAID")) {
+        return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=alreadypaid`, origin), 303);
+      }
+      let target = covering.find((x) => ["REQUESTED", "PENDING", "FAILED"].includes(x.status));
+      if (!target) {
+        const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
+        const feeCents = rate?.seasonFeeCents ?? 49500;
+        const season = await prisma.season.findUnique({ where: { id: reg.seasonId }, select: { name: true } });
+        const res = await accruePlayerSeasonFee({ playerId: personId, seasonId: reg.seasonId, feeCents, seasonName: season?.name ?? "Season" });
+        target = (await prisma.payment.findUnique({ where: { id: res.paymentId } })) ?? undefined;
+      }
+      if (!target) return back("?err=fields");
+
+      const done = paidN >= 3;
+      await prisma.payment.update({
+        where: { id: target.id },
+        data: {
+          installmentPlan: true,
+          installmentsTotal: 3,
+          installmentsPaid: paidN,
+          // All 3 in → fully PAID; otherwise it's an active plan (PENDING).
+          status: done ? "PAID" : "PENDING",
+          ...(done ? { paidAt: target.paidAt ?? new Date() } : {}),
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: target.id, action: done ? "PAID" : "SCHEDULED", summary: `Marked as subscription — ${paidN}/3 paid for ${person.firstName} ${person.lastName}` });
+      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=subscription`, origin), 303);
+    }
+
     // Split a consolidated family fee (one invoice covering several players) into
     // a separate per-player invoice for each — e.g. a father and son on two
     // different teams. Only a not-yet-paid (REQUESTED) invoice can be split.
