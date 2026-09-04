@@ -11,6 +11,13 @@ import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
 // endpoint or missing event is caught here.
 
 const REQUIRED_EVENT = "checkout.session.completed";
+// BOTH of these are required for full coverage:
+//   • checkout.session.completed — records one-time / pay-in-full fees and links
+//     a new subscription to its Payment row.
+//   • invoice.paid — records EACH installment of a 3-payment plan. Without it a
+//     subscription is linked but never advances past "0 paid", so every payment
+//     plan silently shows as unpaid no matter how many charges actually cleared.
+const CRITICAL_EVENTS = ["checkout.session.completed", "invoice.paid"];
 
 function safeHost(u: string): string {
   try { return new URL(u).host; } catch { return ""; }
@@ -25,6 +32,8 @@ export type WebhookEndpointInfo = {
   pointsHere: boolean; // exact host + path match for THIS deployment
   samePathOtherHost: boolean; // our webhook path, but a different domain (e.g. another deployment/DB)
   coversRequired: boolean; // subscribed to checkout.session.completed (or "*")
+  coversInvoicePaid: boolean; // subscribed to invoice.paid (or "*") — needed for subscriptions
+  missingCritical: string[]; // of CRITICAL_EVENTS, the ones NOT covered
   missingHelpful: string[];
   dashboardUrl: string; // deep link to this endpoint (signing secret + deliveries live here)
 };
@@ -71,8 +80,11 @@ export async function getStripeWebhookStatus(): Promise<WebhookStatus> {
     base.listed = true;
     base.endpoints = list.data.map((e) => {
       const events = e.enabled_events ?? [];
-      const coversRequired = events.includes("*") || events.includes(REQUIRED_EVENT);
-      const missingHelpful = events.includes("*") ? [] : HELPFUL_EVENTS.filter((ev) => !events.includes(ev));
+      const coversAll = events.includes("*");
+      const coversRequired = coversAll || events.includes(REQUIRED_EVENT);
+      const coversInvoicePaid = coversAll || events.includes("invoice.paid");
+      const missingCritical = coversAll ? [] : CRITICAL_EVENTS.filter((ev) => !events.includes(ev));
+      const missingHelpful = coversAll ? [] : HELPFUL_EVENTS.filter((ev) => !events.includes(ev));
       const host = safeHost(e.url);
       const pathMatches = e.url.replace(/\/$/, "").endsWith(WEBHOOK_PATH);
       const pointsHere = pathMatches && !!expectedHost && host === expectedHost;
@@ -83,11 +95,15 @@ export async function getStripeWebhookStatus(): Promise<WebhookStatus> {
         pointsHere,
         samePathOtherHost: pathMatches && !pointsHere,
         coversRequired,
+        coversInvoicePaid,
+        missingCritical,
         missingHelpful,
         dashboardUrl: `${dash}/webhooks/${e.id}`,
       };
     });
-    base.matchingHealthy = base.endpoints.some((e) => e.pointsHere && e.status === "enabled" && e.coversRequired);
+    // Healthy = an enabled endpoint here that covers BOTH critical events
+    // (one-time completion AND subscription installments).
+    base.matchingHealthy = base.endpoints.some((e) => e.pointsHere && e.status === "enabled" && e.missingCritical.length === 0);
   } catch (e) {
     base.listError = e instanceof Error ? e.message.slice(0, 160) : "couldn't read webhooks from Stripe";
   }
