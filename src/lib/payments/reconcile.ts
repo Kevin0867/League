@@ -39,8 +39,17 @@ export type ReconcileResult = {
   /** Imported charges we couldn't attribute to a known person (need a name). */
   importedUnattributed: number;
   errors: number;
+  /** The first error message seen this run — so "reconcile isn't working" is
+   *  actionable (e.g. a restricted Stripe key, an API-permission problem). */
+  firstError?: string;
   details: Array<{ paymentId: string; note: string; amountCents: number; nowPaid: boolean }>;
 };
+
+/** Record the first error message seen, for surfacing to the admin. */
+function noteError(res: ReconcileResult, e: unknown): void {
+  res.errors++;
+  if (!res.firstError) res.firstError = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+}
 
 type PaymentRow = {
   id: string;
@@ -431,7 +440,7 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
         if (!person) res.importedUnattributed++;
         res.details.push({ paymentId: created.id, note: person ? "imported from Stripe" : "imported (no matching person)", amountCents: charge.amount, nowPaid: true });
       } catch (e) {
-        res.errors++;
+        noteError(res, e);
         console.error(`outside-in reconcile failed for charge ${charge.id}`, e);
       }
     }
@@ -498,7 +507,7 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
         res.details.push({ paymentId: p.id, note: r.note, amountCents: p.amountCents, nowPaid: r.nowPaid });
       }
     } catch (e) {
-      res.errors++;
+      noteError(res, e);
       console.error(`reconcile failed for payment ${p.id}`, e);
     }
   }
@@ -514,7 +523,7 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
   try {
     await reconcileFromStripe(res, matchSinceUnix, IMPORT_FLOOR_UNIX, activeSeason?.id ?? null);
   } catch (e) {
-    res.errors++;
+    noteError(res, e);
     console.error("outside-in reconcile pass failed", e);
   }
 
@@ -551,7 +560,7 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
         }
       }
     } catch (e) {
-      res.errors++;
+      noteError(res, e);
       console.error(`refund reconcile failed for payment ${p.id}`, e);
     }
   }
