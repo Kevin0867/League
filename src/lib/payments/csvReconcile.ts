@@ -175,25 +175,38 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
     const a = feesByPerson.get(pid) ?? []; a.push(f); feesByPerson.set(pid, a);
   }
 
-  // Resolve a record to a person id: by summary name, then by email.
+  // Resolve a record to a person id: by summary name, then by email. When a name
+  // is ambiguous (duplicate person records — common after a person-split), pick
+  // the record that actually HAS a covering fee this season, then an unpaid one,
+  // then the payer email. This is what fixes a player like Otto whose name maps to
+  // two records but only one carries the season fee.
+  const hasFee = (id: string) => (feesByPerson.get(id) ?? []).length > 0;
+  const hasUnpaidFee = (id: string) => (feesByPerson.get(id) ?? []).some((f) => f.status !== "PAID" && f.status !== "REFUNDED");
   const resolvePerson = (rec: Rec): string | null => {
+    const cands = new Set<string>();
     if (rec.name) {
       const full = lc(rec.name);
-      let hit = personByName.get(full);
-      if (!hit || hit.length !== 1) {
+      (personByName.get(full) ?? []).forEach((id) => cands.add(id));
+      if (cands.size === 0) {
         const toks = rec.name.trim().split(/\s+/);
-        const key = lc(`${toks[0]} ${toks[toks.length - 1]}`);
-        hit = personByTokens.get(key);
-      }
-      if (hit && hit.length === 1) return hit[0];
-      // Ambiguous name — try email to disambiguate.
-      if (hit && hit.length > 1 && rec.email) {
-        const byEmail = personByEmail.get(rec.email);
-        if (byEmail && hit.includes(byEmail)) return byEmail;
+        (personByTokens.get(lc(`${toks[0]} ${toks[toks.length - 1]}`)) ?? []).forEach((id) => cands.add(id));
       }
     }
-    if (rec.email) return personByEmail.get(rec.email) ?? null;
-    return null;
+    const list = [...cands];
+    if (list.length === 1) return list[0];
+    if (list.length > 1) {
+      const unpaid = list.filter(hasUnpaidFee);
+      if (unpaid.length === 1) return unpaid[0];
+      const withFee = list.filter(hasFee);
+      if (withFee.length === 1) return withFee[0];
+      const byEmail = rec.email ? personByEmail.get(rec.email) : undefined;
+      if (byEmail && list.includes(byEmail)) return byEmail;
+      if (unpaid.length > 1) return unpaid[0];
+      if (withFee.length > 1) return withFee[0];
+      return null; // genuinely can't tell them apart
+    }
+    // No name match → payer email.
+    return rec.email ? personByEmail.get(rec.email) ?? null : null;
   };
 
   // ---- Split into subscription installments and one-time charges. ----
