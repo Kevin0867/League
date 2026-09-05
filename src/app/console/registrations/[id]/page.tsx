@@ -120,7 +120,9 @@ export default async function RegistrationDetail({
   // wrong size/garment can be corrected right here.
   const apparelItems = await prisma.apparelOrderItem.findMany({
     where: { OR: [{ personId: p.id }, { payment: { partyId: p.id } }] },
-    select: { id: true, garment: true, size: true, quantity: true, payment: { select: { status: true } } },
+    // installmentPlan/installmentsPaid so apparel reads PAID on a subscription too —
+    // team apparel is charged on the first installment, so a started plan covers it.
+    select: { id: true, garment: true, size: true, quantity: true, payment: { select: { status: true, installmentPlan: true, installmentsPaid: true } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -490,7 +492,7 @@ export default async function RegistrationDetail({
                 <ApparelItemEditor
                   ticket={ticket}
                   item={{ id: a.id, garment: a.garment, size: a.size, quantity: a.quantity }}
-                  paid={a.payment.status === "PAID"}
+                  paid={a.payment.status === "PAID" || (!!a.payment.installmentPlan && (a.payment.installmentsPaid ?? 0) >= 1)}
                   returnTo={`/console/registrations/${reg.id}`}
                 />
               </li>
