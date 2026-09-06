@@ -28,7 +28,7 @@ const ACADEMY_LINKS = [
   { label: "Teams", href: "/teams" },
   { label: "Schedule", href: "/schedule" },
   { label: "Standings", href: "/standings" },
-  { label: "Clinics", href: "/clinics" },
+  { label: "Clinics and lessons", href: "/clinics" },
   { label: "Order Apparel", href: "/order-apparel" },
 ];
 const ACADEMY_LEGAL = [
