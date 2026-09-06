@@ -23,7 +23,7 @@ export function TeamPhotoUploadForm({ ticket, teamId, currentUrl }: { ticket: st
           <div className="grid h-full w-full place-items-center text-[10px] text-slate-400">No photo</div>
         )}
       </div>
-      <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required className="max-w-[16rem] text-sm" />
+      <input type="file" name="file" accept="image/jpeg,image/png,image/webp" capture="environment" required className="max-w-[16rem] text-sm" />
       <button type="submit" disabled={pending} className="btn-secondary text-sm disabled:opacity-60">
         {pending ? "Uploading…" : "Upload team photo"}
       </button>
