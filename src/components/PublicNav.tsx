@@ -7,7 +7,7 @@ const LINKS = [
   { href: "/programs", label: "Programs" },
   { href: "/coaches", label: "Coaches" },
   { href: "/teams", label: "Teams" },
-  { href: "/clinics", label: "Clinics" },
+  { href: "/clinics", label: "Clinics and lessons" },
   { href: "/locations", label: "Locations" },
   { href: "/standings", label: "Standings" },
   { href: "/championship", label: "Championship" },
