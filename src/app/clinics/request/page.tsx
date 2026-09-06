@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { prisma } from "@/lib/db";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 
@@ -25,6 +26,16 @@ export default async function ClinicRequestPage({
 }) {
   const sp = await searchParams;
   const submitted = sp.ok === "1";
+
+  // Coaches the requester can ask for by name (private/semi-private lessons).
+  const coachRows = await prisma.coach.findMany({
+    where: { publishedOnSite: true },
+    include: { person: { select: { firstName: true, lastName: true } } },
+  });
+  const coaches = coachRows
+    .map((c) => `${c.person.firstName} ${c.person.lastName}`.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
 
   return (
     <div>
@@ -91,6 +102,17 @@ export default async function ClinicRequestPage({
                   ))}
                 </div>
               </div>
+
+              {coaches.length > 0 && (
+                <div>
+                  <label className="label" htmlFor="preferredCoach">Preferred coach</label>
+                  <select id="preferredCoach" name="preferredCoach" className="input" defaultValue="">
+                    <option value="">No preference — match me with the right coach</option>
+                    {coaches.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-400">For a private or semi-private lesson, pick the coach you&apos;d like to work with (optional).</p>
+                </div>
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
