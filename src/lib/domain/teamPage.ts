@@ -5,7 +5,7 @@
 import { prisma } from "@/lib/db";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 import { leagueStandingsFlat, type LeagueStandingRow } from "@/lib/domain/leagueStandings";
-import { publicPlayerName, publicPlayerSlug, teamPhotoPublishable } from "@/lib/domain/publicPlayer";
+import { publicPlayerName, publicPlayerSlug } from "@/lib/domain/publicPlayer";
 
 const DAY_LABEL: Record<string, string> = {
   MON: "Monday", TUE: "Tuesday", WED: "Wednesday", THU: "Thursday",
@@ -50,7 +50,7 @@ export type TeamPageData = {
   practice: { day: string | null; startTime: string | null; facility: string | null };
   coachName: string | null;
   coachPersonId: string | null;
-  photoUrl: string | null; // null unless a photo exists AND all players consent
+  photoUrl: string | null; // the uploaded team photo, if any (not consent-gated)
   roster: RosterPlayer[];
   combinedDupr: number | null; // sum of adult ratings
   avgDupr: number | null;
@@ -213,10 +213,9 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
     },
     coachName,
     coachPersonId: team.coach?.person.id ?? null,
-    photoUrl:
-      team.photoUrl && teamPhotoPublishable(team.members.map((m) => ({ waiverSignedAt: m.person.waiverSignedAt, mediaOptOut: m.person.mediaOptOut })))
-        ? team.photoUrl
-        : null,
+    // Team photos aren't consent-gated — every player signs a waiver with photo
+    // consent as a condition of playing, so an uploaded team photo always shows.
+    photoUrl: team.photoUrl ?? null,
     roster: rosterPlayers,
     combinedDupr,
     avgDupr,

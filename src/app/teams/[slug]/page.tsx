@@ -60,7 +60,7 @@ export default async function TeamPage({
             "PURE Academy team"}
         </p>
 
-        {/* Team photo — shown only when every player has media consent */}
+        {/* Team photo — shown whenever one's been uploaded */}
         {data.photoUrl && (
           <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
