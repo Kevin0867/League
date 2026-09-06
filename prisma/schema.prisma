@@ -1079,6 +1079,9 @@ model LessonRequest {
   skillLevel     String?
   locations      String?
   preferredTimes String?
+  /// The coach the requester asked for by name (private/semi-private lessons),
+  /// or null for "no preference". Stored as a name — this is a lightweight lead.
+  preferredCoach String?
   notes          String?
   /// NEW | CONTACTED | SCHEDULED | CLOSED
   status         String   @default("NEW")

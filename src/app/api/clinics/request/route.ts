@@ -32,12 +32,13 @@ export async function POST(req: Request) {
   const skillLevel = String(form.get("skillLevel") ?? "").trim() || null;
   const locations = String(form.get("locations") ?? "").trim() || null;
   const preferredTimes = String(form.get("preferredTimes") ?? "").trim() || null;
+  const preferredCoach = String(form.get("preferredCoach") ?? "").trim().slice(0, 120) || null;
   const notes = String(form.get("notes") ?? "").trim() || null;
 
   if (!name || !email || !/.+@.+\..+/.test(email)) return back("?err=fields");
 
   await prisma.lessonRequest.create({
-    data: { name, email, phone, requestType, skillLevel, locations, preferredTimes, notes },
+    data: { name, email, phone, requestType, skillLevel, locations, preferredTimes, preferredCoach, notes },
   });
 
   const typeLabel = TYPE_LABEL[requestType];
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
       `• Email: ${email}\n` +
       `• Phone: ${phone ?? "—"}\n` +
       `• Looking for: ${typeLabel}\n` +
+      `• Preferred coach: ${preferredCoach ?? "No preference"}\n` +
       `• Skill level: ${skillLevel ?? "—"}\n` +
       `• Preferred locations: ${locations ?? "—"}\n` +
       `• Preferred times: ${preferredTimes ?? "—"}\n` +
@@ -63,6 +65,7 @@ export async function POST(req: Request) {
   const text =
     `Thanks, ${name} — we got your request for coaching with PURE Academy.\n\n` +
     `What you asked for: ${typeLabel}\n` +
+    (preferredCoach ? `Preferred coach: ${preferredCoach}\n` : "") +
     (skillLevel ? `Skill level: ${skillLevel}\n` : "") +
     (locations ? `Preferred locations: ${locations}\n` : "") +
     (preferredTimes ? `Preferred times: ${preferredTimes}\n` : "") +
@@ -74,6 +77,7 @@ export async function POST(req: Request) {
       `<p style="margin:0 0 12px;color:#334155;font-size:15px">Here's what you told us:</p>` +
       `<table style="width:100%;border-collapse:collapse;margin:0 0 16px">` +
       row("Looking for", esc(typeLabel)) +
+      (preferredCoach ? row("Preferred coach", esc(preferredCoach)) : "") +
       (skillLevel ? row("Skill level", esc(skillLevel)) : "") +
       (locations ? row("Locations", esc(locations)) : "") +
       (preferredTimes ? row("Preferred times", esc(preferredTimes)) : "") +
