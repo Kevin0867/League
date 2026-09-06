@@ -6,8 +6,8 @@ import { audit } from "@/lib/audit";
 import { uploadImage } from "@/lib/upload";
 
 // Team photo upload (multipart). Admins, or the team's own head/assistant coach.
-// The photo only appears publicly when every player has media consent — that
-// gate is enforced at render time on the public team page.
+// Every player signs a waiver with photo consent to play, so team photos aren't
+// consent-gated — an uploaded team photo shows on the public team page.
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
