@@ -20,6 +20,7 @@ import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { AddPlayerToTeam } from "./AddPlayerToTeam";
 import { PrintButton } from "@/components/PrintButton";
 import { TeamPhotoUploadForm } from "@/components/TeamPhotoUploadForm";
+import { ImageUploadForm } from "@/components/ImageUploadForm";
 
 export const dynamic = "force-dynamic";
 
@@ -534,6 +535,22 @@ export default async function TeamDetailPage({
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      <details className="text-xs">
+                        <summary className="cursor-pointer font-semibold text-brand-600 hover:underline">photo</summary>
+                        <div className="mt-1.5">
+                          {/* Coach or admin can snap/upload a photo for this player. */}
+                          <ImageUploadForm
+                            ticket={ticket}
+                            personId={m.personId}
+                            returnTo={`/console/teams/${team.id}`}
+                            currentUrl={m.person.imageUrl}
+                            name={`${m.person.firstName} ${m.person.lastName}`}
+                            capture
+                            compact
+                            label="Save"
+                          />
+                        </div>
+                      </details>
                       <Link href={`/console/teams/${team.id}/progress/${m.personId}`} className="text-xs font-semibold text-brand-600 hover:underline">
                         notes
                       </Link>

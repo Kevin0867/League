@@ -8,6 +8,7 @@ import { NOTICE_DAYS } from "@/lib/domain/availability";
 import { MessageFrame } from "@/components/MessageFrame";
 import { formatTime12, formatDate, formatStamp } from "@/lib/time";
 import { Notice } from "@/components/Notice";
+import { ImageUploadForm } from "@/components/ImageUploadForm";
 import { PayButtons } from "./PayButtons";
 import { installmentChargeDates } from "@/lib/payments/receipt";
 
@@ -148,6 +149,35 @@ export default async function PortalHome({
             A signed waiver is required before appearing on a court-ready roster.
           </p>
         </div>
+      )}
+
+      {sp.imgok && <Notice kind="success" title="Photo saved">Looks great — the photo is updated.</Notice>}
+      {sp.imgerr && <Notice kind="error" title="Couldn't upload the photo">{decodeURIComponent(sp.imgerr)}</Notice>}
+
+      {/* Profile photos — the logged-in player, plus each player in their household */}
+      {me && (
+        <section className="card">
+          <h2 className="font-semibold text-slate-900">Profile {me.dependents.length ? "photos" : "photo"}</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Add a photo for {me.dependents.length ? "each player in your household" : "your profile"} — it shows on their player page and team roster. You can take one right from your phone.
+          </p>
+          <div className="mt-3 space-y-3">
+            {[me, ...me.dependents].map((person) => (
+              <div key={person.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 first:border-0 first:pt-0">
+                <span className="text-sm font-medium text-slate-700">{person.firstName} {person.lastName}</span>
+                <ImageUploadForm
+                  ticket={ticket}
+                  personId={person.id}
+                  returnTo="/portal"
+                  currentUrl={person.imageUrl}
+                  name={`${person.firstName} ${person.lastName}`}
+                  capture
+                  label="Add / change"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* ── Pinned to the top: Payments, Registrations, Teams ── */}
