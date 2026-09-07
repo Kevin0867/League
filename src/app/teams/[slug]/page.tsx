@@ -55,6 +55,9 @@ export default async function TeamPage({
           )}
           <h1 className="display text-3xl text-brand-900 sm:text-4xl">{data.displayName}</h1>
         </div>
+        {data.motto && (
+          <p className="mt-1 text-lg font-medium italic text-brand-700">&ldquo;{data.motto}&rdquo;</p>
+        )}
         <p className="mt-2 text-slate-600">
           {[data.shortMarket && `PURE ${data.shortMarket}`, data.divisionCode].filter(Boolean).join(" · ") ||
             "PURE Academy team"}
