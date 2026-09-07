@@ -16,9 +16,9 @@ import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
 import { accruePlayerSeasonFee, placementPayLink, splitFamilyFee, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
+import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { feeStateOf } from "@/lib/domain/feeStatus";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
-import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { describeTeamPractice } from "@/lib/domain/practiceInfo";
 import { decryptField } from "@/lib/crypto";
@@ -45,6 +45,15 @@ async function seasonTeamIds(seasonId: string): Promise<string[]> {
  * same season, upsert the membership, and mark their registration ASSIGNED.
  * Shared by assignToTeam and assignPair so both behave identically.
  */
+/** Was this player already on a team in the season BEFORE this placement? Used to
+ *  fire the welcome/launch on FIRST placement only (so moves don't re-spam). */
+async function wasPlacedInSeason(personId: string, seasonId: string): Promise<boolean> {
+  const ids = await seasonTeamIds(seasonId);
+  if (!ids.length) return false;
+  const m = await prisma.teamMember.findFirst({ where: { personId, teamId: { in: ids } }, select: { id: true } });
+  return !!m;
+}
+
 async function placeOnTeam(personId: string, teamId: string, seasonId: string) {
   const ids = (await seasonTeamIds(seasonId)).filter((id) => id !== teamId);
   if (ids.length) await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: ids } } });
@@ -405,6 +414,8 @@ export async function POST(req: Request) {
         : null;
       if (!team) return back("?err=team");
 
+      // First placement (not already on any team this season) → auto-welcome.
+      const firstPlacement = !(await wasPlacedInSeason(personId, team.seasonId));
       const alreadyOn = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId, personId } } });
       // Cap is a soft limit for admins: they may exceed TEAM_CAP with override=1
       // (e.g. to honor a "play with my friend" request onto a full team). Only
@@ -429,11 +440,11 @@ export async function POST(req: Request) {
       // season-fee invoice exists so the fee + apparel are payable right away.
       await ensureSeasonFeePayable(personId, team.seasonId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Assigned/moved ${personId}` });
-      // Assignment is SILENT by design: players/parents are never messaged just
-      // for being placed. Staff control who and when — messaging goes out later,
-      // deliberately, from the team Launch flow (welcome + fee + waiver) or the
-      // explicit "Resend assignment email" action. Notify only on opt-in.
-      if (String(fd.get("notify") ?? "") === "1") await notifyAssignment(teamId, personId, team.seasonId);
+      // On FIRST placement, auto-send the full welcome (team details + pay the
+      // fee + pick apparel + complete the waiver). A move between teams doesn't
+      // re-send — the admin can opt in with notify=1 for the lighter placement note.
+      if (firstPlacement) await sendTeamLaunch({ personId, seasonId: team.seasonId, senderId: actor.userId });
+      else if (String(fd.get("notify") ?? "") === "1") await notifyAssignment(teamId, personId, team.seasonId);
       if (String(fd.get("from") ?? "") === "requests")
         return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
       return back("?ok=assign");
@@ -460,11 +471,17 @@ export async function POST(req: Request) {
         return NextResponse.redirect(new URL(`/console/requests?err=cap`, origin), 303);
       }
 
+      // Which of the pair are being placed for the FIRST time this season.
+      const firstTimers = new Set<string>();
+      for (const pid of people) if (!(await wasPlacedInSeason(pid, team.seasonId))) firstTimers.add(pid);
       for (const pid of people) await placeOnTeam(pid, teamId, team.seasonId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Placed pair on team: ${people.join(" + ")}` });
-      // Silent by design — see assignToTeam. Placement never auto-messages.
-      if (String(fd.get("notify") ?? "") === "1")
-        for (const pid of people) await notifyAssignment(teamId, pid, team.seasonId);
+      // First placement → full welcome; a move → optional placement note on opt-in.
+      const notifyOptIn = String(fd.get("notify") ?? "") === "1";
+      for (const pid of people) {
+        if (firstTimers.has(pid)) await sendTeamLaunch({ personId: pid, seasonId: team.seasonId, senderId: actor.userId });
+        else if (notifyOptIn) await notifyAssignment(teamId, pid, team.seasonId);
+      }
       return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
     }
 
@@ -884,63 +901,10 @@ export async function POST(req: Request) {
     // "to be confirmed".
     case "launchRegistration": {
       if (!reg) return back("?err=fields");
-      const person = await prisma.person.findUnique({ where: { id: personId } });
+      const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } });
       if (!person) return back("?err=fields");
-
-      const ids = await seasonTeamIds(reg.seasonId);
-      const membership = ids.length
-        ? await prisma.teamMember.findFirst({
-            where: { personId, teamId: { in: ids } },
-            include: { team: { include: { facility: true, coach: { include: { person: true } } } } },
-          })
-        : null;
-      const team = membership?.team ?? null;
-
-      const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
-      const feeCents = rate?.seasonFeeCents ?? 49500;
-      const season = await prisma.season.findUnique({ where: { id: reg.seasonId } });
-      const seasonName = season?.name ?? "Season";
-      const payerId = person.guardianId ?? person.id;
-
-      // This player's own invoice (unless their registration is fee-waived).
-      const res = reg.feeWaived ? null : await accruePlayerSeasonFee({ playerId: person.id, seasonId: reg.seasonId, feeCents, seasonName });
-      const payUrl = res ? `${appUrl()}/pay/${res.paymentId}` : null;
-
-      const payer = await prisma.person.findUnique({ where: { id: payerId } });
-      if (!payer) return back("?err=fields");
-
-      const coachName = team?.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
-      const coachContact = team?.coach ? [team.coach.person.email, team.coach.person.phone].filter(Boolean).join(" · ") || null : null;
-      const practiceWhen = team ? await describeTeamPractice(team, reg.seasonId) : "To be confirmed";
-      // Always include the participation-waiver link so anyone unsigned is caught.
-      const waiverUrl = `${appUrl()}/waiver/sign?token=${encodeURIComponent(await signWaiverToken(payerId))}`;
-
-      const email = teamLaunchEmail({
-        recipientName: payer.firstName,
-        teamName: team?.name ?? "PURE Academy",
-        players: [`${person.firstName} ${person.lastName}`],
-        coachName,
-        coachContact,
-        locationName: team?.facility?.name ?? "To be confirmed",
-        locationAddress: team?.facility?.exactAddress ?? team?.facility?.generalArea ?? null,
-        practiceWhen,
-        payUrl: payUrl ?? `${appUrl()}/portal`,
-        feeCents,
-        waiverUrl,
-      });
-      const smsBody = `PURE Academy — welcome${team ? ` to ${team.name}` : ""}! ${team ? `Practices: ${practiceWhen}. ` : ""}${payUrl ? `Pick your team apparel & pay the season fee here: ${payUrl} ` : ""}Full details + your waiver are in your email.`;
-      await dispatchMessage({
-        senderId: actor.userId,
-        seasonId: reg.seasonId,
-        audienceType: "SINGLE_PERSON",
-        audienceRef: payerId,
-        channels: ["IN_APP", "EMAIL", "SMS"],
-        triggerType: "TEAM_LAUNCH",
-        subject: email.subject,
-        body: email.text,
-        html: email.html,
-        smsBody,
-      });
+      const r = await sendTeamLaunch({ personId, seasonId: reg.seasonId, senderId: actor.userId });
+      if (!r.ok) return back("?err=fields");
       await audit({ actorId: actor.userId, entityType: "Registration", entityId: reg.id, action: "LAUNCH", summary: `Sent all to ${person.firstName} ${person.lastName}'s family — welcome + fee + waiver` });
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=sentall`, origin), 303);
     }
