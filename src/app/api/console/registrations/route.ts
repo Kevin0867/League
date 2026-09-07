@@ -936,12 +936,22 @@ export async function POST(req: Request) {
     case "resendPayment": {
       if (!reg) return back("?err=fields");
       const person = await prisma.person.findUnique({ where: { id: personId } });
+      // Match the fee that COVERS this player — a minor's fee is billed to their
+      // guardian (partyId = the parent), so a partyId-only lookup would miss it
+      // and wrongly report "no outstanding fee".
       const pay = await prisma.payment.findFirst({
-        where: { partyId: personId, seasonId: reg.seasonId, category: "PLAYER_FEE", status: { in: ["REQUESTED", "PENDING"] } },
+        where: {
+          seasonId: reg.seasonId,
+          category: "PLAYER_FEE",
+          status: { in: ["REQUESTED", "PENDING"] },
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
         orderBy: { createdAt: "desc" },
       });
       if (!person || !pay) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nopayment`, origin), 303);
-      const email = paymentRequestEmail({ name: person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+      // Greet the paying adult (the invoice's party), who may be the guardian.
+      const payer = pay.partyId ? await prisma.person.findUnique({ where: { id: pay.partyId }, select: { firstName: true } }) : null;
+      const email = paymentRequestEmail({ name: payer?.firstName ?? person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
       // Hand-picked recipients from the detail-page checklist; the list-view
       // quick resend sends to every address on file (picked empty → fan-out).
       const { picked } = await pickedRecipients(personId, fd.getAll("to").map((v) => String(v)));
@@ -961,8 +971,14 @@ export async function POST(req: Request) {
     // Start a refund on this player's paid season fee.
     case "refund": {
       if (!reg) return back("?err=fields");
+      // Match the fee covering this player — a minor's is billed to the guardian.
       const pay = await prisma.payment.findFirst({
-        where: { partyId: personId, seasonId: reg.seasonId, category: "PLAYER_FEE", status: "PAID" },
+        where: {
+          seasonId: reg.seasonId,
+          category: "PLAYER_FEE",
+          status: "PAID",
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
         orderBy: { paidAt: "desc" },
       });
       if (!pay) return back("?err=norefund");
@@ -986,7 +1002,7 @@ export async function POST(req: Request) {
         await prisma.payment.update({ where: { id: pay.id }, data: { status: "REFUNDED" } });
         await prisma.payment.create({
           data: {
-            direction: "OUT", partyId: personId, amountCents: pay.amountCents, method: "STRIPE",
+            direction: "OUT", partyId: pay.partyId ?? personId, amountCents: pay.amountCents, method: "STRIPE",
             status: "PAID", category: "REFUND", seasonId: reg.seasonId, paidAt: new Date(),
             description: `Refund — ${pay.description ?? "season fee"} [simulated]`,
           },
