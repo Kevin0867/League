@@ -710,9 +710,19 @@ export async function POST(req: Request) {
     case "deleteRegistration": {
       if (!actor) return back("?err=auth");
       if (!reg) return back("?err=notfound");
-      const seasonTeams = await seasonTeamIds(reg.seasonId);
-      if (seasonTeams.length) {
-        await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: seasonTeams } } });
+      // If this person has ANOTHER registration in the same season (a duplicate
+      // signup — e.g. Dara registered twice), their team placement belongs to the
+      // other registration, so DON'T pull them off their team when deleting this
+      // duplicate. Only remove team memberships when this is their last one.
+      const otherRegs = await prisma.registration.count({
+        where: { personId, seasonId: reg.seasonId, id: { not: reg.id } },
+      });
+      const pulled = otherRegs === 0;
+      if (pulled) {
+        const seasonTeams = await seasonTeamIds(reg.seasonId);
+        if (seasonTeams.length) {
+          await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: seasonTeams } } });
+        }
       }
       await prisma.registration.delete({ where: { id: reg.id } });
       await audit({
@@ -720,7 +730,7 @@ export async function POST(req: Request) {
         entityType: "Registration",
         entityId: reg.id,
         action: "DELETE",
-        summary: `Removed registration for ${personId}; pulled from ${seasonTeams.length ? "season teams" : "no teams"}`,
+        summary: `Removed registration for ${personId}; ${pulled ? "pulled from season teams" : "kept team placement (has another registration)"}`,
       });
       // The detail page is gone now — land on the list with a confirmation.
       return NextResponse.redirect(new URL(`/console/registrations?ok=regDeleted`, origin), 303);
