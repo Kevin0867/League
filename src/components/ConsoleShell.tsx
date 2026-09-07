@@ -66,6 +66,7 @@ const SECTIONS: NavSection[] = [
       { href: "/console/apparel", label: "Apparel", roles: ["COO", "DIRECTOR"] },
       { href: "/console/sponsorships", label: "Sponsorships", roles: ["COO", "DIRECTOR"], match: ["/console/sponsorships"] },
       { href: "/console/inbox", label: "Inbox", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/lounge", label: "Coaches' Lounge", roles: ["ADMIN", "COO", "CEO", "DIRECTOR", "COACH"] },
       { href: "/console/messages", label: "Messaging", roles: ["COO", "DIRECTOR"] },
       { href: "/console/compliance", label: "Compliance", roles: ["COO", "DIRECTOR"] },
       { href: "/console/consent", label: "Consent log", roles: ["COO", "DIRECTOR"] },
