@@ -1,0 +1,40 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { actorFromForm } from "@/lib/auth";
+import { can } from "@/lib/rbac";
+import { audit } from "@/lib/audit";
+
+// Set a team's motto/tagline. Admins, or the team's own head/assistant coach —
+// same authorization as the team photo. Shown under the team name on the public
+// team page.
+export const dynamic = "force-dynamic";
+
+export async function POST(req: Request) {
+  const origin = new URL(req.url).origin;
+  const fd = await req.formData();
+  const teamId = String(fd.get("teamId") ?? "");
+  const back = (qs: string) => NextResponse.redirect(new URL(`/console/teams/${teamId}${qs}`, origin), 303);
+
+  const actor = await actorFromForm(fd);
+  if (!actor) return back("?err=auth");
+  if (!teamId) return NextResponse.redirect(new URL("/console/teams", origin), 303);
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { coach: { select: { id: true } }, assistantCoaches: { select: { coachId: true } } },
+  });
+  if (!team) return back("?err=notfound");
+
+  let allowed = can(actor.role, "manageTeams");
+  if (!allowed) {
+    const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
+    const myCoach = me?.personId ? await prisma.coach.findUnique({ where: { personId: me.personId }, select: { id: true } }) : null;
+    allowed = !!myCoach && (team.coachId === myCoach.id || team.assistantCoaches.some((tc) => tc.coachId === myCoach.id));
+  }
+  if (!allowed) return back("?err=auth");
+
+  const motto = String(fd.get("motto") ?? "").trim().slice(0, 120) || null;
+  await prisma.team.update({ where: { id: teamId }, data: { motto } });
+  await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "team.motto", summary: motto ? `Set team motto: ${motto}` : "Cleared team motto" });
+  return back("?ok=motto");
+}

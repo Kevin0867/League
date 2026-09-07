@@ -47,6 +47,7 @@ export type TeamPageData = {
   shortMarket: string | null;
   divisionCode: string | null;
   color: string | null;
+  motto: string | null;
   practice: { day: string | null; startTime: string | null; facility: string | null };
   coachName: string | null;
   coachPersonId: string | null;
@@ -213,6 +214,7 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
     },
     coachName,
     coachPersonId: team.coach?.person.id ?? null,
+    motto: team.motto?.trim() || null,
     // Team photos aren't consent-gated — every player signs a waiver with photo
     // consent as a condition of playing, so an uploaded team photo always shows.
     photoUrl: team.photoUrl ?? null,

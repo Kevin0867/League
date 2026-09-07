@@ -36,6 +36,7 @@ function hasFamilyEmail(person: WithEmails & { guardian?: WithEmails | null }): 
 }
 
 const OK_MSG: Record<string, string> = {
+  motto: "Team motto saved.",
   updateTeam: "Team fields saved.",
   addPlayer: "Player added to the roster.",
   addPlayerOver: `Player added — this team is now over the target of ${TEAM_CAP}. Move a player to another team to get back to ${TEAM_CAP}.`,
@@ -480,15 +481,33 @@ export default async function TeamDetailPage({
         )}
       </div>
 
+      </>)}
+
+      {/* Team identity — photo + motto. Available to admins AND the team's coach. */}
       <div className="card">
-        <h2 className="font-semibold text-slate-900">Team photo</h2>
+        <h2 className="font-semibold text-slate-900">Team identity</h2>
         <p className="mb-3 mt-0.5 text-sm text-slate-500">
-          Shown on the public team page — but only once every rostered player has media consent (a signed waiver with
-          media consent). Where any player is missing consent, it&apos;s withheld rather than cropping anyone out.
+          The team name, photo, and motto show on the public team page. You can take a team photo right from your phone.
         </p>
         <TeamPhotoUploadForm ticket={ticket} teamId={team.id} currentUrl={team.photoUrl} />
+        <form method="POST" action="/api/console/team-motto" className="mt-4 border-t border-slate-100 pt-4">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="teamId" value={team.id} />
+          <label className="label" htmlFor="motto">Team motto</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              id="motto"
+              name="motto"
+              maxLength={120}
+              defaultValue={team.motto ?? ""}
+              placeholder="e.g. Dink responsibly."
+              className="input max-w-md"
+            />
+            <button className="btn-secondary text-sm">Save motto</button>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">A short tagline shown under the team name. Leave blank to remove it.</p>
+        </form>
       </div>
-      </>)}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Roster */}
