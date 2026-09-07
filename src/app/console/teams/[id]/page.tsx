@@ -67,6 +67,8 @@ const ERR_MSG: Record<string, string> = {
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",
   op: "Unknown action.",
+  fields: "Missing details for that action.",
+  nopayment: "No season-fee invoice to request — this player may be fee-waived or on a non-Academy registration.",
 };
 
 export default async function TeamDetailPage({
@@ -81,7 +83,8 @@ export default async function TeamDetailPage({
   if (!(await canViewTeamNotes(id))) redirect("/console");
   const viewer = await getSession();
   const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
-  const { ok, err, imgok, imgerr, n, failed, failedNames } = await searchParams;
+  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail } = await searchParams;
+  const VIA_LABEL: Record<string, string> = { email: "email", text: "text", both: "email and text" };
   const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
     where: { id },
@@ -282,6 +285,12 @@ export default async function TeamDetailPage({
       ) : ok === "launched" ? (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
           Launched — combined welcome + apparel &amp; fee + waiver emailed/texted to {n ?? 0} famil{n === "1" ? "y" : "ies"}.
+        </div>
+      ) : ok === "reqpay" ? (
+        <div className={`rounded-lg px-4 py-2 text-sm ${reqfail ? "bg-rose-50 text-rose-800" : "bg-emerald-50 text-emerald-800"}`}>
+          {reqfail
+            ? `Couldn't send the fee & apparel request to ${who ?? "the player"} via ${VIA_LABEL[String(via)] ?? "the chosen channel"} — no email/phone on file, or delivery failed.`
+            : `Fee & apparel request sent to ${who ?? "the player"} via ${VIA_LABEL[String(via)] ?? "the chosen channel"}.${reqsim ? " (Delivery isn't configured yet, so it was simulated — check the Payments page connection status.)" : ""}`}
         </div>
       ) : ok && OK_MSG[ok] ? (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{OK_MSG[ok]}</div>
@@ -573,6 +582,26 @@ export default async function TeamDetailPage({
                       <Link href={`/console/teams/${team.id}/progress/${m.personId}`} className="text-xs font-semibold text-brand-600 hover:underline">
                         notes
                       </Link>
+                      {admin && (
+                        <details className="text-xs">
+                          <summary className="cursor-pointer font-semibold text-brand-600 hover:underline">request payment</summary>
+                          {/* One tap to send this player their season-fee + apparel
+                              pay link. The poster picks the channel; the button they
+                              click IS the choice (email / text / both). */}
+                          <form method="POST" action="/api/console/registrations" className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <input type="hidden" name="ticket" value={ticket} />
+                            <input type="hidden" name="op" value="requestPayment" />
+                            <input type="hidden" name="personId" value={m.personId} />
+                            <input type="hidden" name="teamId" value={team.id} />
+                            <input type="hidden" name="seasonId" value={team.seasonId} />
+                            <input type="hidden" name="returnTo" value={`/console/teams/${team.id}`} />
+                            <button name="channel" value="email" className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 font-semibold text-brand-700 hover:bg-brand-100">Email</button>
+                            <button name="channel" value="text" className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 font-semibold text-brand-700 hover:bg-brand-100">Text</button>
+                            <button name="channel" value="both" className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 font-semibold text-brand-700 hover:bg-brand-100">Both</button>
+                          </form>
+                          <p className="mt-1 text-[11px] text-slate-400">Sends the season fee &amp; apparel pay link.</p>
+                        </details>
+                      )}
                       {admin && (
                         <ConfirmSubmit
                           action="/api/console/teams"
