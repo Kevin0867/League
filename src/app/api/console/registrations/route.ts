@@ -15,7 +15,7 @@ import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal
 import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
-import { accruePlayerSeasonFee, placementPayLink, splitFamilyFee } from "@/lib/payments/familyFee";
+import { accruePlayerSeasonFee, placementPayLink, splitFamilyFee, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
 import { feeStateOf } from "@/lib/domain/feeStatus";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
@@ -57,6 +57,9 @@ async function placeOnTeam(personId: string, teamId: string, seasonId: string) {
     where: { personId, seasonId, status: { not: "ASSIGNED" } },
     data: { status: "ASSIGNED" },
   });
+  // Placement (incl. off the waitlist) clears them to pay — ensure their
+  // season-fee invoice exists so the fee + apparel are payable immediately.
+  await ensureSeasonFeePayable(personId, seasonId);
 }
 
 async function notifyAssignment(teamId: string, personId: string, seasonId: string, opts?: { emailOnly?: boolean }) {
@@ -422,6 +425,9 @@ export async function POST(req: Request) {
         where: { personId, seasonId: team.seasonId, status: { not: "ASSIGNED" } },
         data: { status: "ASSIGNED" },
       });
+      // Placement (incl. off the waitlist) clears them to pay — ensure a
+      // season-fee invoice exists so the fee + apparel are payable right away.
+      await ensureSeasonFeePayable(personId, team.seasonId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Assigned/moved ${personId}` });
       // Assignment is SILENT by design: players/parents are never messaged just
       // for being placed. Staff control who and when — messaging goes out later,

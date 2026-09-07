@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
-import { accruePlayerSeasonFee, placementPayLink } from "@/lib/payments/familyFee";
+import { accruePlayerSeasonFee, placementPayLink, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
 import { isBookable } from "@/lib/domain/facilityWindows";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
@@ -557,6 +557,9 @@ export async function POST(req: Request) {
         update: {},
       });
       await prisma.registration.updateMany({ where: { personId, seasonId: team.seasonId }, data: { status: "ASSIGNED" } });
+      // Placing a player (incl. off the waitlist) clears them to pay — ensure a
+      // season-fee invoice exists so they can pay the fee + apparel right away.
+      await ensureSeasonFeePayable(personId, team.seasonId);
 
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster${overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
       return back(overCap ? "?ok=addPlayerOver" : "?ok=addPlayer");

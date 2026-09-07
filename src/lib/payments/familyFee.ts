@@ -102,6 +102,32 @@ export async function accruePlayerSeasonFee(opts: {
   return { paymentId: created.id, payerId, amountCents: feeCents, coveredCount: 1, created: true };
 }
 
+/**
+ * Make a just-placed player PAYABLE: ensure their season-fee invoice exists so
+ * they can pay the season fee + apparel immediately — including someone taken off
+ * the waitlist and placed on a team. Idempotent (reuses an existing invoice) and
+ * best-effort (never throws, so it can't block a placement). Skips a fee-waived
+ * registration and any season with no fee configured. Creates the invoice only —
+ * no email or charge; the family can self-pay from the portal, and Launch /
+ * Request-fee reuse the same invoice.
+ */
+export async function ensureSeasonFeePayable(playerId: string, seasonId: string): Promise<void> {
+  try {
+    const reg = await prisma.registration.findFirst({ where: { personId: playerId, seasonId }, select: { feeWaived: true } });
+    if (reg?.feeWaived) return;
+    const [rate, season] = await Promise.all([
+      prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { seasonFeeCents: true } }),
+      prisma.season.findUnique({ where: { id: seasonId }, select: { name: true, program: true } }),
+    ]);
+    // Season fees apply to Academy teams; ACP/other programs price entries elsewhere.
+    if (season && season.program !== "PURE_ACADEMY") return;
+    const feeCents = rate?.seasonFeeCents ?? 49500;
+    await accruePlayerSeasonFee({ playerId, seasonId, feeCents, seasonName: season?.name ?? "Season" });
+  } catch (e) {
+    console.error("ensureSeasonFeePayable failed", e);
+  }
+}
+
 export type SplitResult =
   | { ok: true; created: number; players: number }
   | { ok: false; reason: "notfound" | "single" | "inflight" };
