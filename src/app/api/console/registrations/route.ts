@@ -398,6 +398,57 @@ export async function POST(req: Request) {
     return NextResponse.redirect(new URL(`/console/payments?${qs.toString()}`, origin), 303);
   }
 
+  // Request the season fee + apparel from one player via a chosen channel —
+  // email, text, or both. Works from the team roster (no need to open the player)
+  // and the registration record. Ensures the fee invoice exists first, then sends
+  // the pay link (which is the fee + apparel page). Reports which channel went out.
+  if (op === "requestPayment") {
+    if (!can(actor.role, "manageTeams")) return back("?err=auth");
+    const pid = String(fd.get("personId") ?? "");
+    const rawReturn = String(fd.get("returnTo") ?? "");
+    const rt = rawReturn.startsWith("/console/") ? rawReturn : "/console/registrations";
+    const backRT = (qs: string) => NextResponse.redirect(new URL(`${rt}${qs}`, origin), 303);
+    if (!pid) return backRT("?err=fields");
+    const ch = String(fd.get("channel") ?? "both");
+    const channels = ch === "text" ? (["SMS"] as const) : ch === "email" ? (["EMAIL"] as const) : (["EMAIL", "SMS"] as const);
+
+    // Resolve the season: explicit, or from the team the request came from.
+    let seasonId = String(fd.get("seasonId") ?? "");
+    const teamId = String(fd.get("teamId") ?? "");
+    if (!seasonId && teamId) seasonId = (await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } }))?.seasonId ?? "";
+    if (!seasonId) return backRT("?err=fields");
+
+    const person = await prisma.person.findUnique({ where: { id: pid }, select: { firstName: true, lastName: true } });
+    if (!person) return backRT("?err=fields");
+
+    // Make sure there's an invoice to point at (accrue if missing), then find it.
+    await ensureSeasonFeePayable(pid, seasonId);
+    const pay = await prisma.payment.findFirst({
+      where: {
+        seasonId,
+        category: "PLAYER_FEE",
+        status: { in: ["REQUESTED", "PENDING"] },
+        OR: [{ partyId: pid }, { coveredPersonIds: { array_contains: pid } }],
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!pay) return backRT("?err=nopayment");
+
+    const payer = pay.partyId ? await prisma.person.findUnique({ where: { id: pay.partyId }, select: { firstName: true } }) : null;
+    const email = paymentRequestEmail({ name: payer?.firstName ?? person.firstName, amountCents: pay.amountCents, description: pay.description ?? "Season fee", paymentId: pay.id });
+    const res = await dispatchMessage({
+      senderId: actor.userId, seasonId, audienceType: "SINGLE_PERSON", audienceRef: pid,
+      channels: [...channels], triggerType: "PAYMENT_REQUEST",
+      subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
+    });
+    await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "RESEND", summary: `Requested fee + apparel via ${ch} for ${person.firstName} ${person.lastName}` });
+
+    const qs = new URLSearchParams({ ok: "reqpay", via: ch, who: `${person.firstName} ${person.lastName}` });
+    if (res.failures > 0) qs.set("reqfail", "1");
+    else if (res.simulated > 0) qs.set("reqsim", "1");
+    return backRT(`?${qs.toString()}`);
+  }
+
   // The roster quick-actions require team-management rights.
   if (!can(actor.role, "manageTeams")) return back("?err=auth");
   const personId = String(fd.get("personId") ?? "");
