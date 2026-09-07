@@ -1667,3 +1667,32 @@ model Sponsorship {
   @@index([organizationId, scopeType, scopeId])
   @@index([sponsorId])
 }
+
+/// Coaches' Lounge — a single staff-only board for banter, announcements, and
+/// asks (e.g. "need a sub Thursday"). Never visible to players/parents. The
+/// poster chooses how staff are notified (none / in-app / email / text).
+model CoachPost {
+  id             String   @id @default(cuid())
+  authorPersonId String?
+  authorName     String
+  body           String
+  pinned         Boolean  @default(false)
+  /// NONE | INAPP | EMAIL | TEXT — how staff were notified when this posted.
+  notify         String   @default("INAPP")
+  createdAt      DateTime @default(now())
+  replies        CoachReply[]
+
+  @@index([pinned, createdAt])
+}
+
+model CoachReply {
+  id             String    @id @default(cuid())
+  postId         String
+  post           CoachPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorPersonId String?
+  authorName     String
+  body           String
+  createdAt      DateTime  @default(now())
+
+  @@index([postId, createdAt])
+}
