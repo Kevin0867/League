@@ -7,6 +7,7 @@ import { dispatchMessage } from "@/lib/messaging";
 import { coachAssignmentGate, canPublishTeam } from "@/lib/domain/teams";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { accruePlayerSeasonFee, placementPayLink, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
+import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
 import { isBookable } from "@/lib/domain/facilityWindows";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
@@ -544,6 +545,9 @@ export async function POST(req: Request) {
       const effective = team._count.members + (team.coachPlays ? 1 : 0) + (already ? 0 : 1);
       if (effective > TEAM_MAX) return back("?err=cap");
       const overCap = effective > TEAM_CAP;
+      // First placement this season (on no team yet) → auto-welcome after placing.
+      const seasonTeamIds = (await prisma.team.findMany({ where: { seasonId: team.seasonId }, select: { id: true } })).map((t) => t.id);
+      const firstPlacement = !(await prisma.teamMember.findFirst({ where: { personId, teamId: { in: seasonTeamIds } }, select: { id: true } }));
 
       // One team per season: pull them off any other team first.
       const otherTeamIds = (
@@ -560,6 +564,10 @@ export async function POST(req: Request) {
       // Placing a player (incl. off the waitlist) clears them to pay — ensure a
       // season-fee invoice exists so they can pay the fee + apparel right away.
       await ensureSeasonFeePayable(personId, team.seasonId);
+      // On first placement, auto-send the welcome (team details + pay fee + pick
+      // apparel + complete waiver). A move onto a team they were already on this
+      // season doesn't re-send.
+      if (firstPlacement) await sendTeamLaunch({ personId, seasonId: team.seasonId, senderId: actor.userId });
 
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster${overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
       return back(overCap ? "?ok=addPlayerOver" : "?ok=addPlayer");
