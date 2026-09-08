@@ -8,7 +8,9 @@ import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 //    passed. A 4:00–6:00 PM class is payable any time after 6:00 PM; no coach
 //    has to "check out". (Attendance still flips status to DELIVERED, but pay no
 //    longer depends on it.)
-//  • Cancelled / rescheduled sessions never pay.
+//  • Cancelled / rescheduled sessions don't pay — UNLESS an admin chose to pay
+//    the coach anyway at cancel time (SessionCoach.paidIfCancelled=true), the
+//    "Pay <coach> for this class?" prompt on cancellation.
 //  • Pay follows whoever WORKED the class: only SessionCoach rows with
 //    payable=true earn. Assigning a substitute sets the normal coach's row to
 //    payable=false for that one session (see the schedule route), so the sub is
@@ -23,9 +25,11 @@ export function isSessionComplete(
 }
 
 /**
- * The payable SessionCoach rows for classes that are COMPLETE as of `now`,
- * optionally bounded to a date window (by session date). One row per
- * coach-per-session, carrying the role so callers can apply the role rate.
+ * The payable SessionCoach rows a coach has EARNED as of `now`, optionally
+ * bounded to a date window (by session date). A row is earned when its class is
+ * complete (end time passed, not cancelled) OR it was explicitly marked
+ * paid-if-cancelled when the class was called off. One row per coach-per-session,
+ * carrying the role so callers can apply the role rate.
  */
 export async function payableCompletedRows(opts?: {
   periodStart?: Date;
@@ -44,7 +48,9 @@ export async function payableCompletedRows(opts?: {
       ...(opts?.coachId ? { coachId: opts.coachId } : {}),
       session: { ...dateWhere },
     },
-    select: { coachId: true, role: true, session: { select: { date: true, endTime: true, status: true } } },
+    select: { coachId: true, role: true, paidIfCancelled: true, session: { select: { date: true, endTime: true, status: true } } },
   });
-  return rows.filter((r) => isSessionComplete(r.session, now)).map((r) => ({ coachId: r.coachId, role: r.role }));
+  return rows
+    .filter((r) => r.paidIfCancelled || isSessionComplete(r.session, now))
+    .map((r) => ({ coachId: r.coachId, role: r.role }));
 }

@@ -91,6 +91,9 @@ export default async function SessionDetail({
   const myRole = myCoachId ? s.coaches.find((c) => c.coachId === myCoachId)?.role ?? null : null;
   const coveringSub = !admin && (myRole === "SUBSTITUTE" || myRole === "BACKUP");
 
+  // The coach(es) who'd earn this class — asked about on cancellation, since a
+  // cancelled class doesn't pay by default.
+  const payableCoaches = s.coaches.filter((c) => c.payable);
   const attMap = new Map(s.attendance.map((a) => [a.personId, a.status]));
   const roster = s.teams.flatMap((t) => t.team.members.map((m) => ({ ...m, teamName: t.team.name })));
   const active = s.status === "SCHEDULED" || s.status === "DELIVERED";
@@ -291,6 +294,25 @@ export default async function SessionDetail({
                 {CANCEL_REASON.map((r) => <option key={r} value={r}>{r[0] + r.slice(1).toLowerCase().replace(/_/g, " ")}</option>)}
               </select>
               <input type="hidden" name="sessionId" value={s.id} />
+
+              {/* Pay-on-cancel — a cancelled class isn't paid by default. Ask per
+                  coach so a late cancellation the coach showed up for can still pay. */}
+              {payableCoaches.length > 0 && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium text-slate-600">
+                    A cancelled class isn&apos;t paid by default. Pay the coach for this class anyway?
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {payableCoaches.map((c) => (
+                      <label key={c.coachId} className="flex items-center gap-2 text-sm text-slate-700">
+                        <input type="checkbox" name="payCoach" value={c.coachId} className="h-4 w-4" />
+                        Pay {coachName.get(c.coachId) ?? "this coach"} for this class
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button className="btn-secondary mt-3 w-full text-rose-700 ring-rose-200 hover:bg-rose-50">
                 {s.type === "PRACTICE" ? "Cancel practice" : "Cancel & reschedule"}
               </button>
