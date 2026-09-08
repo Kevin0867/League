@@ -401,9 +401,20 @@ export async function POST(req: Request) {
     }
     await prisma.sessionCoach.upsert({
       where: { sessionId_coachId: { sessionId, coachId } },
-      create: { sessionId, coachId, role },
-      update: { role },
+      create: { sessionId, coachId, role, payable: true },
+      update: { role, payable: true },
     });
+
+    // A SUBSTITUTE works this class INSTEAD of the normal coach: pay follows the
+    // sub, so suppress the primary's pay for this one session. (Assistants
+    // co-coach and keep their 50% line; backups are additive.) This is per
+    // session — the normal coach is unaffected on every other class.
+    if (role === "SUBSTITUTE") {
+      await prisma.sessionCoach.updateMany({
+        where: { sessionId, role: "PRIMARY", coachId: { not: coachId } },
+        data: { payable: false },
+      });
+    }
 
     // Notify the assigned coach, with an emailed .ics invite for this class plus
     // their calendar-sync link.
@@ -442,6 +453,12 @@ export async function POST(req: Request) {
     const coachId = String(formData.get("coachId") ?? "").trim();
     if (!sessionId || !coachId) return back("?err=session");
     await prisma.sessionCoach.deleteMany({ where: { sessionId, coachId } });
+    // If no substitute is left covering this class, the normal (PRIMARY) coach
+    // works it again — restore their pay for the session.
+    const subsLeft = await prisma.sessionCoach.count({ where: { sessionId, role: "SUBSTITUTE" } });
+    if (subsLeft === 0) {
+      await prisma.sessionCoach.updateMany({ where: { sessionId, role: "PRIMARY" }, data: { payable: true } });
+    }
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.removeCoach", summary: `Removed coach ${coachId}` });
     return back("?ok=subRemoved");
   }

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { formatTime12 } from "@/lib/time";
 import { formatCents } from "@/lib/money";
 import { coachAssignmentGate } from "@/lib/domain/teams";
+import { payableCompletedRows } from "@/lib/domain/coachPay";
+import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { CopyLink } from "@/components/CopyLink";
@@ -47,7 +49,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
   const pendingWhere = coach
     ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfTomorrow() } }
     : undefined;
-  const [headTeams, upcoming, pendingAttendance, pendingCount, earnings] = coach
+  const [headTeams, upcoming, pendingAttendance, pendingCount, myCompletedRows, alaAgg] = coach
     ? await Promise.all([
         prisma.team.findMany({
           where: { OR: [{ coachId: coach.id }, { assistantCoaches: { some: { coachId: coach.id } } }] },
@@ -67,9 +69,19 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           take: 8,
         }),
         prisma.session.count({ where: pendingWhere }),
-        prisma.coachPayoutLine.aggregate({ where: { coachId: coach.id }, _sum: { totalCents: true } }),
+        // Sessions you were the payable coach on that are now COMPLETE (end time
+        // passed) — pay accrues here automatically, no check-out needed.
+        payableCompletedRows({ coachId: coach.id }),
+        prisma.alaCarteBooking.aggregate({ where: { coachId: coach.id, status: "DELIVERED" }, _sum: { coachCents: true } }),
       ])
-    : [[], [], [], 0, { _sum: { totalCents: 0 } }];
+    : [[], [], [], 0, [] as { coachId: string; role: string }[], { _sum: { coachCents: 0 } }];
+
+  // Live earned-to-date: completed sessions × the coach's per-session rate
+  // (season pay ÷ 12, else the default) + delivered private-lesson earnings.
+  const perSessionCents = coach && coach.seasonPayCents && coach.seasonPayCents > 0
+    ? Math.round(coach.seasonPayCents / 12)
+    : COACH_PER_SESSION_CENTS;
+  const earnedCents = myCompletedRows.length * perSessionCents + (alaAgg._sum.coachCents ?? 0);
 
   const hasLocations = parseMarkets(coach?.marketsCovered ?? null).length > 0;
   const hasDayTimes = (coach?.availabilityBlocks?.length ?? 0) > 0;
@@ -182,7 +194,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Stat label="Teams" value={headTeams.length} />
         <Stat label="Players" value={playersCoached} />
-        <Stat label="Earnings" value={formatCents(earnings._sum.totalCents ?? 0)} />
+        <Stat label="Earned to date" value={formatCents(earnedCents)} />
       </div>
 
       {/* My teams — the heart of a coach's job. Each team opens straight to

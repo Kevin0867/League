@@ -727,6 +727,11 @@ model SessionCoach {
   /// Whether this coach is paid for a session PURE cancels — modeled as a
   /// per-session payable flag so policy can flip without rework (§9).
   paidIfCancelled Boolean @default(false)
+  /// Whether this coach earns the session pay. Only ONE coach works a given
+  /// class: assigning a SUBSTITUTE sets the normal (PRIMARY) coach's row to
+  /// payable=false for that one session, so pay follows whoever actually
+  /// covered it (§9).
+  payable        Boolean @default(true)
 
   @@unique([sessionId, coachId])
   @@index([coachId])
