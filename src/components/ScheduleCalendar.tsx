@@ -12,6 +12,9 @@ export type CalSession = {
   type: string;
   teamNames: string;
   facilityName: string;
+  /** A planned (not-yet-generated) practice derived from a team's day/time —
+   *  rendered as a dashed, muted chip and not clickable. */
+  planned?: boolean;
 };
 
 const TYPE_CHIP: Record<string, string> = {
@@ -27,12 +30,12 @@ function monthParam(year: number, month0: number) {
   return `${year}-${String(month0 + 1).padStart(2, "0")}`;
 }
 
-export function ScheduleCalendar({ sessions, year, month }: { sessions: CalSession[]; year: number; month: number }) {
+export function ScheduleCalendar({ sessions, planned = [], year, month }: { sessions: CalSession[]; planned?: CalSession[]; year: number; month: number }) {
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const startWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
 
   const byDay = new Map<number, CalSession[]>();
-  for (const s of sessions) {
+  for (const s of [...sessions, ...planned.map((p) => ({ ...p, planned: true }))]) {
     const d = new Date(s.date);
     if (d.getUTCFullYear() === year && d.getUTCMonth() === month) {
       const list = byDay.get(d.getUTCDate()) ?? [];
@@ -40,7 +43,11 @@ export function ScheduleCalendar({ sessions, year, month }: { sessions: CalSessi
       byDay.set(d.getUTCDate(), list);
     }
   }
-  for (const list of byDay.values()) list.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  // Real sessions first, planned after; each group sorted by start time.
+  for (const list of byDay.values()) {
+    list.sort((a, b) => Number(!!a.planned) - Number(!!b.planned) || a.startTime.localeCompare(b.startTime));
+  }
+  const hasPlanned = planned.length > 0;
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
@@ -68,16 +75,26 @@ export function ScheduleCalendar({ sessions, year, month }: { sessions: CalSessi
               <>
                 <div className="mb-1 text-right text-[11px] text-slate-400">{day}</div>
                 <div className="space-y-1">
-                  {(byDay.get(day) ?? []).map((s) => (
-                    <Link
-                      key={s.id}
-                      href={`/console/schedule/${s.id}`}
-                      title={`${s.teamNames} · ${s.facilityName}`}
-                      className={`block truncate rounded px-1 py-0.5 text-[11px] ${TYPE_CHIP[s.type] ?? "bg-slate-100 text-slate-700"} hover:opacity-80`}
-                    >
-                      {formatTime12(s.startTime)} {s.teamNames || "Session"}
-                    </Link>
-                  ))}
+                  {(byDay.get(day) ?? []).map((s) =>
+                    s.planned ? (
+                      <span
+                        key={s.id}
+                        title={`${s.teamNames} · ${s.facilityName || "planned practice"} — generate to confirm`}
+                        className="block truncate rounded border border-dashed border-slate-300 bg-white px-1 py-0.5 text-[11px] text-slate-400"
+                      >
+                        {formatTime12(s.startTime)} {s.teamNames || "Practice"}
+                      </span>
+                    ) : (
+                      <Link
+                        key={s.id}
+                        href={`/console/schedule/${s.id}`}
+                        title={`${s.teamNames} · ${s.facilityName}`}
+                        className={`block truncate rounded px-1 py-0.5 text-[11px] ${TYPE_CHIP[s.type] ?? "bg-slate-100 text-slate-700"} hover:opacity-80`}
+                      >
+                        {formatTime12(s.startTime)} {s.teamNames || "Session"}
+                      </Link>
+                    )
+                  )}
                 </div>
               </>
             )}
@@ -89,7 +106,13 @@ export function ScheduleCalendar({ sessions, year, month }: { sessions: CalSessi
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> League</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Championship</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-slate-400" /> Private Lessons</span>
+        {hasPlanned && <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded border border-dashed border-slate-300" /> Planned (not generated yet)</span>}
       </div>
+      {hasPlanned && (
+        <p className="mt-2 text-[11px] text-slate-400">
+          Dashed entries are the practice days &amp; times set on each team, shown before you generate them. Use <span className="font-medium">Generate</span> above to confirm the season and enable check-in.
+        </p>
+      )}
     </div>
   );
 }
