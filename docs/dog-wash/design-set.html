@@ -1,0 +1,1645 @@
+<title>Ten-Bay Dog Wash Set</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --paper:#ECEDE8; --field:#F5F6F2; --inset:#E1E3DC;
+  --ink:#1A2026; --ink-2:#4E5A63; --ink-3:#7A858C;
+  --rule:#C6C9C1; --rule-2:#A8ADA4;
+  --accent:#00879B; --accent-tint:rgba(0,135,155,.10); --accent-line:rgba(0,135,155,.34);
+  --counter:#BE5514; --counter-tint:rgba(190,85,20,.10);
+  --sys-waste:#8250B0; --sys-hot:#C4443A; --sys-cold:#2E6DC0; --sys-air:#9C7208;
+  --poche:#20272C; --glass:rgba(26,32,38,.05);
+  --shadow:0 1px 2px rgba(26,32,38,.06), 0 8px 24px -12px rgba(26,32,38,.20);
+  --f-disp:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#121A20; --field:#182228; --inset:#0D1418;
+    --ink:#DDE4E3; --ink-2:#9AA8AF; --ink-3:#6D7C84;
+    --rule:#28343D; --rule-2:#3B4A54;
+    --accent:#17A0B2; --accent-tint:rgba(23,160,178,.14); --accent-line:rgba(23,160,178,.40);
+    --counter:#DB7434; --counter-tint:rgba(219,116,52,.14);
+    --sys-waste:#9B6FD0; --sys-hot:#D9584D; --sys-cold:#4285D6; --sys-air:#B98A1C;
+    --poche:#7E8C95; --glass:rgba(221,228,227,.05);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121A20; --field:#182228; --inset:#0D1418;
+  --ink:#DDE4E3; --ink-2:#9AA8AF; --ink-3:#6D7C84;
+  --rule:#28343D; --rule-2:#3B4A54;
+  --accent:#17A0B2; --accent-tint:rgba(23,160,178,.14); --accent-line:rgba(23,160,178,.40);
+  --counter:#DB7434; --counter-tint:rgba(219,116,52,.14);
+  --sys-waste:#9B6FD0; --sys-hot:#D9584D; --sys-cold:#4285D6; --sys-air:#B98A1C;
+  --poche:#7E8C95; --glass:rgba(221,228,227,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-size:16.5px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--f-disp); text-wrap:balance; margin:0; line-height:1.14; letter-spacing:-.012em}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+
+.wrap{max-width:1220px; margin:0 auto; padding:0 clamp(14px,3vw,34px)}
+
+/* ── title block ─────────────────────────────── */
+.masthead{border-bottom:1.5px solid var(--ink); padding:clamp(28px,5vw,56px) 0 0}
+.stamp{
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); display:flex; flex-wrap:wrap; gap:6px 22px; align-items:baseline;
+}
+.stamp b{color:var(--accent); font-weight:500}
+h1.title{
+  font-size:clamp(38px,7.2vw,80px); font-weight:700; letter-spacing:-.035em;
+  margin:16px 0 0; line-height:.98;
+}
+h1.title em{font-style:normal; color:var(--accent)}
+.deck{
+  font-size:clamp(17px,2vw,20px); color:var(--ink-2); max-width:62ch; margin:18px 0 0;
+}
+.tblock{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+  border-top:1px solid var(--rule); margin-top:30px;
+}
+.tblock div{padding:14px 16px 16px 0; border-right:1px solid var(--rule)}
+.tblock div:last-child{border-right:0}
+.tblock dt{font-family:var(--f-mono); font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3)}
+.tblock dd{margin:5px 0 0; font-family:var(--f-mono); font-size:14px; font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums}
+
+/* ── sheet index nav ─────────────────────────── */
+.idx{
+  position:sticky; top:0; z-index:40; background:var(--paper);
+  border-bottom:1px solid var(--rule); margin-top:-1px;
+}
+.idx-in{display:flex; gap:2px; overflow-x:auto; scrollbar-width:thin; padding:0 clamp(14px,3vw,34px); max-width:1220px; margin:0 auto}
+.idx a{
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--ink-3); text-decoration:none; padding:11px 12px; white-space:nowrap;
+  border-bottom:2px solid transparent;
+}
+.idx a:hover{color:var(--ink); background:var(--glass)}
+.idx a.on{color:var(--accent); border-bottom-color:var(--accent)}
+
+/* ── sheets ──────────────────────────────────── */
+.sheet{border-bottom:1px solid var(--rule); padding:clamp(40px,6vw,76px) 0}
+.sheet:last-of-type{border-bottom:0}
+.sheet-grid{display:grid; grid-template-columns:112px minmax(0,1fr); gap:clamp(20px,4vw,44px)}
+@media (max-width:820px){.sheet-grid{grid-template-columns:1fr; gap:16px}}
+.spine{position:sticky; top:56px; align-self:start; border-top:2px solid var(--ink); padding-top:10px}
+@media (max-width:820px){.spine{position:static; display:flex; gap:18px; align-items:baseline; border-top:0; border-left:2px solid var(--ink); padding:0 0 0 12px}}
+.spine .no{font-family:var(--f-mono); font-size:15px; font-weight:600; letter-spacing:.02em; color:var(--accent)}
+.spine .disc{font-family:var(--f-mono); font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3); margin-top:4px}
+.sheet h2{font-size:clamp(26px,3.6vw,38px); font-weight:600; letter-spacing:-.028em}
+.sheet .lede{font-size:17.5px; color:var(--ink-2); max-width:64ch; margin-top:12px}
+.body{max-width:66ch}
+.body p+p{margin-top:14px}
+.body h3{font-size:19px; font-weight:600; margin:30px 0 8px; letter-spacing:-.01em}
+.body h4{font-family:var(--f-mono); font-size:11px; font-weight:600; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3); margin:26px 0 8px}
+.body ul{margin:10px 0 0; padding-left:0; list-style:none}
+.body li{position:relative; padding-left:20px; margin-top:7px}
+.body li::before{content:""; position:absolute; left:2px; top:.62em; width:6px; height:1.5px; background:var(--rule-2)}
+.body strong{font-weight:600}
+.body code, .mono{font-family:var(--f-mono); font-size:.9em; font-variant-numeric:tabular-nums}
+
+/* ── drawing frames ──────────────────────────── */
+figure{margin:26px 0 0}
+.dwg{
+  background:var(--field); border:1px solid var(--rule); border-radius:1px;
+  overflow-x:auto; padding:10px;
+}
+.dwg svg{display:block; width:100%; height:auto; min-width:560px}
+figcaption{
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink-3); margin-top:9px; display:flex; flex-wrap:wrap; gap:4px 18px;
+}
+figcaption b{color:var(--ink-2); font-weight:500}
+
+/* ── findings cards ──────────────────────────── */
+.finds{display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin-top:26px}
+.find{background:var(--field); padding:22px 22px 24px}
+.find .kick{font-family:var(--f-mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--counter)}
+.find.ok .kick{color:var(--accent)}
+.find h3{font-family:var(--f-disp); font-size:19px; font-weight:600; margin:9px 0 0; letter-spacing:-.015em}
+.find p{font-size:15.5px; color:var(--ink-2); margin-top:9px; line-height:1.55}
+.find .fig{font-family:var(--f-mono); font-size:26px; font-weight:600; color:var(--ink); margin-top:14px; font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.find .fig span{font-size:12px; color:var(--ink-3); letter-spacing:.09em; text-transform:uppercase; display:block; margin-top:2px; font-weight:400}
+
+/* ── tables ──────────────────────────────────── */
+.tw{overflow-x:auto; margin-top:22px; border:1px solid var(--rule)}
+table{border-collapse:collapse; width:100%; min-width:560px; font-size:14.5px}
+caption{text-align:left; font-family:var(--f-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3); padding:11px 13px; border-bottom:1px solid var(--rule); background:var(--inset)}
+th{
+  font-family:var(--f-mono); font-size:10px; font-weight:600; letter-spacing:.11em; text-transform:uppercase;
+  color:var(--ink-3); text-align:left; padding:9px 13px; border-bottom:1px solid var(--rule-2); background:var(--inset);
+  white-space:nowrap;
+}
+td{padding:9px 13px; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2)}
+td:first-child{color:var(--ink)}
+tbody tr:last-child td{border-bottom:0}
+td.n, th.n{font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+td.tag{font-family:var(--f-mono); font-weight:600; color:var(--accent); white-space:nowrap}
+tbody tr:hover td{background:var(--glass)}
+
+/* ── keynote list ────────────────────────────── */
+.keys{display:grid; grid-template-columns:repeat(auto-fill,minmax(292px,1fr)); gap:2px 26px; margin-top:20px; list-style:none; padding:0}
+.keys li{display:grid; grid-template-columns:26px 1fr; gap:9px; padding:7px 0; border-top:1px solid var(--rule); font-size:14.5px; color:var(--ink-2); line-height:1.45}
+.keys b{
+  font-family:var(--f-mono); font-size:11px; font-weight:600; color:var(--accent);
+  border:1px solid var(--accent-line); border-radius:50%; width:22px; height:22px;
+  display:grid; place-items:center; margin-top:1px;
+}
+.keys i{font-style:normal; color:var(--ink); font-weight:600}
+
+/* ── callout ─────────────────────────────────── */
+.note{
+  border-left:2px solid var(--counter); background:var(--counter-tint);
+  padding:15px 18px; margin:24px 0 0; font-size:15.5px; color:var(--ink-2); max-width:66ch;
+}
+.note.go{border-left-color:var(--accent); background:var(--accent-tint)}
+.note b{color:var(--ink); font-weight:600}
+.note .lbl{font-family:var(--f-mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--counter); display:block; margin-bottom:5px}
+.note.go .lbl{color:var(--accent)}
+
+/* ── calc block ──────────────────────────────── */
+.calc{
+  font-family:var(--f-mono); font-size:13.5px; line-height:1.85; font-variant-numeric:tabular-nums;
+  background:var(--inset); border:1px solid var(--rule); padding:16px 18px; margin-top:20px;
+  overflow-x:auto; color:var(--ink-2);
+}
+.calc b{color:var(--ink); font-weight:600}
+.calc .op{color:var(--ink-3)}
+.calc hr{border:0; border-top:1px solid var(--rule-2); margin:9px 0}
+
+/* ── legend chips ────────────────────────────── */
+.legend{display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:14px; font-family:var(--f-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2)}
+.legend span{display:flex; align-items:center; gap:7px}
+.legend svg{width:26px; height:8px; flex:none}
+
+/* ── 3D viewer ───────────────────────────────── */
+.viewer{border:1px solid var(--rule); background:var(--field); margin-top:26px}
+.vtop{display:flex; flex-wrap:wrap; gap:8px 20px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--rule)}
+.vgroup{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+.vgroup>span{font-family:var(--f-mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); margin-right:2px}
+.btn{
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  background:transparent; color:var(--ink-2); border:1px solid var(--rule-2); border-radius:1px;
+  padding:5px 9px; cursor:pointer; display:flex; align-items:center; gap:6px; line-height:1;
+}
+.btn:hover{color:var(--ink); border-color:var(--ink-3)}
+.btn[aria-pressed="true"]{color:var(--paper); background:var(--ink); border-color:var(--ink)}
+.btn .sw{width:8px; height:8px; border-radius:50%; flex:none}
+.btn[aria-pressed="true"] .sw{outline:1px solid var(--paper); outline-offset:1px}
+#stage{display:block; width:100%; height:min(66vh,560px); touch-action:none; cursor:grab}
+#stage:active{cursor:grabbing}
+.vfoot{display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between; padding:10px 12px; border-top:1px solid var(--rule); font-family:var(--f-mono); font-size:11px; color:var(--ink-3); letter-spacing:.05em}
+#readout{color:var(--ink-2)}
+#readout b{color:var(--accent); font-weight:600}
+.nowebgl{padding:40px 16px; text-align:center; color:var(--ink-3); font-family:var(--f-mono); font-size:13px}
+
+/* ── two-col ─────────────────────────────────── */
+.cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:clamp(22px,3.5vw,44px); margin-top:24px}
+.cols .body{max-width:none}
+footer{padding:44px 0 60px; color:var(--ink-3); font-family:var(--f-mono); font-size:11.5px; letter-spacing:.06em; line-height:1.9}
+footer b{color:var(--ink-2); font-weight:500}
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="stamp">
+      <span>Self-serve dog wash <b>· tenant fit-out</b></span>
+      <span>1,000 SF shell</span>
+      <span>Schematic design · issued for pricing</span>
+    </div>
+    <h1 class="title">Ten bays,<br>one <em>quiet</em> room.</h1>
+    <p class="deck">A complete schematic set for a 20'-0" &times; 50'-0" self-serve dog wash: eight elevated bays, two walk-in oversized bays, and the water, air, acoustic and electrical plant that has to sit behind them. Every dimension below is carried through the plan, the sections and the 3D model from one geometry file.</p>
+    <dl class="tblock">
+      <div><dt>Shell</dt><dd>20'-0" &times; 50'-0"</dd></div>
+      <div><dt>Wash stations</dt><dd>8 elevated + 2 XL</dd></div>
+      <div><dt>Aisle</dt><dd>6'-0" clear</dd></div>
+      <div><dt>Peak water</dt><dd>20 GPM @ 40 PSI</dd></div>
+      <div><dt>DHW plant</dt><dd>597 MBH input</dd></div>
+      <div><dt>Exhaust</dt><dd>2,100 CFM · 10.5 ACH</dd></div>
+    </dl>
+  </div>
+</header>
+
+<nav class="idx" aria-label="Sheet index">
+  <div class="idx-in">
+    <a href="#g001">G-001 Findings</a>
+    <a href="#a101">A-101 Floor plan</a>
+    <a href="#a102">A-102 3D model</a>
+    <a href="#a201">A-201 Typical bay</a>
+    <a href="#a301">A-301 Bay schedule</a>
+    <a href="#p401">P-401 Hot water</a>
+    <a href="#p402">P-402 Drainage</a>
+    <a href="#s501">S-501 Acoustics</a>
+    <a href="#m601">M-601 Air &amp; odor</a>
+    <a href="#f701">F-701 Materials</a>
+    <a href="#e801">E-801 Power</a>
+    <a href="#g901">G-901 Code &amp; cost</a>
+  </div>
+</nav>
+
+<!-- ══════════ G-001 ══════════ -->
+<section class="sheet" id="g001">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">G-001</div><div class="disc">General<br>Findings</div></div>
+  <div>
+    <h2>Four things to settle before anything gets drawn twice</h2>
+    <p class="lede">Three of your requirements collide with physics, arithmetic or a utility meter. Here is where they land, and what the rest of this set is designed around.</p>
+
+    <div class="finds">
+      <div class="find">
+        <div class="kick">Constraint · program</div>
+        <h3>Twenty bays do not fit</h3>
+        <p>A bay needs 7'-0" of depth (tub + ramp run + owner) and the aisle needs 6'-0". That consumes the full 20'-0" width, so bays can only run down the two long walls. After a 10'-0" front and a 14'-0" back of house, 26'-0" of wall length is left per side.</p>
+        <div class="fig">8 + 2<span>elevated + oversized</span></div>
+      </div>
+      <div class="find">
+        <div class="kick">Contraindicated · acoustics</div>
+        <h3>Dogs hear the carrier</h3>
+        <p>Parametric "directional sound" domes project a 40&ndash;60&nbsp;kHz ultrasonic carrier at 120&nbsp;dB+. Dogs hear to roughly 45&nbsp;kHz. You would be mounting a high-power dog deterrent over every dog. Active noise cancellation is no better &mdash; it works below about 500&nbsp;Hz, and a bark is a broadband 1&ndash;4&nbsp;kHz transient.</p>
+        <div class="fig">45 kHz<span>upper limit, canine</span></div>
+      </div>
+      <div class="find ok">
+        <div class="kick">Achievable · acoustics</div>
+        <h3>The hood is the cone of silence</h3>
+        <p>What does work is a per-bay absorptive canopy at 7'-6", solid 6'-0" dividers between bays, a washable NRC&nbsp;0.90 ceiling and low-level masking. Modelled reverberation drops from about 2.0&nbsp;s to 0.36&nbsp;s and an adjacent bark at the owner's ear from ~91 to ~78&nbsp;dBA.</p>
+        <div class="fig">&minus;13 dB<span>&asymp; 60% quieter, perceived</span></div>
+      </div>
+      <div class="find">
+        <div class="kick">Go / no-go · utility</div>
+        <h3>Gas decides the lease</h3>
+        <p>Heating 10.6&nbsp;GPM of hot water through an 85&nbsp;&deg;F rise is 450,000&nbsp;BTU/hr. Done with gas that is three wall-hung condensing units. Done with electric resistance it is roughly 132&nbsp;kW and a 400&nbsp;A service. Confirm the gas meter before you sign.</p>
+        <div class="fig">597 MBH<span>installed input, 3 units</span></div>
+      </div>
+    </div>
+
+    <div class="note go">
+      <span class="lbl">Your call that was right</span>
+      <b>Running water up the back wall and across the ceiling is the correct move.</b> It halves the trenching, keeps the slab intact, and puts the supply where the retracting reels already have to be. It also puts pressurised mains over customers' heads &mdash; so this set adds a continuous drip pan under the header, leak-detection cable, and a motorised shut-off on the incoming service. That package is not optional at this scale.
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ A-101 ══════════ -->
+<section class="sheet" id="a101">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">A-101</div><div class="disc">Architectural<br>Floor plan</div></div>
+  <div>
+    <h2>Floor plan</h2>
+    <p class="lede">Single-loaded on both long walls with a 6'-0" centre aisle and a continuous trench drain down its spine. Entry at the left; back of house at the right.</p>
+
+    <figure>
+      <div class="dwg"><svg id="plan" role="img" aria-label="Floor plan of the dog wash: eight elevated bays on the two long walls flanking a six-foot centre aisle, welcome area at the front, oversized bays, restroom, storage and mechanical room at the back."></svg></div>
+      <figcaption><b>A-101</b><span>Floor plan</span><span>Scale 3/16" = 1'-0" nominal</span><span>Dimensions to face of finish</span></figcaption>
+    </figure>
+
+    <div class="cols">
+      <div class="body">
+        <h4>Why the module is 7'-0" deep</h4>
+        <p>The tub cabinet is 2'-6" deep. The fold-down ramp runs 4'-0" at a 1:3 slope to clear a 16" rise, and lands 6" clear of the gate. 2'-6" + 4'-0" + 0'-6" = 7'-0". Anything shallower and either the ramp gets steeper than a nervous Labrador will walk, or the owner has nowhere to stand while it is deployed.</p>
+        <p>You proposed 6'-0" bay widths. That is exactly right for a medium bay and a little tight for a large one, so the set runs three widths: <span class="mono">5'-0"</span> small, <span class="mono">6'-0"</span> medium, <span class="mono">6'-6"</span> large. Two dogs plus one owner fit inside the fence at every size.</p>
+      </div>
+      <div class="body">
+        <h4>The 26'-0" that is left</h4>
+        <p>West wall takes two large plus two medium (25'-0" of bay plus 6" of partitions). East wall takes one large, one medium and two small, plus a 3'-0" towel and supply alcove at the entry end where it catches everyone on the way in.</p>
+        <p>A maximum-density variant fits five 5'-8" bays per side &mdash; ten elevated stations &mdash; by shortening the front to 8'-0" and the back to 13'-0". It costs you the large-dog bays, which are the ones people cannot do at home and will pay most for. Not recommended.</p>
+      </div>
+    </div>
+
+    <div class="tw">
+      <table>
+        <caption>Program areas &mdash; 1,000 SF gross</caption>
+        <thead><tr><th>Zone</th><th class="n">Depth</th><th class="n">Area</th><th>Contains</th></tr></thead>
+        <tbody>
+          <tr><td>A &mdash; Arrival</td><td class="n">10'-0"</td><td class="n">200 SF</td><td>Vestibule, welcome desk (34" accessible transaction top), retail wall, bench, hand sanitiser</td></tr>
+          <tr><td>B &mdash; Wash hall</td><td class="n">26'-0"</td><td class="n">520 SF</td><td>8 elevated bays, 6'-0" aisle, 32'-0" centre trench drain</td></tr>
+          <tr><td>C &mdash; Back of house</td><td class="n">14'-0"</td><td class="n">280 SF</td><td>2 XL walk-in bays, ADA restroom, storage / laundry, mechanical</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ A-102 ══════════ -->
+<section class="sheet" id="a102">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">A-102</div><div class="disc">Architectural<br>3D model</div></div>
+  <div>
+    <h2>The room in three dimensions</h2>
+    <p class="lede">Drag to orbit, scroll to zoom, right-drag to pan. Click any bay for its schedule row. Perimeter walls are cut at 4'-0" so the plan reads from above; the systems layers switch on the services that run in the ceiling zone.</p>
+
+    <div class="viewer">
+      <div class="vtop">
+        <div class="vgroup"><span>View</span>
+          <button class="btn" data-view="iso" aria-pressed="true">Isometric</button>
+          <button class="btn" data-view="top" aria-pressed="false">Plan</button>
+          <button class="btn" data-view="eye" aria-pressed="false">Eye level</button>
+          <button class="btn" data-view="bay" aria-pressed="false">Bay W1</button>
+        </div>
+        <div class="vgroup"><span>Layers</span>
+          <button class="btn" data-layer="acoustic" aria-pressed="true"><i class="sw" style="background:var(--accent)"></i>Canopies</button>
+          <button class="btn" data-layer="hot" aria-pressed="false"><i class="sw" style="background:var(--sys-hot)"></i>Hot</button>
+          <button class="btn" data-layer="cold" aria-pressed="false"><i class="sw" style="background:var(--sys-cold)"></i>Cold</button>
+          <button class="btn" data-layer="waste" aria-pressed="false"><i class="sw" style="background:var(--sys-waste)"></i>Waste</button>
+          <button class="btn" data-layer="air" aria-pressed="false"><i class="sw" style="background:var(--sys-air)"></i>Exhaust</button>
+        </div>
+      </div>
+      <canvas id="stage"></canvas>
+      <div class="vfoot">
+        <span id="readout">Click a bay to inspect it</span>
+        <span>1 unit = 1'-0" &middot; ceiling zone 10'-0" to 14'-0"</span>
+      </div>
+    </div>
+    <figcaption style="margin-top:9px"><b>A-102</b><span>Cutaway axonometric</span><span>Generated from the A-101 geometry file</span></figcaption>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ A-201 ══════════ -->
+<section class="sheet" id="a201">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">A-201</div><div class="disc">Architectural<br>Typical bay</div></div>
+  <div>
+    <h2>Typical bay &mdash; section and elevation</h2>
+    <p class="lede">Every height in this set hangs off one datum you already set: the tub rim at 36" AFF, the same as a kitchen counter. Everything else is dimensioned from the floor so a plumber and a carpenter read the same numbers.</p>
+
+    <figure>
+      <div class="dwg"><svg id="sect" role="img" aria-label="Section through a typical large bay showing the stainless tub with its rim at thirty-six inches, the fold-down ramp at a one-to-three slope, the four-foot gate, the acoustic canopy at seven feet six inches with the hose reel inside it, and the centre trench drain in the aisle."></svg></div>
+      <figcaption><b>A-201</b><span>Section through large bay</span><span>Looking north</span><span>Scale 3/4" = 1'-0" nominal</span></figcaption>
+    </figure>
+
+    <figure>
+      <div class="dwg"><svg id="elev" role="img" aria-label="Elevation of the back wall of a large bay showing the tub, backsplash, hot and cold mixing handles at forty-four inches, the perforated towel shelf at sixty inches, the shampoo dispenser bank, the grooming arm and restraint loop, the dryer and GFCI outlet at forty-eight inches, and the acoustic canopy above."></svg></div>
+      <figcaption><b>A-202</b><span>Bay elevation &mdash; back wall</span><span>Large bay, 6'-6" clear</span><span>Scale 3/4" = 1'-0" nominal</span></figcaption>
+    </figure>
+
+    <h3 style="font-family:var(--f-disp);font-size:20px;font-weight:600;margin-top:36px">Keynotes</h3>
+    <ol class="keys">
+      <li><b>1</b><span><i>Tub.</i> 16 ga 304 stainless, #4 finish, 1" coved corners, integral 8" backsplash and deck, sound-deadened underside. Rim / working deck <span class="mono">36" AFF</span>, interior floor <span class="mono">16" AFF</span>, factory-pitched to a 2" drain.</span></li>
+      <li><b>2</b><span><i>Grate platform.</i> Removable 304 SS or HDPE grate, <span class="mono">+2"</span>, so the dog stands above the water film. Small-dog riser insert lifts the standing surface to <span class="mono">26" AFF</span>.</span></li>
+      <li><b>3</b><span><i>Tub door.</i> Gasketed swing panel in the tub front, <span class="mono">24" clear</span>, cam-latched watertight to the rim. The dog walks in level &mdash; nobody lifts a 90 lb retriever over a rim.</span></li>
+      <li><b>4</b><span><i>Ramp.</i> Hinged at the door sill. <span class="mono">24" wide &times; 4'-0" run &times; 16" rise = 1:3 (18.4&deg;)</span>. Cleated non-slip tread, gas-strut assist, magnetic stow against the tub front.</span></li>
+      <li><b>5</b><span><i>Hose reel.</i> Spring-retract stainless, <span class="mono">3/8" &times; 15'</span>, 300 psi, mounted inside the canopy plenum. Hose exits a bell guide at <span class="mono">7'-6"</span>. Retract force 2&ndash;3 lbf so it does not snatch the gun.</span></li>
+      <li><b>6</b><span><i>Spray gun.</i> Trigger-operated, <span class="mono">2.0 GPM</span> pressure-compensating cartridge. Holster at <span class="mono">54" AFF</span>. Pull down to reach under the dog; release and it climbs back.</span></li>
+      <li><b>7</b><span><i>Foot switch.</i> IP67 stainless, recessed in the toe kick at <span class="mono">4" AFF</span>, 8" wide. Latching &mdash; press on, press off &mdash; with a 6-minute auto-off.</span></li>
+      <li><b>8</b><span><i>Solenoid valve.</i> 24 VAC brass on the mixed line, in the canopy chase. Class 2 low voltage only: no line voltage anywhere below the rim.</span></li>
+      <li><b>9</b><span><i>Mixing valve.</i> ASSE 1016/1069 thermostatic, cross handles at <span class="mono">44" AFF</span> like a sink, with a mechanical stop at <span class="mono">105 &deg;F</span>. A dog cannot tell you the water is too hot.</span></li>
+      <li><b>10</b><span><i>Towel shelf.</i> 12" deep perforated 304 SS, underside at <span class="mono">60" AFF</span>, full bay width, directly over the tub. Perforated so it drains and does not hold a wet towel smell.</span></li>
+      <li><b>11</b><span><i>Shampoo bank.</i> Four push-lever dispensers plus conditioner at <span class="mono">42" AFF</span> on the side partition, gravity-fed and refilled from 5-gallon bulk in storage. No chemical is ever plumbed into a water line.</span></li>
+      <li><b>12</b><span><i>Dryer.</i> Force-air, variable speed, wall bracket at <span class="mono">48" AFF</span>, hose on a swivel hook. The motor never touches the floor and there is nothing to drop.</span></li>
+      <li><b>13</b><span><i>Power.</i> 20 A GFCI duplex, weather-resistant device with an in-use cover, at <span class="mono">48" AFF</span> on the side partition, <span class="mono">&ge;12"</span> horizontally clear of the tub rim.</span></li>
+      <li><b>14</b><span><i>Restraint.</i> 316 SS grooming arm with a quick-release loop at <span class="mono">42" AFF</span>, plus a second D-ring at <span class="mono">48" AFF</span> for a hip tether on a large dog.</span></li>
+      <li><b>15</b><span><i>Inter-bay divider.</i> Solid: 1/2" HDPE / 1" mineral wool / 1 lb-sf loaded vinyl / 1/2" HDPE. <span class="mono">6'-0" high recommended</span> (<span class="mono">4'-0"</span> as briefed &mdash; see S-501, it costs 3 dB). Blocks the dog-height sightline, which is what actually starts the barking.</span></li>
+      <li><b>16</b><span><i>Fence and gate.</i> <span class="mono">48" high</span> to the aisle, <span class="mono">32" clear</span> gate, inward swing with a hold-open magnet, self-closing hinge, magnetic latch at <span class="mono">40" AFF</span> out of a dog's reach. Pickets <span class="mono">2-1/2" max clear</span> &mdash; no head entrapment.</span></li>
+      <li><b>17</b><span><i>Acoustic canopy.</i> Bay width &times; 6'-0" &times; 6" deep, bottom at <span class="mono">7'-6" AFF</span>, 12" downturned skirt. Perforated aluminium over encapsulated 6 pcf mineral wool, <span class="mono">NRC &ge; 0.95</span>. This is the cone of silence.</span></li>
+      <li><b>18</b><span><i>Exhaust.</i> Grille in the canopy face at <span class="mono">8'-0" AFF</span>, <span class="mono">175 CFM</span> per bay. The canopy is a capture hood as well as an absorber.</span></li>
+      <li><b>19</b><span><i>Light.</i> IP65 linear LED in the canopy, 4000 K, <span class="mono">CRI &ge; 90</span>, <span class="mono">55 fc</span> at the deck. Below 50 fc nobody can see whether the dog is actually clean.</span></li>
+      <li><b>20</b><span><i>Supply drops.</i> <span class="mono">1/2"</span> hot and cold, insulated, with quarter-turn isolation valves behind a hinged canopy access panel. One bay can be shut down without closing the hall.</span></li>
+      <li><b>21</b><span><i>Bay floor.</i> Urethane cement with broadcast quartz, <span class="mono">1/4" per foot</span> to the aisle, <span class="mono">DCOF &ge; 0.60 wet</span>, 6" integral cove base. No flat spots, nowhere for a film to stand.</span></li>
+      <li><b>22</b><span><i>Trench drain.</i> 6" stainless slot channel on the aisle centreline, <span class="mono">1/8" per foot</span> fall, removable heel-proof grate and a basket at each section. The whole room hoses down to it.</span></li>
+      <li><b>23</b><span><i>Wall finish.</i> 6 mm solid phenolic compact panel to <span class="mono">8'-0"</span>, silicone-sealed joints; 304 SS splash panel <span class="mono">36"&ndash;60" AFF</span> behind the tub.</span></li>
+      <li><b>24</b><span><i>Ceiling.</i> Washable acoustic at <span class="mono">10'-0"</span>, <span class="mono">NRC &ge; 0.90</span>, gasketed aluminium grid. Piping and duct zone above, to structure at <span class="mono">14'-0"</span>.</span></li>
+    </ol>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ A-301 ══════════ -->
+<section class="sheet" id="a301">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">A-301</div><div class="disc">Architectural<br>Schedules</div></div>
+  <div>
+    <h2>Bay schedule</h2>
+    <p class="lede">All bays are 7'-0" deep. Widths vary by dog size; everything above the rim is identical so a customer never has to relearn the controls.</p>
+    <div class="tw">
+      <table>
+        <caption>Wash station schedule &mdash; 10 stations</caption>
+        <thead><tr><th>Tag</th><th>Type</th><th class="n">Clear W</th><th class="n">Depth</th><th class="n">Tub L &times; W &times; D</th><th class="n">Rim AFF</th><th>Access</th></tr></thead>
+        <tbody>
+          <tr><td class="tag">W1</td><td>Large</td><td class="n">6'-6"</td><td class="n">7'-0"</td><td class="n">60 &times; 30 &times; 20"</td><td class="n">36"</td><td>Door + 4'-0" ramp</td></tr>
+          <tr><td class="tag">W2</td><td>Large</td><td class="n">6'-6"</td><td class="n">7'-0"</td><td class="n">60 &times; 30 &times; 20"</td><td class="n">36"</td><td>Door + 4'-0" ramp</td></tr>
+          <tr><td class="tag">W3</td><td>Medium</td><td class="n">6'-0"</td><td class="n">7'-0"</td><td class="n">48 &times; 26 &times; 20"</td><td class="n">36"</td><td>Door + 4'-0" ramp</td></tr>
+          <tr><td class="tag">W4</td><td>Medium</td><td class="n">6'-0"</td><td class="n">7'-0"</td><td class="n">48 &times; 26 &times; 20"</td><td class="n">36"</td><td>Door + 4'-0" ramp</td></tr>
+          <tr><td class="tag">E1</td><td>Large</td><td class="n">6'-6"</td><td class="n">7'-0"</td><td class="n">60 &times; 30 &times; 20"</td><td class="n">36"</td><td>Door + 4'-0" ramp</td></tr>
+          <tr><td class="tag">E2</td><td>Medium</td><td class="n">6'-0"</td><td class="n">7'-0"</td><td class="n">48 &times; 26 &times; 20"</td><td class="n">36"</td><td>Door + 4'-0" ramp</td></tr>
+          <tr><td class="tag">E3</td><td>Small</td><td class="n">5'-0"</td><td class="n">7'-0"</td><td class="n">40 &times; 24 &times; 20"</td><td class="n">36"</td><td>Ramp + riser insert to 26"</td></tr>
+          <tr><td class="tag">E4</td><td>Small</td><td class="n">5'-0"</td><td class="n">7'-0"</td><td class="n">40 &times; 24 &times; 20"</td><td class="n">36"</td><td>Ramp + riser insert to 26"</td></tr>
+          <tr><td class="tag">XL1</td><td>Oversized</td><td class="n">6'-6"</td><td class="n">6'-6"</td><td class="n">54 &times; 48" floor pan</td><td class="n">0"</td><td>Walk-in, 1/2" bevelled threshold</td></tr>
+          <tr><td class="tag">XL2</td><td>Oversized &middot; accessible</td><td class="n">6'-6"</td><td class="n">6'-6"</td><td class="n">54 &times; 48" floor pan</td><td class="n">0"</td><td>Walk-in; controls within 44" reach</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note go">
+      <span class="lbl">Accessibility</span>
+      <b>XL2 is the accessible wash station.</b> It has no ramp, no rim and no lift, its gun holster, mixing handles and dispensers all sit within a 44" side reach, and the 3'-0" gate takes a wheelchair. Making one of the oversized bays do this costs nothing &mdash; they are already floor-level &mdash; and it is the station a customer with a mobility limitation would choose anyway.
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ P-401 ══════════ -->
+<section class="sheet" id="p401">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">P-401</div><div class="disc">Plumbing<br>Hot water<br>&amp; pressure</div></div>
+  <div>
+    <h2>Making ten guns fire at once</h2>
+    <p class="lede">"No loss of pressure when everyone is spraying" is two separate problems: enough heat, and enough head. They get two separate answers, and one of them is not a bigger pump.</p>
+
+    <figure>
+      <div class="dwg"><svg id="riser" role="img" aria-label="Water riser diagram: service enters through a meter, backflow preventer, softener and variable speed booster, splits to a cold header and to three condensing water heaters with a buffer tank and master mixing valve, then both headers rise the back wall and run the ceiling with insulated drops to each bay."></svg></div>
+      <figcaption><b>P-401</b><span>Domestic water riser</span><span>Schematic &mdash; not to scale</span><span>Line weight indicates system, not size</span></figcaption>
+    </figure>
+
+    <div class="body">
+      <h3>Heat: 450,000 BTU/hr at full simultaneity</h3>
+      <p>Size on the worst realistic minute, not the average day. Every gun is a 2.0&nbsp;GPM pressure-compensating nozzle; the design mixed temperature is 100&nbsp;&deg;F from 55&nbsp;&deg;F cold and 140&nbsp;&deg;F stored.</p>
+    </div>
+
+    <div class="calc">
+      hot fraction <span class="op">=</span> (100 &minus; 55) / (140 &minus; 55) <span class="op">=</span> 45 / 85 <span class="op">=</span> <b>0.529</b><br>
+      per station <span class="op">=</span> 2.0 GPM &times; 0.529 <span class="op">=</span> <b>1.06 GPM hot</b><br>
+      10 stations <span class="op">=</span> <b>10.6 GPM hot</b> &nbsp;<span class="op">(20 GPM mixed)</span>
+      <hr>
+      load <span class="op">=</span> 10.6 GPM &times; 500 &times; 85 &deg;F rise <span class="op">=</span> <b>450,500 BTU/hr</b><br>
+      <span class="op">at 60% diversity (realistic peak) &rarr; 270,000 BTU/hr</span>
+      <hr>
+      installed <span class="op">=</span> 3 &times; 199,000 <span class="op">=</span> <b>597,000 BTU/hr</b> input<br>
+      output <span class="op">@</span> 95% <span class="op">=</span> 567,000 <span class="op">=</span> <b>13.3 GPM</b> at 85 &deg;F rise <span class="op">&mdash; 25% margin</span><br>
+      any two units alone <span class="op">=</span> 8.9 GPM <span class="op">= 84% of stations. N+1 holds.</span>
+    </div>
+
+    <div class="body">
+      <ul>
+        <li><b>Three wall-hung 199 MBH condensing tankless</b> on a cascade rack, common-vented, sequenced so they wear evenly.</li>
+        <li><b>119-gallon insulated buffer tank</b> downstream. Tankless units hate the 30-second on/off of ten trigger guns; the buffer absorbs it and stops short-cycling.</li>
+        <li><b>Store at 140 &deg;F</b> for <i>Legionella</i> control, <b>master-mix to 120 &deg;F</b> (ASSE 1017) for distribution, then <b>per-bay mix to 85&ndash;105 &deg;F</b> with a hard stop.</li>
+        <li><b>3/4" recirculation return</b> with a bronze circulator on an aquastat. Without it the last bay runs 40 seconds of cold water down the drain every single wash &mdash; roughly 45,000 gallons a year at 30 washes a day.</li>
+        <li><b>Twin-alternating softener</b>, 1.5" valve, 25 GPM continuous, if hardness exceeds 7 gpg. Soft water lathers on half the shampoo and keeps scale out of the heat exchangers and the nozzles.</li>
+      </ul>
+
+      <h3>Head: 103 PSI needed at the meter</h3>
+      <p>Add up everything between the street and the worst-case nozzle. This is where most dog washes discover they needed a booster after the walls closed up.</p>
+    </div>
+
+    <div class="calc">
+      required at nozzle <span class="op">············</span> <b>40.0</b><br>
+      static lift to ceiling, 12' <span class="op">····</span> 5.2<br>
+      RPZ backflow preventer <span class="op">·······</span> 12.0<br>
+      softener <span class="op">·····················</span> 8.0<br>
+      water heater <span class="op">·················</span> 5.0<br>
+      master mixing valve <span class="op">··········</span> 5.0<br>
+      bay mixing valve <span class="op">·············</span> 8.0<br>
+      solenoid valve <span class="op">···············</span> 3.0<br>
+      reel + 15' of 3/8" hose <span class="op">·······</span> 9.0<br>
+      pipe friction, ~180' developed <span class="op">·</span> 8.0
+      <hr>
+      total required at meter <span class="op">······</span> <b>103.2 PSI</b><br>
+      <span class="op">typical municipal residual: 55&ndash;70 PSI &rarr; a booster is required</span>
+    </div>
+
+    <div class="note go">
+      <span class="lbl">The actual fix for pressure loss</span>
+      <b>A bigger pump alone will not do it &mdash; pressure-compensating flow cartridges will.</b> Put a 2.0 GPM compensating cartridge in every spray gun and each one delivers exactly 2.0 GPM whether one bay is running or ten, even if header pressure sags 15 PSI. The VFD booster holds the header steady; the cartridges guarantee every customer gets the same spray. Specify both. Without the cartridges, bay 1 next to the riser steals flow from bay 10 and you will hear about it every Saturday.
+    </div>
+
+    <div class="tw">
+      <table>
+        <caption>Ceiling distribution &mdash; your back-wall-and-ceiling route</caption>
+        <thead><tr><th>Run</th><th class="n">Size</th><th class="n">Flow</th><th class="n">Velocity</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Cold header, first third</td><td class="n">1-1/2" type L</td><td class="n">20 GPM</td><td class="n">3.5 ft/s</td><td>Under the 8 ft/s cold limit</td></tr>
+          <tr><td>Hot header, first third</td><td class="n">1-1/4" type L</td><td class="n">11 GPM</td><td class="n">2.8 ft/s</td><td>Under the 5 ft/s hot erosion limit</td></tr>
+          <tr><td>Headers, remaining runs</td><td class="n">1-1/4" &rarr; 1" &rarr; 3/4"</td><td class="n">tapering</td><td class="n">&lt; 5 ft/s</td><td>Step down as fixture units drop</td></tr>
+          <tr><td>Bay drop, each</td><td class="n">1/2" hot + 1/2" cold</td><td class="n">1.06 / 0.94 GPM</td><td class="n">1.5 ft/s</td><td>Quarter-turn isolation at the canopy</td></tr>
+          <tr><td>Recirculation return</td><td class="n">3/4"</td><td class="n">3 GPM</td><td class="n">2.0 ft/s</td><td>Return must stay &ge; 124 &deg;F</td></tr>
+          <tr><td>Insulation</td><td class="n">1" hot / 1/2" cold</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td>Cold needs anti-sweat: the plenum is humid</td></tr>
+          <tr><td>Support</td><td class="n">Trapeze @ 6'-0" o.c.</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td>Continuous 6" drip pan under the header</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="lbl">Non-negotiable with mains overhead</span>
+      Water-sensing cable in the drip pan and at every bay drop, wired to a <b>normally-open motorised ball valve on the incoming service</b>, with a local alarm and a phone alert. A pinhole in a ceiling header over a Saturday night is a five-figure event and an insurance conversation. Also: <b>RPZ backflow preventer at the service</b> is mandatory here, not optional &mdash; hoses, shampoo and animal contact make this a high-hazard cross-connection.
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ P-402 ══════════ -->
+<section class="sheet" id="p402">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">P-402</div><div class="disc">Plumbing<br>Drainage<br>&amp; dry floor</div></div>
+  <div>
+    <h2>Drainage, hair, and keeping a dryer out of a puddle</h2>
+    <p class="lede">You asked for a surface that drains fast enough that a blow dryer is never near standing water. That is a five-layer answer, and only the last layer is electrical.</p>
+
+    <div class="cols">
+      <div class="body">
+        <h4>Drainage</h4>
+        <ul>
+          <li><b>Each tub:</b> 2" waste, deep-seal P-trap, removable 1/8"-perforated stainless strainer basket.</li>
+          <li><b>Bay floors:</b> slope <span class="mono">1/4" per foot</span> out to the aisle. No bay drains to maintain.</li>
+          <li><b>Aisle:</b> slopes <span class="mono">1/4" per foot</span> from both sides to a <b>6" stainless slot channel</b> on the centreline, 32'-0" long, <span class="mono">1/8" per foot</span> fall to a 4" outlet at the back. Hose the entire room down at close.</li>
+          <li><b>XL bays:</b> 3" &times; 3'-0" linear drain in each floor pan.</li>
+          <li><b>Building drain:</b> ~37 DFU total &rarr; 4" at <span class="mono">1/8" per foot</span>.</li>
+          <li><b>Trap primers</b> on every floor drain, electronic manifold in mechanical. A dry trap is a sewer-gas complaint.</li>
+        </ul>
+        <div class="note" style="margin-top:20px">
+          <span class="lbl">The one that ruins operations</span>
+          <b>A 20 GPM hair and solids interceptor is mandatory</b> &mdash; flush-mounted in the mechanical room floor, removable stainless basket, emptied daily. Skip it and you will be rodding the building drain monthly within a year. Confirm with the sewer authority whether they also want a sediment interceptor or a discharge permit for shampoo.
+        </div>
+      </div>
+      <div class="body">
+        <h4>Why a dryer never meets water here</h4>
+        <ul>
+          <li><b>1 &mdash; The dog stands on a grate.</b> A removable platform 2" above the tub floor. Water leaves under the dog's feet instantly; the airstream hits a dog on a dry-topped surface, not one standing in an inch of runoff.</li>
+          <li><b>2 &mdash; The tub floor has no flat spots.</b> Factory-pitched <span class="mono">1/4" per foot</span> to a corner drain, coved corners, nothing to pond in.</li>
+          <li><b>3 &mdash; The bay floor sheds in seconds.</b> Urethane cement with broadcast quartz at <span class="mono">1/4" per foot</span>, <span class="mono">DCOF &ge; 0.60 wet</span>. There is no film to stand in and it is not slippery when there is.</li>
+          <li><b>4 &mdash; The dryer is never on the floor.</b> Wall bracket at <span class="mono">48" AFF</span>, hose on a swivel hook, cord dressed into a strain relief. There is nothing to knock over and nothing to trip on.</li>
+          <li><b>5 &mdash; Class A GFCI, at the breaker.</b> 4&ndash;6 mA trip on a dedicated 20 A circuit per bay, so the whip and the device are both protected &mdash; not just a GFCI receptacle. Weather-resistant device, in-use cover, <span class="mono">48" AFF</span>, <span class="mono">&ge;12"</span> horizontally clear of the rim.</li>
+        </ul>
+        <p style="margin-top:14px">Stated plainly: a corded appliance near water carries residual risk that no design removes. This stack reduces it to very low and makes GFCI the last net rather than the only one. Have the licensed electrical engineer of record confirm the receptacle locations against NEC 210.8(B) and 406.9(C) and your AHJ &mdash; those two articles are what the inspector will open the book to.</p>
+      </div>
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ S-501 ══════════ -->
+<section class="sheet" id="s501">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">S-501</div><div class="disc">Special<br>Acoustics</div></div>
+  <div>
+    <h2>The cone of silence, examined honestly</h2>
+    <p class="lede">Your instinct is right: a calm dog is a quiet dog, and quiet bays make calm dogs. Your proposed mechanism is the problem. Here is the frequency question you asked, answered, and then the thing to build instead.</p>
+
+    <figure>
+      <div class="dwg"><svg id="hearing" role="img" aria-label="Hearing range chart on a logarithmic frequency axis from 20 hertz to 50 kilohertz. Human hearing spans 20 hertz to 20 kilohertz; canine hearing spans 67 hertz to 45 kilohertz. The bark energy band from 1 to 4 kilohertz, the 500 hertz practical ceiling for active noise cancellation, and the 40 kilohertz parametric speaker carrier are marked. The 40 kilohertz carrier falls inside canine hearing."></svg></div>
+      <figcaption><b>S-501</b><span>Hearing range vs. proposed sources</span><span>Log frequency axis</span><span>Canine range per Heffner, 1983</span></figcaption>
+    </figure>
+
+    <div class="body">
+      <h3>Can a dog hear the frequency that gets shot out? Yes.</h3>
+      <p>Parametric arrays &mdash; the "audio spotlight" domes sold as directional or private sound &mdash; work by modulating audible content onto an ultrasonic carrier, typically <b>40 to 60&nbsp;kHz</b>, radiated at <b>120&nbsp;dB SPL or more</b>. Dogs hear from roughly <b>67&nbsp;Hz to 45&nbsp;kHz</b> with useful sensitivity well past 30&nbsp;kHz. A 40&nbsp;kHz carrier is inside that range. Mounting one over each bay installs a high-power ultrasonic dog deterrent above every dog in the building. It would make them louder, not quieter, and you would never work out why.</p>
+      <p>Active noise cancellation does not rescue the idea either. ANC is effective below roughly <b>500&nbsp;Hz</b> and only within about a tenth of a wavelength of its error microphone &mdash; about 2.7&nbsp;inches at 500&nbsp;Hz. A bark is a broadband <b>1&ndash;4&nbsp;kHz</b> transient with a 5&ndash;20&nbsp;ms rise, arriving from a moving source at a moving head. No product creates a silent zone around a person under those conditions. Anything sold as one is selling masking.</p>
+
+      <h3>What actually delivers the quiet bay</h3>
+      <p>Absorption, barrier, separation, masking, and behaviour &mdash; in that order of effect. The canopy over each bay is the piece that does the most work, and it happens to be the shape you were already imagining.</p>
+      <ul>
+        <li><b>Per-bay acoustic canopy.</b> Bay width &times; 6'-0" &times; 6" deep, bottom at <span class="mono">7'-6" AFF</span>, 12" downturned skirt on all four sides. Perforated aluminium (23% open) over encapsulated 6 pcf mineral wool, <span class="mono">NRC &ge; 0.95</span>. It kills the ceiling bounce &mdash; the dominant path from one bay to the next &mdash; and puts a metre of absorption directly above the dog's mouth. It is also the exhaust hood, the light housing and the reel mount, so it earns its place four times.</li>
+        <li><b>Inter-bay dividers at 6'-0", not 4'-0".</b> This is the one change worth making to your brief. A big dog's head sits at about 48" AFF standing in the tub; the owner's ear is at about 64". A 4'-0" divider leaves that path grazing the top &mdash; barely 5&nbsp;dB. Taking the <i>divider between bays</i> to 6'-0" breaks it properly and buys another 6&ndash;8&nbsp;dB, for the price of two feet of HDPE.</li>
+        <li><b>Keep the aisle fence at 4'-0" exactly as you asked.</b> That is the face staff and other customers look over, and supervision matters more there than acoustics. Solid between bays, 4'-0" picket and gate to the aisle.</li>
+        <li><b>Washable acoustic ceiling</b> across the wash hall, <span class="mono">NRC &ge; 0.90</span>, gasketed aluminium grid, plus washable acoustic wall panels from 4'-0" to 8'-0". Encapsulated cores only &mdash; an exposed fibreglass face in a wet dog room is a mould culture.</li>
+        <li><b>Low-level masking</b> on distributed 70V ceiling speakers: shaped pink noise at <span class="mono">45&ndash;48 dBA</span> plus slow, low-frequency classical at 50&ndash;60 bpm. Keep total ambient under 55&nbsp;dBA. Do not fight SPL with SPL &mdash; a louder room makes dogs bark harder.</li>
+        <li><b>Visual separation is the real behavioural lever.</b> Most reactive barking is triggered by seeing another dog, not hearing one. The solid divider removes the dog-height sightline while people still see over the aisle fence. The acoustics and the behaviour want the same wall.</li>
+      </ul>
+    </div>
+
+    <div class="calc">
+      <b>Sabine check &mdash; V = 1,000 SF &times; 12' = 12,000 CF</b><hr>
+      canopies, 10 &times; 36 SF face + skirts <span class="op">·······</span> 500 sabins<br>
+      acoustic ceiling, 640 SF <span class="op">@</span> &alpha; 0.90 <span class="op">·······</span> 576<br>
+      wall panels, 420 SF <span class="op">@</span> &alpha; 0.85 <span class="op">············</span> 357
+      <hr>
+      total A <span class="op">·································</span> <b>1,433 sabins</b><br>
+      RT<sub>60</sub> <span class="op">=</span> 0.049 &times; 12,000 / 1,433 <span class="op">=</span> <b>0.41 s</b> <span class="op">@ 1 kHz &nbsp;(target &le; 0.45)</span><br>
+      bare shell <span class="op">=</span> ~190 sabins <span class="op">&rarr;</span> RT<sub>60</sub> <span class="op">&asymp;</span> 3.2 s
+    </div>
+
+    <div class="tw">
+      <table>
+        <caption>Predicted performance &mdash; adjacent bay, dog barking at 100 dBA @ 1 m</caption>
+        <thead><tr><th>Condition</th><th class="n">RT<sub>60</sub> @ 1 kHz</th><th class="n">At owner's ear</th><th class="n">vs. bare shell</th></tr></thead>
+        <tbody>
+          <tr><td>Bare hard shell &mdash; no treatment</td><td class="n">3.2 s</td><td class="n">95 dBA</td><td class="n">&mdash;</td></tr>
+          <tr><td>Full treatment, 4'-0" dividers as briefed</td><td class="n">0.41 s</td><td class="n">85 dBA</td><td class="n">&minus;10 dB</td></tr>
+          <tr><td>Full treatment, 6'-0" dividers &mdash; recommended</td><td class="n">0.41 s</td><td class="n">82 dBA</td><td class="n">&minus;13 dB</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="lbl">Say this to yourself once</span>
+      <b>Thirteen decibels is roughly "60% quieter." It is not silence.</b> A dog in the next bay will still be audible, and that is the honest ceiling for an open room with 4'-6" partitions. Selling it as a cone of silence sets a promise the building cannot keep. Sell it as the calmest dog wash in town, which it will be. If you want a genuinely private bay you need a full-height enclosed room with a door, which costs you three stations, all your supervision sightlines, and the ventilation strategy.
+    </div>
+
+    <div class="note">
+      <span class="lbl">Staff exposure &mdash; do not skip this</span>
+      With ten stations busy and force-air dryers running at 75&ndash;95 dBA, staff can approach an <b>85 dBA 8-hour TWA</b>. Commission the space with a dosimetry survey. If it reaches 85, OSHA 1910.95 requires a hearing conservation programme. Budget low-noise variable-speed dryers, offer 25 NRR earmuffs at the desk for customers, and stock ear snoods for the dogs.
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ M-601 ══════════ -->
+<section class="sheet" id="m601">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">M-601</div><div class="disc">Mechanical<br>Air &amp; odor</div></div>
+  <div>
+    <h2>Capture the smell; don't cover it</h2>
+    <p class="lede">Wet dog is volatile microbial metabolites &mdash; aldehydes, ketones, sulfur compounds, phenols &mdash; released from the coat as water evaporates, and a blow dryer aerosolises the lot. You are right that a scent machine alone will not do it. It needs capture, exhaust, carbon, dilution and dry air, and then a very light hand with fragrance.</p>
+
+    <div class="cols">
+      <div class="body">
+        <h4>Capture and exhaust</h4>
+        <ul>
+          <li><b>The canopy is the capture hood.</b> A grille in each canopy face at 8'-0" AFF pulls <span class="mono">175 CFM</span> per elevated bay, <span class="mono">250 CFM</span> per XL bay &mdash; right where the dryer is throwing the odour, before it reaches the room.</li>
+          <li><b>Total exhaust 2,100 CFM</b> (8&times;175 + 2&times;250 + restroom 75 + laundry 100), which is <span class="mono">10.5 air changes per hour</span> on a 12,000 CF volume. Grooming spaces want 10&ndash;15; a code-minimum ventilation rate would leave this room smelling like a kennel.</li>
+          <li><b>Make-up air 1,850 CFM</b> tempered through a dedicated ERV, leaving the space <b>250 CFM net negative</b>. Odour then never migrates to the lobby, the front door, or the neighbouring tenant. In a strip centre this is the difference between a business and a complaint file.</li>
+          <li><b>Discharge placement:</b> keep the exhaust louvre at least 10'-0" from any outside-air intake, yours or a neighbour's, and downwind of your own entry.</li>
+        </ul>
+      </div>
+      <div class="body">
+        <h4>Treatment and drying</h4>
+        <ul>
+          <li><b>MERV-13 prefilter &rarr; 2" deep-bed activated carbon</b> impregnated with potassium permanganate, on the recirculating side. The permanganate is what takes the aldehydes and amines that plain carbon passes. Change on differential pressure, roughly every six months &mdash; put it in the operating budget, because a saturated bed silently stops working.</li>
+          <li><b>Dehumidify to &le; 55% RH.</b> Ten dryers evaporating water is a large latent load &mdash; on the order of <span class="mono">90 lb/hr, ~97,000 BTU/hr latent</span>. Use DX with hot-gas reheat or a dedicated 130 pt/day commercial unit. Dry air dries dogs faster, holds less odour, and keeps mould out of the canopy insulation.</li>
+          <li><b>Dose the drains nightly.</b> A bio-enzymatic dosing pump on a timer into the trench and the tub traps. Drain biofilm is the odour source everyone forgets and then blames on the HVAC.</li>
+          <li><b>No porous materials anywhere.</b> No carpet, no bare wood, no fabric-faced acoustic panels. This is why every absorber in this set is perforated metal over an encapsulated core.</li>
+          <li><b>Skip bipolar ionisation and PCO</b> unless the unit is UL 2998 zero-ozone listed &mdash; the odour evidence is mixed and ozone around animals is not acceptable. Never an ozone generator.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="lbl">Scent-air machine &mdash; read before ordering</span>
+      <b>Fragrance the lobby. Leave the wash hall smelling like nothing.</b> An HVAC-integrated cold-air atomiser in the supply duct, downstream of the carbon, serving Zone A only, dosed light and intermittent. Two reasons. First, a dog's nose is orders of magnitude more sensitive than yours &mdash; what reads as pleasant to a customer is overwhelming to the animal you are trying to keep calm. Second, <b>many common diffuser oils are toxic to dogs</b>: tea tree, eucalyptus, pennyroyal, pine, wintergreen, citrus (d-limonene), cinnamon, peppermint and ylang-ylang among them, and cats are more sensitive still. Specify water-based, non-essential-oil fragrance only, and confirm the formulation with the supplier in writing. The wash hall should be odour-<i>neutral</i> by carbon and air change, not masked.
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ F-701 ══════════ -->
+<section class="sheet" id="f701">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">F-701</div><div class="disc">Finishes<br>Materials</div></div>
+  <div>
+    <h2>Waterproof, scratch-proof, and still cleanable in year five</h2>
+    <p class="lede">Every surface in the wash hall gets hot water, shampoo chemistry, quat sanitiser and dog claws, several hundred times a week. Two materials do most of the work: urethane cement underfoot and solid phenolic on the walls.</p>
+    <div class="tw">
+      <table>
+        <caption>Materials schedule &mdash; wet zone</caption>
+        <thead><tr><th>Element</th><th>Specify</th><th>Why this one</th><th>Do not use</th></tr></thead>
+        <tbody>
+          <tr><td>Floor, all wet areas</td><td>Urethane cement (polyurethane-modified concrete), 1/4" troweled, broadcast quartz, 6" integral cove, DCOF &ge; 0.60 wet</td><td>Takes 200 &deg;F water and thermal shock without debonding. It is what commercial kitchens use, for the same reasons.</td><td>Epoxy &mdash; hot water and thermal cycling delaminate it. Tile &mdash; grout joints fail and harbour bacteria.</td></tr>
+          <tr><td>Tubs and decks</td><td>16 ga 304 stainless, #4 finish, 1" coved corners, integral backsplash and deck, welded and ground seams, sound-deadened underside</td><td>Scratch-tolerant, chew-proof, genuinely sanitisable, and the sound deadening stops the tub ringing like a drum under a dryer.</td><td>Fibreglass &mdash; cheaper up front, crazes and stains within two years.</td></tr>
+          <tr><td>Bay walls, floor to 8'-0"</td><td>6 mm solid phenolic compact panel on furring, joints back-caulked with medical-grade silicone, aluminium H-trim</td><td>Waterproof right through the core, not just the face. High impact and scratch resistance, takes quat sanitisers.</td><td>FRP &mdash; the print layer scuffs off, seams delaminate in two to three years, and it always looks tired.</td></tr>
+          <tr><td>Splash zone behind tub</td><td>304 SS panel, 36" to 60" AFF</td><td>The one band that takes direct spray all day.</td><td>Painted gypsum in any form.</td></tr>
+          <tr><td>Dividers between bays</td><td>1/2" HDPE / 1" mineral wool / 1 lb-sf loaded vinyl / 1/2" HDPE, <b>6'-0" high</b></td><td>HDPE is colour-through, absorbs no water, shrugs off urine and claws, and sands clean. The core is what makes it an acoustic barrier rather than a fence.</td><td>Laminated MDF or melamine &mdash; the core swells the first time a seal fails.</td></tr>
+          <tr><td>Aisle fence and gate</td><td>1-1/2" square 316 SS or powder-coated aluminium frame, pickets 2-1/2" max clear, <b>4'-0" high</b>, 32" clear self-closing gate</td><td>Keeps your supervision sightline. 2-1/2" clear is below head-entrapment risk for a small dog.</td><td>Galvanised steel &mdash; it will bloom rust at every cut end.</td></tr>
+          <tr><td>Towel shelf</td><td>304 SS, 1/2"-perforated deck, 12" deep, underside 60" AFF</td><td>Drains and ventilates, so a forgotten towel does not become the smell everyone notices.</td><td>Solid shelf, timber, or wire that snags.</td></tr>
+          <tr><td>Ceiling, wash hall</td><td>Perforated aluminium lay-in with encapsulated mineral wool, NRC &ge; 0.90, gasketed aluminium grid</td><td>Acoustic and washable at once. The encapsulation keeps the core dry in a 55% RH room.</td><td>Standard mineral fibre tile &mdash; it will sag, stain and grow things. Steel grid &mdash; it will rust.</td></tr>
+          <tr><td>Fasteners, trim, hardware</td><td><b>316</b> stainless throughout the wet zone</td><td>304 pits from the chlorides in some shampoos and from winter salt tracked in on paws.</td><td>304 or zinc-plated anything below 8'-0".</td></tr>
+          <tr><td>Sealants</td><td>Mildew-resistant medical / food-grade silicone at every change of plane</td><td>The joints are what fail first in every wash facility ever built.</td><td>Acrylic or painter's caulk.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ E-801 ══════════ -->
+<section class="sheet" id="e801">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">E-801</div><div class="disc">Electrical<br>Power &amp; light</div></div>
+  <div>
+    <h2>Power</h2>
+    <p class="lede">Ten dryers is the whole load story, and the answer to it is diversity plus one dedicated circuit each &mdash; so a tripped bay never takes its neighbour down mid-wash.</p>
+    <div class="calc">
+      10 &times; dryer <span class="op">@</span> 1,600 W <span class="op">···················</span> 16,000 W <span class="op">&times; 0.70 diversity =</span> <b>11,200</b><br>
+      exhaust fan, ERV, dehumidifier <span class="op">············</span> <b>7,500</b><br>
+      receptacles, POS, cameras, masking audio <span class="op">··</span> <b>3,000</b><br>
+      booster pump, 2 HP running <span class="op">···············</span> <b>1,900</b><br>
+      lighting, 1.0 W/SF <span class="op">························</span> <b>1,000</b><br>
+      water heater blowers and controls <span class="op">·········</span> <b>600</b>
+      <hr>
+      total connected <span class="op">···························</span> <b>25,200 W</b><br>
+      25,200 / (208 &times; 1.732) <span class="op">=</span> <b>70 A</b> at 208 V, 3&phi;<br>
+      <span class="op">service:</span> <b>200 A, 120/208 V, 3&phi;, 4W</b> <span class="op">&mdash; headroom to reach 20 bays</span>
+    </div>
+    <div class="body">
+      <ul>
+        <li><b>One dedicated 20 A / 120 V circuit per bay</b> on a Class A GFCI breaker (4&ndash;6 mA), so the whip and the device are both protected. Weather-resistant duplex, in-use cover, <span class="mono">48" AFF</span> on the side partition, <span class="mono">&ge;12"</span> horizontally clear of the tub rim.</li>
+        <li><b>Class 2 low voltage only below the rim.</b> A 24 VAC transformer per bay feeds the foot switch and the solenoid, with a 6-minute auto-off and a local "water off" button beside the pedal. No line voltage goes anywhere near the wet zone.</li>
+        <li><b>Lighting:</b> IP65 linear LED integrated into each canopy, 4000 K, <span class="mono">CRI &ge; 90</span>, <span class="mono">55 fc</span> at the deck; IP65 downlights at <span class="mono">30 fc</span> in the aisle; <span class="mono">20 fc</span> back of house. High CRI is not a luxury &mdash; at low CRI nobody can tell a clean dog from a dirty one, and they will refill the shampoo instead of rinsing.</li>
+        <li><b>Water heating must be gas.</b> Electric resistance for the same 450 MBH is roughly 132 kW and turns this into a 400 A service with a utility upgrade. If the shell has no gas, price a CO<sub>2</sub> heat-pump water heater plant with 500+ gallons of storage before you walk away &mdash; it is the only electric route that pencils.</li>
+        <li><b>Also on the panel:</b> a camera at each bay (liability and remote assist), the leak-detection controller and its motorised shut-off valve, the masking audio head end, the bio-enzymatic drain doser, and a staff master water shut-off at the welcome desk.</li>
+      </ul>
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<!-- ══════════ G-901 ══════════ -->
+<section class="sheet" id="g901">
+ <div class="wrap"><div class="sheet-grid">
+  <div class="spine"><div class="no">G-901</div><div class="disc">General<br>Code, cost<br>&amp; scaling</div></div>
+  <div>
+    <h2>Before design development</h2>
+
+    <div class="cols">
+      <div class="body">
+        <h4>Confirm early &mdash; in this order</h4>
+        <ul>
+          <li><b>Gas meter capacity for 597 MBH.</b> The single most common project-killer. Ask the utility before the lease, not after.</li>
+          <li><b>Electrical service.</b> Does the shell already have 200 A, 120/208 V 3&phi;, or is that an upgrade you are paying for?</li>
+          <li><b>Water static and residual pressure</b> measured at 25 GPM, so the booster is sized on a reading rather than an assumption.</li>
+          <li><b>Sewer authority</b> on hair and shampoo discharge &mdash; some require a permit and a sediment interceptor beyond the hair basket.</li>
+          <li><b>Exhaust discharge location</b> relative to neighbouring intakes, and whether the landlord permits a roof penetration at all.</li>
+          <li><b>Occupancy classification</b> with the AHJ &mdash; likely Group B or M, but confirm, because it drives the restroom count and egress.</li>
+          <li><b>Animal establishment licensing.</b> Many jurisdictions license self-serve washes even with no grooming service.</li>
+          <li><b>ADA:</b> accessible route in, a 34" max transaction counter at the desk, a compliant restroom, and XL2 as the accessible wash station.</li>
+        </ul>
+      </div>
+      <div class="body">
+        <h4>Rough order of magnitude</h4>
+        <p style="font-size:15px">US metro, 2026, tenant fit-out of an existing shell. <b>&plusmn;30% &mdash; not a bid.</b> Get three GC prices before you rely on any of it.</p>
+        <div class="tw" style="margin-top:14px">
+          <table style="min-width:0">
+            <tbody>
+              <tr><td>Plumbing, trench, interceptor, ceiling distribution</td><td class="n">$85&ndash;135k</td></tr>
+              <tr><td>HVAC &mdash; exhaust, ERV, dehumidification, carbon</td><td class="n">$60&ndash;90k</td></tr>
+              <tr><td>Electrical &mdash; service, bay circuits, lighting, LV</td><td class="n">$52&ndash;75k</td></tr>
+              <tr><td>Wash equipment, 10 stations</td><td class="n">$52&ndash;70k</td></tr>
+              <tr><td>DHW plant, softener, gas piping and venting</td><td class="n">$42&ndash;60k</td></tr>
+              <tr><td>Acoustic package &mdash; canopies, ceiling, panels</td><td class="n">$38&ndash;58k</td></tr>
+              <tr><td>Partitions, gates, phenolic wall panels</td><td class="n">$36&ndash;52k</td></tr>
+              <tr><td>Millwork, desk, restroom, storage</td><td class="n">$26&ndash;38k</td></tr>
+              <tr><td>Booster, RPZ, leak detection</td><td class="n">$20&ndash;30k</td></tr>
+              <tr><td>Flooring &mdash; urethane cement, 1,000 SF</td><td class="n">$16&ndash;22k</td></tr>
+              <tr><td>Demolition, shell prep, framing</td><td class="n">$18&ndash;28k</td></tr>
+              <tr><td>Signage, POS, smallwares, opening stock</td><td class="n">$12&ndash;18k</td></tr>
+              <tr><td>Design fees, permits, contingency</td><td class="n">$124&ndash;180k</td></tr>
+              <tr><td><b>Total</b></td><td class="n"><b>$580&ndash;855k</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:15px;margin-top:12px">Roughly $580&ndash;855 per square foot, which is restaurant territory &mdash; because the MEP intensity is restaurant territory. A value-engineered version (simple make-up air instead of an ERV, welded PVC hygienic sheet instead of phenolic, canopies over the eight elevated bays only) lands nearer $420k and gives up about 3 dB.</p>
+      </div>
+    </div>
+
+    <h3 style="font-family:var(--f-disp);font-size:22px;font-weight:600;margin-top:44px">If you do get to twenty bays</h3>
+    <p class="lede" style="margin-top:8px">You mentioned sizing the water plant for twenty. Here is what twenty actually requires, so the phase-one plant is not stranded when you expand into the unit next door.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>System</th><th class="n">10 stations &mdash; this set</th><th class="n">20 stations</th></tr></thead>
+        <tbody>
+          <tr><td>Floor area</td><td class="n">1,000 SF</td><td class="n">2,000&ndash;2,200 SF</td></tr>
+          <tr><td>Peak mixed water</td><td class="n">20 GPM</td><td class="n">40 GPM</td></tr>
+          <tr><td>Peak hot water</td><td class="n">10.6 GPM</td><td class="n">21.2 GPM</td></tr>
+          <tr><td>DHW load @ 85 &deg;F rise</td><td class="n">450 MBH</td><td class="n">901 MBH</td></tr>
+          <tr><td>Heaters</td><td class="n">3 &times; 199 MBH + 119 gal</td><td class="n">5 &times; 199 MBH + 200 gal</td></tr>
+          <tr><td>Gas service</td><td class="n">597 MBH</td><td class="n">~1,000 MBH &mdash; likely a 2 PSI service and a utility upgrade</td></tr>
+          <tr><td>Booster</td><td class="n">Duplex, 25 GPM @ 45 PSI</td><td class="n">Triplex VFD, 50 GPM @ 45 PSI</td></tr>
+          <tr><td>Building drain</td><td class="n">4"</td><td class="n">6", two 25 GPM interceptors</td></tr>
+          <tr><td>Exhaust / make-up air</td><td class="n">2,100 / 1,850 CFM</td><td class="n">3,800 / 3,400 CFM</td></tr>
+          <tr><td>Electrical service</td><td class="n">200 A, 208 V 3&phi;</td><td class="n">400 A, 208 V 3&phi;</td></tr>
+          <tr><td>Absorption for RT<sub>60</sub> &le; 0.45 s</td><td class="n">1,433 sabins</td><td class="n">~2,875 sabins</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note go">
+      <span class="lbl">Phasing advice</span>
+      <b>Buy the plant room once.</b> Rack space, gas piping and the header sized for five heaters costs very little more today than three; adding the fourth and fifth units later is then a day's work rather than re-piping a live business. Do the same with the booster skid and the electrical service. Everything downstream of the bay isolation valve can be added a bay at a time.
+    </div>
+  </div>
+ </div></div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <b>Ten-Bay Dog Wash &mdash; schematic design set</b><br>
+    Plan, sections and model generated from a single geometry file, so every dimension agrees across drawings.<br>
+    Issued for pricing and discussion. <b>Not for construction.</b> Loads, sizes and clearances here are design-intent and require a licensed architect and MEP engineer of record, stamped drawings, and review by your authority having jurisdiction before permit.
+  </div>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   GEOMETRY FILE — inches, origin at inside face of front (S)
+   wall and inside face of west wall. Every drawing on this
+   page, 2D and 3D, is generated from this object.
+   ═══════════════════════════════════════════════════════════ */
+const G = {
+  W: 240, D: 600, CEIL: 120, STRUCT: 168, WALL: 8,
+  zoneA: [0, 120], zoneB: [120, 432], zoneC: [432, 600],
+  bayDepth: 84, aisle: [84, 156], trench: [117, 123], trenchRun: [120, 522],
+  divider: 72,        // inter-bay, recommended
+  fence: 48,          // aisle-facing, as briefed
+  rim: 36, tubFloor: 16, grate: 18, shelf: 60, mixer: 44, gfci: 48,
+  ramp: { run: 48, rise: 16, wide: 24 },
+  canopy: { btm: 90, top: 96, skirt: 12, depth: 72 },
+  bays: [
+    { tag:'W1', side:'W', type:'L', a:120, b:198 },
+    { tag:'W2', side:'W', type:'L', a:200, b:278 },
+    { tag:'W3', side:'W', type:'M', a:280, b:352 },
+    { tag:'W4', side:'W', type:'M', a:354, b:426 },
+    { tag:'E1', side:'E', type:'L', a:156, b:234 },
+    { tag:'E2', side:'E', type:'M', a:236, b:308 },
+    { tag:'E3', side:'E', type:'S', a:310, b:370 },
+    { tag:'E4', side:'E', type:'S', a:372, b:432 }
+  ],
+  alcove: { a:120, b:156 },
+  xl: [ { tag:'XL1', x0:0, x1:78 }, { tag:'XL2', x0:80, x1:158 } ],
+  xlY: [522, 600],
+  boh: { bandY:[432,522], store:[0,66], stage:[66,156], rest:[156,240], mech:[160,240] }
+};
+const TUB = { L:{len:60,dep:30,label:'Large'}, M:{len:48,dep:26,label:'Medium'}, S:{len:40,dep:24,label:'Small'} };
+const SPEC = {
+  W1:'Large · 6\'-6" clear · tub 60×30×20"', W2:'Large · 6\'-6" clear · tub 60×30×20"',
+  W3:'Medium · 6\'-0" clear · tub 48×26×20"', W4:'Medium · 6\'-0" clear · tub 48×26×20"',
+  E1:'Large · 6\'-6" clear · tub 60×30×20"', E2:'Medium · 6\'-0" clear · tub 48×26×20"',
+  E3:'Small · 5\'-0" clear · tub 40×24×20" + riser', E4:'Small · 5\'-0" clear · tub 40×24×20" + riser',
+  XL1:'Oversized walk-in · 6\'-6"×6\'-6" · 54×48" pan', XL2:'Oversized · accessible station · 54×48" pan'
+};
+
+/* ── SVG helpers ─────────────────────────────────────────── */
+const NS = 'http://www.w3.org/2000/svg';
+function E(tag, at, kids){
+  const n = document.createElementNS(NS, tag);
+  for (const k in at) if (at[k] != null) n.setAttribute(k, at[k]);
+  if (kids != null) (Array.isArray(kids) ? kids : [kids]).forEach(c =>
+    n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+  return n;
+}
+const K = {
+  ink:'var(--ink)', ink2:'var(--ink-2)', ink3:'var(--ink-3)', rule:'var(--rule)', rule2:'var(--rule-2)',
+  acc:'var(--accent)', accT:'var(--accent-tint)', ctr:'var(--counter)', ctrT:'var(--counter-tint)',
+  field:'var(--field)', inset:'var(--inset)', poche:'var(--poche)',
+  hot:'var(--sys-hot)', cold:'var(--sys-cold)', waste:'var(--sys-waste)', air:'var(--sys-air)'
+};
+const R  = (x,y,w,h,st) => E('rect',{x,y,width:Math.max(0,w),height:Math.max(0,h),style:st});
+const L  = (x1,y1,x2,y2,st) => E('line',{x1,y1,x2,y2,style:st});
+const P  = (d,st) => E('path',{d,style:st});
+const C  = (cx,cy,r,st) => E('circle',{cx,cy,r,style:st});
+const T  = (x,y,s,st,rot) => E('text', rot ? {x,y,style:st,transform:`rotate(${rot} ${x} ${y})`} : {x,y,style:st}, String(s));
+const fs = (px,fill,w,anc,ls) => `font-family:var(--f-mono);font-size:${px}px;fill:${fill};font-weight:${w||400};text-anchor:${anc||'middle'};letter-spacing:${ls==null?0:ls}px`;
+const ST = {
+  thin:  `fill:none;stroke:${K.rule2};stroke-width:.6`,
+  hair:  `fill:none;stroke:${K.rule};stroke-width:.5`,
+  obj:   `fill:none;stroke:${K.ink2};stroke-width:1`,
+  heavy: `fill:none;stroke:${K.ink};stroke-width:1.8`,
+  dim:   `fill:none;stroke:${K.ink3};stroke-width:.55`,
+  acc:   `fill:none;stroke:${K.acc};stroke-width:1.4`
+};
+/* feet-inches formatter */
+function fi(n){ const f = Math.floor(n/12), i = Math.round(n-f*12); return i ? `${f}'-${i}"` : `${f}'-0"`; }
+
+/* dimension strings: architectural slash ticks */
+function dimH(g, x1, x2, y, label, sz, up){
+  const t = 3.4*sz/8;
+  g.appendChild(L(x1,y,x2,y,ST.dim));
+  [x1,x2].forEach(x => g.appendChild(L(x-t,y+t,x+t,y-t,ST.dim)));
+  g.appendChild(T((x1+x2)/2, y + (up===false ? sz+2.5 : -2.6), label, fs(sz,K.ink3,500,'middle',.2)));
+}
+function dimV(g, y1, y2, x, label, sz, left){
+  const t = 3.4*sz/8;
+  g.appendChild(L(x,y1,x,y2,ST.dim));
+  [y1,y2].forEach(y => g.appendChild(L(x-t,y+t,x+t,y-t,ST.dim)));
+  g.appendChild(T(x + (left===false ? sz+2.5 : -2.8), (y1+y2)/2, label, fs(sz,K.ink3,500,'middle',.2), -90));
+}
+function dimVt(g, y1, y2, x, label, sz){
+  const t = 3.4*sz/8;
+  g.appendChild(L(x,y1,x,y2,ST.dim));
+  [y1,y2].forEach(y => g.appendChild(L(x-t,y+t,x+t,y-t,ST.dim)));
+  g.appendChild(T(x+3.4, (y1+y2)/2 + sz*0.36, label, fs(sz,K.ink3,500,'start',.2)));
+}
+/* keynote bubble with leader */
+function key(g, n, x, y, lx, ly, sz){
+  const r = sz*1.15;
+  if (lx != null) g.appendChild(L(x,y,lx,ly,ST.dim));
+  const cx = lx == null ? x : lx, cy = ly == null ? y : ly;
+  g.appendChild(C(cx,cy,r,`fill:${K.field};stroke:${K.acc};stroke-width:.7`));
+  g.appendChild(T(cx, cy + sz*0.36, n, fs(sz,K.acc,600)));
+}
+function legend(el, items){
+  const d = document.createElement('div'); d.className = 'legend';
+  d.innerHTML = items.map(([c,txt,dash]) =>
+    `<span><svg viewBox="0 0 26 8" aria-hidden="true"><line x1="0" y1="4" x2="26" y2="4" stroke="${c}" stroke-width="2.4"${dash?` stroke-dasharray="${dash}"`:''}/></svg>${txt}</span>`).join('');
+  el.parentNode.insertBefore(d, el.nextSibling);
+}
+</script>
+
+<script>
+/* ═══════════ A-101 FLOOR PLAN ═══════════
+   plan is drawn rotated: sheet x = building Y (depth),
+   sheet y = building X (width). Entry left, back of house right. */
+(function(){
+  const s = document.getElementById('plan');
+  s.setAttribute('viewBox','-40 -62 676 368');
+  const PR = (bx,by,bw,bd,st) => R(by,bx,bd,bw,st);
+  const PL = (bx1,by1,bx2,by2,st) => L(by1,bx1,by2,bx2,st);
+  const PT = (bx,by,t,st,rot) => T(by,bx,t,st,rot);
+  const g = document.createDocumentFragment();
+  const add = n => g.appendChild(n);
+
+  /* shell */
+  add(R(-8,-8,616,256, `fill:${K.poche};opacity:.9;stroke:none`));
+  add(R(0,0,600,240, `fill:${K.field};stroke:none`));
+  add(PR(0,   0, 240, 120, `fill:${K.inset};stroke:none`));   // zone A
+  add(PR(0, 432, 240, 168, `fill:${K.inset};stroke:none`));   // zone C
+  add(R(0,0,600,240, ST.heavy));
+
+  /* zone divisions */
+  [120,432].forEach(y => add(PL(0,y,240,y, `fill:none;stroke:${K.rule2};stroke-width:.7;stroke-dasharray:8 4`)));
+
+  /* ── elevated bays ── */
+  G.bays.forEach(b => {
+    const W = b.side === 'W', t = TUB[b.type], cy = (b.a+b.b)/2;
+    const x0 = W ? 0 : 240 - G.bayDepth;                 // bay band, building X
+    add(PR(x0, b.a, G.bayDepth, b.b-b.a, `fill:${K.accT};stroke:none`));
+    /* tub + door */
+    const tx = W ? 0 : 240 - t.dep;
+    add(PR(tx, cy - t.len/2, t.dep, t.len, `fill:${K.field};stroke:${K.ink2};stroke-width:1.1`));
+    add(PR(tx + (W?2:2), cy - t.len/2 + 3, t.dep-4, t.len-6, `fill:none;stroke:${K.rule2};stroke-width:.5`));
+    const dx = W ? t.dep : 240 - t.dep;                  // door face
+    add(PL(dx, cy-12, dx, cy+12, `fill:none;stroke:${K.acc};stroke-width:1.6`));
+    /* ramp, 4'-0" run toward aisle */
+    const r0 = W ? t.dep : 240 - t.dep - G.ramp.run, r1 = r0 + G.ramp.run;
+    add(PR(r0, cy-12, G.ramp.run, 24, `fill:${K.field};stroke:${K.rule2};stroke-width:.6;stroke-dasharray:4 2.5`));
+    for (let i=1;i<4;i++){ const xx = r0 + G.ramp.run*i/4; add(PL(xx,cy-12,xx,cy+12, ST.hair)); }
+    add(PT(W ? r1-10 : r0+10, cy, 'UP', fs(7,K.ink3,600,'middle',1.1)));
+    /* restraint loop + shampoo bank marks */
+    add(C(cy - t.len/2 + 6, W ? t.dep-3 : 240-t.dep+3, 2.4, `fill:none;stroke:${K.ink3};stroke-width:.7`));
+    /* tag */
+    add(PT(W ? 46 : 184, cy, b.tag, fs(11,K.ink,600,'middle',.6)));
+    add(PT(W ? 56 : 194, cy, TUB[b.type].label.toUpperCase()+' · '+fi(b.b-b.a), fs(6.4,K.ink3,400,'middle',.55)));
+    /* dividers each side, 6'-0" high */
+    [b.a, b.b].forEach(y => add(PL(W?0:156, y, W?84:240, y, `fill:none;stroke:${K.ink};stroke-width:2.4`)));
+    /* aisle fence with 32" gate */
+    const fx = W ? 84 : 156;
+    add(PL(fx, b.a, fx, cy-16, `fill:none;stroke:${K.ink2};stroke-width:1.2`));
+    add(PL(fx, cy+16, fx, b.b, `fill:none;stroke:${K.ink2};stroke-width:1.2`));
+    const open = W ? fx-32 : fx+32;
+    add(PL(fx, cy-16, open, cy-16, `fill:none;stroke:${K.ink2};stroke-width:1.6`));
+    add(P(`M ${cy+16} ${fx} A 32 32 0 0 ${W?0:1} ${cy-16} ${open}`, `fill:none;stroke:${K.rule2};stroke-width:.55`));
+  });
+
+  /* supply alcove */
+  add(PR(156, G.alcove.a, 84, G.alcove.b-G.alcove.a, `fill:${K.field};stroke:${K.rule2};stroke-width:.7`));
+  add(PT(190, (G.alcove.a+G.alcove.b)/2, 'TOWEL &', fs(7,K.ink2,600,'middle',.5)));
+  add(PT(199, (G.alcove.a+G.alcove.b)/2, 'SUPPLY', fs(7,K.ink2,600,'middle',.5)));
+  add(PT(210, (G.alcove.a+G.alcove.b)/2, "3'-0\"", fs(6.4,K.ink3,400,'middle',.4)));
+
+  /* ── aisle + trench drain ── */
+  add(PR(G.trench[0], G.trenchRun[0], 6, G.trenchRun[1]-G.trenchRun[0], `fill:${K.inset};stroke:${K.waste};stroke-width:.9`));
+  for (let y=G.trenchRun[0]+8; y<G.trenchRun[1]; y+=16) add(PL(117,y,123,y, `fill:none;stroke:${K.waste};stroke-width:.5;opacity:.55`));
+  add(PT(112, 300, "6\" SS TRENCH DRAIN — 1/8\" PER FOOT FALL TO 4\" OUTLET", fs(7,K.waste,500,'middle',.7)));
+  add(PT(133, 300, "AISLE FLOOR SLOPES 1/4\" PER FOOT BOTH SIDES TO TRENCH", fs(6.6,K.ink3,400,'middle',.6)));
+
+  /* ── zone A ── */
+  add(PR(150, 62, 90, 30, `fill:${K.field};stroke:${K.ink2};stroke-width:1`));
+  add(PT(166, 77, 'WELCOME DESK', fs(7,K.ink2,600,'middle',.6)));
+  add(PT(175, 77, '34" ACCESSIBLE TOP', fs(6.2,K.ink3,400,'middle',.5)));
+  add(PR(0, 14, 14, 44, `fill:${K.field};stroke:${K.rule2};stroke-width:.7`));
+  add(PT(22, 36, 'RETAIL', fs(6.4,K.ink3,500,'middle',.5)));
+  add(PR(4, 62, 20, 40, `fill:${K.field};stroke:${K.rule2};stroke-width:.7`));
+  add(PT(30, 82, 'BENCH', fs(6.4,K.ink3,500,'middle',.5)));
+  add(PL(96,0,96,36, `fill:none;stroke:${K.ink2};stroke-width:1.4`));
+  add(P('M 0 132 A 36 36 0 0 0 36 96', `fill:none;stroke:${K.rule2};stroke-width:.55`));
+  add(PT(150, 26, 'ENTRY', fs(8,K.ink2,600,'middle',1.4)));
+  add(PT(60, 60, 'ZONE A · ARRIVAL', fs(9,K.ink,600,'middle',1)));
+  add(PT(72, 60, '200 SF', fs(7,K.ink3,400,'middle',.6)));
+
+  /* ── zone C ── */
+  const room = (bx,by,bw,bd,name,area) => {
+    add(PR(bx,by,bw,bd, `fill:${K.field};stroke:${K.ink2};stroke-width:1`));
+    add(PT(bx+bw/2-3, by+bd/2, name, fs(7.4,K.ink,600,'middle',.7)));
+    if (area) add(PT(bx+bw/2+7, by+bd/2, area, fs(6.4,K.ink3,400,'middle',.5)));
+  };
+  room(0,432,66,90,'STORAGE','LAUNDRY · 41 SF');
+  room(156,432,84,90,'RESTROOM','ADA · 52 SF');
+  add(PR(170,445,20,28, `fill:none;stroke:${K.rule2};stroke-width:.7`));
+  add(PR(206,440,22,16, `fill:none;stroke:${K.rule2};stroke-width:.7`));
+  add(PT(112, 462, 'STAGING', fs(7.4,K.ink2,600,'middle',.7)));
+  add(PR(160,522,80,78, `fill:${K.field};stroke:${K.ink2};stroke-width:1`));
+  add(PT(198, 532, 'MECHANICAL', fs(7.4,K.ink,600,'middle',.7)));
+  add(PT(207, 532, '43 SF', fs(6.4,K.ink3,400,'middle',.5)));
+  [166,188,210].forEach(x => add(PR(x,584,18,12, `fill:none;stroke:${K.hot};stroke-width:.9`)));
+  add(C(556,228,10, `fill:none;stroke:${K.hot};stroke-width:.9`));
+  add(PR(186,540,30,18, `fill:none;stroke:${K.cold};stroke-width:.9`));
+  [170,188].forEach(x => add(C(556,x,7, `fill:none;stroke:${K.cold};stroke-width:.8`)));
+  G.xl.forEach(x => {
+    add(PR(x.x0, G.xlY[0], x.x1-x.x0, 78, `fill:${K.accT};stroke:none`));
+    add(R(G.xlY[0], x.x0, 78, x.x1-x.x0, `fill:none;stroke:${K.ink};stroke-width:2.4`));
+    add(PR(x.x0+12, 546, 54, 48, `fill:${K.field};stroke:${K.ink2};stroke-width:1.1`));
+    add(PL(x.x0+14, 570, x.x0+64, 570, `fill:none;stroke:${K.waste};stroke-width:1.2`));
+    add(PT(x.x0+34, 532, x.tag, fs(10,K.ink,600,'middle',.6)));
+  });
+
+  /* ── keynotes ── */
+  key(g, 1,  150, 14,  140, -6, 5.6);   // tub
+  key(g, 3,  168, 30,  178, -6, 5.6);   // tub door
+  key(g, 4,  215, 54,  213, -6, 5.6);   // ramp
+  key(g, 15, 278, 42,  278, -6, 5.6);   // 6'-0" divider
+  key(g, 16, 316, 84,  316, -6, 5.6);   // 4'-0" fence + gate
+  key(g, 22, 470, 121, 470, 141, 5.6);  // trench drain
+
+  /* ── dimension strings ── */
+  dimH(g, 0, 600, -52, "50'-0\"  SHELL DEPTH", 10);
+  [[0,120,"10'-0\""],[120,432,"26'-0\""],[432,600,"14'-0\""]].forEach(z => dimH(g,z[0],z[1],-34,z[2],8));
+  G.bays.filter(b=>b.side==='W').forEach(b => dimH(g,b.a,b.b,-16,fi(b.b-b.a),7));
+  dimH(g, G.alcove.a, G.alcove.b, 256, "3'-0\"", 7, false);
+  G.bays.filter(b=>b.side==='E').forEach(b => dimH(g,b.a,b.b,256,fi(b.b-b.a),7,false));
+  dimV(g, 0, 240, -22, "20'-0\"  SHELL WIDTH", 10);
+  dimV(g, 0, 84, 618, "7'-0\"", 8, false);
+  dimV(g, 84, 156, 618, "6'-0\" AISLE", 8, false);
+  dimV(g, 156, 240, 618, "7'-0\"", 8, false);
+
+  /* north arrow */
+  add(L(524,286,566,286, `fill:none;stroke:${K.ink2};stroke-width:.9`));
+  add(P('M 566 286 L 558 282.5 L 558 289.5 Z', `fill:${K.ink2};stroke:none`));
+  add(T(574, 289, 'N', fs(9,K.ink2,600,'start',.6)));
+  add(T(524, 300, 'PLAN NORTH', fs(6.6,K.ink3,400,'start',.7)));
+
+  s.appendChild(g);
+  legend(s.parentNode, [
+    [K.ink, "6'-0\" solid divider between bays", null],
+    ['var(--ink-2)', "4'-0\" fence + 32\" gate to aisle", null],
+    [K.acc, 'Tub door — walk-in, no lifting', null],
+    [K.waste, 'Trench drain + XL bay drains', null],
+    [K.hot, 'Water heating plant', null],
+    [K.cold, 'Booster + softener', null]
+  ]);
+})();
+</script>
+
+<script>
+/* ═══════════ A-201 SECTION THROUGH LARGE BAY ═══════════ */
+(function(){
+  const s = document.getElementById('sect');
+  s.setAttribute('viewBox','-90 -30 314 268');
+  const H = 180, Y = z => H - z;
+  const g = document.createDocumentFragment(), add = n => g.appendChild(n);
+  const box = (x,z,w,h,st) => R(x, Y(z+h), w, h, st);
+
+  /* shell + datum */
+  add(box(-8,0,8,168, `fill:${K.poche};opacity:.9;stroke:none`));
+  add(L(-8,Y(0),168,Y(0), ST.heavy));
+  add(L(-8,Y(168),168,Y(168), `fill:none;stroke:${K.ink2};stroke-width:1.4`));
+  for(let x=0;x<168;x+=12) add(L(x,Y(168),x+6,Y(164), `fill:none;stroke:${K.rule2};stroke-width:.5`));
+  add(T(84,Y(172),'STRUCTURE  14\'-0"', fs(6,K.ink3,500,'middle',.7)));
+  add(L(0,Y(120),168,Y(120), `fill:none;stroke:${K.ink2};stroke-width:.9;stroke-dasharray:6 3`));
+  add(T(166,Y(112),'ACOUSTIC CEILING  10\'-0"', fs(5.4,K.ink3,500,'end',.5)));
+
+  /* stratified ceiling zone: exhaust 10'-6", cold 11'-2", hot 11'-10" */
+  add(box(96,148,54,8, `fill:none;stroke:${K.rule2};stroke-width:.5;stroke-dasharray:3 2`));
+  add(T(123,Y(160),'DRIP PAN + LEAK CABLE', fs(5,K.ink3,500,'middle',.5)));
+  add(L(8,Y(142),122,Y(142), `fill:none;stroke:${K.hot};stroke-width:1.3`));
+  add(L(14,Y(134),130,Y(134), `fill:none;stroke:${K.cold};stroke-width:1.3`));
+  add(C(122,Y(142),3, `fill:none;stroke:${K.hot};stroke-width:1.1`));
+  add(C(130,Y(134),3, `fill:none;stroke:${K.cold};stroke-width:1.1`));
+  add(L(8,Y(142),8,Y(96), `fill:none;stroke:${K.hot};stroke-width:1.3`));
+  add(L(14,Y(134),14,Y(96), `fill:none;stroke:${K.cold};stroke-width:1.3`));
+  add(L(24,Y(96),24,Y(126), `fill:none;stroke:${K.air};stroke-width:1.5`));
+  add(L(24,Y(126),104,Y(126), `fill:none;stroke:${K.air};stroke-width:1.5`));
+  add(T(66,Y(130),'175 CFM', fs(5,K.air,500,'middle',.5)));
+
+  /* canopy: absorber + capture hood + reel mount + light */
+  add(box(0,90,72,6, `fill:${K.accT};stroke:${K.acc};stroke-width:1.2`));
+  add(box(66,78,6,12, `fill:${K.accT};stroke:${K.acc};stroke-width:1.2`));
+  for(let x=4;x<70;x+=4) add(L(x,Y(90),x,Y(96), `fill:none;stroke:${K.acc};stroke-width:.35;opacity:.5`));
+  add(box(44,88.4,20,1.8, `fill:${K.acc};stroke:none`));
+  add(box(8,88.4,14,1.8, `fill:none;stroke:${K.air};stroke-width:1.1`));
+  add(C(42,Y(93),5, `fill:${K.field};stroke:${K.ink2};stroke-width:.9`));
+  add(C(42,Y(93),2, `fill:none;stroke:${K.ink3};stroke-width:.5`));
+  add(L(42,Y(90),42,Y(58), `fill:none;stroke:${K.ink2};stroke-width:1`));
+  add(box(40,50,5,8, `fill:${K.field};stroke:${K.ink};stroke-width:1`));
+
+  /* tub, door, ramp */
+  add(box(0,0,30,36, `fill:${K.field};stroke:${K.ink};stroke-width:1.3`));
+  add(box(2,16,26,20, `fill:none;stroke:${K.ink2};stroke-width:.8`));
+  add(L(3,Y(18),27,Y(18), `fill:none;stroke:${K.acc};stroke-width:1.4`));
+  for(let x=4;x<27;x+=3) add(L(x,Y(17),x,Y(19), `fill:none;stroke:${K.acc};stroke-width:.4`));
+  add(box(3,0,27,4, `fill:${K.inset};stroke:${K.rule2};stroke-width:.5`));
+  add(box(22,1.5,7,3, `fill:${K.acc};stroke:none`));
+  add(L(30,Y(16),30,Y(36), `fill:none;stroke:${K.acc};stroke-width:1.8`));
+  add(P(`M 30 ${Y(16)} L 78 ${Y(0)} L 78 ${Y(-2)} L 30 ${Y(14)} Z`, `fill:${K.accT};stroke:${K.acc};stroke-width:1`));
+  for(let i=1;i<6;i++){ const t=i/6; add(L(30+48*t,Y(16-16*t),30+48*t,Y(14-16*t), `fill:none;stroke:${K.acc};stroke-width:.45`)); }
+  add(T(50,Y(28),'1:3  (18.4°)', fs(5,K.acc,600,'middle',.5)));
+
+  /* splash, mixer, shelf, dog */
+  add(box(0,36,2,24, `fill:${K.ink2};stroke:none;opacity:.35`));
+  add(C(3.5,Y(44),2.2, `fill:none;stroke:${K.ink};stroke-width:.9`));
+  add(L(5.7,Y(44),9,Y(44), `fill:none;stroke:${K.ink};stroke-width:.9`));
+  add(box(0,60,12,2.4, `fill:${K.field};stroke:${K.ink};stroke-width:1`));
+  for(let x=2;x<11;x+=2) add(C(x,Y(61.2),.5, `fill:${K.ink3};stroke:none`));
+  /* divider beyond, fence + gate, aisle, trench */
+  add(L(0,Y(72),84,Y(72), `fill:none;stroke:${K.ink};stroke-width:1.2;stroke-dasharray:7 3`));
+  add(T(80,Y(76),'6\'-0" DIVIDER BEYOND', fs(4.8,K.ink2,600,'end',.5)));
+  add(box(83,0,2,48, `fill:${K.ink2};stroke:none`));
+  add(T(90,Y(56),'4\'-0" FENCE + GATE', fs(4.8,K.ink2,600,'start',.5)));
+  add(P(`M 85 ${Y(0)} L 117 ${Y(-2.5)} M 123 ${Y(-2.5)} L 156 ${Y(0)}`, `fill:none;stroke:${K.ink};stroke-width:1.3`));
+  add(P(`M 0 ${Y(2)} L 84 ${Y(0)}`, `fill:none;stroke:${K.ink};stroke-width:1.3`));
+  add(box(117,-8,6,8, `fill:${K.inset};stroke:${K.waste};stroke-width:1.2`));
+  add(T(101,Y(5),'1/4" / FT', fs(4.4,K.ink3,500,'middle',.4)));
+  add(T(132,Y(-6),'TRENCH', fs(4.8,K.waste,600,'start',.5)));
+
+  /* level tags */
+  [[36,'RIM 36"'],[48,'FENCE 48"'],[72,'DIVIDER 72"'],[90,'CANOPY 90"'],[120,'CEILING 120"']].forEach(([z,t]) => {
+    add(L(-14,Y(z),-9,Y(z), `fill:none;stroke:${K.ink3};stroke-width:.6`));
+    add(P(`M -14 ${Y(z)} L -17.5 ${Y(z)-2} L -17.5 ${Y(z)+2} Z`, `fill:${K.ink3};stroke:none`));
+    add(T(-20,Y(z)+1.6,t, fs(4.8,K.ink3,500,'end',.4)));
+  });
+
+  /* keynotes */
+  [[1,14,26,-76,30],[2,14,18,-76,12],[9,4,44,-76,48],[10,6,61,-76,66],[19,52,91,-76,84],[17,30,93,-76,98],
+   [7,26,3,14,-18],[21,60,1,60,-18],[22,120,-4,140,-18],[4,58,7,78,20],[5,42,93,58,108],[6,42,55,60,64],
+   [15,70,72,88,80],[16,84,30,100,34],[18,24,112,10,120],[20,14,138,0,152],[24,150,120,162,132]]
+   .forEach(([n,tx,tz,bx,bz]) => key(g,n,tx,Y(tz),bx,Y(bz),4.6));
+
+  /* dimensions */
+  dimH(g, 0, 30, Y(-26), '2\'-6"', 6, false);
+  dimH(g, 30, 78, Y(-26), '4\'-0"', 6, false);
+  dimH(g, 84, 156, Y(-26), '6\'-0"', 6, false);
+  dimH(g, 0, 84, Y(-40), '7\'-0" BAY DEPTH', 7, false);
+  [[0,16,'1\'-4"'],[16,36,'1\'-8"'],[36,60,'2\'-0"'],[60,72,'1\'-0"'],[72,90,'1\'-6"'],[90,120,'2\'-6"'],[120,168,'4\'-0"']]
+    .forEach(([a,b,t]) => dimVt(g, Y(b), Y(a), 182, t, 5));
+
+  s.appendChild(g);
+  legend(s.parentNode, [
+    [K.acc,'Wet-side equipment · canopy · ramp',null],
+    [K.hot,'Hot supply 120°F to bay valve',null],
+    [K.cold,'Cold supply',null],
+    [K.air,'Bay exhaust 175 CFM',null],
+    [K.waste,'Trench drain',null]
+  ]);
+})();
+
+/* ═══════════ A-202 BAY ELEVATION ═══════════ */
+(function(){
+  const s = document.getElementById('elev');
+  s.setAttribute('viewBox','-88 -26 300 212');
+  const H = 132, Y = z => H - z;
+  const g = document.createDocumentFragment(), add = n => g.appendChild(n);
+  const box = (x,z,w,h,st) => R(x, Y(z+h), w, h, st);
+
+  add(L(-6,Y(0),84,Y(0), ST.heavy));
+  add(L(-6,Y(120),84,Y(120), `fill:none;stroke:${K.ink2};stroke-width:.8;stroke-dasharray:5 3`));
+  /* 6'-0" dividers each side */
+  [0,76].forEach(x => add(box(x,0,2,72, `fill:${K.ink};stroke:none`)));
+  /* canopy: absorber, light, exhaust grille, reel */
+  add(box(-4,90,86,6, `fill:${K.accT};stroke:${K.acc};stroke-width:1.2`));
+  [-4,78].forEach(x => add(box(x,78,4,12, `fill:${K.accT};stroke:${K.acc};stroke-width:1`)));
+  add(box(8,88.4,26,1.8, `fill:${K.acc};stroke:none`));
+  add(box(46,88.4,22,2.4, `fill:none;stroke:${K.air};stroke-width:1.1`));
+  add(C(39,Y(93),4, `fill:${K.field};stroke:${K.ink2};stroke-width:.9`));
+  add(L(39,Y(90),39,Y(58), `fill:none;stroke:${K.ink2};stroke-width:.9`));
+  add(box(37,50,4.5,8, `fill:${K.field};stroke:${K.ink};stroke-width:.9`));
+  /* tub, door, ramp beyond */
+  add(box(9,0,60,36, `fill:${K.field};stroke:${K.ink};stroke-width:1.3`));
+  add(box(7,36,64,1.8, `fill:${K.ink2};stroke:none`));
+  add(box(27,3,24,32, `fill:none;stroke:${K.acc};stroke-width:1.4`));
+  add(box(27,0,24,14, `fill:none;stroke:${K.acc};stroke-width:.7;stroke-dasharray:3 2`));
+  add(L(11,Y(18),67,Y(18), `fill:none;stroke:${K.acc};stroke-width:1.1;stroke-dasharray:4 2`));
+  /* splash, mixer, shelf */
+  add(box(7,37.8,64,22, `fill:none;stroke:${K.rule2};stroke-width:.7`));
+  [33,45].forEach(x => add(C(x,Y(44),2.4, `fill:none;stroke:${K.ink};stroke-width:1`)));
+  add(box(37.5,42.6,4,2.8, `fill:${K.ink};stroke:none`));
+  add(box(4,60,70,2.6, `fill:${K.field};stroke:${K.ink};stroke-width:1`));
+  for(let x=7;x<73;x+=4) add(C(x,Y(61.3),.55, `fill:${K.ink3};stroke:none`));
+  /* shampoo bank, grooming arm, dryer, gfci */
+  add(box(2,38,5,14, `fill:${K.field};stroke:${K.ink2};stroke-width:.9`));
+  for(let i=0;i<5;i++) add(L(2,Y(50-i*3),7,Y(50-i*3), `fill:none;stroke:${K.ink3};stroke-width:.5`));
+  add(P(`M 67 ${Y(36)} L 67 ${Y(70)} L 50 ${Y(70)} L 50 ${Y(61)}`, `fill:none;stroke:${K.ink};stroke-width:1.1`));
+  add(E('ellipse',{cx:50,cy:Y(56),rx:5,ry:4.6,style:`fill:none;stroke:${K.ink};stroke-width:1.1`}));
+  add(box(70,44,8,12, `fill:${K.field};stroke:${K.ink};stroke-width:1`));
+  add(box(70,58,5,4, `fill:none;stroke:${K.ctr};stroke-width:1`));
+
+  /* level tags */
+  [[36,'RIM 36"'],[60,'SHELF 60"'],[72,'DIVIDER 72"'],[90,'CANOPY 90"']].forEach(([z,t]) => {
+    add(L(-14,Y(z),-9,Y(z), `fill:none;stroke:${K.ink3};stroke-width:.6`));
+    add(P(`M -14 ${Y(z)} L -17.5 ${Y(z)-2} L -17.5 ${Y(z)+2} Z`, `fill:${K.ink3};stroke:none`));
+    add(T(-20,Y(z)+1.6,t, fs(4.8,K.ink3,500,'end',.4)));
+  });
+
+  /* keynotes */
+  [[19,21,91,-70,96],[10,12,61,-70,78],[9,39,44,-70,60],[11,4,44,-70,40],[1,20,26,-70,20],[3,39,10,-70,4],
+   [17,68,93,140,132],[5,39,93,140,118],[18,57,91,140,104],[15,77,66,140,86],
+   [13,72,58,140,68],[14,50,57,140,50],[6,39,55,140,32],[12,74,50,140,14]]
+   .forEach(([n,tx,tz,bx,bz]) => key(g,n,tx,Y(tz),bx,Y(bz),4.6));
+
+  /* dimensions */
+  dimH(g, 27, 51, Y(-6), '2\'-0"', 5.4, false);
+  dimH(g, 9, 69, Y(-16), '5\'-0" TUB', 5.4, false);
+  dimH(g, 0, 78, Y(-28), '6\'-6" CLEAR', 6.4, false);
+  [[0,16,'1\'-4"'],[16,36,'1\'-8"'],[36,60,'2\'-0"'],[60,72,'1\'-0"'],[72,90,'1\'-6"']]
+    .forEach(([a,b,t]) => dimVt(g, Y(b), Y(a), 104, t, 5));
+  s.appendChild(g);
+  legend(s.parentNode, [
+    [K.acc,'Tub door · grate platform · canopy',null],
+    [K.air,'Exhaust grille in canopy face',null],
+    ['var(--counter)','GFCI — 48" AFF, 12" clear of rim',null]
+  ]);
+})();
+</script>
+
+<script>
+/* ═══════════ P-401 WATER RISER ═══════════ */
+(function(){
+  const s = document.getElementById('riser');
+  s.setAttribute('viewBox','-96 6 800 340');
+  const g = document.createDocumentFragment(), add = n => g.appendChild(n);
+  const HOT=40, COLD=58, RECIRC=76, PX=573;
+  const W = (c,w) => `fill:none;stroke:${c};stroke-width:${w||1.6}`;
+  const plant = (y,h,t1,t2) => {
+    add(R(496,y,154,h, `fill:${K.field};stroke:${K.ink2};stroke-width:1.1`));
+    add(T(573,y+(t2?h/2-2:h/2+3.2),t1, fs(8,K.ink,600,'middle',.35)));
+    if (t2) add(T(573,y+h/2+8,t2, fs(7,K.ink3,400,'middle',.25)));
+  };
+  const note = (x,y,t,sz,col) => {
+    const w = t.length*sz*0.62;
+    add(R(x-w/2-4,y-sz-1,w+8,sz+6, `fill:${K.field};stroke:none`));
+    add(T(x,y,t, fs(sz,col||K.ink3,500,'middle',.6)));
+  };
+
+  add(L(-8,318,690,318, `fill:none;stroke:${K.ink};stroke-width:1.6`));
+  add(L(20,96,470,96, `fill:none;stroke:${K.rule2};stroke-width:.9;stroke-dasharray:7 4`));
+  add(T(-90,22,'CEILING ZONE — HEADERS ON TRAPEZE, DRIP PAN AND LEAK CABLE BELOW', fs(8.4,K.ink3,500,'start',.6)));
+
+  /* headers */
+  add(L(40,HOT,PX,HOT, W(K.hot,2.2)));
+  add(L(40,COLD,470,COLD, W(K.cold,2.2)));
+  add(L(40,RECIRC,452,RECIRC, `fill:none;stroke:${K.hot};stroke-width:1.6;stroke-dasharray:8 4`));
+  add(T(34,HOT+3.4,'HOT 120 °F · 1-1/4"', fs(8.6,K.hot,600,'end',.4)));
+  add(T(34,COLD+3.4,'COLD · 1-1/2"', fs(8.6,K.cold,600,'end',.4)));
+  add(T(34,RECIRC+3.4,'RECIRC ≥ 124 °F · 3/4"', fs(8.6,K.hot,600,'end',.4)));
+
+  /* bays */
+  [70,142,214,286,358].forEach((c,i) => {
+    add(L(c-9,HOT,c-9,150, W(K.hot,1.5)));
+    add(L(c+9,COLD,c+9,150, W(K.cold,1.5)));
+    add(C(c-9,116,3.6, `fill:${K.field};stroke:${K.hot};stroke-width:1.2`));
+    add(C(c+9,116,3.6, `fill:${K.field};stroke:${K.cold};stroke-width:1.2`));
+    add(R(c-29,150,58,40, `fill:${K.accT};stroke:${K.acc};stroke-width:1.2`));
+    add(T(c,165,'BAY '+(i+1), fs(9,K.ink,600,'middle',.5)));
+    add(T(c,176,'105 °F MAX', fs(7,K.ink2,400,'middle',.3)));
+    add(T(c,186,'2.0 GPM PC', fs(7,K.ink2,400,'middle',.3)));
+    add(L(c,190,c,298, W(K.waste,1.5)));
+  });
+  add(T(420,168,'+ 5 MORE', fs(9,K.ink3,600,'middle',.8)));
+  add(T(420,180,'STATIONS', fs(9,K.ink3,600,'middle',.8)));
+  note(214,138,'QUARTER-TURN ISOLATION AT EACH DROP',7.4);
+
+  /* waste */
+  add(L(70,298,404,298, W(K.waste,2.2)));
+  add(R(404,286,104,24, `fill:${K.field};stroke:${K.waste};stroke-width:1.4`));
+  add(T(456,295,'HAIR INTERCEPTOR', fs(7.8,K.waste,600,'middle',.3)));
+  add(T(456,305,'20 GPM · DAILY BASKET', fs(6.8,K.ink3,400,'middle',.3)));
+  add(L(508,298,650,298, W(K.waste,2.2)));
+  add(P('M 656 298 L 646 293.5 L 646 302.5 Z', `fill:${K.waste};stroke:none`));
+  add(T(648,288,'SANITARY 4"', fs(7.8,K.waste,600,'end',.4)));
+
+  /* plant column */
+  plant(96,18,'MASTER TMV 140 → 120 °F');
+  plant(120,24,'119 GAL BUFFER','stops tankless short-cycling');
+  plant(150,26,'3 × 199 MBH CONDENSING','597 MBH input · N+1');
+  plant(182,24,'DUPLEX VFD BOOSTER','25 GPM @ 45 PSI boost');
+  plant(212,20,'TWIN SOFTENER 25 GPM');
+  plant(240,20,'RPZ BACKFLOW PREVENTER');
+  plant(268,20,'METER + PRV');
+  [[288,268],[260,240],[232,212],[206,182],[176,150],[144,120],[114,96]].forEach(([a,b],i) =>
+    add(L(PX,a,PX,b, W(i>=4?K.hot:K.cold,1.8))));
+  add(L(700,278,650,278, W(K.cold,2.2)));
+  add(P('M 650 278 L 659 273.5 L 659 282.5 Z', `fill:${K.cold};stroke:none`));
+  add(T(700,268,'SERVICE', fs(7.8,K.cold,600,'end',.4)));
+  add(L(PX,96,PX,HOT, W(K.hot,2.2)));
+  add(P(`M 496 194 L 470 194 L 470 ${COLD}`, W(K.cold,2.2)));
+  add(P(`M 452 ${RECIRC} L 452 132 L 496 132`, `fill:none;stroke:${K.hot};stroke-width:1.6;stroke-dasharray:8 4`));
+  add(T(573,332,'MECHANICAL — BACK WALL', fs(8,K.ink3,600,'middle',.9)));
+  add(T(214,332,'WASH HALL — HEADERS RUN THE CEILING, DROPS AT EACH BAY', fs(8,K.ink3,600,'middle',.6)));
+
+  s.appendChild(g);
+  legend(s.parentNode, [
+    [K.hot,'Hot supply — solid','' ],
+    [K.hot,'Hot recirculation — dashed','8 4'],
+    [K.cold,'Cold supply',''],
+    [K.waste,'Sanitary waste','']
+  ]);
+})();
+
+/* ═══════════ S-501 HEARING RANGE CHART ═══════════ */
+(function(){
+  const s = document.getElementById('hearing');
+  s.setAttribute('viewBox','0 -12 640 226');
+  const g = document.createDocumentFragment(), add = n => g.appendChild(n);
+  const X0=76, X1=616, LO=Math.log10(20), HI=Math.log10(50000);
+  const fx = f => X0 + (Math.log10(f)-LO)/(HI-LO)*(X1-X0);
+  const bar = (a,b,y,h,c,label,val) => {
+    const n = E('rect',{x:fx(a),y,width:fx(b)-fx(a),height:h,rx:4,style:`fill:${c};stroke:none`});
+    n.appendChild(E('title',null,label+': '+val)); add(n);
+    add(T(fx(a), y+h+15, label.toUpperCase(), fs(10.5,K.ink,600,'start',1)));
+    add(T(fx(a)+(label.length*7.6)+10, y+h+15, val, fs(10.5,K.ink2,400,'start',.3)));
+  };
+
+  /* axis */
+  add(L(X0,158,X1,158, `fill:none;stroke:${K.rule2};stroke-width:1`));
+  [[20,'20 Hz'],[100,'100'],[500,'500'],[1000,'1k'],[4000,'4k'],[20000,'20k'],[45000,'45k']].forEach(([f,l]) => {
+    add(L(fx(f),158,fx(f),163, `fill:none;stroke:${K.rule2};stroke-width:1`));
+    add(T(fx(f),176,l, fs(10,K.ink3,400,'middle',.4)));
+  });
+  add(T(X0,199,'FREQUENCY — LOGARITHMIC', fs(9.5,K.ink3,500,'start',1.1)));
+
+  /* bark energy bracket */
+  add(P(`M ${fx(1000)} 48 L ${fx(1000)} 42 L ${fx(4000)} 42 L ${fx(4000)} 48`, `fill:none;stroke:${K.ink2};stroke-width:1.2`));
+  add(T((fx(1000)+fx(4000))/2, 36, 'BARK ENERGY 1–4 kHz', fs(9.5,K.ink2,600,'middle',.7)));
+  add(L(fx(40000),-4,fx(40000),24, `fill:none;stroke:${K.ink};stroke-width:2.4`));
+
+  /* series */
+  bar(20,20000,58,24,K.acc,'Human','20 Hz – 20 kHz');
+  bar(67,45000,106,24,K.ctr,'Dog','67 Hz – 45 kHz  (Heffner, 1983)');
+
+  /* markers */
+  add(L(fx(500),50,fx(500),140, `fill:none;stroke:${K.ink3};stroke-width:1.2;stroke-dasharray:5 4`));
+  add(T(fx(500)-6,36,'ANC CEILING ~500 Hz', fs(9.5,K.ink3,600,'end',.6)));
+  add(L(fx(40000),50,fx(40000),140, `fill:none;stroke:${K.ink};stroke-width:2.4`));
+  add(T(fx(40000)-8,-2,'PARAMETRIC CARRIER 40 kHz', fs(9.5,K.ink,600,'end',.6)));
+  add(T(fx(40000)-8,138,'inside canine hearing →', fs(9.5,K.ink,600,'end',.3)));
+
+  /* legend */
+  add(R(444,190,11,11, `fill:${K.acc};stroke:none;rx:2`));
+  add(T(460,199,'HUMAN', fs(9.5,K.ink2,500,'start',.8)));
+  add(R(516,190,11,11, `fill:${K.ctr};stroke:none;rx:2`));
+  add(T(532,199,'DOG', fs(9.5,K.ink2,500,'start',.8)));
+  s.appendChild(g);
+})();
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ═══════════ A-102 CUTAWAY MODEL ═══════════
+   Same G object as every drawing above. 1 three-unit = 1 foot. */
+(function(){
+  const canvas = document.getElementById('stage');
+  const readout = document.getElementById('readout');
+  if (!window.THREE) {
+    const d = document.createElement('div'); d.className = 'nowebgl';
+    d.textContent = '3D model unavailable — the WebGL library did not load. Plan and sections above carry the same geometry.';
+    canvas.replaceWith(d); return;
+  }
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas, antialias:true }); }
+  catch(e){
+    const d = document.createElement('div'); d.className = 'nowebgl';
+    d.textContent = '3D model unavailable — this browser has WebGL disabled.';
+    canvas.replaceWith(d); return;
+  }
+
+  /* theme */
+  const cs = getComputedStyle(document.documentElement);
+  const cvar = n => cs.getPropertyValue(n).trim();
+  const paper = cvar('--paper');
+  const dark = parseInt(paper.slice(1,3),16) + parseInt(paper.slice(3,5),16) + parseInt(paper.slice(5,7),16) < 330;
+  const PAL = dark
+    ? { bg:0x121A20, floor:0x1E272D, zone:0x182127, wall:0x2C3A43, cab:0x243239, tub:0x93A0A6,
+        part:0x3A4A53, fence:0x5C6D77, wood:0x3A4148, eq:0x2A363D, ramp:0x2E3F47 }
+    : { bg:0xECEDE8, floor:0xE4E6DF, zone:0xDBDED6, wall:0xC9CDC4, cab:0xF3F4F0, tub:0xAEB7BC,
+        part:0x9AA29C, fence:0x7C8890, wood:0xD6D8D0, eq:0xE9EBE5, ramp:0xDCE1DC };
+  const ACC = new THREE.Color(cvar('--accent')), HOT = new THREE.Color(cvar('--sys-hot')),
+        COLD = new THREE.Color(cvar('--sys-cold')), WASTE = new THREE.Color(cvar('--sys-waste')),
+        AIR = new THREE.Color(cvar('--sys-air'));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(PAL.bg);
+  const cam = new THREE.PerspectiveCamera(38, 2, 0.4, 500);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+
+  scene.add(new THREE.HemisphereLight(dark ? 0x4E6675 : 0xFFFFFF, dark ? 0x0B1014 : 0xB8BDB4, dark ? 0.85 : 1.05));
+  const d1 = new THREE.DirectionalLight(0xffffff, dark ? 0.75 : 0.72); d1.position.set(34, 46, 24); scene.add(d1);
+  const d2 = new THREE.DirectionalLight(0xffffff, 0.3); d2.position.set(-28, 20, -30); scene.add(d2);
+
+  const M = (c, r, m, o) => new THREE.MeshStandardMaterial({
+    color:c, roughness:r==null?0.82:r, metalness:m||0,
+    transparent:o!=null, opacity:o==null?1:o, depthWrite:o==null||o>0.5 });
+  const mFloor=M(PAL.floor,.94), mZone=M(PAL.zone,.94), mWall=M(PAL.wall,.9), mCab=M(PAL.cab,.62),
+        mTub=M(PAL.tub,.32,.65), mPart=M(PAL.part,.8), mFence=M(PAL.fence,.55,.35),
+        mWood=M(PAL.wood,.8), mEq=M(PAL.eq,.6), mRamp=M(PAL.ramp,.85),
+        mAcc=M(ACC.getHex(),.6,0,.5), mAccS=M(ACC.getHex(),.55),
+        mHot=M(HOT.getHex(),.5,.2), mCold=M(COLD.getHex(),.5,.2),
+        mWaste=M(WASTE.getHex(),.6,0,.72), mAir=M(AIR.getHex(),.55,.15,.85);
+
+  const root = new THREE.Group(); root.position.set(-10, 0, -25); scene.add(root);
+  const LY = {}; ['arch','acoustic','hot','cold','waste','air'].forEach(k => {
+    LY[k] = new THREE.Group(); root.add(LY[k]);
+  });
+  LY.hot.visible = LY.cold.visible = LY.waste.visible = LY.air.visible = false;
+
+  /* building-inches → scene */
+  const B = (x,y,z,w,d,h,mat,layer) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w/12,h/12,d/12), mat);
+    m.position.set((x+w/2)/12, (z+h/2)/12, (y+d/2)/12);
+    (layer||LY.arch).add(m); return m;
+  };
+  const V = (x,y,z) => new THREE.Vector3(x/12, z/12, y/12);
+  const pipe = (p1,p2,rIn,mat,layer) => {
+    const dv = new THREE.Vector3().subVectors(p2,p1), len = dv.length();
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rIn/12,rIn/12,len,10), mat);
+    m.position.copy(p1).add(p2).multiplyScalar(.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dv.normalize());
+    layer.add(m); return m;
+  };
+
+  /* ── shell ── */
+  B(0,0,-3, 240,600,3, mFloor);
+  B(0,0,0, 240,120,.4, mZone); B(0,432,0, 240,168,.4, mZone);
+  B(-8,-8,0, 8,616,48, mWall); B(240,-8,0, 8,616,48, mWall);
+  B(-8,-8,0, 256,8,48, mWall); B(-8,600,0, 256,8,48, mWall);
+
+  /* ── elevated bays ── */
+  const picks = [];
+  G.bays.forEach(b => {
+    const W = b.side==='W', t = TUB[b.type], cy=(b.a+b.b)/2, w = b.b-b.a;
+    const bx0 = W ? 0 : 240-G.bayDepth;
+    const tint = B(bx0, b.a, .4, G.bayDepth, w, .3, M(ACC.getHex(),.95,0,.14));
+    const tx = W ? 0 : 240-t.dep;
+    B(tx, cy-t.len/2, 0, t.dep, t.len, 36, mCab);
+    B(tx+2, cy-t.len/2+2, 16, t.dep-4, t.len-4, 19.6, mTub);
+    B(tx+3, cy-t.len/2+3, 17.6, t.dep-6, t.len-6, 1.2, mAccS);
+    /* ramp */
+    const ang = Math.atan2(G.ramp.rise, G.ramp.run), Lr = Math.hypot(G.ramp.run, G.ramp.rise);
+    const rm = new THREE.Mesh(new THREE.BoxGeometry(Lr/12, 2/12, G.ramp.wide/12), mRamp);
+    rm.position.set((W ? t.dep+24 : 240-t.dep-24)/12, 8/12, cy/12);
+    rm.rotation.z = W ? -ang : ang;
+    LY.arch.add(rm);
+    /* 6'-0" dividers + 4'-0" fence with gate gap */
+    [b.a-1, b.b-1].forEach(y => B(bx0, y, 0, G.bayDepth, 2, G.divider, mPart));
+    const fx = W ? 83 : 155;
+    B(fx, b.a, 0, 2, (w/2)-16, G.fence, mFence);
+    B(fx, cy+16, 0, 2, (b.b-cy)-16, G.fence, mFence);
+    /* canopy + reel + dryer */
+    B(bx0, b.a+2, G.canopy.btm, G.canopy.depth, w-4, 6, mAcc, LY.acoustic);
+    B(W?66:156, b.a+2, 78, 6, w-4, 12, mAcc, LY.acoustic);
+    const reel = new THREE.Mesh(new THREE.CylinderGeometry(5/12,5/12,7/12,14), mEq);
+    reel.rotation.x = Math.PI/2; reel.position.set((W?42:198)/12, 93/12, cy/12);
+    LY.acoustic.add(reel);
+    pipe(V(W?42:198, cy, 90), V(W?42:198, cy, 54), .6, mEq, LY.arch);
+    B(W?46:188, b.a+4, 44, 6, 10, 12, mEq);
+    /* supply drops */
+    pipe(V(W?10:230, cy, 132), V(W?10:230, cy, 96), .9, mHot, LY.hot);
+    pipe(V(W?16:224, cy, 128), V(W?16:224, cy, 96), .9, mCold, LY.cold);
+    /* exhaust */
+    pipe(V(W?14:226, cy, 96), V(W?14:226, cy, 124), 2.6, mAir, LY.air);
+    pipe(V(W?14:226, cy, 124), V(120, cy, 124), 2.6, mAir, LY.air);
+    /* drain footprint */
+    B(tx+t.dep/2-2, cy-2, .5, 4, 4, .5, mWaste, LY.waste);
+    B(W?4:172, cy-2, .5, 64, 4, .5, mWaste, LY.waste);
+    /* pick volume */
+    const pk = B(bx0, b.a, 0, G.bayDepth, w, 72, new THREE.MeshBasicMaterial({visible:false}));
+    pk.userData = { tag:b.tag, spec:SPEC[b.tag], hl:tint }; picks.push(pk);
+  });
+
+  /* ── trench + waste main ── */
+  B(G.trench[0], G.trenchRun[0], .2, 6, G.trenchRun[1]-G.trenchRun[0], .6, mWaste, LY.waste);
+  B(G.trench[0], G.trenchRun[0], 0, 6, G.trenchRun[1]-G.trenchRun[0], .5, M(PAL.wall,.9));
+  B(176, 522, .5, 40, 22, 3, mWaste, LY.waste);
+
+  /* ── ceiling headers ── */
+  pipe(V(120,140,132), V(120,540,132), 1.6, mHot, LY.hot);
+  pipe(V(128,140,128), V(128,540,128), 1.9, mCold, LY.cold);
+  pipe(V(112,140,124), V(112,528,124), 3.2, mAir, LY.air);
+
+  /* ── back of house ── */
+  B(0,432,0, 66,90,48, mWall); B(156,432,0, 84,90,48, mWall);
+  B(160,522,0, 80,78,48, mWall);
+  [168,190,212].forEach(x => B(x, 588, 40, 18, 10, 26, mHot, LY.hot));
+  const bufTank = new THREE.Mesh(new THREE.CylinderGeometry(13/12,13/12,52/12,18), mEq);
+  bufTank.position.set(176/12, 26/12, 560/12); LY.arch.add(bufTank);
+  B(196, 540, 0, 40, 20, 26, mEq);
+  [170,188].forEach(x => { const s2 = new THREE.Mesh(new THREE.CylinderGeometry(8/12,8/12,54/12,14), mEq);
+    s2.position.set(x/12, 27/12, 532/12); LY.arch.add(s2); });
+  G.xl.forEach(x => {
+    const tintx = B(x.x0, G.xlY[0], .4, x.x1-x.x0, 78, .3, M(ACC.getHex(),.95,0,.14));
+    B(x.x0+12, 546, 0, 54, 48, 1.5, mCab);
+    B(x.x0+14, 568, .6, 50, 4, .8, mWaste, LY.waste);
+    B(x.x0-1, G.xlY[0], 0, 2, 78, G.divider, mPart);
+    B(x.x1-1, G.xlY[0], 0, 2, 78, G.divider, mPart);
+    B(x.x0, 528, 90, 66, 66, 6, mAcc, LY.acoustic);
+    pipe(V(x.x0+33, 560, 132), V(x.x0+33, 560, 96), .9, mHot, LY.hot);
+    pipe(V(x.x0+33, 566, 128), V(x.x0+33, 566, 96), .9, mCold, LY.cold);
+    const pk = B(x.x0, G.xlY[0], 0, x.x1-x.x0, 78, 60, new THREE.MeshBasicMaterial({visible:false}));
+    pk.userData = { tag:x.tag, spec:SPEC[x.tag], hl:tintx }; picks.push(pk);
+  });
+
+  /* ── arrival ── */
+  B(150,62,0, 90,30,40, mWood); B(4,62,0, 20,40,18, mWood); B(0,14,0, 14,44,60, mWood);
+  B(156,120,0, 84,36,36, mWood);
+
+  /* ═══ camera + interaction ═══ */
+  const target = new THREE.Vector3(0, 3.6, 0);
+  const sph = { r:62, theta:-0.86, phi:1.0 };
+  const VIEWS = {
+    iso:{ t:[0,3.6,0], r:62, theta:-0.86, phi:1.0 },
+    top:{ t:[0,0,0],   r:52, theta:-Math.PI/2, phi:0.07 },
+    eye:{ t:[0,4.6,-2],r:24, theta:-1.55, phi:1.44 },
+    bay:{ t:[-6.5,3.2,-11.8], r:15, theta:-0.5, phi:1.16 }
+  };
+  function apply(v){
+    target.set(v.t[0], v.t[1], v.t[2]); sph.r = v.r; sph.theta = v.theta; sph.phi = v.phi; draw();
+  }
+  function place(){
+    const sp = Math.sin(sph.phi);
+    cam.position.set(target.x + sph.r*sp*Math.sin(sph.theta),
+                     target.y + sph.r*Math.cos(sph.phi),
+                     target.z + sph.r*sp*Math.cos(sph.theta));
+    cam.lookAt(target);
+  }
+  let queued = false;
+  function draw(){ if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; place(); renderer.render(scene, cam); }); }
+  function resize(){
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false); cam.aspect = w/h; cam.updateProjectionMatrix(); draw();
+  }
+  new ResizeObserver(resize).observe(canvas); resize();
+
+  /* pointer orbit / pan / zoom */
+  const pts = new Map(); let last = null, moved = 0, pinch = 0;
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('pointerdown', e => {
+    canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    last = {x:e.clientX, y:e.clientY, b:e.button, shift:e.shiftKey}; moved = 0;
+    if (pts.size === 2){ const [a,b] = [...pts.values()]; pinch = Math.hypot(a.x-b.x, a.y-b.y); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (pts.size === 2){
+      const [a,b] = [...pts.values()], d = Math.hypot(a.x-b.x, a.y-b.y);
+      if (pinch) { sph.r = Math.min(140, Math.max(7, sph.r * pinch/d)); draw(); }
+      pinch = d; return;
+    }
+    if (!last) return;
+    const dx = e.clientX-last.x, dy = e.clientY-last.y;
+    moved += Math.abs(dx)+Math.abs(dy);
+    if (last.b === 2 || last.shift){
+      const right = new THREE.Vector3().setFromMatrixColumn(cam.matrix, 0);
+      const up = new THREE.Vector3().setFromMatrixColumn(cam.matrix, 1);
+      const k = sph.r * 0.0016;
+      target.addScaledVector(right, -dx*k).addScaledVector(up, dy*k);
+    } else {
+      sph.theta -= dx*0.006;
+      sph.phi = Math.min(1.53, Math.max(0.05, sph.phi - dy*0.006));
+    }
+    last.x = e.clientX; last.y = e.clientY; draw();
+  });
+  function release(e){ pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (!pts.size) last = null; }
+  canvas.addEventListener('pointerup', e => { if (moved < 5) hit(e); release(e); });
+  canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault(); sph.r = Math.min(140, Math.max(7, sph.r * (1 + e.deltaY*0.0014))); draw();
+  }, {passive:false});
+
+  /* selection */
+  const ray = new THREE.Raycaster(); let selected = null;
+  function hit(e){
+    const r = canvas.getBoundingClientRect();
+    ray.setFromCamera(new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1), cam);
+    const h = ray.intersectObjects(picks, false);
+    if (selected){ selected.material.opacity = 0.14; selected = null; }
+    if (!h.length){ readout.textContent = 'Click a bay to inspect it'; draw(); return; }
+    const u = h[0].object.userData;
+    selected = u.hl; selected.material.opacity = 0.62;
+    readout.innerHTML = `<b>${u.tag}</b> — ${u.spec}`;
+    draw();
+  }
+
+  /* controls */
+  document.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-view]').forEach(o => o.setAttribute('aria-pressed', o === btn));
+    apply(VIEWS[btn.dataset.view]);
+  }));
+  document.querySelectorAll('[data-layer]').forEach(btn => btn.addEventListener('click', () => {
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', on); LY[btn.dataset.layer].visible = on; draw();
+  }));
+  apply(VIEWS.iso);
+})();
+
+/* sheet index highlight */
+(function(){
+  const links = [...document.querySelectorAll('.idx a')];
+  const map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+  const io = new IntersectionObserver(es => es.forEach(en => {
+    if (en.isIntersecting){ links.forEach(a => a.classList.remove('on')); map.get(en.target.id)?.classList.add('on');
+      map.get(en.target.id)?.scrollIntoView({block:'nearest', inline:'nearest'}); }
+  }), { rootMargin:'-20% 0px -70% 0px' });
+  document.querySelectorAll('section.sheet').forEach(s => io.observe(s));
+})();
+</script>
