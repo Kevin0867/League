@@ -20,6 +20,31 @@ export async function canViewTeamNotes(teamId: string): Promise<boolean> {
   return team.coachId === coach.id || team.assistantCoaches.some((tc) => tc.coachId === coach.id);
 }
 
+// Notes access for the progress pages + the coaching-notes API. Admins and the
+// team's head/assistant coaches always; ALSO any coach who covers (or covered) a
+// session for this team — a substitute/backup — so a sub can keep notes for the
+// players they coached that day. The full team console page stays
+// head/assistant-only (canViewTeamNotes above); this is the wider notes-only gate.
+export async function canCoverTeamNotes(teamId: string): Promise<boolean> {
+  const session = await getSession();
+  if (!session) return false;
+  if (can(session.roles ?? [session.role], "manageTeams")) return true;
+  if (!session.personId) return false;
+  const coach = await prisma.coach.findUnique({ where: { personId: session.personId }, select: { id: true } });
+  if (!coach) return false;
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { coachId: true, assistantCoaches: { select: { coachId: true } } },
+  });
+  if (!team) return false;
+  if (team.coachId === coach.id || team.assistantCoaches.some((tc) => tc.coachId === coach.id)) return true;
+  const covers = await prisma.sessionCoach.findFirst({
+    where: { coachId: coach.id, session: { teams: { some: { teamId } } } },
+    select: { id: true },
+  });
+  return !!covers;
+}
+
 /** Team ids a given USER (by userId) heads or assists. Empty if not a coach.
  *  Used by API routes that authorize from the form ticket (actor.userId). */
 export async function coachedTeamIdsForUser(userId: string): Promise<string[]> {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
-import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
+import { canCoverTeamNotes } from "@/lib/domain/coachingAccess";
 import { COACHING_WEEKS, COACHING_WEEK_COUNT, noteHasContent } from "@/lib/domain/coachingNotes";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
 import { formatTime12, BUSINESS_TZ } from "@/lib/time";
@@ -35,7 +35,7 @@ export default async function TeamProgressPage({
 }) {
   const { id: teamId } = await params;
   const sp = await searchParams;
-  if (!(await canViewTeamNotes(teamId))) redirect("/console/teams");
+  if (!(await canCoverTeamNotes(teamId))) redirect("/console/teams");
   const ticket = await mintConsoleTicket();
 
   const team = await prisma.team.findUnique({

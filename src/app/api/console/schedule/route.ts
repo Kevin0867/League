@@ -421,12 +421,13 @@ export async function POST(req: Request) {
         description: "PURE Academy",
       };
       const attachments = assigned.person?.email ? [icsInvite(teams || "PURE Academy session", [event], assigned.person.email)] : undefined;
+      const classLink = `${origin}/console/schedule/${sessDetail.id}`;
       await dispatchMessage({
         senderId: actor.userId, seasonId: sessDetail.seasonId,
         audienceType: "SINGLE_PERSON", audienceRef: assigned.personId,
         channels: ["IN_APP", "EMAIL"], triggerType: "COACH_ASSIGNED_SESSION",
         subject: "You've been added to a class",
-        body: `You're set as ${role.toLowerCase()} for ${teams || "a session"} on ${formatDate(sessDetail.date)} at ${formatTime12(sessDetail.startTime)}${sessDetail.facility ? ` · ${sessDetail.facility.name}` : ""}. The attached invite adds it to your calendar; subscribe to keep it in sync: ${feed}`,
+        body: `You're set as ${role.toLowerCase()} for ${teams || "a session"} on ${formatDate(sessDetail.date)} at ${formatTime12(sessDetail.startTime)}${sessDetail.facility ? ` · ${sessDetail.facility.name}` : ""}. Open the class to check players in, add notes, and message the team: ${classLink}. You'll also get a text with this link about 15 minutes before it starts. The attached invite adds it to your calendar; subscribe to keep it in sync: ${feed}`,
         attachments,
       });
     }

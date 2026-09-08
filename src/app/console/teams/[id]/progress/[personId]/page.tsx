@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
-import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
+import { canCoverTeamNotes } from "@/lib/domain/coachingAccess";
 import { PendingSubmit } from "@/components/ConfirmSubmit";
 import { RecipientChecklist } from "@/components/RecipientChecklist";
 import { SpeechToTextArea } from "@/components/SpeechToTextArea";
@@ -51,7 +51,7 @@ export default async function StudentProgressPage({
 }) {
   const { id: teamId, personId } = await params;
   const sp = await searchParams;
-  if (!(await canViewTeamNotes(teamId))) redirect("/console/teams");
+  if (!(await canCoverTeamNotes(teamId))) redirect("/console/teams");
   const ticket = await mintConsoleTicket();
 
   const [team, member, notes] = await Promise.all([
