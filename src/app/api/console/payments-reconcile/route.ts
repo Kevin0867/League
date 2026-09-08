@@ -17,6 +17,27 @@ export async function POST(req: Request) {
 
   const actor = await actorFromForm(fd);
   if (!actor || !can(actor.role, "runPayouts")) return back("?err=auth");
+
+  // Purge the $0.00 imported charges — Stripe's card-verification / setup
+  // authorizations that got imported as empty "needs filing" rows. This only
+  // deletes local rows, so it works whether or not Stripe is configured; scoped
+  // hard to STRIPE_IMPORT + amountCents 0 so nothing with money is touched.
+  if (String(fd.get("op") ?? "") === "remove-zero-imports") {
+    try {
+      const del = await prisma.payment.deleteMany({
+        where: { direction: "IN", category: "STRIPE_IMPORT", amountCents: 0 },
+      });
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: "reconcile", action: "IMPORT_REVERTED",
+        summary: `Removed ${del.count} zero-dollar imported charge(s) (Stripe card verifications)`,
+      });
+      return back(`?zeroremoved=${del.count}`);
+    } catch (e) {
+      console.error("remove zero imports failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "cleanup failed")}`);
+    }
+  }
+
   if (!isStripeConfigured()) return back("?recerr=notconfigured");
 
   // Revert the historical over-import: remove the pre-floor auto-imported rows

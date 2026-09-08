@@ -313,6 +313,11 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
       res.chargesScanned++;
       // Only real money in: a succeeded, captured charge.
       if (charge.status !== "succeeded" || !charge.paid) continue;
+      // Skip $0 charges — Stripe records a succeeded, paid $0.00 charge for card
+      // verifications / setup authorizations (saving a card, starting a
+      // subscription). They carry no revenue and often no email, so importing
+      // them just litters the triage list with empty rows.
+      if (charge.amount <= 0) continue;
       res.chargesScannedCents += charge.amount;
 
       try {
