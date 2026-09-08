@@ -18,6 +18,7 @@ import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
 import { feeStateOf } from "@/lib/domain/feeStatus";
+import { payableCompletedRows } from "@/lib/domain/coachPay";
 
 export const dynamic = "force-dynamic";
 
@@ -202,18 +203,23 @@ export default async function PaymentsPage({
   // $1,200/season → $100/session), falling back to the default per-session rate.
   // $0 until practices begin — nothing is owed for sessions that haven't happened.
   const SESSIONS_PER_SEASON = 12;
-  const [coachPayoutAgg, facilityDueAgg, deliveredByCoach, coachRates] = await Promise.all([
+  const [coachPayoutAgg, facilityDueAgg, paidRows, coachRates] = await Promise.all([
     prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
     prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
-    prisma.sessionCoach.groupBy({ by: ["coachId"], where: { session: { status: "DELIVERED" } }, _count: true }),
+    // Pay accrues on completion: payable rows on classes whose end time has
+    // passed (not cancelled). Substitute coverage already moved the payable flag
+    // to whoever worked the class.
+    payableCompletedRows(),
     prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
   ]);
+  const completedByCoach = new Map<string, number>();
+  for (const r of paidRows) completedByCoach.set(r.coachId, (completedByCoach.get(r.coachId) ?? 0) + 1);
   const rateMap = new Map(coachRates.map((c) => [c.id, c.seasonPayCents]));
   const perSessionFor = (coachId: string) => {
     const seasonPay = rateMap.get(coachId);
     return seasonPay && seasonPay > 0 ? Math.round(seasonPay / SESSIONS_PER_SEASON) : COACH_PER_SESSION_CENTS;
   };
-  const accruedCoachCents = deliveredByCoach.reduce((s, r) => s + perSessionFor(r.coachId) * r._count, 0);
+  const accruedCoachCents = [...completedByCoach.entries()].reduce((s, [coachId, count]) => s + perSessionFor(coachId) * count, 0);
   const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
   const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : accruedCoachCents;
   const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;

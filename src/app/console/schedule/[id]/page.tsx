@@ -132,7 +132,8 @@ export default async function SessionDetail({
 
       {coveringSub && (
         <div className="rounded-lg border-l-4 border-brand-400 bg-brand-50 px-4 py-3 text-sm text-brand-800">
-          You&apos;re covering this class as a {myRole === "BACKUP" ? "backup" : "substitute"} coach. Check players in below and add notes for the team — saving attendance records the session, so it&apos;s counted toward your pay.
+          You&apos;re covering this class as a {myRole === "BACKUP" ? "backup" : "substitute"} coach — check players in and add notes for the team below.
+          {myRole === "SUBSTITUTE" && " This session&apos;s pay is yours, not the normal coach&apos;s."} It&apos;s credited to you automatically once the class time is over — no check-out needed.
         </div>
       )}
       {ok && (

@@ -12,6 +12,7 @@ import {
   type FacilityRates,
   type DeliveredSession,
 } from "@/lib/domain/finance";
+import { payableCompletedRows } from "@/lib/domain/coachPay";
 
 // Payments mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -284,15 +285,19 @@ async function generatePayoutRun(
   const coaches = await prisma.coach.findMany({ include: { person: true } });
   let lines = 0;
 
+  // Sessions that are COMPLETE (end time passed, not cancelled) and PAYABLE for
+  // this coach — pay follows whoever actually covered the class, credited on
+  // completion, no check-out required. Fetched once for the whole run.
+  const paidRows = await payableCompletedRows({ periodStart: start, periodEnd: end });
+  const rowsByCoach = new Map<string, string[]>();
+  for (const r of paidRows) {
+    const list = rowsByCoach.get(r.coachId) ?? [];
+    list.push(r.role);
+    rowsByCoach.set(r.coachId, list);
+  }
+
   for (const coach of coaches) {
-    // Delivered sessions this coach worked in the period, with their role.
-    const sessionCoachRows = await prisma.sessionCoach.findMany({
-      where: {
-        coachId: coach.id,
-        session: { status: "DELIVERED", date: { gte: start, lt: end } },
-      },
-      select: { role: true },
-    });
+    const sessionCoachRows = (rowsByCoach.get(coach.id) ?? []).map((role) => ({ role }));
 
     let sessionPayCents = 0;
     for (const sc of sessionCoachRows) {
