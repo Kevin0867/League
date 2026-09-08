@@ -31,6 +31,15 @@ async function authorizeTeamNotes(actor: Actor, teamId: string) {
   if (myCoach && (team.coachId === myCoach.id || team.assistantCoaches.some((tc) => tc.coachId === myCoach.id))) {
     return { ok: true as const, team };
   }
+  // A substitute/backup who covers (or covered) a session for this team may keep
+  // notes for the players they coached — mirrors canCoverTeamNotes.
+  if (myCoach) {
+    const covers = await prisma.sessionCoach.findFirst({
+      where: { coachId: myCoach.id, session: { teams: { some: { teamId } } } },
+      select: { id: true },
+    });
+    if (covers) return { ok: true as const, team };
+  }
   return { ok: false as const, team: null };
 }
 

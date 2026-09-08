@@ -79,13 +79,17 @@ export default async function SessionDetail({
   // reschedule / relocate / cancel / delete / coach-staffing stay admin-only.
   const viewer = await getSession();
   const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
+  const myCoachId = viewer?.personId
+    ? (await prisma.coach.findUnique({ where: { personId: viewer.personId }, select: { id: true } }))?.id ?? null
+    : null;
   if (!admin) {
-    const coachId = viewer?.personId
-      ? (await prisma.coach.findUnique({ where: { personId: viewer.personId }, select: { id: true } }))?.id ?? null
-      : null;
-    const onSession = !!coachId && (sessionCoachIds.has(coachId) || s.teams.some((t) => t.team.coachId === coachId));
+    const onSession = !!myCoachId && (sessionCoachIds.has(myCoachId) || s.teams.some((t) => t.team.coachId === myCoachId));
     if (!onSession) redirect("/console");
   }
+  // If the viewer is covering this class as a substitute/backup, note it so they
+  // know check-in records the session toward their pay.
+  const myRole = myCoachId ? s.coaches.find((c) => c.coachId === myCoachId)?.role ?? null : null;
+  const coveringSub = !admin && (myRole === "SUBSTITUTE" || myRole === "BACKUP");
 
   const attMap = new Map(s.attendance.map((a) => [a.personId, a.status]));
   const roster = s.teams.flatMap((t) => t.team.members.map((m) => ({ ...m, teamName: t.team.name })));
@@ -126,6 +130,11 @@ export default async function SessionDetail({
         )}
       </div>
 
+      {coveringSub && (
+        <div className="rounded-lg border-l-4 border-brand-400 bg-brand-50 px-4 py-3 text-sm text-brand-800">
+          You&apos;re covering this class as a {myRole === "BACKUP" ? "backup" : "substitute"} coach. Check players in below and add notes for the team — saving attendance records the session, so it&apos;s counted toward your pay.
+        </div>
+      )}
       {ok && (
         <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{OK_LABEL[ok] ?? "Done."}</div>
       )}
