@@ -10,6 +10,7 @@ import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { icsInvite, phoenixWallTimeToUtc, type IcsEvent } from "@/lib/domain/ics";
 import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
 import { isBookable, DOW } from "@/lib/domain/facilityWindows";
+import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 
 // Schedule mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -285,11 +286,17 @@ export async function POST(req: Request) {
 
   // Add a single one-off practice for a team and (by default) notify the team.
   // Complements bulk "generate" — for a make-up session or an extra practice.
+  // Admins may add for any team; a coach may add ONLY for a team they head or
+  // assist (their own roster).
   if (op === "addSession") {
-    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    if (!actor) return back("?err=auth");
     const teamId = String(formData.get("teamId") ?? "");
     const team = await prisma.team.findUnique({ where: { id: teamId } });
     if (!team) return back("?err=team");
+    if (!can(actor.roles, "manageScheduling")) {
+      const mine = await coachedTeamIdsForUser(actor.userId);
+      if (!mine.includes(teamId)) return back("?err=notyourteam");
+    }
 
     const dateStr = String(formData.get("date") ?? "").trim();
     const parsed = dateStr ? new Date(dateStr) : null;
