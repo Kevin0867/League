@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatStamp } from "@/lib/time";
+import { formatStamp, formatDate, formatTime12, formatTimeRange12 } from "@/lib/time";
+import { AddPracticeForm } from "../../schedule/AddPracticeForm";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -50,6 +51,11 @@ const OK_MSG: Record<string, string> = {
   resentAll: "Fee reminders resent to unpaid players.",
   addTeamCoach: "Coach added to the team.",
   removeTeamCoach: "Coach removed from the team.",
+  generate: "Practice schedule generated for this team.",
+  added: "Practice added — the team has been notified.",
+  deleted: "Practice deleted.",
+  edited: "Practice updated.",
+  cancel: "Session cancelled.",
 };
 
 const ERR_MSG: Record<string, string> = {
@@ -69,6 +75,13 @@ const ERR_MSG: Record<string, string> = {
   op: "Unknown action.",
   fields: "Missing details for that action.",
   nopayment: "No season-fee invoice to request — this player may be fee-waived or on a non-Academy registration.",
+  config: "Set the team's day, time, and facility before generating practices.",
+  exists: "This team already has a practice schedule.",
+  adddate: "Pick a valid date for the practice.",
+  addslot: "That date and time is outside the facility's available hours — pick a time the facility is open.",
+  session: "Session not found.",
+  sessionlinked: "That practice has linked records and couldn't be deleted — open it and Cancel instead.",
+  notyourteam: "You can only add practices for teams you coach.",
 };
 
 export default async function TeamDetailPage({
@@ -243,6 +256,16 @@ export default async function TeamDetailPage({
     (tally[it.garment] ??= {})[it.size] = (tally[it.garment]?.[it.size] ?? 0) + it.quantity;
   }
 
+  // This team's practices (for the Schedule card on the team page). Only
+  // PRACTICE sessions — league/championship are managed from their own pages.
+  const teamPractices = await prisma.session.findMany({
+    where: { type: "PRACTICE", teams: { some: { teamId: team.id } } },
+    include: { facility: { select: { name: true } } },
+    orderBy: { date: "asc" },
+  });
+  const hasDayTimeFacility = !!team.dayOfWeek && !!team.startTime && !!team.facilityId;
+  const canGenerate = hasDayTimeFacility && teamPractices.length === 0;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -310,11 +333,15 @@ export default async function TeamDetailPage({
           messages with a family. */}
       <div className="card">
         <h2 className="font-semibold text-slate-900">Coach tools</h2>
-        <p className="mt-0.5 text-sm text-slate-500">Notes, homework, and messages for {team.name}.</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <p className="mt-0.5 text-sm text-slate-500">Notes, homework, messages, and the practice schedule for {team.name}.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <Link href={`/console/teams/${team.id}/progress`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
             <div className="text-sm font-semibold text-brand-800">Practice notes &amp; progress →</div>
             <div className="mt-0.5 text-xs text-slate-500">Weekly notes and homework per player — strengths, growth, a coach&apos;s note — then send the report to the parent.</div>
+          </Link>
+          <Link href={`/console/schedule?view=calendar&team=${team.id}`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
+            <div className="text-sm font-semibold text-brand-800">Practice schedule →</div>
+            <div className="mt-0.5 text-xs text-slate-500">See this team&apos;s practices on the calendar, check players in, and add a make-up or extra practice.</div>
           </Link>
           <Link href={`/console/teams/${team.id}/progress#message`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
             <div className="text-sm font-semibold text-brand-800">Message the whole team →</div>
@@ -353,12 +380,18 @@ export default async function TeamDetailPage({
           <ReadyChip ok={team.members.length > 0} label={`Roster ${roster.effective}`} />
         </div>
 
-        {/* One-click launch — the combined email. */}
+        {/* One-click launch — the combined email. Re-runnable: once launched the
+            button becomes "Re-launch team" (re-sends to every family). */}
         <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold text-slate-900">Launch team — send everything</div>
-              <p className="mt-0.5 text-xs text-slate-500">One combined email per player (to their family): welcome + pick apparel &amp; pay their season fee + complete the waiver.</p>
+              <div className="text-sm font-semibold text-slate-900">
+                {team.launchedAt ? "Re-launch team — resend everything" : "Launch team — send everything"}
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500">
+                One combined email per player (to their family): welcome + pick apparel &amp; pay their season fee + complete the waiver.
+                {team.launchedAt ? " Re-launching sends it again to everyone — a safe reminder." : ""}
+              </p>
             </div>
             {team.members.length === 0 ? (
               <span className="text-xs text-slate-400">Add players first.</span>
@@ -366,10 +399,10 @@ export default async function TeamDetailPage({
               <ConfirmSubmit
                 action="/api/console/teams"
                 fields={{ ticket, op: "launchTeam", teamId: team.id }}
-                confirm={`${launchWarnText}Launch "${team.name}"? Sends one combined email (welcome + apparel & fee + waiver) to every player's family.`}
-                confirmLabel={launchWarnings.length ? "Launch anyway" : "Launch team"}
+                confirm={`${launchWarnText}${team.launchedAt ? "Re-launch" : "Launch"} "${team.name}"? Sends one combined email (welcome + apparel & fee + waiver) to every player's family${team.launchedAt ? " again" : ""}.`}
+                confirmLabel={launchWarnings.length ? (team.launchedAt ? "Re-launch anyway" : "Launch anyway") : (team.launchedAt ? "Re-launch team" : "Launch team")}
                 danger={launchWarnings.length > 0}
-                label="Launch team"
+                label={team.launchedAt ? "Re-launch team" : "Launch team"}
                 className="btn-primary text-sm"
               />
             )}
@@ -488,6 +521,81 @@ export default async function TeamDetailPage({
             <p className="text-xs text-slate-400">Full order export: Reports → Apparel orders.</p>
           </div>
         )}
+      </div>
+
+      {/* Practices & schedule — see this team's sessions and add/remove one right
+          here, without hunting through the Schedule page. */}
+      <div className="card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-slate-900">Practices &amp; schedule</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {hasDayTimeFacility
+                ? <>Meets {team.dayOfWeek} at {formatTime12(team.startTime)} · {team.facility?.name ?? "facility"}.</>
+                : "Set this team's day, time, and facility in Team fields below, then generate the season."}
+            </p>
+          </div>
+          <Link href={`/console/schedule?view=calendar&team=${team.id}`} className="btn-secondary text-sm">Open full calendar →</Link>
+        </div>
+
+        {/* Generate the whole season's practices in one click (when none yet). */}
+        {canGenerate && (
+          <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-slate-700">No practices yet. Generate the season&apos;s six weekly practices from this team&apos;s day &amp; time.</p>
+              <ConfirmSubmit
+                action="/api/console/schedule"
+                fields={{ ticket, op: "generate", teamId: team.id, returnTo: `/console/teams/${team.id}` }}
+                confirm={`Generate the season's practices for "${team.name}" (${team.dayOfWeek} ${formatTime12(team.startTime)})? Skips blackout weeks.`}
+                label="Generate practices"
+                className="btn-primary text-sm"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* The list of this team's practices — open one to reschedule/relocate, or
+            delete it right here. */}
+        {teamPractices.length > 0 ? (
+          <ul className="mt-3 divide-y divide-slate-100">
+            {teamPractices.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <div className="text-slate-700">
+                  <span className="font-medium text-slate-800">{formatDate(s.date)}</span>
+                  <span className="text-slate-400"> · </span>
+                  {formatTimeRange12(s.startTime, s.endTime)}
+                  <span className="text-slate-400"> · </span>
+                  {s.facility?.name ?? "no facility"}
+                  {s.status !== "SCHEDULED" && <span className="ml-2 badge bg-slate-100 text-slate-600 lowercase">{s.status.toLowerCase()}</span>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link href={`/console/schedule/${s.id}`} className="text-xs font-semibold text-brand-600 hover:underline">open / reschedule →</Link>
+                  <ConfirmSubmit
+                    action="/api/console/schedule"
+                    fields={{ ticket, op: "deleteSession", sessionId: s.id, returnTo: `/console/teams/${team.id}` }}
+                    confirm={`Delete the ${formatDate(s.date)} practice for "${team.name}"? The team is not notified. To call it off with a notice, open it and use Cancel instead.`}
+                    label="delete"
+                    className="text-xs text-rose-600 hover:underline"
+                    danger
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : !canGenerate ? (
+          <p className="mt-3 text-sm text-slate-400">No practices scheduled yet.</p>
+        ) : null}
+
+        {/* Add a single practice (make-up or extra) right on the team page. */}
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <AddPracticeForm
+            ticket={ticket}
+            teams={[{ id: team.id, name: team.name, facilityId: team.facilityId }]}
+            facilities={facilities.map((f) => ({ id: f.id, name: f.name }))}
+            facilitySlots={slotsByFacility}
+            returnTo={`/console/teams/${team.id}`}
+          />
+        </div>
       </div>
 
       </>)}

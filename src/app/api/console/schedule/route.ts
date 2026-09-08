@@ -35,7 +35,11 @@ export async function POST(req: Request) {
   // Where to bounce back to. Detail-page forms pass their own path; anything
   // else falls back to the schedule index.
   const rawReturn = String(formData.get("returnTo") ?? "");
-  const returnTo = rawReturn.startsWith("/console/schedule") ? rawReturn : "/console/schedule";
+  // Schedule actions can be driven from the Schedule page or a team's page, so
+  // allow returning to either; anything else falls back to the schedule index.
+  const returnTo = rawReturn.startsWith("/console/schedule") || rawReturn.startsWith("/console/teams/")
+    ? rawReturn
+    : "/console/schedule";
   const back = (qs: string) => NextResponse.redirect(new URL(`${returnTo}${qs}`, origin), 303);
 
   const actor = await actorFromForm(formData);
