@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { mintConsoleTicket } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
+import { can } from "@/lib/rbac";
+import { coachedTeamIds } from "@/lib/domain/coachingAccess";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatTime12, formatTimeRange12, formatDate } from "@/lib/time";
@@ -35,6 +37,7 @@ const ERR_LABEL: Record<string, string> = {
   exists: "This team already has a practice schedule.",
   adddate: "Pick a valid date for the practice.",
   addslot: "That date and time is outside the facility's available hours — pick a day/time the facility is open.",
+  notyourteam: "You can only add practices for teams you coach.",
   session: "Session not found.",
   sessionlinked: "That session has linked records and couldn't be deleted — cancel it instead.",
   op: "Unknown action.",
@@ -47,6 +50,12 @@ export default async function SchedulePage({
 }) {
   const { ok, err, view, month, team, n } = await searchParams;
   const ticket = await mintConsoleTicket();
+  // Admins manage the whole schedule (generate, clear, add for any team). A coach
+  // who isn't an admin can only add practices for the teams they coach.
+  const viewer = await getSession();
+  const roles = viewer?.roles ?? (viewer?.role ? [viewer.role] : []);
+  const scheduleAdmin = can(roles, "manageScheduling");
+  const myTeamIds = scheduleAdmin ? null : new Set(await coachedTeamIds());
   const isCalendar = view === "calendar";
   const teamFilter = team && team !== "all" ? team : null;
   const now = new Date();
@@ -173,21 +182,32 @@ export default async function SchedulePage({
       )}
 
       {/* What the schedule is and how it fills — shown up top so it's never a
-          mystery why the list is empty. */}
-      <div className="card border-l-4 border-brand-500">
-        <h2 className="font-semibold text-slate-900">How the schedule fills</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          This is every <span className="font-medium">practice, league match, and championship</span> session for the season. It doesn&apos;t populate on its own — you generate it per team:
-        </p>
-        <ol className="mt-3 space-y-1.5 text-sm text-slate-700">
-          <li className="flex gap-2"><span className="font-semibold text-brand-700">1.</span><span>Give each team a <span className="font-medium">day, time, and home facility</span> on the <Link href="/console/teams" className="text-brand-700 underline">Teams</Link> page.{needSetup > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">{needSetup} team{needSetup === 1 ? "" : "s"} still need this</span>}</span></li>
-          <li className="flex gap-2"><span className="font-semibold text-brand-700">2.</span><span><span className="font-medium">Generate practices</span> below — one click per team creates its six weekly practices, skipping blackout weeks (Thanksgiving is dark).{ungenerated.length > 0 && <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">{ungenerated.length} ready now</span>}</span></li>
-          <li className="flex gap-2"><span className="font-semibold text-brand-700">3.</span><span><span className="font-medium">League matches</span> are created from the <Link href="/console/league" className="text-brand-700 underline">League</Link> page once teams are entered into a league.</span></li>
-          <li className="flex gap-2"><span className="font-semibold text-brand-700">4.</span><span>Need a one-off? Use <span className="font-medium">Add practice</span> below to place a single session by hand.</span></li>
-        </ol>
-      </div>
+          mystery why the list is empty. Admins see the full generate flow; a
+          coach sees a short note (they add one-off practices for their teams). */}
+      {scheduleAdmin ? (
+        <div className="card border-l-4 border-brand-500">
+          <h2 className="font-semibold text-slate-900">How the schedule fills</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            This is every <span className="font-medium">practice, league match, and championship</span> session for the season. It doesn&apos;t populate on its own — you generate it per team:
+          </p>
+          <ol className="mt-3 space-y-1.5 text-sm text-slate-700">
+            <li className="flex gap-2"><span className="font-semibold text-brand-700">1.</span><span>Give each team a <span className="font-medium">day, time, and home facility</span> on the <Link href="/console/teams" className="text-brand-700 underline">Teams</Link> page.{needSetup > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">{needSetup} team{needSetup === 1 ? "" : "s"} still need this</span>}</span></li>
+            <li className="flex gap-2"><span className="font-semibold text-brand-700">2.</span><span><span className="font-medium">Generate practices</span> below — one click per team creates its six weekly practices, skipping blackout weeks (Thanksgiving is dark).{ungenerated.length > 0 && <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">{ungenerated.length} ready now</span>}</span></li>
+            <li className="flex gap-2"><span className="font-semibold text-brand-700">3.</span><span><span className="font-medium">League matches</span> are created from the <Link href="/console/league" className="text-brand-700 underline">League</Link> page once teams are entered into a league.</span></li>
+            <li className="flex gap-2"><span className="font-semibold text-brand-700">4.</span><span>Need a one-off? Use <span className="font-medium">Add practice</span> below to place a single session by hand.</span></li>
+          </ol>
+        </div>
+      ) : (
+        <div className="card border-l-4 border-brand-500">
+          <h2 className="font-semibold text-slate-900">Your team schedule</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Your teams&apos; practices, league matches, and championship sessions. An admin generates the season&apos;s weekly practices;
+            you can add a <span className="font-medium">one-off practice</span> (a make-up or an extra session) for a team you coach below.
+          </p>
+        </div>
+      )}
 
-      {ungenerated.length > 0 && (
+      {scheduleAdmin && ungenerated.length > 0 && (
         <div className="card">
           <h2 className="mb-1 font-semibold text-slate-900">Generate practice season</h2>
           <p className="mb-3 text-sm text-slate-500">
@@ -209,20 +229,24 @@ export default async function SchedulePage({
         </div>
       )}
 
-      {/* Add a single practice (make-up or extra) — notifies the team */}
-      {teams.length > 0 && (
-        <AddPracticeForm
-          ticket={ticket}
-          teams={teams.map((t) => ({ id: t.id, name: t.name, facilityId: t.facilityId }))}
-          facilities={facilities.map((f) => ({ id: f.id, name: f.name }))}
-          facilitySlots={facilitySlots}
-        />
-      )}
+      {/* Add a single practice (make-up or extra) — notifies the team. Admins
+          can add for any team; a coach only for the teams they coach. */}
+      {(() => {
+        const addable = scheduleAdmin ? teams : teams.filter((t) => myTeamIds!.has(t.id));
+        return addable.length > 0 ? (
+          <AddPracticeForm
+            ticket={ticket}
+            teams={addable.map((t) => ({ id: t.id, name: t.name, facilityId: t.facilityId }))}
+            facilities={facilities.map((f) => ({ id: f.id, name: f.name }))}
+            facilitySlots={facilitySlots}
+          />
+        ) : null;
+      })()}
 
       {/* Clear & regenerate — once a team's practices are generated it drops off
           the Generate list. If the day/time/facility was wrong, clear the set
-          here (quiet — no team notice) and regenerate above with the fix. */}
-      {teamsWithPractices.length > 0 && (
+          here (quiet — no team notice) and regenerate above with the fix. Admin only. */}
+      {scheduleAdmin && teamsWithPractices.length > 0 && (
         <details className="card">
           <summary className="cursor-pointer font-semibold text-slate-900">Clear a team&apos;s practices</summary>
           <p className="mt-1 text-sm text-slate-500">
