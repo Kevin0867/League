@@ -232,10 +232,15 @@ export default async function PaymentsPage({
   // real category. We tag imports with category STRIPE_IMPORT so they surface
   // here until an admin files them.
   const importedRaw = await prisma.payment.findMany({
-    where: { direction: "IN", category: "STRIPE_IMPORT" },
+    // Only real-money imports need filing. $0 imports (Stripe card-verification /
+    // setup charges) carry no revenue — count them separately for one-click cleanup.
+    where: { direction: "IN", category: "STRIPE_IMPORT", amountCents: { gt: 0 } },
     include: { party: { select: { id: true, firstName: true, lastName: true, email: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,
+  });
+  const zeroImportCount = await prisma.payment.count({
+    where: { direction: "IN", category: "STRIPE_IMPORT", amountCents: 0 },
   });
   // Best-guess a family from the payer email we stored on the description
   // ("… · someone@example.com") for rows we couldn't match at import time.
@@ -431,6 +436,35 @@ export default async function PaymentsPage({
       )}
       {sp.delok && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Payment deleted.</div>
+      )}
+
+      {sp.zeroremoved && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Removed <strong>{sp.zeroremoved} zero-dollar imported charge{Number(sp.zeroremoved) === 1 ? "" : "s"}</strong> (Stripe card verifications — no revenue).
+        </div>
+      )}
+
+      {zeroImportCount > 0 && (
+        <div className="card border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-semibold text-slate-900">{zeroImportCount} zero-dollar imported charge{zeroImportCount === 1 ? "" : "s"}</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                These are <strong>$0.00</strong> Stripe charges — card verifications / setup authorizations (saving a card or
+                starting a subscription), not payments. They carry no money and nothing to file. Safe to remove.
+              </p>
+            </div>
+            <ConfirmSubmit
+              action="/api/console/payments-reconcile"
+              fields={{ ticket, op: "remove-zero-imports" }}
+              confirm={`Remove ${zeroImportCount} zero-dollar imported charge${zeroImportCount === 1 ? "" : "s"}? These are Stripe card verifications with no revenue — nothing with money is touched.`}
+              confirmLabel="Remove $0 charges"
+              label="Remove $0 charges"
+              className="btn-secondary text-sm"
+              danger
+            />
+          </div>
+        </div>
       )}
 
       {imported.length > 0 && (
