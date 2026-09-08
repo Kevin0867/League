@@ -19,13 +19,15 @@ export function AddPracticeForm({
   teams,
   facilities,
   facilitySlots,
+  returnTo = "/console/schedule",
 }: {
   ticket: string;
   teams: { id: string; name: string; facilityId: string | null }[];
   facilities: { id: string; name: string }[];
   facilitySlots: Record<string, Slot[]>;
+  returnTo?: string;
 }) {
-  const [teamId, setTeamId] = useState("");
+  const [teamId, setTeamId] = useState(teams.length === 1 ? teams[0].id : "");
   const [date, setDate] = useState("");
   const [start, setStart] = useState("");
   const [facilityId, setFacilityId] = useState("");
@@ -62,7 +64,7 @@ export function AddPracticeForm({
       <form method="POST" action="/api/console/schedule" className="mt-3 grid gap-3 sm:grid-cols-6 sm:items-end">
         <input type="hidden" name="ticket" value={ticket} />
         <input type="hidden" name="op" value="addSession" />
-        <input type="hidden" name="returnTo" value="/console/schedule" />
+        <input type="hidden" name="returnTo" value={returnTo} />
         <div className="sm:col-span-2">
           <label className="label">Team</label>
           <select name="teamId" value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input" required>
