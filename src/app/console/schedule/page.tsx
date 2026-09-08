@@ -4,10 +4,13 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatTime12, formatTimeRange12, formatDate } from "@/lib/time";
-import { ScheduleCalendar } from "@/components/ScheduleCalendar";
+import { ScheduleCalendar, type CalSession } from "@/components/ScheduleCalendar";
 import { PrintButton } from "@/components/PrintButton";
 import { AddPracticeForm } from "./AddPracticeForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { generatePracticeDates } from "@/lib/domain/schedule";
+
+const PRACTICE_WEEKS = 6;
 
 export const dynamic = "force-dynamic";
 
@@ -47,12 +50,7 @@ export default async function SchedulePage({
   const isCalendar = view === "calendar";
   const teamFilter = team && team !== "all" ? team : null;
   const now = new Date();
-  const [calYear, calMonth] = (() => {
-    const m = /^(\d{4})-(\d{2})$/.exec(month ?? "");
-    if (m) return [Number(m[1]), Number(m[2]) - 1];
-    return [now.getUTCFullYear(), now.getUTCMonth()];
-  })();
-  const [sessions, teams, facilities] = await Promise.all([
+  const [sessions, teams, facilities, blackoutRows] = await Promise.all([
     prisma.session.findMany({
       include: { facility: true, teams: { include: { team: true } } },
       orderBy: { date: "asc" },
@@ -60,11 +58,48 @@ export default async function SchedulePage({
     }),
     prisma.team.findMany({
       where: { origin: "PURE_ACADEMY", isTest: false },
-      include: { _count: { select: { sessions: true } } },
+      include: { _count: { select: { sessions: true } }, season: { select: { startDate: true } }, facility: { select: { name: true } } },
       orderBy: { name: "asc" },
     }),
     prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, include: { courtBlocks: true } }),
+    prisma.blackoutDate.findMany({ select: { date: true, facilityId: true } }),
   ]);
+
+  // Planned practices — teams that have a day/time set but no generated sessions
+  // yet. We derive the same dates the generator would (season start + weekday,
+  // skipping blackout/dark weeks) so the calendar shows each team's practice
+  // days/times immediately, before "Generate" is clicked.
+  const plannedCal: CalSession[] = [];
+  for (const t of teams) {
+    if (t._count.sessions > 0) continue;
+    if (!t.dayOfWeek || !t.startTime || !t.season?.startDate) continue;
+    if (teamFilter && t.id !== teamFilter) continue;
+    const blk = blackoutRows.filter((b) => b.facilityId === null || b.facilityId === t.facilityId).map((b) => b.date);
+    const dates = generatePracticeDates(t.season.startDate, t.dayOfWeek, PRACTICE_WEEKS, blk);
+    for (let i = 0; i < dates.length; i++) {
+      plannedCal.push({
+        id: `planned-${t.id}-${i}`,
+        date: dates[i],
+        startTime: t.startTime,
+        type: "PRACTICE",
+        teamNames: t.name,
+        facilityName: t.facility?.name ?? "",
+        planned: true,
+      });
+    }
+  }
+
+  // Default the calendar to the month that actually has something: the earliest
+  // upcoming date among real + planned sessions, else the earliest overall, else
+  // this month. Keeps the view from opening on an empty pre-season month.
+  const [calYear, calMonth] = (() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(month ?? "");
+    if (m) return [Number(m[1]), Number(m[2]) - 1];
+    const allDates = [...sessions.map((s) => s.date), ...plannedCal.map((p) => p.date)].sort((a, b) => a.getTime() - b.getTime());
+    const upcoming = allDates.find((d) => d.getTime() >= now.getTime());
+    const anchor = upcoming ?? allDates[allDates.length - 1] ?? now;
+    return [anchor.getUTCFullYear(), anchor.getUTCMonth()];
+  })();
 
   // Availability windows per facility, so the Add-a-practice form can show which
   // days/times a facility is actually open (and validate against them server-side).
@@ -260,6 +295,7 @@ export default async function SchedulePage({
             teamNames: s.teams.map((t) => t.team.name).join(", "),
             facilityName: s.facility?.name ?? "",
           }))}
+          planned={plannedCal}
         />
       ) : (
       <div className="card overflow-x-auto print-area">
