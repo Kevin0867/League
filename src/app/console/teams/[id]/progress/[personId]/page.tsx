@@ -6,15 +6,21 @@ import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
 import { PendingSubmit } from "@/components/ConfirmSubmit";
 import { RecipientChecklist } from "@/components/RecipientChecklist";
 import { SpeechToTextArea } from "@/components/SpeechToTextArea";
-import { formatStamp } from "@/lib/time";
+import { formatStamp, BUSINESS_TZ } from "@/lib/time";
 import {
   COACHING_WEEKS,
+  COACHING_WEEK_COUNT,
   NOTE_CATALOG,
   parseTags,
   noteHasContent,
 } from "@/lib/domain/coachingNotes";
+import { teamWeekSchedule } from "@/lib/domain/practiceInfo";
 
 export const dynamic = "force-dynamic";
+
+function shortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: BUSINESS_TZ });
+}
 
 const OK: Record<string, string> = {
   saved: "Note saved — the parent was NOT notified. Use “Send report” below to send it to them.",
@@ -58,6 +64,8 @@ export default async function StudentProgressPage({
 
   const student = member.person;
   const byWeek = new Map(notes.map((n) => [n.week, n]));
+  const { slots: weekSlots } = await teamWeekSchedule(team, team.seasonId, COACHING_WEEK_COUNT);
+  const dateByWeek = new Map(weekSlots.map((s) => [s.week, s.date]));
   const active = Math.min(Math.max(parseInt(sp.week ?? "", 10) || firstOpenWeek(byWeek), 1), COACHING_WEEKS.length);
   const note = byWeek.get(active);
   const strengths = parseTags(note?.strengths);
@@ -132,14 +140,19 @@ export default async function StudentProgressPage({
             <Link
               key={w}
               href={`/console/teams/${teamId}/progress/${personId}?week=${w}`}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ring-1 ring-inset transition-colors ${
+              className={`flex flex-col items-center rounded-md px-3 py-1.5 text-sm font-semibold ring-1 ring-inset transition-colors ${
                 on ? "bg-brand-900 text-white ring-brand-900" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
               }`}
             >
-              <span>Week {w}</span>
-              {sent ? <span className={on ? "text-emerald-300" : "text-emerald-600"}>✓</span>
-                : has ? <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-accent-400" : "bg-amber-400"}`} />
-                : null}
+              <span className="flex items-center gap-1.5">
+                Week {w}
+                {sent ? <span className={on ? "text-emerald-300" : "text-emerald-600"}>✓</span>
+                  : has ? <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-accent-400" : "bg-amber-400"}`} />
+                  : null}
+              </span>
+              {dateByWeek.get(w) && (
+                <span className={`text-[10px] font-normal ${on ? "text-white/70" : "text-slate-400"}`}>{shortDate(dateByWeek.get(w) as Date)}</span>
+              )}
             </Link>
           );
         })}
