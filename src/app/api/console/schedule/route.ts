@@ -184,6 +184,19 @@ export async function POST(req: Request) {
       data: { status: outcome.newStatus, cancelReason: reason },
     });
 
+    // Pay-on-cancel: a cancelled class doesn't pay its coach by default, but the
+    // admin is asked "Pay <coach> for this class?" and any coach they check is
+    // still paid (e.g. a late cancellation the coach showed up for). Reset all
+    // rows first so re-cancelling reflects the latest choice.
+    const payCoachIds = formData.getAll("payCoach").map((v) => String(v)).filter(Boolean);
+    await prisma.sessionCoach.updateMany({ where: { sessionId }, data: { paidIfCancelled: false } });
+    if (payCoachIds.length) {
+      await prisma.sessionCoach.updateMany({
+        where: { sessionId, coachId: { in: payCoachIds } },
+        data: { paidIfCancelled: true },
+      });
+    }
+
     // Practice cancellations are time-critical → include SMS (§13).
     const isPractice = s.type === "PRACTICE";
     const reasonLabel = reason.toLowerCase().replace(/_/g, " ");
@@ -207,7 +220,7 @@ export async function POST(req: Request) {
       entityType: "Session",
       entityId: sessionId,
       action: "CANCEL",
-      summary: `${s.type} → ${outcome.newStatus} (${reason}). ${outcome.note}`,
+      summary: `${s.type} → ${outcome.newStatus} (${reason}). ${payCoachIds.length ? `Paying ${payCoachIds.length} coach(es) despite cancellation. ` : "No coach pay. "}${outcome.note}`,
     });
 
     return back("?ok=cancel");
