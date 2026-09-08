@@ -3,11 +3,21 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
-import { COACHING_WEEKS, noteHasContent } from "@/lib/domain/coachingNotes";
+import { COACHING_WEEKS, COACHING_WEEK_COUNT, noteHasContent } from "@/lib/domain/coachingNotes";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
-import { formatDate, formatTime12 } from "@/lib/time";
+import { formatTime12, BUSINESS_TZ } from "@/lib/time";
+import { teamWeekSchedule, describeTeamPractice } from "@/lib/domain/practiceInfo";
 
 export const dynamic = "force-dynamic";
+
+// "Oct 26" in the club's timezone — used for the week-key labels.
+function shortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: BUSINESS_TZ });
+}
+// "Sun Oct 26" for the planned-practice list.
+function weekdayShort(d: Date): string {
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: BUSINESS_TZ });
+}
 
 function startOfTomorrow() {
   const d = new Date();
@@ -52,6 +62,18 @@ export default async function TeamProgressPage({
   const upcoming = sessions.filter((s) => s.date >= tomorrow).slice(0, 3);
   const rosterSize = team.members.length;
 
+  // The 6-week schedule, so week labels line up with real dates. Prefers
+  // generated practice sessions; falls back to the season + this team's day/time
+  // (so a team that has a meeting day but no generated sessions still shows a
+  // real schedule instead of "nothing scheduled").
+  const [{ slots: weekSlots, hasSessions }, practiceLine] = await Promise.all([
+    teamWeekSchedule(team, team.seasonId, COACHING_WEEK_COUNT),
+    describeTeamPractice(team, team.seasonId),
+  ]);
+  // Planned meeting days to show when no check-in sessions exist yet.
+  const plannedDates = weekSlots.filter((s) => s.date).map((s) => ({ week: s.week, date: s.date as Date }));
+  const hasPlan = plannedDates.length > 0;
+
   // Index notes by person → week for the completion strip.
   const notesByPerson = new Map<string, Map<number, { strengths: string; growth: string; note: string | null; sentToParentAt: Date | null }>>();
   for (const n of team.coachingNotes) {
@@ -65,6 +87,9 @@ export default async function TeamProgressPage({
         <Link href={`/console/teams/${teamId}`} className="text-sm text-brand-600 hover:underline">← {team.name}</Link>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">{team.name}</h1>
         <p className="text-sm text-slate-500">Check players in, message your team, and keep notes — all here.</p>
+        <p className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+          <span aria-hidden>🗓</span> Meets {practiceLine}
+        </p>
       </div>
 
       {sp.ok === "teamsent" && (
@@ -84,7 +109,36 @@ export default async function TeamProgressPage({
       <section id="checkin" className="scroll-mt-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Check players in</h2>
         {needsAttendance.length === 0 && upcoming.length === 0 ? (
-          <div className="card text-sm text-slate-500">No practices scheduled for this team yet.</div>
+          hasPlan ? (
+            // No generated check-in sessions yet, but the team has a meeting
+            // day/time — show the planned weekly schedule so it's clear the team
+            // DOES have practices, and where check-in will appear.
+            <div className="card">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Planned practices</div>
+              <p className="mt-0.5 text-xs text-slate-500">
+                From the season and this team&apos;s day &amp; time. Check-in opens for each date once the schedule is generated on the Schedule page.
+              </p>
+              <ul className="mt-2 divide-y divide-slate-100">
+                {plannedDates.map((p) => (
+                  <li key={p.week} className="flex items-center justify-between py-2 text-sm">
+                    <span className="text-slate-700">
+                      <span className="mr-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500">Wk {p.week}</span>
+                      {weekdayShort(p.date)}
+                    </span>
+                    <span className="text-xs text-slate-500">{team.startTime ? formatTime12(team.startTime) : "time TBA"}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/console/schedule" className="mt-3 inline-block text-xs font-semibold text-brand-600 hover:underline">
+                Generate the schedule →
+              </Link>
+            </div>
+          ) : (
+            <div className="card text-sm text-slate-500">
+              No practices scheduled for this team yet. Set this team&apos;s day, time, and facility on its{" "}
+              <Link href={`/console/teams/${teamId}`} className="text-brand-600 hover:underline">team page</Link>, then generate the schedule.
+            </div>
+          )
         ) : (
           <div className="space-y-2">
             {needsAttendance.map((s) => (
@@ -134,53 +188,71 @@ export default async function TeamProgressPage({
         </div>
       </section>
 
-      {/* PLAYER NOTES — tappable per-player rows with a weekly progress strip. */}
+      {/* PLAYER NOTES — one row per player with an aligned weekly progress grid.
+          A week-key header maps each week to its real date (from the schedule),
+          so the columns are self-explanatory. */}
       <section id="notes" className="scroll-mt-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Player notes</h2>
-        <div className="card">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Player notes — by week</h2>
+        <div className="card overflow-x-auto p-0">
           {team.members.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">No players on this roster yet.</p>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {team.members.map((m) => {
-                const weeks = notesByPerson.get(m.personId);
-                return (
-                  <Link
-                    key={m.id}
-                    href={`/console/teams/${teamId}/progress/${m.personId}`}
-                    className="flex min-h-[56px] items-center justify-between gap-3 py-3 active:bg-slate-50"
-                  >
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">{m.person.firstName} {m.person.lastName}</div>
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        {COACHING_WEEKS.map((w) => {
-                          const n = weeks?.get(w);
-                          const has = n ? noteHasContent(n) : false;
-                          const sent = !!n?.sentToParentAt;
-                          return (
-                            <span
-                              key={w}
-                              title={`Week ${w}: ${sent ? "sent to parent" : has ? "notes saved" : "nothing yet"}`}
-                              className={`grid h-4 w-4 place-items-center rounded-full text-[9px] font-bold ${sent ? "bg-emerald-100 text-emerald-700" : has ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-300"}`}
-                            >
-                              {w}
-                            </span>
-                          );
-                        })}
+            <div className="min-w-[440px]">
+              {/* Week-key header: Wk 1 · Oct 26, Wk 2 · Nov 2, … */}
+              <div className="grid items-end gap-1 border-b border-slate-200 bg-slate-50/70 px-4 py-2" style={{ gridTemplateColumns: `minmax(7rem,1fr) repeat(${COACHING_WEEK_COUNT}, minmax(0,1fr))` }}>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Player</div>
+                {weekSlots.map((s) => (
+                  <div key={s.week} className="text-center leading-tight">
+                    <div className="text-xs font-bold text-slate-700">Wk {s.week}</div>
+                    {s.date && <div className="text-[10px] text-slate-400">{shortDate(s.date)}</div>}
+                  </div>
+                ))}
+              </div>
+              {/* One row per player: name + 6 status cells aligned to the header. */}
+              <div className="divide-y divide-slate-100">
+                {team.members.map((m) => {
+                  const weeks = notesByPerson.get(m.personId);
+                  return (
+                    <Link
+                      key={m.id}
+                      href={`/console/teams/${teamId}/progress/${m.personId}`}
+                      className="grid min-h-[52px] items-center gap-1 px-4 py-2.5 active:bg-slate-50 hover:bg-slate-50"
+                      style={{ gridTemplateColumns: `minmax(7rem,1fr) repeat(${COACHING_WEEK_COUNT}, minmax(0,1fr))` }}
+                    >
+                      <div className="pr-2">
+                        <div className="truncate text-sm font-semibold text-slate-800">{m.person.firstName} {m.person.lastName}</div>
+                        <div className="text-xs font-semibold text-brand-600">Open →</div>
                       </div>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-brand-600">Open →</span>
-                  </Link>
-                );
-              })}
+                      {COACHING_WEEKS.map((w) => {
+                        const n = weeks?.get(w);
+                        const has = n ? noteHasContent(n) : false;
+                        const sent = !!n?.sentToParentAt;
+                        const label = sent ? "sent to parent" : has ? "notes saved, not sent" : "nothing yet";
+                        return (
+                          <div key={w} className="flex justify-center" title={`Week ${w}: ${label}`}>
+                            <span
+                              className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${
+                                sent ? "bg-emerald-500 text-white" : has ? "bg-amber-400 text-white" : "border border-dashed border-slate-300 text-slate-300"
+                              }`}
+                            >
+                              {sent ? "✓" : has ? "•" : ""}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
-        <p className="mt-2 text-xs text-slate-400">
-          <span className="mr-1 font-bold text-emerald-600">●</span> sent to parent ·
-          <span className="mx-1 font-bold text-amber-600">●</span> notes saved, not yet sent ·
-          <span className="mx-1 font-bold text-slate-300">●</span> nothing yet
-        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5"><span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-[9px] text-white">✓</span> sent to parent</span>
+          <span className="inline-flex items-center gap-1.5"><span className="grid h-4 w-4 place-items-center rounded-full bg-amber-400 text-[9px] text-white">•</span> notes saved, not yet sent</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-4 w-4 rounded-full border border-dashed border-slate-300" /> nothing yet</span>
+          {!hasSessions && hasPlan && <span className="text-slate-400">Week dates are planned from the season &amp; this team&apos;s day/time.</span>}
+        </div>
       </section>
     </div>
   );

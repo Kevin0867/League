@@ -108,3 +108,60 @@ export async function describeTeamPractice(
 
   return `${dayTime}${begins}`;
 }
+
+/**
+ * The date the team meets each of the first `weeks` weeks, derived purely from
+ * the season's opening week and the team's weekday — Week 1 is the first
+ * occurrence of that weekday, then +7 days each week. Returns [] when the team
+ * has no weekday or the season no start date.
+ */
+export function weeklyPracticeDates(seasonStart: Date | null | undefined, dayCode: string | null | undefined, weeks: number): Date[] {
+  if (!seasonStart || !dayCode) return [];
+  const first = firstPracticeDate(seasonStart, dayCode);
+  if (!first) return [];
+  const out: Date[] = [];
+  for (let i = 0; i < weeks; i++) {
+    const d = new Date(first);
+    d.setUTCDate(first.getUTCDate() + i * 7);
+    out.push(d);
+  }
+  return out;
+}
+
+export type WeekSlot = { week: number; date: Date | null; scheduled: boolean };
+
+/**
+ * Maps each coaching week (1..weeks) to the calendar date the team meets that
+ * week, so week labels line up with the real schedule. Prefers actual generated
+ * PRACTICE sessions (in date order); when none exist yet, falls back to the
+ * planned dates from the season start + the team's day/time. `scheduled` marks
+ * whether that week's date came from a real session (check-in ready) or is a
+ * plan derived from the team's meeting day.
+ */
+export async function teamWeekSchedule(
+  team: { id: string; dayOfWeek: string | null; startTime: string | null },
+  seasonId: string,
+  weeks: number,
+): Promise<{ slots: WeekSlot[]; timeRange: string | null; hasSessions: boolean }> {
+  const [practices, season] = await Promise.all([
+    prisma.session.findMany({
+      where: { seasonId, type: "PRACTICE", teams: { some: { teamId: team.id } }, status: { in: ["SCHEDULED", "RESCHEDULED"] } },
+      orderBy: { date: "asc" },
+      select: { date: true, startTime: true, endTime: true },
+    }),
+    prisma.season.findUnique({ where: { id: seasonId }, select: { startDate: true } }),
+  ]);
+
+  const planned = weeklyPracticeDates(season?.startDate, team.dayOfWeek, weeks);
+  const slots: WeekSlot[] = [];
+  for (let i = 0; i < weeks; i++) {
+    if (practices[i]) slots.push({ week: i + 1, date: practices[i].date, scheduled: true });
+    else if (planned[i]) slots.push({ week: i + 1, date: planned[i], scheduled: false });
+    else slots.push({ week: i + 1, date: null, scheduled: false });
+  }
+
+  const startTime = practices[0]?.startTime ?? team.startTime;
+  const endTime = practices[0]?.endTime ?? null;
+  return { slots, timeRange: practiceTimeRange(startTime, endTime), hasSessions: practices.length > 0 };
+}
+
