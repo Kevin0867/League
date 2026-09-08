@@ -24,8 +24,8 @@ function shortDate(d: Date): string {
 
 const OK: Record<string, string> = {
   saved: "Note saved — the parent was NOT notified. Use “Send report” below to send it to them.",
-  sent: "Progress report emailed to the parent/guardian.",
-  sentsim: "Report generated — email provider isn't configured, so nothing was actually delivered.",
+  sent: "Progress report sent to the parent/guardian.",
+  sentsim: "Report generated — the email/SMS provider isn't configured, so nothing was actually delivered.",
   contact: "Contact info saved.",
 };
 const ERR: Record<string, string> = {
@@ -34,7 +34,10 @@ const ERR: Record<string, string> = {
   notmember: "That player isn't on this team's roster.",
   empty: "Add a tag or a note before sending a report.",
   noemail: "No parent/guardian email on file — add one on the player's record first.",
-  norecipients: "Select at least one recipient before sending.",
+  norecipients: "Select at least one email recipient, or send by text instead.",
+  nophone: "No parent/guardian mobile number on file to text — add one first, or send by email.",
+  nodest: "Nothing to send to for the chosen channel — no email address or mobile number on file.",
+  sendfail: "The report couldn't be delivered.",
   nostudent: "Player not found.",
   op: "Unknown action.",
 };
@@ -80,7 +83,11 @@ export default async function StudentProgressPage({
         <p className="text-sm text-slate-500">Progress notes · {team.name}</p>
       </div>
 
-      {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok]}</p>}
+      {sp.ok && OK[sp.ok] && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {OK[sp.ok]}{(sp.ok === "sent" || sp.ok === "sentsim") && sp.via ? ` Sent via ${sp.via}.` : ""}
+        </p>
+      )}
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {ERR[sp.err] ?? "Something went wrong."}{sp.reason ? ` — ${sp.reason}` : ""}
@@ -220,7 +227,43 @@ export default async function StudentProgressPage({
             This week&apos;s note is saved but hasn&apos;t been sent to the parent yet.
           </p>
         )}
-        <RecipientChecklist person={student} guardian={student.guardian} purpose="report" />
+
+        {/* How to send — email, text, or both. Email goes to the checked
+            addresses below; text goes to the family mobile. */}
+        {(() => {
+          const familyPhone = (student.isMinor && student.guardian?.phone ? student.guardian.phone : student.phone) ?? "";
+          return (
+            <fieldset>
+              <legend className="text-xs font-semibold uppercase tracking-wide text-slate-400">Send by</legend>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {[
+                  { v: "email", label: "Email" },
+                  { v: "text", label: "Text" },
+                  { v: "both", label: "Email & text" },
+                ].map((o, i) => (
+                  <label key={o.v} className="cursor-pointer">
+                    <input type="radio" name="channel" value={o.v} defaultChecked={i === 0} className="peer sr-only" />
+                    <span className="inline-block select-none rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-800 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-400">
+                      {o.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-slate-400">
+                Email goes to the checked address(es) below. Text goes to{" "}
+                {familyPhone
+                  ? `the family mobile (${familyPhone})`
+                  : "the family mobile — none on file yet, add one in Contact info above to text"}
+                .
+              </p>
+            </fieldset>
+          );
+        })()}
+
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Email recipients</div>
+          <RecipientChecklist person={student} guardian={student.guardian} purpose="report" />
+        </div>
         <div className="flex justify-end">
           <PendingSubmit label={note?.sentToParentAt ? "Resend report" : "Send report"} className="btn-secondary text-sm" pendingLabel="Sending…" />
         </div>

@@ -72,8 +72,11 @@ export async function POST(req: Request) {
       return progress(`?ok=saved&week=${week}`);
     }
 
-    // Email this week's note to the student's parent/guardian (or the student
-    // directly if they're an adult with no guardian on file).
+    // Send this week's note to the family. The coach/admin chooses the channel:
+    //   email — to the hand-picked addresses from the "Send to" checklist
+    //   text  — to the family mobile (the guardian's for a minor, else the
+    //           player's; a minor is never texted directly)
+    //   both  — email AND text
     case "sendReport": {
       const note = await prisma.coachingNote.findUnique({ where: { teamId_personId_week: { teamId, personId, week } } });
       if (!note || (parseTags(note.strengths).length === 0 && parseTags(note.growth).length === 0 && !note.note)) {
@@ -85,48 +88,108 @@ export async function POST(req: Request) {
       });
       if (!student) return progress(`?err=nostudent&week=${week}`);
 
-      // Recipients are hand-picked from the "Send to" checklist. Validate the
-      // submitted addresses against the student's (and guardian's) real
-      // contacts, so a send can only go to addresses on the record.
-      const contacts = personContacts(student, student.isMinor ? student.guardian : null);
-      if (contacts.length === 0) return progress(`?err=noemail&week=${week}`);
-      const picked = filterToContacts(fd.getAll("to").map((v) => String(v)), contacts);
-      if (picked.length === 0) return progress(`?err=norecipients&week=${week}`);
+      const channel = String(fd.get("channel") ?? "email"); // email | text | both
+      const wantEmail = channel === "email" || channel === "both";
+      const wantText = channel === "text" || channel === "both";
 
       const coachName = auth.team.coach
         ? `${auth.team.coach.person.firstName} ${auth.team.coach.person.lastName}`
         : "Your PURE coach";
+      const strengths = labelsFor(parseTags(note.strengths));
+      const growth = labelsFor(parseTags(note.growth));
       const email = coachingReportEmail({
         studentFirstName: student.firstName,
         teamName: auth.team.name,
         week,
         coachName,
-        strengths: labelsFor(parseTags(note.strengths)),
-        growth: labelsFor(parseTags(note.growth)),
+        strengths,
+        growth,
         note: note.note,
       });
 
-      const res = await dispatchMessage({
-        senderId: actor.userId,
-        seasonId: auth.team.seasonId,
-        audienceType: "SINGLE_PERSON",
-        audienceRef: student.id,
-        channels: ["EMAIL"],
-        triggerType: "PROGRESS_REPORT",
-        subject: email.subject,
-        body: email.text,
-        html: email.html,
-        toEmails: picked,
-      });
+      // Aggregate the outcome across the chosen channels.
+      let attempted = false;      // at least one channel actually sent something
+      let anyFailure = false;
+      let anySimulated = false;
+      const reasons: string[] = [];
+      let emailNoAddress = false; // email chosen but nobody checked / no address
+      let textNoPhone = false;    // text chosen but no family mobile on file
 
-      if (res.failures > 0) {
-        const reason = res.failureReasons[0] ?? "send failed";
+      // EMAIL — to the hand-picked addresses (validated against real contacts).
+      if (wantEmail) {
+        const contacts = personContacts(student, student.isMinor ? student.guardian : null);
+        const picked = filterToContacts(fd.getAll("to").map((v) => String(v)), contacts);
+        if (picked.length === 0) {
+          emailNoAddress = true;
+        } else {
+          const res = await dispatchMessage({
+            senderId: actor.userId,
+            seasonId: auth.team.seasonId,
+            audienceType: "SINGLE_PERSON",
+            audienceRef: student.id,
+            channels: ["EMAIL"],
+            triggerType: "PROGRESS_REPORT",
+            subject: email.subject,
+            body: email.text,
+            html: email.html,
+            toEmails: picked,
+          });
+          attempted = true;
+          if (res.failures > 0) { anyFailure = true; reasons.push(...res.failureReasons); }
+          else if (res.simulated > 0) anySimulated = true;
+        }
+      }
+
+      // TEXT — to the family mobile. For a minor that's the guardian (never the
+      // child); for an adult it's their own number. Resolve the target person so
+      // dispatch pulls the right phone.
+      if (wantText) {
+        const smsTargetId = student.isMinor && student.guardianId ? student.guardianId : student.id;
+        const smsPhone = ((student.isMinor && student.guardian ? student.guardian.phone : student.phone) ?? "").trim();
+        if (!smsPhone) {
+          textNoPhone = true;
+        } else {
+          const parts = [
+            `${student.firstName}'s Week ${week} update — ${auth.team.name}.`,
+            strengths.length ? `Excelling at: ${strengths.join(", ")}.` : "",
+            growth.length ? `Working on: ${growth.join(", ")}.` : "",
+            (note.note ?? "").trim(),
+            `— ${coachName}`,
+          ].filter(Boolean);
+          const smsBody = parts.join(" ").slice(0, 900);
+          const res = await dispatchMessage({
+            senderId: actor.userId,
+            seasonId: auth.team.seasonId,
+            audienceType: "SINGLE_PERSON",
+            audienceRef: smsTargetId,
+            channels: ["SMS"],
+            triggerType: "PROGRESS_REPORT",
+            subject: email.subject,
+            body: email.text,
+            smsBody,
+          });
+          attempted = true;
+          if (res.failures > 0) { anyFailure = true; reasons.push(...res.failureReasons); }
+          else if (res.simulated > 0) anySimulated = true;
+        }
+      }
+
+      // Nothing could be sent — tell the coach exactly why for the chosen channel.
+      if (!attempted) {
+        if (wantText && !wantEmail && textNoPhone) return progress(`?err=nophone&week=${week}`);
+        if (wantEmail && !wantText && emailNoAddress) return progress(`?err=norecipients&week=${week}`);
+        return progress(`?err=nodest&week=${week}`);
+      }
+      if (anyFailure) {
+        const reason = reasons[0] ?? "send failed";
         await audit({ actorId: actor.userId, entityType: "CoachingNote", entityId: `${teamId}:${personId}:${week}`, action: "coachingNote.sendFailed", summary: `Week ${week} report failed: ${reason}` });
         return progress(`?err=sendfail&week=${week}&reason=${encodeURIComponent(reason.slice(0, 180))}`);
       }
+
       await prisma.coachingNote.update({ where: { id: note.id }, data: { sentToParentAt: new Date() } });
-      await audit({ actorId: actor.userId, entityType: "CoachingNote", entityId: `${teamId}:${personId}:${week}`, action: "coachingNote.sent", summary: res.simulated ? `Week ${week} report simulated (provider unconfigured)` : `Emailed Week ${week} report to ${res.recipients} recipient(s)` });
-      return progress(`?ok=${res.simulated ? "sentsim" : "sent"}&week=${week}`);
+      const via = wantEmail && wantText ? "email & text" : wantText ? "text" : "email";
+      await audit({ actorId: actor.userId, entityType: "CoachingNote", entityId: `${teamId}:${personId}:${week}`, action: "coachingNote.sent", summary: anySimulated ? `Week ${week} report simulated via ${via} (provider unconfigured)` : `Sent Week ${week} report via ${via}` });
+      return progress(`?ok=${anySimulated ? "sentsim" : "sent"}&week=${week}&via=${encodeURIComponent(via)}`);
     }
 
     default:
