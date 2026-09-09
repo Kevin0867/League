@@ -93,6 +93,10 @@ export default async function SessionDetail({
   // know check-in records the session toward their pay.
   const myRole = myCoachId ? s.coaches.find((c) => c.coachId === myCoachId)?.role ?? null : null;
   const coveringSub = !admin && (myRole === "SUBSTITUTE" || myRole === "BACKUP");
+  // The team's own head/assistant coach can add/modify practices (admins are
+  // alerted). A sub covering the class can't reschedule it.
+  const isTeamCoachHere = !!myCoachId && s.teams.some((t) => t.team.coachId === myCoachId || t.team.assistantCoaches.some((ac) => ac.coachId === myCoachId));
+  const coachCanEdit = !admin && isTeamCoachHere && s.type === "PRACTICE";
 
   // Active sub request for this class (if any) — drives the "Need a sub?" card.
   const activeSub = (s.status === "SCHEDULED")
@@ -313,6 +317,54 @@ export default async function SessionDetail({
             </div>
           )}
         </form>
+
+        {/* Coach-editable practice controls — the team's own coach can reschedule
+            or remove this practice; admins are alerted automatically. */}
+        {coachCanEdit && (
+          <div className="space-y-4">
+            <form method="POST" action="/api/console/schedule" className="card">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="editSession" />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <input type="hidden" name="sessionId" value={s.id} />
+              <h2 className="mb-1 font-semibold text-slate-900">Reschedule practice</h2>
+              <p className="mb-3 text-xs text-slate-500">Change the date, time, or place. Admins are notified of the change.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">Date</label>
+                  <DateField name="date" className="input" defaultValue={s.date.toISOString().slice(0, 10)} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="label">Start</label><TimeSelect name="startTime" className="input" defaultValue={s.startTime} /></div>
+                  <div><label className="label">End</label><TimeSelect name="endTime" className="input" defaultValue={s.endTime} /></div>
+                </div>
+                <div>
+                  <label className="label">Facility</label>
+                  <select name="facilityId" className="input" defaultValue={s.facilityId ?? ""}>
+                    <option value="">— none —</option>
+                    {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" name="notify" value="1" defaultChecked />
+                  Notify the team of the change
+                </label>
+                <button className="btn-primary w-full">Save changes</button>
+              </div>
+            </form>
+            <div className="card border border-rose-200">
+              <h2 className="mb-1 font-semibold text-rose-700">Remove practice</h2>
+              <p className="mb-3 text-xs text-slate-500">Deletes this practice (no notice to the team). Admins are notified. To call it off with a notice to families, ask an admin to Cancel it.</p>
+              <ConfirmSubmit
+                action="/api/console/schedule"
+                fields={{ ticket, op: "deleteSession", sessionId: s.id, returnTo }}
+                label="Delete practice"
+                confirm={`Delete this practice on ${formatDate(s.date)}? The team isn't notified, and admins are alerted.`}
+                className="w-full rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Session controls — admin only. Coaches record attendance (left). */}
         {admin && (

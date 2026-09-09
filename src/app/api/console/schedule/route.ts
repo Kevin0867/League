@@ -30,6 +30,38 @@ function addMinutes(hhmm: string, minutes: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+type SchedActor = { userId: string; roles: import("@/lib/enums").Role[] };
+
+// Who may add/modify a session: admins (manageScheduling) for any, or the head/
+// assistant coach of one of the session's teams for their own. Returns the mode
+// so callers can alert admins when a COACH makes the change.
+async function schedEditMode(actor: SchedActor, sessionId: string): Promise<"admin" | "coach" | null> {
+  if (can(actor.roles, "manageScheduling")) return "admin";
+  const mine = await coachedTeamIdsForUser(actor.userId);
+  if (!mine.length) return null;
+  const sess = await prisma.session.findUnique({ where: { id: sessionId }, select: { teams: { select: { teamId: true } } } });
+  if (sess && sess.teams.some((t) => mine.includes(t.teamId))) return "coach";
+  return null;
+}
+
+// Notify admins that a coach added/changed/removed a practice.
+async function alertAdminsScheduleChange(actorUserId: string, seasonId: string, label: string, verb: string, link?: string) {
+  const u = await prisma.user.findUnique({ where: { id: actorUserId }, select: { person: { select: { firstName: true, lastName: true } } } });
+  const who = u?.person ? `${u.person.firstName} ${u.person.lastName}` : "A coach";
+  await dispatchMessage({
+    senderId: actorUserId, seasonId,
+    audienceType: "ALL_ADMINS", triggerType: "COACH_SCHEDULE_CHANGE",
+    channels: ["IN_APP", "EMAIL"],
+    subject: `Coach ${verb} a practice`,
+    body: `${who} ${verb} a practice: ${label}.${link ? ` ${link}` : ""}`,
+  });
+}
+
+function schedLabel(s: { date: Date; startTime: string; facility: { name: string } | null; teams: { team: { name: string } }[] }): string {
+  const teams = s.teams.map((t) => t.team.name).join(", ") || "a class";
+  return `${teams} on ${formatDate(s.date)} at ${formatTime12(s.startTime)}${s.facility ? ` · ${s.facility.name}` : ""}`;
+}
+
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const formData = await req.formData();
@@ -50,9 +82,11 @@ export async function POST(req: Request) {
   // Reschedule a single session — date, time, and/or facility (§7). Notifies the
   // team(s) by default so families see the change (opt out with the checkbox).
   if (op === "editSession") {
-    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    if (!actor) return back("?err=auth");
     const sessionId = String(formData.get("sessionId") ?? "");
     if (!sessionId) return back("?err=notfound");
+    const mode = await schedEditMode(actor, sessionId);
+    if (!mode) return back("?err=auth");
     const dateStr = String(formData.get("date") ?? "").trim();
     const startTime = String(formData.get("startTime") ?? "").trim();
     const endTime = String(formData.get("endTime") ?? "").trim();
@@ -83,7 +117,12 @@ export async function POST(req: Request) {
       }
     }
 
-    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.edit", summary: `Rescheduled session${notify ? " + notified team" : ""}` });
+    // A coach changed the schedule — let admins know.
+    if (mode === "coach") {
+      const full = await prisma.session.findUnique({ where: { id: sessionId }, include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } } });
+      if (full) await alertAdminsScheduleChange(actor.userId, updated.seasonId, schedLabel(full), "rescheduled", `${origin}/console/schedule/${sessionId}`);
+    }
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.edit", summary: `Rescheduled session${notify ? " + notified team" : ""}${mode === "coach" ? " (by coach)" : ""}` });
     return back("?ok=edited");
   }
 
@@ -239,16 +278,23 @@ export async function POST(req: Request) {
   // notification (use Cancel for that). Join rows (teams, coaches, attendance)
   // cascade away.
   if (op === "deleteSession") {
-    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    if (!actor) return back("?err=auth");
     const sessionId = String(formData.get("sessionId") ?? "");
-    const s = await prisma.session.findUnique({ where: { id: sessionId }, select: { id: true, type: true, date: true } });
+    const mode = await schedEditMode(actor, sessionId);
+    if (!mode) return back("?err=auth");
+    // A coach may only delete PRACTICE sessions (not league/championship).
+    const s = await prisma.session.findUnique({ where: { id: sessionId }, include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } } });
     if (!s) return back("?err=session");
+    if (mode === "coach" && s.type !== "PRACTICE") return back("?err=auth");
+    const label = schedLabel(s);
+    const seasonId = s.seasonId;
     try {
       await prisma.session.delete({ where: { id: sessionId } });
     } catch {
       return back("?err=sessionlinked");
     }
-    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "DELETE", summary: `Deleted ${s.type} on ${formatDate(s.date)}` });
+    if (mode === "coach") await alertAdminsScheduleChange(actor.userId, seasonId, label, "deleted");
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "DELETE", summary: `Deleted ${s.type} on ${formatDate(s.date)}${mode === "coach" ? " (by coach)" : ""}` });
     return back("?ok=deleted");
   }
 
@@ -381,7 +427,8 @@ export async function POST(req: Request) {
     const teamId = String(formData.get("teamId") ?? "");
     const team = await prisma.team.findUnique({ where: { id: teamId } });
     if (!team) return back("?err=team");
-    if (!can(actor.roles, "manageScheduling")) {
+    const addByCoach = !can(actor.roles, "manageScheduling");
+    if (addByCoach) {
       const mine = await coachedTeamIdsForUser(actor.userId);
       if (!mine.includes(teamId)) return back("?err=notyourteam");
     }
@@ -431,7 +478,13 @@ export async function POST(req: Request) {
       });
     }
 
-    await audit({ actorId: actor.userId, entityType: "Session", entityId: created.id, action: "session.add", summary: `Added a practice for ${team.name}${notify ? " + notified team" : ""}` });
+    // A coach added a practice — alert admins.
+    if (addByCoach) {
+      const fac = facilityId ? await prisma.facility.findUnique({ where: { id: facilityId }, select: { name: true } }) : null;
+      const label = `${team.name} on ${formatDate(parsed)} at ${formatTime12(startTime)}${fac ? ` · ${fac.name}` : ""}`;
+      await alertAdminsScheduleChange(actor.userId, team.seasonId, label, "added", `${origin}/console/schedule/${created.id}`);
+    }
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: created.id, action: "session.add", summary: `Added a practice for ${team.name}${notify ? " + notified team" : ""}${addByCoach ? " (by coach)" : ""}` });
     return back("?ok=added");
   }
 
