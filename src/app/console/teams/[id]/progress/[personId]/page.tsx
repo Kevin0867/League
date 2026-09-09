@@ -72,6 +72,9 @@ export default async function StudentProgressPage({
   const emergencyName = decryptField(student.emergencyName);
   const emergencyPhone = decryptField(student.emergencyPhone);
   const emergencyRelation = decryptField(student.emergencyRelation);
+  const emergencyName2 = decryptField(student.emergencyName2);
+  const emergencyPhone2 = decryptField(student.emergencyPhone2);
+  const emergencyRelation2 = decryptField(student.emergencyRelation2);
   const address = decryptField(student.address);
   const medicalNotes = decryptField(student.medicalNotes);
   const dobInput = student.dob ? new Date(student.dob).toISOString().slice(0, 10) : "";
@@ -132,11 +135,20 @@ export default async function StudentProgressPage({
           </div>
 
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency contact</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency contact 1</div>
             <div className="mt-2 grid gap-3 sm:grid-cols-3">
               <div><label className="label">Name</label><input name="emergencyName" defaultValue={emergencyName ?? ""} className="input" placeholder="e.g. Jane Doe" /></div>
               <div><label className="label">Relationship</label><input name="emergencyRelation" defaultValue={emergencyRelation ?? ""} className="input" placeholder="e.g. Mother" /></div>
               <div><label className="label">Phone</label><input name="emergencyPhone" type="tel" defaultValue={emergencyPhone ?? ""} className="input" /></div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency contact 2</div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              <div><label className="label">Name</label><input name="emergencyName2" defaultValue={emergencyName2 ?? ""} className="input" placeholder="e.g. John Doe" /></div>
+              <div><label className="label">Relationship</label><input name="emergencyRelation2" defaultValue={emergencyRelation2 ?? ""} className="input" placeholder="e.g. Father" /></div>
+              <div><label className="label">Phone</label><input name="emergencyPhone2" type="tel" defaultValue={emergencyPhone2 ?? ""} className="input" /></div>
             </div>
           </div>
 
