@@ -6,7 +6,19 @@ import { SpeechToTextArea } from "./SpeechToTextArea";
 // Coach composes a team update (with voice dictation) and sends it to everyone
 // on the team — players and their parents — in one tap. Confirms before sending
 // since it's a real broadcast.
-export function TeamUpdateComposer({ ticket, teamId, teamName }: { ticket: string; teamId: string; teamName: string }) {
+export function TeamUpdateComposer({
+  ticket,
+  teamId,
+  teamName,
+  placeholder,
+  submitLabel = "Send to all",
+}: {
+  ticket: string;
+  teamId: string;
+  teamName: string;
+  placeholder?: string;
+  submitLabel?: string;
+}) {
   const [pending, setPending] = useState(false);
   return (
     <form
@@ -32,14 +44,14 @@ export function TeamUpdateComposer({ ticket, teamId, teamName }: { ticket: strin
         name="body"
         rows={5}
         ariaLabel="Team update message"
-        placeholder={"e.g. Great work today on dinks and resets. This week, please work on your third-shot drop — we'll move on to drives next week."}
+        placeholder={placeholder ?? "e.g. Great work today on dinks and resets. This week, please work on your third-shot drop — we'll move on to drives next week."}
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" name="channel_SMS" value="on" defaultChecked /> Also text this to the team
         </label>
         <button type="submit" disabled={pending} className="btn-primary w-full sm:w-auto disabled:opacity-60">
-          {pending ? "Sending…" : "Send to all"}
+          {pending ? "Sending…" : submitLabel}
         </button>
       </div>
     </form>
