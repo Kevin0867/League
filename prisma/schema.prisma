@@ -707,6 +707,36 @@ model Session {
   @@index([status])
 }
 
+/// Season feedback / testimonial from a family. Collected via a texted/emailed
+/// link at mid-season and end-of-season; optionally tied to a coach and, with the
+/// family's consent + admin approval, published on the coach's public profile.
+model Feedback {
+  id             String   @id @default(cuid())
+  seasonId       String?
+  /// The respondent (player or parent) if we know them from the link token.
+  personId       String?
+  /// Display name for a published testimonial (family-provided; optional).
+  respondentName String?
+  /// The coach being reviewed (optional — feedback can be about the program).
+  coachId        String?
+  /// 1–5 star rating (optional).
+  rating         Int?
+  /// The testimonial / feedback text.
+  body           String?
+  /// The family agreed we may publish this.
+  consentPublish Boolean  @default(false)
+  /// An admin approved it for public display (requires consentPublish).
+  published      Boolean  @default(false)
+  /// NEW | REVIEWED | HIDDEN
+  status         String   @default("NEW")
+  /// MIDSEASON | ENDSEASON | GENERAL
+  phase          String?
+  createdAt      DateTime @default(now())
+
+  @@index([coachId, published])
+  @@index([status, createdAt])
+}
+
 /// A coach's request for a substitute on one class. Created by the class's coach
 /// (or an admin on their behalf); other coaches see open requests in the Coaches'
 /// Lounge and can claim one, which assigns them as the SUBSTITUTE (so pay follows

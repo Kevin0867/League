@@ -45,6 +45,16 @@ export default async function PublicCoachPage({ params }: { params: Promise<{ id
   const coach = await getCoach(id);
   if (!coach) notFound();
 
+  // Published testimonials for this coach (family consented + admin approved).
+  const testimonials = await prisma.feedback.findMany({
+    where: { coachId: coach.id, published: true },
+    orderBy: { createdAt: "desc" },
+    take: 12,
+    select: { id: true, rating: true, body: true, respondentName: true },
+  });
+  const rated = testimonials.filter((t) => t.rating);
+  const avgRating = rated.length ? (rated.reduce((s, t) => s + (t.rating ?? 0), 0) / rated.length) : null;
+
   // Teams this coach leads this season (published only), with player counts.
   const teams = await prisma.team.findMany({
     where: { coachId: coach.id, published: true },
@@ -115,6 +125,25 @@ export default async function PublicCoachPage({ params }: { params: Promise<{ id
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* What families say — published testimonials (consented + approved). */}
+            {testimonials.length > 0 && (
+              <div className="mt-8">
+                <div className="flex items-center gap-2">
+                  <h2 className="display text-2xl text-brand-900">What families say</h2>
+                  {avgRating && <span className="text-amber-500">{"★".repeat(Math.round(avgRating))}<span className="text-slate-300">{"★".repeat(5 - Math.round(avgRating))}</span> <span className="text-sm text-slate-500">{avgRating.toFixed(1)}</span></span>}
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {testimonials.map((t) => (
+                    <blockquote key={t.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      {t.rating && <div className="text-amber-400">{"★".repeat(t.rating)}<span className="text-slate-200">{"★".repeat(5 - t.rating)}</span></div>}
+                      {t.body && <p className="mt-1 text-sm text-slate-700">“{t.body}”</p>}
+                      <footer className="mt-2 text-xs font-medium text-slate-400">— {t.respondentName || "A PURE Academy family"}</footer>
+                    </blockquote>
+                  ))}
+                </div>
               </div>
             )}
 
