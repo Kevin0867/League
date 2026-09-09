@@ -15,6 +15,7 @@ export const COACH_ROLE = "COACH";
 // Console sections a COACH may open. Everything else under /console is admin-
 // only. The bare "/console" dashboard is always allowed for a coach.
 export const COACH_CONSOLE_PREFIXES = [
+  "/console/today", // the coach's day — today's classes + check-in
   "/console/calendar", // season calendar (view)
   "/console/schedule", // their practices
   "/console/league", // league standings/fixtures (view)

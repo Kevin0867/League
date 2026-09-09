@@ -148,19 +148,23 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         const one = headTeams.length === 1 ? headTeams[0].id : null;
         const teamHref = (hash: string) => (one ? `/console/teams/${one}/progress${hash}` : "#myteams");
         return (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <QuickTile href={teamHref("#checkin")} label="Check-ins" icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M9 5h6a1 1 0 0 1 1 1v0a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v0a1 1 0 0 1 1-1Z"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 14l2 2 4-4"/></svg>
-            } />
-            <QuickTile href="/console/inbox" label="Messaging" icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M4 5h16v11H8l-4 3V5Z"/></svg>
-            } />
-            <QuickTile href={teamHref("#notes")} label="Team notes" icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 9h8M8 13h6"/></svg>
-            } />
-            <QuickTile href="/console/profile" label="My profile" icon={
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
-            } />
+          <div className="space-y-3">
+            {/* One clear primary action — the reason a coach opens this on a phone. */}
+            <Link href="/console/today" className="flex items-center justify-between gap-3 rounded-2xl bg-brand-900 px-5 py-4 text-white shadow-sm hover:bg-brand-800">
+              <span>
+                <span className="block text-lg font-bold">Today&apos;s classes</span>
+                <span className="block text-sm text-brand-200">Check players in and see what&apos;s next</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-accent-500 px-4 py-2 text-sm font-bold text-brand-900">Open →</span>
+            </Link>
+            <div className="grid grid-cols-2 gap-3">
+              <QuickTile href="/console/inbox" label="Messaging" icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M4 5h16v11H8l-4 3V5Z"/></svg>
+              } />
+              <QuickTile href={teamHref("#notes")} label="Team notes" icon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 9h8M8 13h6"/></svg>
+              } />
+            </div>
           </div>
         );
       })()}
