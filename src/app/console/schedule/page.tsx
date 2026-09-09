@@ -11,6 +11,7 @@ import { PrintButton } from "@/components/PrintButton";
 import { AddPracticeForm } from "./AddPracticeForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { generatePracticeDates } from "@/lib/domain/schedule";
+import { weekOfSeason } from "@/lib/domain/practiceInfo";
 
 const PRACTICE_WEEKS = 6;
 
@@ -65,7 +66,7 @@ export default async function SchedulePage({
   const now = new Date();
   const [sessions, teams, facilities, blackoutRows] = await Promise.all([
     prisma.session.findMany({
-      include: { facility: true, teams: { include: { team: true } } },
+      include: { facility: true, teams: { include: { team: true } }, season: { select: { startDate: true } } },
       orderBy: { date: "asc" },
       take: 200,
     }),
@@ -341,10 +342,18 @@ export default async function SchedulePage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {visibleSessions.map((s) => (
+            {visibleSessions.map((s) => {
+              // Show the season week for EVERY session. Generated practices carry a
+              // stored weekNumber; a one-off added practice has none, so compute the
+              // week it falls in from the season start (muted, since it's a label,
+              // not part of the generated plan) rather than a bare "—" (F-16).
+              const computedWk = s.weekNumber == null ? weekOfSeason(s.season?.startDate, s.date) : null;
+              return (
               <tr key={s.id} className="hover:bg-slate-50">
                 <td className="py-2 text-slate-700">{formatDate(s.date)}</td>
-                <td className="hidden text-slate-500 lg:table-cell">{s.weekNumber ?? "—"}</td>
+                <td className="hidden text-slate-500 lg:table-cell">
+                  {s.weekNumber ?? (computedWk != null ? <span className="text-slate-400" title="Added session — falls in this season week">{computedWk}</span> : "—")}
+                </td>
                 <td className="hidden text-slate-600 md:table-cell">{TYPE_LABEL[s.type] ?? s.type}</td>
                 <td className="hidden text-slate-600 sm:table-cell">{s.teams.map((t) => t.team.name).join(", ") || "—"}</td>
                 <td className="hidden text-slate-600 md:table-cell">{s.facility?.name ?? "—"}</td>
@@ -356,7 +365,8 @@ export default async function SchedulePage({
                   </Link>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {visibleSessions.length === 0 && (
               <tr><td colSpan={8} className="py-8 text-center text-slate-400">{teamFilter ? "No sessions for this team yet." : "No sessions scheduled yet."}</td></tr>
             )}

@@ -71,6 +71,7 @@ export async function POST(req: Request) {
 
   const data = {
     name,
+    facilityType: String(formData.get("facilityType") ?? "").trim() || null,
     market: String(formData.get("market") ?? "").trim() || null,
     courtCount: parseInt(String(formData.get("courtCount") ?? "0"), 10) || 0,
     agreementStatus: String(formData.get("agreementStatus") ?? "IDENTIFIED"),

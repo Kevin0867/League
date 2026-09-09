@@ -59,9 +59,18 @@ export default async function TeamProgressPage({
     orderBy: { date: "asc" },
   });
   const tomorrow = startOfTomorrow();
-  const needsAttendance = sessions
+  // "Needs attendance" leads with the sessions nearest to now — recent practices
+  // still un-recorded — not the oldest one on file. Anything older than a few
+  // weeks is stale (a session that was never delivered or cancelled) and drops to
+  // a separate, quieter list so it can't hijack the primary check-in card (F-14).
+  const recentCutoff = new Date();
+  recentCutoff.setHours(0, 0, 0, 0);
+  recentCutoff.setDate(recentCutoff.getDate() - 21);
+  const pastScheduled = sessions
     .filter((s) => s.status === "SCHEDULED" && s.date < tomorrow)
     .sort((a, b) => b.date.getTime() - a.date.getTime());
+  const needsAttendance = pastScheduled.filter((s) => s.date >= recentCutoff);
+  const staleUnrecorded = pastScheduled.filter((s) => s.date < recentCutoff);
   const upcoming = sessions.filter((s) => s.date >= tomorrow).slice(0, 3);
   const rosterSize = team.members.length;
 
@@ -198,6 +207,28 @@ export default async function TeamProgressPage({
         )}
       </section>
 
+      {/* Stale un-recorded sessions — old practices left SCHEDULED that were never
+          recorded or cancelled. Kept out of the primary check-in card, tucked in a
+          collapsed list so they don't lead but are still reachable. */}
+      {staleUnrecorded.length > 0 && (
+        <section className="scroll-mt-4">
+          <details className="card">
+            <summary className="cursor-pointer text-sm font-medium text-slate-500">
+              {staleUnrecorded.length} older session{staleUnrecorded.length === 1 ? "" : "s"} without attendance
+            </summary>
+            <div className="mt-2 divide-y divide-slate-100">
+              {staleUnrecorded.map((s) => (
+                <Link key={s.id} href={`/console/schedule/${s.id}`} className="flex min-h-[44px] items-center justify-between gap-2 py-2 active:bg-slate-50">
+                  <span className="text-sm text-slate-600">
+                    {formatSessionDay(s.date, "short")} · {formatTime12(s.startTime)}
+                  </span>
+                  <span className="text-xs font-semibold text-brand-600">Open →</span>
+                </Link>
+              ))}
+            </div>
+          </details>
+        </section>
+      )}
 
       {/* PLAYER NOTES — a clean, tappable list. Each player shows a plain-English
           progress line and a tidy 6-week strip; tap to open and write/send. */}

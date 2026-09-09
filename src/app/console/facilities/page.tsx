@@ -180,7 +180,7 @@ export default async function FacilitiesPage({
                   <FacilityForm
                     ticket={ticket}
                     facility={{
-                      id: f.id, name: f.name, market: f.market, courtCount: f.courtCount,
+                      id: f.id, name: f.name, facilityType: f.facilityType, market: f.market, courtCount: f.courtCount,
                       agreementStatus: f.agreementStatus, feeBasis: f.feeBasis,
                       weekdayRateCents: f.weekdayRateCents, weekendRateCents: f.weekendRateCents,
                       percentageRate: f.percentageRate, primaryContact: f.primaryContact,

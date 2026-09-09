@@ -629,9 +629,12 @@ export default async function TeamDetailPage({
         </form>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Admins get the 3-column split (roster + team settings). A coach has no
+          settings column, so the roster would sit alone in a third of the width;
+          give it a comfortable full reading column instead (F-16). */}
+      <div className={admin ? "grid gap-6 lg:grid-cols-3" : "max-w-2xl"}>
         {/* Roster */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className={admin ? "lg:col-span-1 space-y-4" : "space-y-4"}>
           <div className="card">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="font-semibold text-slate-900">Roster</h2>
