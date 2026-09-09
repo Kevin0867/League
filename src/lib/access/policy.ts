@@ -21,6 +21,7 @@ export const COACH_CONSOLE_PREFIXES = [
   "/console/teams", // teams (view others; their roster + progress notes)
   "/console/profile", // their own coach profile & account
   "/console/inbox", // messaging with admins/coaches/their team families
+  "/console/lounge", // the Coaches' Lounge — staff space, coaches included
 ];
 
 export function isAdminRole(roles: string[]): boolean {

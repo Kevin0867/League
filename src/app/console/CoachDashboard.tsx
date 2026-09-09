@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
-import { formatTime12, formatDate } from "@/lib/time";
+import { formatTime12, formatDate, formatSessionDay } from "@/lib/time";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
 import { coachAssignmentGate } from "@/lib/domain/teams";
@@ -202,7 +202,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
               >
                 <span className="text-sm font-medium text-slate-800">
                   {s.teams.map((t) => t.team.name).join(", ") || "Session"}
-                  <span className="ml-2 text-xs font-normal text-slate-500">{s.date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Phoenix" })}</span>
+                  <span className="ml-2 text-xs font-normal text-slate-500">{formatSessionDay(s.date, "none")}</span>
                 </span>
                 <span className="shrink-0 text-sm font-semibold text-amber-700">Record →</span>
               </Link>
@@ -311,7 +311,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
             {upcoming.map((s) => (
               <Link key={s.id} href={`/console/schedule/${s.id}`} className="flex min-h-[48px] items-center justify-between gap-2 py-2.5 active:bg-slate-50">
                 <span className="text-sm font-medium text-slate-800">
-                  {s.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Phoenix" })} · {formatTime12(s.startTime)}
+                  {formatSessionDay(s.date, "short")} · {formatTime12(s.startTime)}
                 </span>
                 <span className="truncate text-right text-sm text-slate-500">{s.teams.map((t) => t.team.name).join(", ")}</span>
               </Link>

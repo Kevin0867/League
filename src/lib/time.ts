@@ -139,6 +139,58 @@ export function phoenixDateInput(d: Date | string | null | undefined): string {
   return dt.toLocaleDateString("en-CA", { timeZone: BUSINESS_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
+/** Weekday + date label for a session's calendar DAY. Session dates are stored
+ *  as a day anchor (12:00 UTC), not a wall-clock instant, so render them in UTC:
+ *  the stored day then never shifts by a timezone. Rendering these in Phoenix is
+ *  the dashboard/team "off-by-one" (a UTC-midnight anchor reads as the previous
+ *  evening). `weekday`: "long" → "Monday, Sep 14", "short" → "Mon, Sep 14",
+ *  "none" → "Sep 14". */
+export function formatSessionDay(
+  d: Date | string | null | undefined,
+  weekday: "long" | "short" | "none" = "short",
+): string {
+  if (!d) return "";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (!(dt instanceof Date) || isNaN(dt.getTime())) return "";
+  return dt.toLocaleDateString("en-US", {
+    ...(weekday === "none" ? {} : { weekday }),
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "YYYY-MM-DD" for today's calendar day in the academy's timezone — for the
+ *  `min` on a scheduling date input and for rejecting backdated sessions. */
+export function phoenixTodayInput(): string {
+  return phoenixDateInput(new Date());
+}
+
+/** Parse a scheduling date input ("YYYY-MM-DD" from <input type="date">) to a
+ *  Date anchored at 12:00 UTC, so the stored day renders as the SAME calendar
+ *  day whether formatted in UTC (formatDate) or Phoenix (noon UTC = 5 AM
+ *  Phoenix). Storing at UTC midnight — what `new Date("YYYY-MM-DD")` gives —
+ *  shifts back a day in Phoenix, the off-by-one on the dashboard. A full
+ *  datetime string passes through. Returns null if unparseable. */
+export function parseSessionDateInput(dateStr: string | null | undefined): Date | null {
+  const s = String(dateStr ?? "").trim();
+  if (!s) return null;
+  if (BARE_DATE.test(s)) {
+    const d = new Date(`${s}T12:00:00Z`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** True when a scheduling date input falls before today (academy timezone) —
+ *  the guard against backdating a practice so it pays out immediately. */
+export function isPastSchedulingDay(dateStr: string | null | undefined): boolean {
+  const d = parseSessionDateInput(dateStr);
+  if (!d) return false;
+  return phoenixDateInput(d) < phoenixTodayInput();
+}
+
 /** The last day registration is open, from a closes-on instant (stored as the
  *  following midnight). MM/DD/YYYY in the academy's timezone. */
 export function closeDayLabel(closesOn: Date | string | null | undefined): string {

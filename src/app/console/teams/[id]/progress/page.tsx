@@ -5,18 +5,20 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { canCoverTeamNotes } from "@/lib/domain/coachingAccess";
 import { COACHING_WEEKS, COACHING_WEEK_COUNT, noteHasContent } from "@/lib/domain/coachingNotes";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
-import { formatTime12, BUSINESS_TZ } from "@/lib/time";
+import { formatTime12, formatSessionDay } from "@/lib/time";
 import { teamWeekSchedule, describeTeamPractice } from "@/lib/domain/practiceInfo";
 
 export const dynamic = "force-dynamic";
 
-// "Oct 26" in the club's timezone — used for the week-key labels.
+// Session/practice dates are stored as a day anchor (12:00 UTC), so render them
+// in UTC — never Phoenix — or a day added at UTC midnight reads a day early.
+// "Oct 26" — used for the week-key labels.
 function shortDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: BUSINESS_TZ });
+  return formatSessionDay(d, "none");
 }
 // "Sun Oct 26" for the planned-practice list.
 function weekdayShort(d: Date): string {
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: BUSINESS_TZ });
+  return formatSessionDay(d, "short");
 }
 
 function startOfTomorrow() {
@@ -167,7 +169,7 @@ export default async function TeamProgressPage({
               >
                 <div>
                   <div className="text-sm font-semibold text-slate-900">
-                    {s.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/Phoenix" })}
+                    {formatSessionDay(s.date, "long")}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-500">
                     {formatTime12(s.startTime)} · {s.facility?.name ?? "location TBA"} · {s._count.attendance > 0 ? `${s._count.attendance}/${rosterSize} checked` : "not started"}
@@ -183,7 +185,7 @@ export default async function TeamProgressPage({
                   {upcoming.map((s) => (
                     <Link key={s.id} href={`/console/schedule/${s.id}`} className="flex min-h-[44px] items-center justify-between gap-2 py-2 active:bg-slate-50">
                       <span className="text-sm text-slate-700">
-                        {s.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Phoenix" })} · {formatTime12(s.startTime)}
+                        {formatSessionDay(s.date, "short")} · {formatTime12(s.startTime)}
                       </span>
                       <span className="text-xs font-semibold text-brand-600">Open →</span>
                     </Link>

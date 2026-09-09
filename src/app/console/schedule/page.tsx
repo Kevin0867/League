@@ -26,6 +26,7 @@ const TYPE_LABEL: Record<string, string> = {
 const OK_LABEL: Record<string, string> = {
   generate: "Practice schedule generated.",
   added: "Practice added — the team has been notified.",
+  addedquiet: "Practice added. The team was not notified.",
   deleted: "Session deleted.",
   cleared: "Practices cleared — you can regenerate them below.",
 };
@@ -36,6 +37,7 @@ const ERR_LABEL: Record<string, string> = {
   config: "Set the team's day, time, and facility before generating a schedule.",
   exists: "This team already has a practice schedule.",
   adddate: "Pick a valid date for the practice.",
+  pastdate: "That date has already passed — pick today or a future date.",
   addslot: "That date and time is outside the facility's available hours — pick a day/time the facility is open.",
   notyourteam: "You can only add practices for teams you coach.",
   session: "Session not found.",

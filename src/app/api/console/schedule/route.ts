@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { formatDate, formatTime12 } from "@/lib/time";
+import { formatDate, formatTime12, parseSessionDateInput, isPastSchedulingDay } from "@/lib/time";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
@@ -13,6 +13,7 @@ import { isBookable, DOW } from "@/lib/domain/facilityWindows";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { assignSessionSub } from "@/lib/domain/coachSub";
 import { addTeamAssistantToSessions } from "@/lib/domain/teamCoachSessions";
+import { isSessionComplete } from "@/lib/domain/coachPay";
 
 // Schedule mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -92,7 +93,11 @@ export async function POST(req: Request) {
     const endTime = String(formData.get("endTime") ?? "").trim();
     const facilityId = String(formData.get("facilityId") ?? "").trim() || null;
     const notify = String(formData.get("notify") ?? "") === "1";
-    const parsedDate = dateStr ? new Date(dateStr) : null;
+    if (dateStr && !parseSessionDateInput(dateStr)) return back("?err=adddate");
+    // A coach may not move a practice into the past (that would let it pay out
+    // immediately). Admins can correct a date freely.
+    if (mode === "coach" && isPastSchedulingDay(dateStr)) return back("?err=pastdate");
+    const parsedDate = parseSessionDateInput(dateStr);
     const updated = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -434,8 +439,11 @@ export async function POST(req: Request) {
     }
 
     const dateStr = String(formData.get("date") ?? "").trim();
-    const parsed = dateStr ? new Date(dateStr) : null;
-    if (!parsed || isNaN(parsed.getTime())) return back("?err=adddate");
+    const parsed = parseSessionDateInput(dateStr);
+    if (!parsed) return back("?err=adddate");
+    // A practice can't be backdated: a past date would make the session look
+    // "complete" the moment it's saved and pay the coach without it happening.
+    if (isPastSchedulingDay(dateStr)) return back("?err=pastdate");
     const startTime = String(formData.get("startTime") ?? "").trim() || team.startTime || "17:00";
     const endTime = String(formData.get("endTime") ?? "").trim() || addMinutes(startTime, DEFAULT_DURATION_MIN);
     const facilityId = String(formData.get("facilityId") ?? "").trim() || team.facilityId || null;
@@ -485,7 +493,7 @@ export async function POST(req: Request) {
       await alertAdminsScheduleChange(actor.userId, team.seasonId, label, "added", `${origin}/console/schedule/${created.id}`);
     }
     await audit({ actorId: actor.userId, entityType: "Session", entityId: created.id, action: "session.add", summary: `Added a practice for ${team.name}${notify ? " + notified team" : ""}${addByCoach ? " (by coach)" : ""}` });
-    return back("?ok=added");
+    return back(notify ? "?ok=added" : "?ok=addedquiet");
   }
 
   // markAttendance — markAttendance, allowed for COACH too (§7)
@@ -509,8 +517,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // Marking attendance confirms the session happened.
-    if (s.status === "SCHEDULED") {
+    // Marking attendance confirms a session that has actually happened — but a
+    // coach can (and does) check players in for an UPCOMING practice. Only flip
+    // to DELIVERED once the class is over by the clock; otherwise leave it
+    // SCHEDULED so the "Need a sub?" panel and an open sub request stay live.
+    // (Pay accrues on completion by time, not on this status — see coachPay.ts.)
+    if (s.status === "SCHEDULED" && isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status })) {
       await prisma.session.update({ where: { id: sessionId }, data: { status: "DELIVERED" } });
     }
 
