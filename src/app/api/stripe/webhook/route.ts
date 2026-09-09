@@ -5,6 +5,7 @@ import { audit } from "@/lib/audit";
 import { sendPaymentConfirmation } from "@/lib/payments/receipt";
 import { notifyAdminsPaymentFailed } from "@/lib/payments/adminAlert";
 import { syncRefundsForCharge, paymentForIntent } from "@/lib/payments/refunds";
+import { matchFeeByEmailAndAmount } from "@/lib/payments/match";
 
 // Resolve the local Payment for a Stripe subscription. Normally it's linked by
 // stripeSubscriptionId (set on checkout.session.completed), but the first
@@ -93,28 +94,16 @@ export async function POST(req: Request) {
         const email = s.customer_details?.email ?? s.customer_email ?? null;
         const amount = s.amount_total ?? null;
         if (email && amount) {
-          const emailEq = { equals: email, mode: "insensitive" as const };
-          const cands = await prisma.payment.findMany({
-            where: {
-              direction: "IN",
-              status: { in: ["REQUESTED", "PENDING"] },
-              amountCents: amount,
-              OR: [
-                { party: { email: emailEq } },
-                { party: { email2: emailEq } },
-                { party: { email3: emailEq } },
-                { party: { guardian: { email: emailEq } } },
-              ],
-            },
-            take: 2,
-          });
-          if (cands.length === 1) {
-            await prisma.payment.update({
-              where: { id: cands[0].id },
+          // The charge total may be fee-only or fee + apparel + tax — the matcher
+          // accepts either and credits both areas.
+          const feeId = await matchFeeByEmailAndAmount(email, amount);
+          if (feeId) {
+            await prisma.payment.updateMany({
+              where: { id: feeId, status: { not: "PAID" } },
               data: { status: "PAID", paidAt: new Date(), method: "STRIPE", stripePaymentIntentId: s.payment_intent ?? null },
             });
-            await audit({ entityType: "Payment", entityId: cands[0].id, action: "PAID", summary: "Stripe checkout completed (matched by email + amount, no app id)" });
-            await sendPaymentConfirmation(cands[0].id);
+            await audit({ entityType: "Payment", entityId: feeId, action: "PAID", summary: "Stripe checkout completed (matched by email + amount, no app id)" });
+            await sendPaymentConfirmation(feeId);
           }
         }
       }
