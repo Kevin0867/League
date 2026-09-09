@@ -183,6 +183,46 @@ export async function POST(req: Request) {
     return back("?srok=approved");
   }
 
+  // --- Assign a DIFFERENT coach (admin only) — approve by choosing someone
+  //     other than the volunteer. Puts the sub in place immediately. ---
+  if (op === "assignOther") {
+    if (!isAdmin) return back("?srerr=auth");
+    const requestId = String(fd.get("requestId") ?? "");
+    const coachId = String(fd.get("coachId") ?? "").trim();
+    if (!coachId) return back("?srerr=nocoach");
+    const request = await prisma.subRequest.findUnique({ where: { id: requestId } });
+    if (!request) return back("?srerr=notfound");
+    if (request.status !== "OPEN" && request.status !== "PENDING") return back("?srerr=taken");
+
+    const session = await prisma.session.findUnique({
+      where: { id: request.sessionId },
+      include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } },
+    });
+    if (!session) return back("?srerr=notfound");
+    const clashes = await coachSessionConflicts({ coachId, date: session.date, startTime: session.startTime, endTime: session.endTime, excludeSessionId: session.id });
+    if (clashes.length) return back("?srerr=clash");
+
+    await assignSessionSub({ sessionId: session.id, coachId, role: "SUBSTITUTE", actorId: actor.userId, origin });
+    await prisma.subRequest.update({ where: { id: requestId }, data: { status: "APPROVED", claimedByCoachId: coachId } });
+
+    const label = sessionLabel(session);
+    const cover = await prisma.coach.findUnique({ where: { id: coachId }, select: { person: { select: { firstName: true, lastName: true } } } });
+    const coverName = cover ? `${cover.person.firstName} ${cover.person.lastName}` : "A coach";
+    const reqCoach = await prisma.coach.findUnique({ where: { id: request.requestedByCoachId }, select: { personId: true } });
+    if (reqCoach?.personId) {
+      await dispatchMessage({
+        senderId: actor.userId, seasonId: session.seasonId,
+        audienceType: "SINGLE_PERSON", audienceRef: reqCoach.personId,
+        channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "SUB_APPROVED",
+        subject: "Your class is covered",
+        body: `${coverName} is covering ${label}. You're all set.`,
+        smsBody: `PURE Academy — ${coverName} is covering ${label}. You're all set.`,
+      });
+    }
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: session.id, action: "SUB_APPROVED", summary: `Assigned ${coverName} to cover ${label}` });
+    return back("?srok=approved");
+  }
+
   // --- Decline a pending offer (admin only) — reopens the request for others. ---
   if (op === "decline") {
     if (!isAdmin) return back("?srerr=auth");

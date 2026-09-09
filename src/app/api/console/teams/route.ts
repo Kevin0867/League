@@ -9,6 +9,7 @@ import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { accruePlayerSeasonFee, placementPayLink, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
 import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
+import { addTeamAssistantToSessions, removeTeamAssistantFromSessions } from "@/lib/domain/teamCoachSessions";
 import { isBookable } from "@/lib/domain/facilityWindows";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
@@ -490,6 +491,8 @@ export async function POST(req: Request) {
         create: { teamId, coachId, role },
         update: { role },
       });
+      // Pay them for the team's already-scheduled sessions too (assistant rate).
+      await addTeamAssistantToSessions(teamId, coachId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ADD_COACH", summary: `Added ${role.toLowerCase()} coach ${coachId}${addOverride}` });
       return back("?ok=addTeamCoach");
     }
@@ -499,6 +502,8 @@ export async function POST(req: Request) {
       const coachId = String(formData.get("coachId") ?? "").trim();
       if (!coachId) return back("?err=coach");
       await prisma.teamCoach.deleteMany({ where: { teamId, coachId } });
+      // Stop paying them for this team's sessions (removes only ASSISTANT rows).
+      await removeTeamAssistantFromSessions(teamId, coachId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "REMOVE_COACH", summary: `Removed additional coach ${coachId}` });
       return back("?ok=removeTeamCoach");
     }

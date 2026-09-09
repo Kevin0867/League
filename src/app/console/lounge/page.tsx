@@ -95,7 +95,7 @@ export default async function LoungePage({
       {openReqs.length > 0 && (
         <div className="card border-l-4 border-amber-400">
           <h2 className="font-semibold text-slate-900">🔁 Sub requests — {openReqs.length}</h2>
-          <p className="mt-0.5 text-sm text-slate-500">A coach needs cover. Offer to cover a class; <strong>an admin approves</strong> before it&apos;s put in place. Whoever covers is paid for the class.</p>
+          <p className="mt-0.5 text-sm text-slate-500">A coach needs cover. First coach to <strong>pick up the class</strong> is sent to admins to <strong>approve, deny, or assign someone else</strong>. Whoever&apos;s approved covers it and is paid for the class.</p>
           <ul className="mt-3 divide-y divide-slate-100">
             {openReqs.map((r) => {
               const teams = r.session.teams.map((t) => t.team.name).join(", ") || "a class";
@@ -131,6 +131,9 @@ export default async function LoungePage({
                         </form>
                       </>
                     )}
+                    {pending && admin && (
+                      <a href={`/console/schedule/${r.session.id}`} className="text-xs font-medium text-brand-600 hover:underline">Assign someone else →</a>
+                    )}
                     {pending && !admin && <span className="text-xs text-amber-700">awaiting admin approval</span>}
                     {!pending && isMine && (
                       <form method="POST" action="/api/console/sub-requests">
@@ -147,7 +150,7 @@ export default async function LoungePage({
                         <input type="hidden" name="op" value="claim" />
                         <input type="hidden" name="requestId" value={r.id} />
                         <input type="hidden" name="returnTo" value="/console/lounge" />
-                        <button className="rounded-full bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Offer to cover →</button>
+                        <button className="rounded-full bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Pick up this class →</button>
                       </form>
                     )}
                     {!pending && !isMine && !myCoachId && <span className="text-xs text-slate-400">coaches can cover</span>}
