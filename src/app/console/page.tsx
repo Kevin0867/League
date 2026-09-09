@@ -1,20 +1,34 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { prisma } from "@/lib/db";
 import { teamMissingFields } from "@/lib/domain/teams";
 import { getSeasonStats } from "@/lib/domain/seasonStats";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getSession } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
+import { formatDate, formatTime12 } from "@/lib/time";
 import { computeEnrollmentBreakdown, type BreakdownRow } from "@/lib/domain/enrollmentBreakdown";
 import { CoachDashboard } from "./CoachDashboard";
 
-export default async function ConsoleDashboard() {
+export default async function ConsoleDashboard({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = (await searchParams) ?? {};
   // Coaches get their own home (their teams / sessions / earnings), not the
   // academy-wide admin dashboard.
   const session = await getSession();
   if (session?.role === "COACH" && session.personId) {
     return <CoachDashboard personId={session.personId} firstName={session.name.split(" ")[0]} />;
   }
+
+  const SUB_MSG: Record<string, string> = {
+    approved: "Approved — the sub is covering that class and is paid for it.",
+    declined: "Offer declined — the request is open for another coach.",
+    offered: "Offer sent for approval.",
+    cancelled: "Sub request cancelled.",
+  };
 
   // One counting service feeds every headline number and the getting-started
   // checklist, so the dashboard can never disagree with Setup / Teams / Schedule.
@@ -73,6 +87,29 @@ export default async function ConsoleDashboard() {
     { n: bgChecksBad, label: `coach background check${bgChecksBad === 1 ? "" : "s"} expired or expiring within 30 days`, href: "/console/coaches", tone: "amber" as const },
   ].filter((a) => a.n > 0);
 
+  // Sub requests needing an admin's call — the top of the "needs attention"
+  // list. OPEN = a coach needs cover (assign someone); PENDING = a coach offered
+  // to take it (approve / deny / assign someone else).
+  const [subReqs, subCoaches, ticket] = await Promise.all([
+    prisma.subRequest.findMany({
+      where: { status: { in: ["OPEN", "PENDING"] }, session: { status: "SCHEDULED" } },
+      orderBy: { createdAt: "asc" },
+      include: { session: { include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } } } },
+    }),
+    prisma.coach.findMany({ select: { id: true, person: { select: { firstName: true, lastName: true } } }, orderBy: { person: { lastName: "asc" } } }),
+    mintConsoleTicket(),
+  ]);
+  const subCoachName = new Map(subCoaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`]));
+  const subRows = subReqs.map((r) => ({
+    id: r.id,
+    status: r.status,
+    sessionId: r.session.id,
+    label: `${r.session.teams.map((t) => t.team.name).join(", ") || "a class"} · ${formatDate(r.session.date)} at ${formatTime12(r.session.startTime)}${r.session.facility ? ` · ${r.session.facility.name}` : ""}`,
+    requester: subCoachName.get(r.requestedByCoachId) ?? "a coach",
+    offer: r.claimedByCoachId ? subCoachName.get(r.claimedByCoachId) ?? "a coach" : null,
+    note: r.note,
+  }));
+
   // The one getting-started sequence, computed in getSeasonStats so Setup, Teams
   // and Schedule show the exact same checkmarks the dashboard does.
   const setup = stats.readiness;
@@ -85,6 +122,69 @@ export default async function ConsoleDashboard() {
         <h1 className="text-2xl font-bold text-slate-900">Season dashboard</h1>
         <p className="text-slate-500">A live read on the build toward Week 1.</p>
       </div>
+
+      {sp.srok && SUB_MSG[sp.srok] && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{SUB_MSG[sp.srok]}</div>
+      )}
+      {sp.srerr && (
+        <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">Couldn&apos;t complete that — {sp.srerr === "clash" ? "that coach already covers another class at this time." : sp.srerr === "taken" ? "that request is no longer open." : "please try again."}</div>
+      )}
+
+      {/* Sub requests — the one thing an admin must action, right at the top.
+          A coach needs cover; approve the coach who offered, deny, or assign
+          someone yourself. */}
+      {subRows.length > 0 && (
+        <div className="card border-l-4 border-amber-400">
+          <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+            🔁 Sub requests
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">{subRows.length} need your call</span>
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-500">A coach needs cover for a class. Approve the coach who offered to take it, deny, or assign a coach yourself.</p>
+          <ul className="mt-3 space-y-3">
+            {subRows.map((r) => (
+              <li key={r.id} className="rounded-xl border border-slate-200 p-3">
+                <div className="text-sm font-semibold text-slate-900">{r.label}</div>
+                <div className="text-xs text-slate-500">
+                  Requested by <span className="font-medium text-slate-700">{r.requester}</span>{r.note ? ` — “${r.note}”` : ""}
+                </div>
+
+                {r.status === "PENDING" ? (
+                  <>
+                    <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      <span className="font-semibold">{r.offer}</span> wants to take this class.
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <SubForm ticket={ticket} op="approve" requestId={r.id}>
+                        <button className="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Approve {r.offer}</button>
+                      </SubForm>
+                      <SubForm ticket={ticket} op="decline" requestId={r.id}>
+                        <button className="rounded-full border border-rose-200 px-4 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-50">Deny</button>
+                      </SubForm>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-2 text-sm text-slate-500">No coach has offered yet — assign one:</div>
+                )}
+
+                {/* Assign a specific coach (approve someone other than the
+                    volunteer, or fill an open request directly). */}
+                <form method="POST" action="/api/console/sub-requests" className="mt-2 flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="assignOther" />
+                  <input type="hidden" name="requestId" value={r.id} />
+                  <input type="hidden" name="returnTo" value="/console" />
+                  <select name="coachId" required className="input w-auto py-1 text-sm">
+                    <option value="">{r.status === "PENDING" ? "— assign someone else —" : "— choose a coach —"}</option>
+                    {subCoaches.map((c) => <option key={c.id} value={c.id}>{c.person.firstName} {c.person.lastName}</option>)}
+                  </select>
+                  <button className="btn-secondary text-sm">Assign &amp; approve</button>
+                  <Link href={`/console/schedule/${r.sessionId}`} className="text-xs font-medium text-brand-600 hover:underline">open class →</Link>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Needs attention today — the prioritized cross-cutting to-do list */}
       {attention.length > 0 && (
@@ -291,4 +391,16 @@ function ComplianceRow({ label, value, warn }: { label: string; value: number; w
 
 function Empty({ text }: { text: string }) {
   return <p className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">{text}</p>;
+}
+
+function SubForm({ ticket, op, requestId, children }: { ticket: string; op: string; requestId: string; children: ReactNode }) {
+  return (
+    <form method="POST" action="/api/console/sub-requests">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value={op} />
+      <input type="hidden" name="requestId" value={requestId} />
+      <input type="hidden" name="returnTo" value="/console" />
+      {children}
+    </form>
+  );
 }
