@@ -154,8 +154,8 @@ export default async function PortalHome({
       >
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-base font-bold">Players and family get 30% off equipment</div>
-            <div className="mt-0.5 text-sm text-blue-100">Click here to start shopping — use code <span className="font-semibold text-white">PURE20</span> at checkout.</div>
+            <div className="text-base font-bold">Players and family members get 30% off equipment</div>
+            <div className="mt-0.5 text-sm text-blue-100">Click here to start shopping — use code <span className="font-semibold text-white">PURE30</span> at checkout.</div>
           </div>
           <span className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-bold text-blue-700">Shop →</span>
         </div>

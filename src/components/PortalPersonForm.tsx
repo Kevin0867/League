@@ -24,9 +24,9 @@ export type PortalPerson = {
 export function PortalPersonForm({ ticket, person, isSelf }: { ticket: string; person: PortalPerson; isSelf: boolean }) {
   return (
     <details className="border-t border-slate-100 pt-3 first:border-0 first:pt-0">
-      <summary className="flex cursor-pointer items-center justify-between gap-2">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
         <span className="text-sm font-medium text-slate-700">{person.firstName} {person.lastName}{isSelf ? " (you)" : ""}</span>
-        <span className="text-xs font-medium text-brand-700">Edit info</span>
+        <span className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100">Edit info</span>
       </summary>
       <form method="POST" action="/api/portal" className="mt-3 space-y-4">
         <input type="hidden" name="ticket" value={ticket} />
