@@ -38,18 +38,31 @@ export default async function ApparelReportPage({
 
   // Resolve player names + their team for each order line.
   const personIds = [...new Set(items.map((i) => i.personId).filter(Boolean) as string[])];
-  const [people, memberships] = await Promise.all([
+  const [people, memberships, regs] = await Promise.all([
     personIds.length ? prisma.person.findMany({ where: { id: { in: personIds } }, select: { id: true, firstName: true, lastName: true } }) : [],
-    personIds.length ? prisma.teamMember.findMany({ where: { personId: { in: personIds } }, select: { personId: true, team: { select: { name: true } } } }) : [],
+    personIds.length ? prisma.teamMember.findMany({ where: { personId: { in: personIds } }, select: { personId: true, team: { select: { name: true, isTest: true } } } }) : [],
+    personIds.length ? prisma.registration.findMany({ where: { personId: { in: personIds } }, select: { personId: true, status: true } }) : [],
   ]);
   const nameById = new Map(people.map((p) => [p.id, `${p.firstName} ${p.lastName}`]));
   const teamById = new Map(memberships.map((m) => [m.personId, m.team.name]));
+  // A player is "test-only" when every team they're on is a test team (their
+  // apparel shouldn't go in a real printer order).
+  const onRealTeam = new Set(memberships.filter((m) => !m.team.isTest).map((m) => m.personId));
+  const onTestTeam = new Set(memberships.filter((m) => m.team.isTest).map((m) => m.personId));
+  const testOnly = new Set([...onTestTeam].filter((id) => !onRealTeam.has(id)));
+  // A player with no active registration this season (only withdrawn/duplicate/
+  // merged, or none) — their apparel is worth a second look.
+  const ACTIVE_REG = (s: string) => !["WITHDRAWN", "DUPLICATE", "MERGED"].includes(s);
+  const hasActiveReg = new Set(regs.filter((r) => ACTIVE_REG(r.status)).map((r) => r.personId));
 
   // "Paid" for fulfillment = a completed payment OR a payment plan whose first
   // installment (which carries the apparel charge) has cleared.
   const apparelPaid = (p: { status: string; installmentPlan?: boolean | null; installmentsPaid?: number | null }) =>
     p.status === "PAID" || (!!p.installmentPlan && (p.installmentsPaid ?? 0) >= 1);
-  const paid = items.filter((i) => apparelPaid(i.payment));
+  const paidAll = items.filter((i) => apparelPaid(i.payment));
+  const isTestPiece = (i: { personId: string | null }) => !!i.personId && testOnly.has(i.personId);
+  // The real printer order excludes test-team pieces.
+  const paid = paidAll.filter((i) => !isTestPiece(i));
 
   // Printer tally — paid only, grouped garment → size → qty.
   const tally: Record<string, Record<string, number>> = {};
@@ -59,12 +72,29 @@ export default async function ApparelReportPage({
     totalPieces += it.quantity;
   }
 
+  // --- Reconciliation: does 183 tie back to paid registrations? ---
+  const qtyByPlayer = new Map<string, number>();
+  let unassignedPieces = 0;
+  for (const it of paid) {
+    if (!it.personId) { unassignedPieces += it.quantity; continue; }
+    qtyByPlayer.set(it.personId, (qtyByPlayer.get(it.personId) ?? 0) + it.quantity);
+  }
+  const distinctPlayers = qtyByPlayer.size;
+  const multiPlayers = [...qtyByPlayer.entries()].filter(([, q]) => q > 1);
+  const extraFromMulti = multiPlayers.reduce((s, [, q]) => s + (q - 1), 0);
+  const testPieces = paidAll.filter(isTestPiece).reduce((s, i) => s + i.quantity, 0);
+  const noRegPieces = paid.filter((i) => i.personId && !hasActiveReg.has(i.personId)).reduce((s, i) => s + i.quantity, 0);
+  const recon = { totalPieces, distinctPlayers, multiCount: multiPlayers.length, extraFromMulti, testPieces, noRegPieces, unassignedPieces };
+  const multiList = multiPlayers
+    .map(([pid, q]) => ({ name: nameById.get(pid) ?? "—", qty: q }))
+    .sort((a, b) => b.qty - a.qty);
+
   const count = (status: string) => paid.filter((i) => i.fulfillment === status).reduce((s, i) => s + i.quantity, 0);
   const pending = count("PENDING");
   const ordered = count("ORDERED");
   const delivered = count("DELIVERED");
 
-  const rows = (showAll ? items : paid).map((i) => ({
+  const rows = (showAll ? items.filter((i) => !isTestPiece(i)) : paid).map((i) => ({
     id: i.id,
     player: i.personId ? nameById.get(i.personId) ?? "" : "",
     payer: i.payment.party ? `${i.payment.party.firstName} ${i.payment.party.lastName}` : "",
@@ -99,6 +129,39 @@ export default async function ApparelReportPage({
           {sp.ok === "advanced" ? `${sp.n ?? ""} item(s) updated.` : sp.ok === "itemedited" ? "Apparel choice updated." : "Updated."}
         </p>
       )}
+
+      {/* Reconciliation — explains how the piece count ties to paid players. */}
+      <div className="card border-l-4 border-brand-500">
+        <h2 className="font-semibold text-slate-900">How this ties to paid registrations</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          <strong>{recon.totalPieces} pieces</strong> to order = <strong>{recon.distinctPlayers} paid players</strong>
+          {recon.extraFromMulti > 0 && <> + <strong>{recon.extraFromMulti}</strong> extra {recon.extraFromMulti === 1 ? "piece" : "pieces"} from {recon.multiCount} player{recon.multiCount === 1 ? "" : "s"} who ordered more than one</>}
+          {recon.unassignedPieces > 0 && <> + <strong>{recon.unassignedPieces}</strong> not linked to a player</>}.
+          So every piece traces to a paying player; the count is above the number of players only where someone bought a second item (e.g. a shirt <em>and</em> a tank).
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          <Metric label="Pieces to order" value={recon.totalPieces} />
+          <Metric label="Paid players" value={recon.distinctPlayers} />
+          <Metric label="2+ pieces" value={recon.multiCount} tone={recon.multiCount > 0 ? "amber" : "slate"} />
+          <Metric label="Test pieces excluded" value={recon.testPieces} tone={recon.testPieces > 0 ? "amber" : "slate"} />
+        </div>
+        {recon.noRegPieces > 0 && (
+          <p className="mt-2 text-sm text-amber-700">
+            ⚠ {recon.noRegPieces} piece{recon.noRegPieces === 1 ? "" : "s"} belong to players with no active registration this season (withdrawn/duplicate) — review before ordering.
+          </p>
+        )}
+        {recon.testPieces > 0 && (
+          <p className="mt-1 text-xs text-slate-400">{recon.testPieces} piece{recon.testPieces === 1 ? " on a test team is" : "s on test teams are"} excluded from the order below.</p>
+        )}
+        {multiList.length > 0 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm font-medium text-brand-700">Players who ordered more than one piece ({multiList.length})</summary>
+            <ul className="mt-1 space-y-0.5 text-sm text-slate-600">
+              {multiList.map((m, i) => <li key={i}>{m.name} — {m.qty} pieces</li>)}
+            </ul>
+          </details>
+        )}
+      </div>
 
       {/* Printer tally */}
       <div className="card">
@@ -234,5 +297,15 @@ function Advance({ ticket, from, to, label, disabled }: { ticket: string; from: 
       <input type="hidden" name="to" value={to} />
       <button className="btn-secondary text-sm disabled:cursor-not-allowed disabled:opacity-50" disabled={disabled}>{label}</button>
     </form>
+  );
+}
+
+function Metric({ label, value, tone = "slate" }: { label: string; value: number; tone?: "slate" | "amber" }) {
+  const color = tone === "amber" ? "text-amber-700" : "text-slate-900";
+  return (
+    <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`mt-0.5 text-2xl font-bold ${color}`}>{value}</div>
+    </div>
   );
 }
