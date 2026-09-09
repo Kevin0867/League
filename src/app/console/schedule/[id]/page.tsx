@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
 import { formatTimeRange12, formatDate, formatSessionDay, formatTime12, phoenixDateInput } from "@/lib/time";
+import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
 import { AttendanceMarker } from "@/components/AttendanceMarker";
@@ -137,6 +138,11 @@ export default async function SessionDetail({
     : null;
   const offerName = subOfferName ? `${subOfferName.person.firstName} ${subOfferName.person.lastName}` : null;
   const canRequestSub = (admin || !!myCoachId) && s.status === "SCHEDULED";
+  // Surface the request-a-sub form (rather than tuck it behind a disclosure) when
+  // the class is close — within ~48h — since that's when a coach opens the class
+  // to ask for cover.
+  const hoursUntilStart = (phoenixWallTimeToUtc(s.date, s.startTime).getTime() - Date.now()) / 3.6e6;
+  const subFormOpen = hoursUntilStart <= 48;
   const SR_OK: Record<string, string> = {
     requested: "Sub requested — coaches and admins have been texted, and it's posted in the Coaches' Lounge.",
     already: "There's already an open sub request for this class.",
@@ -300,7 +306,7 @@ export default async function SessionDetail({
               )}
             </div>
           ) : (
-            <details>
+            <details open={subFormOpen}>
               <summary className="cursor-pointer font-semibold text-slate-900">Can&apos;t make this class? Request a sub</summary>
               <p className="mt-1 text-sm text-slate-500">Texts every coach and admin and posts it to the Coaches&apos; Lounge, where another coach offers to cover it. An admin approves before it&apos;s put in place; whoever covers is paid for the class.</p>
               <form method="POST" action="/api/console/sub-requests" className="mt-3 space-y-2">
