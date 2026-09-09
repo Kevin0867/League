@@ -9,6 +9,7 @@ type BlockedInit = { dayOfWeek: string; startTime: string; endTime: string };
 export type FacilityInitial = {
   id: string;
   name: string;
+  facilityType: string | null;
   market: string | null;
   courtCount: number;
   agreementStatus: string;
@@ -96,6 +97,17 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
               <div>
                 <label className="label">Name</label>
                 <input name="name" className="input" placeholder="Scottsdale Ranch Pickleball Complex" defaultValue={facility?.name ?? ""} required />
+              </div>
+              <div>
+                <label className="label">Type</label>
+                <select name="facilityType" className="input" defaultValue={facility?.facilityType ?? ""}>
+                  <option value="">— unclassified —</option>
+                  <option value="COMMERCIAL">Commercial club / complex</option>
+                  <option value="SCHOOL">School</option>
+                  <option value="PARK">Public park</option>
+                  <option value="PRIVATE_RESIDENCE">Private residence / home court</option>
+                  <option value="OTHER">Other</option>
+                </select>
               </div>
               <div>
                 <label className="label">Market / city</label>

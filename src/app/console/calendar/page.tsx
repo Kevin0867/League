@@ -163,12 +163,16 @@ export default async function SeasonCalendarPage({
               band rather than cancelled, so every team has a season.
             </p>
           </div>
-          <Link href="/console/setup" className="btn-secondary text-sm">Manage divisions →</Link>
+          {admin && <Link href="/console/setup" className="btn-secondary text-sm">Manage divisions →</Link>}
         </div>
 
         {divisions.length === 0 ? (
           <p className="mt-4 rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-            No divisions yet. Add them in <Link href="/console/setup" className="text-brand-700 underline">Season Setup</Link>.
+            {admin ? (
+              <>No divisions yet. Add them in <Link href="/console/setup" className="text-brand-700 underline">Season Setup</Link>.</>
+            ) : (
+              <>No divisions set up yet.</>
+            )}
           </p>
         ) : (
           <div className="mt-4 grid gap-6 md:grid-cols-2">

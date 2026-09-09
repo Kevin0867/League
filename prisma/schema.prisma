@@ -572,6 +572,12 @@ model Facility {
   market           String?
   courtCount       Int       @default(0)
 
+  /// Venue classification: COMMERCIAL | SCHOOL | PARK | PRIVATE_RESIDENCE | OTHER
+  /// (null = unclassified). Keeps the facility list honest — a personal name in
+  /// the list is a flag it should be a PRIVATE_RESIDENCE (named by area, not
+  /// owner) or isn't a real venue at all.
+  facilityType     String?
+
   /// Agreement status: IDENTIFIED | VERBAL | AGREEMENT_SENT | EXECUTED (§6)
   agreementStatus  String    @default("IDENTIFIED")
 

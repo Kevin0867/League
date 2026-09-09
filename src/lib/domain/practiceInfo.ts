@@ -43,6 +43,26 @@ export function firstPracticeDate(seasonStart: Date, dayCode: string): Date | nu
   return result;
 }
 
+/**
+ * Which season week a date falls in, counting 7-day blocks from the published
+ * season start (week 1 = the start day through +6 days). Returns null for a date
+ * before the season starts. Display-only — it reads FROM the season start and
+ * never changes it, so it can label any session (including a one-off make-up)
+ * with the week it lands in without affecting the generated plan.
+ */
+export function weekOfSeason(seasonStart: Date | null | undefined, date: Date | null | undefined): number | null {
+  if (!seasonStart || !date) return null;
+  const [sy, sm, sd] = seasonStart.toLocaleDateString("en-CA", { timeZone: BUSINESS_TZ }).split("-").map(Number);
+  const start = Date.UTC(sy, sm - 1, sd, 12);
+  // Read the session's calendar day in the business zone, then compare at UTC
+  // noon so DST-free day math is exact.
+  const [dy, dm, dd] = date.toLocaleDateString("en-CA", { timeZone: BUSINESS_TZ }).split("-").map(Number);
+  const day = Date.UTC(dy, dm - 1, dd, 12);
+  const diffDays = Math.floor((day - start) / 86400000);
+  if (diffDays < 0) return null;
+  return Math.floor(diffDays / 7) + 1;
+}
+
 /** Add whole hours to an "HH:MM" 24h time, clamped to the same day. */
 export function addHoursHHMM(hhmm: string | null | undefined, hours: number): string | null {
   if (!hhmm) return null;
@@ -79,9 +99,13 @@ export async function describeTeamPractice(
   seasonId: string,
 ): Promise<string> {
   const [firstPractice, season] = await Promise.all([
+    // The team's WEEK-1 practice — the first of the generated season plan
+    // (weekNumber set), ordered by week. A one-off make-up (no weekNumber, and
+    // possibly out of season) must not become the "starting" date, or a single
+    // added practice re-labels when the season begins (F-14).
     prisma.session.findFirst({
-      where: { seasonId, type: "PRACTICE", teams: { some: { teamId: team.id } }, status: { in: ["SCHEDULED", "RESCHEDULED"] } },
-      orderBy: { date: "asc" },
+      where: { seasonId, type: "PRACTICE", teams: { some: { teamId: team.id } }, status: { in: ["SCHEDULED", "RESCHEDULED"] }, weekNumber: { not: null } },
+      orderBy: { weekNumber: "asc" },
       select: { date: true, startTime: true, endTime: true },
     }),
     prisma.season.findUnique({ where: { id: seasonId }, select: { startDate: true } }),
@@ -147,21 +171,33 @@ export async function teamWeekSchedule(
     prisma.session.findMany({
       where: { seasonId, type: "PRACTICE", teams: { some: { teamId: team.id } }, status: { in: ["SCHEDULED", "RESCHEDULED"] } },
       orderBy: { date: "asc" },
-      select: { date: true, startTime: true, endTime: true },
+      select: { date: true, startTime: true, endTime: true, weekNumber: true },
     }),
     prisma.season.findUnique({ where: { id: seasonId }, select: { startDate: true } }),
   ]);
 
+  // The six-week grid is anchored to the SEASON START and the generated plan,
+  // NOT to the earliest session on file — a one-off make-up (no weekNumber) must
+  // not shift week 1. Map each grid row to the generated session carrying that
+  // week number; weeks with no generated session fall back to the season-derived
+  // planned date. Added practices simply don't appear in the grid (F-14).
+  const byWeek = new Map<number, (typeof practices)[number]>();
+  for (const p of practices) {
+    if (p.weekNumber && p.weekNumber >= 1 && p.weekNumber <= weeks && !byWeek.has(p.weekNumber)) byWeek.set(p.weekNumber, p);
+  }
   const planned = weeklyPracticeDates(season?.startDate, team.dayOfWeek, weeks);
   const slots: WeekSlot[] = [];
   for (let i = 0; i < weeks; i++) {
-    if (practices[i]) slots.push({ week: i + 1, date: practices[i].date, scheduled: true });
-    else if (planned[i]) slots.push({ week: i + 1, date: planned[i], scheduled: false });
-    else slots.push({ week: i + 1, date: null, scheduled: false });
+    const wk = i + 1;
+    const real = byWeek.get(wk);
+    if (real) slots.push({ week: wk, date: real.date, scheduled: true });
+    else if (planned[i]) slots.push({ week: wk, date: planned[i], scheduled: false });
+    else slots.push({ week: wk, date: null, scheduled: false });
   }
 
-  const startTime = practices[0]?.startTime ?? team.startTime;
-  const endTime = practices[0]?.endTime ?? null;
-  return { slots, timeRange: practiceTimeRange(startTime, endTime), hasSessions: practices.length > 0 };
+  const firstReal = byWeek.get(1) ?? [...byWeek.values()][0];
+  const startTime = firstReal?.startTime ?? team.startTime;
+  const endTime = firstReal?.endTime ?? null;
+  return { slots, timeRange: practiceTimeRange(startTime, endTime), hasSessions: byWeek.size > 0 };
 }
 
