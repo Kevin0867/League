@@ -39,7 +39,7 @@ export default async function ConsoleLayout({
     ? { ticket: await mintConsoleTicket(), configured: !!process.env.ANTHROPIC_API_KEY }
     : null;
   return (
-    <ConsoleShell role={session.role} name={session.name} ask={ask}>
+    <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask}>
       {children}
     </ConsoleShell>
   );

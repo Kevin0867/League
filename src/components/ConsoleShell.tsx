@@ -79,11 +79,16 @@ const SECTIONS: NavSection[] = [
 
 export function ConsoleShell({
   role,
+  roles,
   name,
   children,
   ask,
 }: {
+  /** Primary role — used only for the sidebar badge label. */
   role: Role;
+  /** Every role the user holds — drives nav visibility so a multi-role user
+   *  (e.g. a parent who also coaches) sees the items for ALL their roles. */
+  roles?: Role[];
   name: string;
   children: React.ReactNode;
   /** When present (admin only), floats the "Ask Brett" assistant on every page. */
@@ -91,11 +96,13 @@ export function ConsoleShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const held = roles && roles.length ? roles : [role];
   const roleVisible = (n: NavItem) => {
     if (!n.roles) return true;
-    if (n.roles.includes(role)) return true;
+    // Visible if the user holds ANY role the item allows.
+    if (n.roles.some((r) => held.includes(r))) return true;
     // ADMIN inherits every admin-scoped item (any legacy admin role present).
-    if (role === "ADMIN" && n.roles.some((r) => r === "COO" || r === "CEO" || r === "DIRECTOR")) return true;
+    if (held.includes("ADMIN") && n.roles.some((r) => r === "COO" || r === "CEO" || r === "DIRECTOR")) return true;
     return false;
   };
   const sections = SECTIONS.map((s) => ({ title: s.title, items: s.items.filter(roleVisible) })).filter(

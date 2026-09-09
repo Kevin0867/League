@@ -1,16 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { compressImage } from "@/lib/browser/compressImage";
 
 /** Team photo upload (multipart). Admins or the team's coach. */
 export function TeamPhotoUploadForm({ ticket, teamId, currentUrl }: { ticket: string; teamId: string; currentUrl?: string | null }) {
   const [pending, setPending] = useState(false);
+
+  // Compress in-browser before upload so a large phone photo stays under the
+  // serverless body limit (413). Falls back to a normal submit on any failure.
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
+    const fileInput = form.querySelector('input[type="file"]') as HTMLInputElement | null;
+    const file = fileInput?.files?.[0];
+    if (!file) return;
+    e.preventDefault();
+    setPending(true);
+    try {
+      const compressed = await compressImage(file);
+      const fd = new FormData();
+      fd.set("ticket", ticket);
+      fd.set("teamId", teamId);
+      fd.set("file", compressed, (file.name.replace(/\.[^.]+$/, "") || "team") + ".jpg");
+      const res = await fetch("/api/console/team-image", { method: "POST", body: fd });
+      window.location.href = res.url || `/console/teams/${teamId}`;
+    } catch {
+      setPending(false);
+      form.submit();
+    }
+  }
+
   return (
     <form
       method="POST"
       action="/api/console/team-image"
       encType="multipart/form-data"
-      onSubmit={() => setPending(true)}
+      onSubmit={onSubmit}
       className="flex flex-wrap items-center gap-3"
     >
       <input type="hidden" name="ticket" value={ticket} />
