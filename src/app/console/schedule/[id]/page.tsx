@@ -8,7 +8,7 @@ import { isAdmin } from "@/lib/rbac";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
-import { formatTimeRange12, formatDate, formatSessionDay } from "@/lib/time";
+import { formatTimeRange12, formatDate, formatSessionDay, formatTime12, phoenixDateInput } from "@/lib/time";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
 import { AttendanceMarker } from "@/components/AttendanceMarker";
@@ -94,6 +94,39 @@ export default async function SessionDetail({
   // alerted). A sub covering the class can't reschedule it.
   const isTeamCoachHere = !!myCoachId && s.teams.some((t) => t.team.coachId === myCoachId || t.team.assistantCoaches.some((ac) => ac.coachId === myCoachId));
   const coachCanEdit = !admin && isTeamCoachHere && s.type === "PRACTICE";
+
+  // Multi-team check-in: a coach's OTHER classes to check in — today's, plus any
+  // recent past practice still un-recorded — so they hop team → team without
+  // leaving the check-in flow. Excludes this session.
+  let otherClasses: { id: string; name: string; startTime: string; isToday: boolean; done: boolean }[] = [];
+  if (myCoachId) {
+    const myTeams = await prisma.team.findMany({
+      where: { OR: [{ coachId: myCoachId }, { assistantCoaches: { some: { coachId: myCoachId } } }] },
+      select: { id: true },
+    });
+    const myTeamIds = myTeams.map((t) => t.id);
+    if (myTeamIds.length) {
+      const todayStr = phoenixDateInput(new Date());
+      const from = new Date(Date.now() - 21 * 86400000);
+      const rows = await prisma.session.findMany({
+        where: { id: { not: id }, teams: { some: { teamId: { in: myTeamIds } } }, type: "PRACTICE", status: { in: ["SCHEDULED", "DELIVERED", "RESCHEDULED"] }, date: { gte: from } },
+        orderBy: { date: "asc" },
+        include: { _count: { select: { attendance: true } }, teams: { include: { team: { select: { name: true } } } } },
+      });
+      otherClasses = rows
+        .filter((x) => {
+          const day = phoenixDateInput(x.date);
+          return day === todayStr || (day < todayStr && x.status === "SCHEDULED" && x._count.attendance === 0);
+        })
+        .map((x) => ({
+          id: x.id,
+          name: x.teams.map((t) => t.team.name).join(", ") || "Class",
+          startTime: x.startTime,
+          isToday: phoenixDateInput(x.date) === todayStr,
+          done: x._count.attendance > 0,
+        }));
+    }
+  }
 
   // Active sub request for this class (if any) — drives the "Need a sub?" card.
   // Query regardless of session status so an open request stays approvable and
@@ -282,6 +315,21 @@ export default async function SessionDetail({
               </form>
             </details>
           )}
+        </div>
+      )}
+
+      {/* Multi-team coaches: jump straight to another class to check in without
+          going back out. Today's classes first, then any still needing attendance. */}
+      {otherClasses.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Your other classes to check in</div>
+          <div className="flex flex-wrap gap-2">
+            {otherClasses.map((c) => (
+              <a key={c.id} href={`/console/schedule/${c.id}#attendance`} className="btn-link text-xs">
+                {c.name} · {formatTime12(c.startTime)}{c.isToday ? "" : " (past)"}{c.done ? " ✓" : ""}
+              </a>
+            ))}
+          </div>
         </div>
       )}
 
