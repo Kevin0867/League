@@ -11,8 +11,10 @@ import { cancellationOutcome } from "@/lib/domain/schedule";
 import { formatTimeRange12, formatDate } from "@/lib/time";
 import { PendingSubmit, ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
+import { AttendanceQuickFill } from "@/components/AttendanceQuickFill";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Session" };
 
 const TYPE_LABEL: Record<string, string> = {
   PRACTICE: "Practice", LEAGUE_MATCH: "League match", CHAMPIONSHIP: "Championship", ALA_CARTE: "Private Lessons",
@@ -287,7 +289,7 @@ export default async function SessionDetail({
           ) : (
             <ul className="divide-y divide-slate-100">
               {roster.map((m) => {
-                const cur = attMap.get(m.personId) ?? "PRESENT";
+                const cur = attMap.get(m.personId) ?? "";
                 return (
                   <li key={m.personId} className="py-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -313,7 +315,8 @@ export default async function SessionDetail({
             </ul>
           )}
           {roster.length > 0 && (
-            <div className="mt-4 flex justify-stretch sm:justify-end">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <AttendanceQuickFill formId="attendance" />
               <PendingSubmit label="Save attendance" pendingLabel="Saving…" className="btn-primary w-full sm:w-auto" />
             </div>
           )}

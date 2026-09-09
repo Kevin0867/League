@@ -9,6 +9,8 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Inbox" };
+
 const ERRORS: Record<string, string> = {
   perm: "You can't message that audience.",
   fields: "Pick a recipient and write a message.",

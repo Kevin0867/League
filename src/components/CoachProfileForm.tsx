@@ -143,34 +143,59 @@ export function CoachProfileForm({
 
       <section id="screening" className="card space-y-4 scroll-mt-24 target:ring-2 target:ring-brand-400">
         <h2 className="font-semibold text-slate-900">Screening &amp; compliance</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">Safe Sport certified</label>
-            <select name="safeSport" className="input" defaultValue={initial.safeSport ? "yes" : "no"}>
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Background check</label>
-            <select name="bgCheck" className="input" value={bgCheck ? "yes" : "no"} onChange={(e) => setBgCheck(e.target.value === "yes")}>
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </select>
-          </div>
-          {bgCheck && (
-            <>
+        {editableIdentity ? (
+          // Admin context only — screening is set by staff, never self-attested.
+          // The hidden marker tells the save route this section was rendered, so
+          // the compliance fields are written (and not treated as "cleared").
+          <>
+            <input type="hidden" name="screenVisible" value="1" />
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="label">Date checked</label>
-                <input name="bgDate" type="date" className="input" defaultValue={initial.backgroundCheckDate} />
+                <label className="label">Safe Sport certified</label>
+                <select name="safeSport" className="input" defaultValue={initial.safeSport ? "yes" : "no"}>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
               </div>
               <div>
-                <label className="label">Company that ran the check</label>
-                <input name="bgCompany" className="input" defaultValue={initial.backgroundCheckCompany} placeholder="e.g. Sterling, Checkr" />
+                <label className="label">Background check</label>
+                <select name="bgCheck" className="input" value={bgCheck ? "yes" : "no"} onChange={(e) => setBgCheck(e.target.value === "yes")}>
+                  <option value="no">No</option>
+                  <option value="yes">Yes</option>
+                </select>
               </div>
-            </>
-          )}
-        </div>
+              {bgCheck && (
+                <>
+                  <div>
+                    <label className="label">Date checked</label>
+                    <input name="bgDate" type="date" className="input" defaultValue={initial.backgroundCheckDate} />
+                  </div>
+                  <div>
+                    <label className="label">Company that ran the check</label>
+                    <input name="bgCompany" className="input" defaultValue={initial.backgroundCheckCompany} placeholder="e.g. Sterling, Checkr" />
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          // Self-service: read-only status. Coaches can see where they stand but
+          // can't certify themselves — the club sets this. No form fields render,
+          // so saving your profile never changes it.
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+              <span className="text-slate-600">Safe Sport certified</span>
+              <span className={initial.safeSport ? "font-medium text-emerald-700" : "text-slate-400"}>{initial.safeSport ? "Yes" : "Not on file"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-slate-600">Background check</span>
+              <span className={initial.backgroundCheck ? "font-medium text-emerald-700" : "text-slate-400"}>
+                {initial.backgroundCheck ? `On file${initial.backgroundCheckDate ? ` · ${initial.backgroundCheckDate}` : ""}` : "Not on file"}
+              </span>
+            </div>
+            <p className="pt-1 text-xs text-slate-400">Screening is recorded by the academy. Contact an admin to update it.</p>
+          </div>
+        )}
       </section>
 
       {pay && (

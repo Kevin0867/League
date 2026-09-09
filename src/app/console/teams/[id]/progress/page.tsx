@@ -9,6 +9,7 @@ import { formatTime12, formatSessionDay } from "@/lib/time";
 import { teamWeekSchedule, describeTeamPractice } from "@/lib/domain/practiceInfo";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Team notes" };
 
 // Session/practice dates are stored as a day anchor (12:00 UTC), so render them
 // in UTC — never Phoenix — or a day added at UTC midnight reads a day early.

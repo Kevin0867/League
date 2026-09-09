@@ -7,6 +7,8 @@ import { PasswordField } from "@/components/PasswordField";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "My Profile" };
+
 function parseMarkets(json: string | null): string[] {
   if (!json) return [];
   try {

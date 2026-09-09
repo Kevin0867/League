@@ -5,6 +5,8 @@ import { TEAM_CAP } from "@/lib/enums";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Requests" };
+
 type TeamOption = { id: string; name: string; full: boolean };
 
 // A compact "move to team" control: a team dropdown + Go, posting to the shared

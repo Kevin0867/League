@@ -18,6 +18,8 @@ import { DEFAULT_SCORING, scoringFormatOf, scoringShort } from "@/lib/domain/sco
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "League" };
+
 const iso = (d: Date) => new Date(d).toISOString().slice(0, 10);
 const hhmm = (d: Date) => new Date(d).toISOString().slice(11, 16);
 

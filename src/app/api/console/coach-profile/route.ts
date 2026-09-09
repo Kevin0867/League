@@ -61,23 +61,31 @@ export async function POST(req: Request) {
   }
 
   const markets = list("market").filter(Boolean);
-  const bgChecked = g("bgCheck") === "yes";
-  const bgDate = g("bgDate");
   const data: Record<string, unknown> = {
     rpoCertLevel: g("rpoCertLevel") || null,
     certifications: g("certifications") || null,
     bio: g("bio") || null,
     coachingLevels: g("coachingLevels") || null,
     marketsCovered: markets.length ? JSON.stringify(markets) : null,
-    safeSportCertified: g("safeSport") === "yes",
-    backgroundCheckDate: bgChecked && bgDate ? new Date(bgDate) : bgChecked ? new Date() : null,
-    backgroundCheckCompany: bgChecked ? (g("bgCompany") || null) : null,
     // Public-profile visibility: the form submits the fields to SHOW; anything
     // not checked is hidden. Only written when the visibility section rendered.
     ...(g("pubVisible") === "1"
       ? { publicHidden: COACH_PUBLIC_FIELDS.map((f) => f.key).filter((k) => !list("pubShow").includes(k)) }
       : {}),
   };
+
+  // Screening & compliance (Safe Sport, background check) is admin-only. It is
+  // written ONLY when the form rendered that section (screenVisible=1) AND the
+  // actor may manage coaches — so a coach editing their own profile can neither
+  // self-certify their screening nor, by omitting the fields, wipe the values
+  // an admin set. A coach hand-posting these fields is ignored here too.
+  if (g("screenVisible") === "1" && can(actor.role, "manageCoaches")) {
+    const bgChecked = g("bgCheck") === "yes";
+    const bgDate = g("bgDate");
+    data.safeSportCertified = g("safeSport") === "yes";
+    data.backgroundCheckDate = bgChecked && bgDate ? new Date(bgDate) : bgChecked ? new Date() : null;
+    data.backgroundCheckCompany = bgChecked ? (g("bgCompany") || null) : null;
+  }
 
   // Compensation is admin-only. It is written only when the form was rendered
   // with the pay section (payVisible=1) AND the actor may manage coaches — so a

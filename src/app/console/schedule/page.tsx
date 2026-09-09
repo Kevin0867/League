@@ -16,6 +16,8 @@ const PRACTICE_WEEKS = 6;
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Schedule" };
+
 const TYPE_LABEL: Record<string, string> = {
   PRACTICE: "Practice",
   LEAGUE_MATCH: "League",

@@ -7,6 +7,8 @@ import { formatStamp, formatDate, formatTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Coaches' Lounge" };
+
 const OK: Record<string, string> = {
   posted: "Posted to the lounge.",
   replied: "Reply added.",

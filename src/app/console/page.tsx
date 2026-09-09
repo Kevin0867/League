@@ -10,6 +10,9 @@ import { formatDate, formatTime12 } from "@/lib/time";
 import { computeEnrollmentBreakdown, type BreakdownRow } from "@/lib/domain/enrollmentBreakdown";
 import { CoachDashboard } from "./CoachDashboard";
 
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Dashboard" };
+
 export default async function ConsoleDashboard({
   searchParams,
 }: {

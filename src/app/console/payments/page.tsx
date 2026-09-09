@@ -22,6 +22,8 @@ import { payableCompletedRows } from "@/lib/domain/coachPay";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Payments" };
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default async function PaymentsPage({

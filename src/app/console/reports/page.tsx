@@ -10,6 +10,8 @@ import { requireAdmin } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Reports" };
+
 // Weekday order so the coaching grid reads Mon→Sun, not alphabetically.
 const DAY_ORDER: Record<string, number> = { MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6, SUN: 7 };
 const DAY_LABEL: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
