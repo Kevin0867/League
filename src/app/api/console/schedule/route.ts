@@ -12,6 +12,7 @@ import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
 import { isBookable, DOW } from "@/lib/domain/facilityWindows";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { assignSessionSub } from "@/lib/domain/coachSub";
+import { addTeamAssistantToSessions } from "@/lib/domain/teamCoachSessions";
 
 // Schedule mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -93,7 +94,7 @@ export async function POST(req: Request) {
     const teamId = String(formData.get("teamId") ?? "");
     const team = await prisma.team.findUnique({
       where: { id: teamId },
-      include: { season: true, facility: true },
+      include: { season: true, facility: true, assistantCoaches: { select: { coachId: true } } },
     });
     if (!team) return back("?err=team");
     if (!team.dayOfWeek || !team.startTime || !team.facilityId) return back("?err=config");
@@ -132,6 +133,9 @@ export async function POST(req: Request) {
       });
       created.push({ id: s.id, date: dates[i] });
     }
+
+    // Assistant coaches are paid for the team's sessions too — attach them.
+    for (const ac of team.assistantCoaches) await addTeamAssistantToSessions(teamId, ac.coachId);
 
     // Tell the head coach their practices are set: the calendar-sync link plus an
     // emailed .ics invite for all the practices so they land in their calendar.
@@ -311,7 +315,7 @@ export async function POST(req: Request) {
     if (!actor) return back("?err=auth");
     const teamId = String(formData.get("teamId") ?? "");
     const dateStr = String(formData.get("date") ?? "").trim();
-    const team = await prisma.team.findUnique({ where: { id: teamId }, include: { season: { select: { startDate: true } } } });
+    const team = await prisma.team.findUnique({ where: { id: teamId }, include: { season: { select: { startDate: true } }, assistantCoaches: { select: { coachId: true } } } });
     if (!team) return back("?err=team");
     if (!can(actor.roles, "manageScheduling")) {
       const mine = await coachedTeamIdsForUser(actor.userId);
@@ -363,6 +367,8 @@ export async function POST(req: Request) {
       });
       sess = created;
     }
+    // Keep assistant coaches attached (and paid) on the team's sessions.
+    for (const ac of team.assistantCoaches) await addTeamAssistantToSessions(teamId, ac.coachId);
     return NextResponse.redirect(new URL(`/console/schedule/${sess.id}#attendance`, origin), 303);
   }
 
@@ -483,10 +489,10 @@ export async function POST(req: Request) {
     }
     await assignSessionSub({ sessionId, coachId, role, actorId: actor.userId, origin });
 
-    // Assigning a coach clears any open sub request for this class.
+    // Assigning a coach resolves any open/pending sub request for this class.
     await prisma.subRequest.updateMany({
-      where: { sessionId, status: "OPEN" },
-      data: { status: "CLAIMED", claimedByCoachId: coachId },
+      where: { sessionId, status: { in: ["OPEN", "PENDING"] } },
+      data: { status: "APPROVED", claimedByCoachId: coachId },
     });
 
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.addCoach", summary: `Added ${role.toLowerCase()} coach ${coachId}` });

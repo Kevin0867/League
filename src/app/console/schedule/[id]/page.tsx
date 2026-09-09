@@ -209,14 +209,14 @@ export default async function SessionDetail({
                       <input type="hidden" name="op" value="approve" />
                       <input type="hidden" name="requestId" value={activeSub.id} />
                       <input type="hidden" name="returnTo" value={returnTo} />
-                      <button className="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Approve</button>
+                      <button className="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Approve {offerName ?? "coach"}</button>
                     </form>
                     <form method="POST" action="/api/console/sub-requests">
                       <input type="hidden" name="ticket" value={ticket} />
                       <input type="hidden" name="op" value="decline" />
                       <input type="hidden" name="requestId" value={activeSub.id} />
                       <input type="hidden" name="returnTo" value={returnTo} />
-                      <button className="text-sm text-rose-600 hover:underline">Decline</button>
+                      <button className="text-sm text-rose-600 hover:underline">Deny</button>
                     </form>
                   </>
                 )}
@@ -230,6 +230,22 @@ export default async function SessionDetail({
                   </form>
                 )}
               </div>
+              {/* Choose another coach — admins can approve someone other than the
+                  volunteer (or assign directly on an OPEN request). */}
+              {admin && (
+                <form method="POST" action="/api/console/sub-requests" className="mt-3 flex w-full flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="assignOther" />
+                  <input type="hidden" name="requestId" value={activeSub.id} />
+                  <input type="hidden" name="returnTo" value={returnTo} />
+                  <label className="text-sm text-slate-600">Or assign a different coach:</label>
+                  <select name="coachId" required className="input w-auto py-1 text-sm">
+                    <option value="">— choose coach —</option>
+                    {allCoaches.map((c) => <option key={c.id} value={c.id}>{c.person.firstName} {c.person.lastName}</option>)}
+                  </select>
+                  <button className="btn-secondary text-sm">Assign &amp; approve</button>
+                </form>
+              )}
             </div>
           ) : (
             <details>
