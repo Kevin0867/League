@@ -15,6 +15,7 @@ import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
+import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
 import { feeStateOf } from "@/lib/domain/feeStatus";
@@ -276,29 +277,14 @@ export default async function PaymentsPage({
   // from the reconcile result and, for each, offer a best-guess match by last
   // name so the admin can jump straight to the right record and fix the spelling
   // (or confirm it's a genuinely missing player).
-  type CsvUnmatched = { who: string; amountCents: number; suggestions: { id: string; name: string }[] };
+  type CsvUnmatched = { who: string; amountCents: number; chargeId: string };
   let csvUnmatched: CsvUnmatched[] = [];
   if (sp.csvunmatched) {
     try {
-      const parsed = JSON.parse(sp.csvunmatched) as Array<{ w: string; c: number }>;
-      // One query for all candidate last names, then match in memory.
-      const lastNames = [...new Set(parsed.map((u) => (u.w || "").trim().split(/\s+/).pop() ?? "").filter((n) => n.length > 1))];
-      const near = lastNames.length
-        ? await prisma.person.findMany({
-            where: { OR: lastNames.map((ln) => ({ lastName: { equals: ln, mode: "insensitive" as const } })) },
-            select: { id: true, firstName: true, lastName: true },
-            take: 200,
-          })
-        : [];
-      csvUnmatched = parsed.map((u) => {
-        const who = (u.w || "").trim();
-        const last = who.split(/\s+/).pop()?.toLowerCase() ?? "";
-        const suggestions = near
-          .filter((p) => p.lastName.toLowerCase() === last)
-          .slice(0, 3)
-          .map((p) => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }));
-        return { who: who || "(no name)", amountCents: u.c ?? 0, suggestions };
-      });
+      const parsed = JSON.parse(sp.csvunmatched) as Array<{ w: string; c: number; id?: string }>;
+      csvUnmatched = parsed
+        .filter((u) => u.id)
+        .map((u) => ({ who: (u.w || "").trim() || "(no name)", amountCents: u.c ?? 0, chargeId: String(u.id) }));
     } catch {
       csvUnmatched = [];
     }
@@ -450,41 +436,36 @@ export default async function PaymentsPage({
             {sp.csverrs && sp.csverrs !== "0" && <li className="text-rose-700">• Rows with errors: <strong>{sp.csverrs}</strong></li>}
           </ul>
           <p className="mt-1.5 text-xs text-emerald-900/70">Matches each charge to its player by the name on the Stripe line item, so a payment lands on the right person even when billed to a parent. Idempotent — paid stays paid and plan counts only move forward, so re-uploading never double-counts.</p>
+        </div>
+      )}
 
-          {csvUnmatched.length > 0 && (
-            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900">
-              <div className="text-sm font-semibold">
-                {csvUnmatched.length} paid {csvUnmatched.length === 1 ? "charge names a player" : "charges name players"} we couldn&apos;t find here — fix the spelling and re-upload
-              </div>
-              <p className="mt-0.5 text-xs text-amber-800">
-                Stripe has these names on the charge, but no player record matches. Open the likely record below and set the name to match Stripe exactly (or add the player if they&apos;re genuinely missing), then upload the CSV again — it will mark them paid without touching anything already recorded.
-              </p>
-              <ul className="mt-2 divide-y divide-amber-200/70 text-sm">
-                {csvUnmatched.map((u, i) => (
-                  <li key={`${u.who}-${i}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5">
-                    <span className="font-medium text-amber-900">
-                      &ldquo;{u.who}&rdquo; <span className="font-normal text-amber-700">· {formatCents(u.amountCents)}</span>
-                    </span>
-                    <span className="text-xs">
-                      {u.suggestions.length > 0 ? (
-                        <>
-                          Likely:{" "}
-                          {u.suggestions.map((s, j) => (
-                            <span key={s.id}>
-                              {j > 0 ? ", " : ""}
-                              <Link href={`/console/people/${s.id}`} className="font-medium underline hover:text-amber-950">{s.name}</Link>
-                            </span>
-                          ))}
-                        </>
-                      ) : (
-                        <span className="text-amber-700">No close match — this player may need to be added.</span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {sp.assignok && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Charge assigned and marked paid. {csvUnmatched.length > 0 ? `${csvUnmatched.length} left to assign below.` : "That was the last one — all assigned. ✓"}
+        </div>
+      )}
+
+      {csvUnmatched.length > 0 && (
+        <div className="card border-amber-200 bg-amber-50/40">
+          <div className="text-sm font-semibold text-slate-900">
+            {csvUnmatched.length} paid {csvUnmatched.length === 1 ? "charge couldn’t be matched to a player" : "charges couldn’t be matched to a player"} — assign each one here
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Stripe has only the payer&apos;s email on these charges (no player name), and that email isn&apos;t on any record — so they couldn&apos;t auto-match. Pick the player each one belongs to and it&apos;s marked paid on the spot. We record the charge so a later CSV re-upload never double-counts it, and save the email to the player so their next payment matches automatically.
+          </p>
+          <div className="mt-2">
+            {csvUnmatched.map((u, i) => (
+              <AssignCsvChargeRow
+                key={`${u.chargeId}-${i}`}
+                ticket={ticket}
+                chargeId={u.chargeId}
+                amount={formatCents(u.amountCents)}
+                amountCents={u.amountCents}
+                who={u.who}
+                remaining={sp.csvunmatched ?? ""}
+              />
+            ))}
+          </div>
         </div>
       )}
       {sp.csvundo && (

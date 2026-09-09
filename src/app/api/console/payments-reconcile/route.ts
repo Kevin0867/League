@@ -75,6 +75,89 @@ export async function POST(req: Request) {
     }
   }
 
+  // Assign an unmatched Stripe-CSV charge to a player, by hand. These charges
+  // name no player we could find (often only the payer's email is on the charge,
+  // and it isn't on any record), so an admin picks the player here. We mark that
+  // player's outstanding season fee PAID for this charge — or, if they have no
+  // fee on file, record one — stamping the Stripe charge id so a later CSV
+  // re-upload recognizes it and never double-counts. The payer email, if new, is
+  // saved to an empty slot on the record so future charges auto-match.
+  if (String(fd.get("op") ?? "") === "assign-csv-charge") {
+    const chargeId = String(fd.get("chargeId") ?? "").trim();
+    const personId = String(fd.get("personId") ?? "").trim();
+    const amountCents = Math.max(0, Math.round(Number(fd.get("amountCents") ?? 0)));
+    const payerEmail = String(fd.get("payerEmail") ?? "").trim().toLowerCase();
+    if (!personId || !chargeId || !amountCents) return back("?recerr=missing");
+    try {
+      // Idempotency: this exact charge already recorded here — just make sure it's
+      // attached to the chosen player and paid, never a second row.
+      const existing = await prisma.payment.findFirst({
+        where: { direction: "IN", stripePaymentIntentId: chargeId },
+        select: { id: true, status: true },
+      });
+      const activeSeason = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } });
+      if (existing) {
+        await prisma.payment.update({
+          where: { id: existing.id },
+          data: {
+            partyId: personId,
+            ...(existing.status !== "PAID" ? { status: "PAID", paidAt: new Date() } : {}),
+            ...(activeSeason ? { seasonId: activeSeason.id } : {}),
+          },
+        });
+        await audit({ actorId: actor.userId, entityType: "Payment", entityId: existing.id, action: "ATTRIBUTED", summary: `Assigned Stripe charge ${chargeId} to person ${personId}` });
+      } else {
+        // Prefer marking their real outstanding season fee paid (so the request
+        // they were sent shows settled), else record the money against them.
+        const fee = await prisma.payment.findFirst({
+          where: { direction: "IN", category: "PLAYER_FEE", partyId: personId, status: { in: ["REQUESTED", "PENDING", "FAILED"] } },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, paidAt: true },
+        });
+        if (fee) {
+          await prisma.payment.update({
+            where: { id: fee.id },
+            data: { status: "PAID", paidAt: fee.paidAt ?? new Date(), method: "STRIPE", stripePaymentIntentId: chargeId },
+          });
+          await audit({ actorId: actor.userId, entityType: "Payment", entityId: fee.id, action: "PAID", summary: `Marked season fee paid from Stripe charge ${chargeId} (assigned by admin)` });
+        } else {
+          const created = await prisma.payment.create({
+            data: {
+              direction: "IN", method: "STRIPE", status: "PAID", category: "PLAYER_FEE",
+              amountCents, partyId: personId, seasonId: activeSeason?.id ?? null,
+              stripePaymentIntentId: chargeId, paidAt: new Date(),
+              description: "Assigned from Stripe CSV (no fee request on file)",
+            },
+          });
+          await audit({ actorId: actor.userId, entityType: "Payment", entityId: created.id, action: "IMPORTED", summary: `Recorded Stripe charge ${chargeId} as paid fee (assigned by admin)` });
+        }
+      }
+      // Save the payer email to an empty slot so this family auto-matches next time.
+      if (payerEmail && /@/.test(payerEmail)) {
+        const person = await prisma.person.findUnique({ where: { id: personId }, select: { email: true, email2: true, email3: true } });
+        if (person) {
+          const known = [person.email, person.email2, person.email3].map((e) => (e ?? "").toLowerCase());
+          if (!known.includes(payerEmail)) {
+            const slot = !person.email ? "email" : !person.email2 ? "email2" : !person.email3 ? "email3" : null;
+            if (slot) await prisma.person.update({ where: { id: personId }, data: { [slot]: payerEmail } });
+          }
+        }
+      }
+      // Re-show the remaining unmatched charges (minus this one) so the admin can
+      // keep assigning without re-uploading the CSV between each.
+      const params = new URLSearchParams({ assignok: "1" });
+      try {
+        const list = JSON.parse(String(fd.get("remaining") ?? "[]")) as Array<{ w: string; c: number; id?: string }>;
+        const rest = list.filter((u) => u.id && u.id !== chargeId);
+        if (rest.length) params.set("csvunmatched", JSON.stringify(rest).slice(0, 3500));
+      } catch { /* no list carried — just show the success note */ }
+      return back(`?${params.toString()}`);
+    } catch (e) {
+      console.error("assign csv charge failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "assign failed")}`);
+    }
+  }
+
   // Attribute an imported charge: attach it to a family and/or set its real
   // category so it lands in the right reports.
   if (String(fd.get("op") ?? "") === "attribute") {
