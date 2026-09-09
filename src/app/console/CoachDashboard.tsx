@@ -5,7 +5,7 @@ import { formatTime12, formatDate } from "@/lib/time";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
 import { coachAssignmentGate } from "@/lib/domain/teams";
-import { payableCompletedRows } from "@/lib/domain/coachPay";
+import { payableCompletedRows, alaCarteEarnedCents } from "@/lib/domain/coachPay";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
@@ -50,7 +50,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
   const pendingWhere = coach
     ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfTomorrow() } }
     : undefined;
-  const [headTeams, upcoming, pendingAttendance, pendingCount, myCompletedRows, alaAgg] = coach
+  const [headTeams, upcoming, pendingAttendance, pendingCount, myCompletedRows, alaEarnedCents] = coach
     ? await Promise.all([
         prisma.team.findMany({
           where: { OR: [{ coachId: coach.id }, { assistantCoaches: { some: { coachId: coach.id } } }] },
@@ -73,16 +73,17 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         // Sessions you were the payable coach on that are now COMPLETE (end time
         // passed) — pay accrues here automatically, no check-out needed.
         payableCompletedRows({ coachId: coach.id }),
-        prisma.alaCarteBooking.aggregate({ where: { coachId: coach.id, status: "DELIVERED" }, _sum: { coachCents: true } }),
+        alaCarteEarnedCents({ coachId: coach.id }),
       ])
-    : [[], [], [], 0, [] as { coachId: string; role: string }[], { _sum: { coachCents: 0 } }];
+    : [[], [], [], 0, [] as { coachId: string; role: string }[], 0];
 
   // Live earned-to-date: completed sessions × the coach's per-session rate
-  // (season pay ÷ 12, else the default) + delivered private-lesson earnings.
+  // (season pay ÷ 12, else the default) + private-lesson/clinic earnings that are
+  // over (accepted/delivered and the scheduled time has passed).
   const perSessionCents = coach && coach.seasonPayCents && coach.seasonPayCents > 0
     ? Math.round(coach.seasonPayCents / 12)
     : COACH_PER_SESSION_CENTS;
-  const earnedCents = myCompletedRows.length * perSessionCents + (alaAgg._sum.coachCents ?? 0);
+  const earnedCents = myCompletedRows.length * perSessionCents + alaEarnedCents;
 
   // Open sub requests this coach could cover (not their own), + a ticket to act.
   const [openSubs, subTicket] = coach

@@ -54,3 +54,31 @@ export async function payableCompletedRows(opts?: {
     .filter((r) => r.paidIfCancelled || isSessionComplete(r.session, now))
     .map((r) => ({ coachId: r.coachId, role: r.role }));
 }
+
+/**
+ * A coach's private-lesson / clinic (à la carte) earnings that are EARNED — the
+ * booking was accepted or delivered and its scheduled time has passed (the class
+ * is over). Cancelled/declined never pay; nothing pays before it happens. Sums
+ * the stamped coach split. Optional date window (by scheduledAt) for a payout run.
+ */
+export async function alaCarteEarnedCents(opts?: {
+  coachId?: string;
+  now?: Date;
+  periodStart?: Date;
+  periodEnd?: Date;
+}): Promise<number> {
+  const now = opts?.now ?? new Date();
+  const rows = await prisma.alaCarteBooking.findMany({
+    where: {
+      ...(opts?.coachId ? { coachId: opts.coachId } : {}),
+      status: { in: ["ACCEPTED", "DELIVERED"] },
+      scheduledAt: {
+        lte: now,
+        ...(opts?.periodStart ? { gte: opts.periodStart } : {}),
+        ...(opts?.periodEnd ? { lt: opts.periodEnd } : {}),
+      },
+    },
+    select: { coachCents: true },
+  });
+  return rows.reduce((s, r) => s + r.coachCents, 0);
+}

@@ -3,10 +3,10 @@
 // applied rates are stamped onto the transaction so a historical payout can be
 // reconstructed after a rate change.
 //
-//   Assigned Coach teaches:  Coach 50% / Director 10% / PURE 40%
+//   Assigned Coach teaches:  Coach 60% / Director 10% / PURE 30%
 //   Director teaches:        Coach 60% / Director 10% / PURE 30%
-//     (the Director takes the 60% coach line + 10% director line = 70%;
-//      the ten points move from PURE to the coach line, PURE retains 30%)
+//     (same split either way; when the Director teaches they take the 60% coach
+//      line + 10% director line = 70%, PURE retains 30%)
 
 export type SplitRates = {
   coachPct: number;
@@ -15,9 +15,9 @@ export type SplitRates = {
 };
 
 export const COACH_TEACHES: SplitRates = {
-  coachPct: 0.5,
+  coachPct: 0.6,
   directorPct: 0.1,
-  purePct: 0.4,
+  purePct: 0.3,
 };
 
 export const DIRECTOR_TEACHES: SplitRates = {

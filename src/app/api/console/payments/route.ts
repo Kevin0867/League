@@ -12,7 +12,7 @@ import {
   type FacilityRates,
   type DeliveredSession,
 } from "@/lib/domain/finance";
-import { payableCompletedRows } from "@/lib/domain/coachPay";
+import { payableCompletedRows, alaCarteEarnedCents } from "@/lib/domain/coachPay";
 
 // Payments mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -304,12 +304,8 @@ async function generatePayoutRun(
       sessionPayCents += coachSessionPayCents(sc.role, perSession, assistantPct, proPerSession);
     }
 
-    // À la carte earnings (delivered) in the period.
-    const ala = await prisma.alaCarteBooking.aggregate({
-      where: { coachId: coach.id, status: "DELIVERED", scheduledAt: { gte: start, lt: end } },
-      _sum: { coachCents: true },
-    });
-    const alaCarteCents = ala._sum.coachCents ?? 0;
+    // À la carte earnings that are over (accepted/delivered, time passed) in the period.
+    const alaCarteCents = await alaCarteEarnedCents({ coachId: coach.id, periodStart: start, periodEnd: end });
 
     if (sessionCoachRows.length === 0 && alaCarteCents === 0) continue;
 
