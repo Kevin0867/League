@@ -193,70 +193,62 @@ export default async function TeamProgressPage({
         </div>
       </section>
 
-      {/* PLAYER NOTES — one row per player with an aligned weekly progress grid.
-          A week-key header maps each week to its real date (from the schedule),
-          so the columns are self-explanatory. */}
+      {/* PLAYER NOTES — a clean, tappable list. Each player shows a plain-English
+          progress line and a tidy 6-week strip; tap to open and write/send. */}
       <section id="notes" className="scroll-mt-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Player notes — by week</h2>
-        <div className="card overflow-x-auto p-0">
-          {team.members.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">No players on this roster yet.</p>
-          ) : (
-            <div className="min-w-[440px]">
-              {/* Week-key header: Wk 1 · Oct 26, Wk 2 · Nov 2, … */}
-              <div className="grid items-end gap-1 border-b border-slate-200 bg-slate-50/70 px-4 py-2" style={{ gridTemplateColumns: `minmax(7rem,1fr) repeat(${COACHING_WEEK_COUNT}, minmax(0,1fr))` }}>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Player</div>
-                {weekSlots.map((s) => (
-                  <div key={s.week} className="text-center leading-tight">
-                    <div className="text-xs font-bold text-slate-700">Wk {s.week}</div>
-                    {s.date && <div className="text-[10px] text-slate-400">{shortDate(s.date)}</div>}
-                  </div>
-                ))}
-              </div>
-              {/* One row per player: name + 6 status cells aligned to the header. */}
-              <div className="divide-y divide-slate-100">
-                {team.members.map((m) => {
-                  const weeks = notesByPerson.get(m.personId);
-                  return (
-                    <Link
-                      key={m.id}
-                      href={`/console/teams/${teamId}/progress/${m.personId}`}
-                      className="grid min-h-[52px] items-center gap-1 px-4 py-2.5 active:bg-slate-50 hover:bg-slate-50"
-                      style={{ gridTemplateColumns: `minmax(7rem,1fr) repeat(${COACHING_WEEK_COUNT}, minmax(0,1fr))` }}
-                    >
-                      <div className="pr-2">
-                        <div className="truncate text-sm font-semibold text-slate-800">{m.person.firstName} {m.person.lastName}</div>
-                        <div className="text-xs font-semibold text-brand-600">Open →</div>
-                      </div>
-                      {COACHING_WEEKS.map((w) => {
-                        const n = weeks?.get(w);
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Player notes</h2>
+        {team.members.length === 0 ? (
+          <div className="card py-8 text-center text-sm text-slate-400">No players on this roster yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {team.members.map((m) => {
+              const weeks = notesByPerson.get(m.personId);
+              const noted = COACHING_WEEKS.filter((w) => { const n = weeks?.get(w); return n ? noteHasContent(n) : false; }).length;
+              const sentCount = COACHING_WEEKS.filter((w) => !!weeks?.get(w)?.sentToParentAt).length;
+              const summary =
+                noted === 0 ? "No notes yet — tap to start Week 1"
+                : `${noted} of ${COACHING_WEEK_COUNT} weeks noted${sentCount ? ` · ${sentCount} sent to parent` : " · none sent yet"}`;
+              return (
+                <Link
+                  key={m.id}
+                  href={`/console/teams/${teamId}/progress/${m.personId}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-brand-200 hover:bg-brand-50/40 active:bg-brand-50"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-slate-900">{m.person.firstName} {m.person.lastName}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{summary}</div>
+                    {/* Tidy week strip — one dot per week, colored by status. */}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {weekSlots.map((s) => {
+                        const n = weeks?.get(s.week);
                         const has = n ? noteHasContent(n) : false;
                         const sent = !!n?.sentToParentAt;
-                        const label = sent ? "sent to parent" : has ? "notes saved, not sent" : "nothing yet";
+                        const label = sent ? "sent to parent" : has ? "saved, not sent" : "nothing yet";
                         return (
-                          <div key={w} className="flex justify-center" title={`Week ${w}: ${label}`}>
-                            <span
-                              className={`grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${
-                                sent ? "bg-emerald-500 text-white" : has ? "bg-amber-400 text-white" : "border border-dashed border-slate-300 text-slate-300"
-                              }`}
-                            >
-                              {sent ? "✓" : has ? "•" : ""}
-                            </span>
-                          </div>
+                          <span
+                            key={s.week}
+                            title={`Week ${s.week}${s.date ? ` · ${shortDate(s.date)}` : ""}: ${label}`}
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              sent ? "bg-emerald-100 text-emerald-700" : has ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-400"
+                            }`}
+                          >
+                            {sent ? "✓" : has ? "•" : ""} Wk {s.week}
+                          </span>
                         );
                       })}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-[9px] text-white">✓</span> sent to parent</span>
-          <span className="inline-flex items-center gap-1.5"><span className="grid h-4 w-4 place-items-center rounded-full bg-amber-400 text-[9px] text-white">•</span> notes saved, not yet sent</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-4 w-4 rounded-full border border-dashed border-slate-300" /> nothing yet</span>
-          {!hasSessions && hasPlan && <span className="text-slate-400">Week dates are planned from the season &amp; this team&apos;s day/time.</span>}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-brand-600" aria-hidden>›</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-semibold text-emerald-700">✓</span> sent to parent</span>
+          <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">•</span> saved, not sent</span>
+          <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-400">Wk</span> nothing yet</span>
+          <span className="text-slate-400">Weeks {weekSlots[0]?.date ? shortDate(weekSlots[0].date) : "1"}–{weekSlots[COACHING_WEEK_COUNT - 1]?.date ? shortDate(weekSlots[COACHING_WEEK_COUNT - 1].date as Date) : COACHING_WEEK_COUNT}{!hasSessions && hasPlan ? " (planned)" : ""}.</span>
         </div>
       </section>
     </div>
