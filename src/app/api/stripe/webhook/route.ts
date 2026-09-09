@@ -61,6 +61,9 @@ export async function POST(req: Request) {
         mode?: string;
         subscription?: string;
         payment_intent?: string;
+        amount_total?: number | null;
+        customer_details?: { email?: string | null } | null;
+        customer_email?: string | null;
         metadata?: { paymentId?: string };
       };
       const paymentId = s.metadata?.paymentId;
@@ -80,6 +83,40 @@ export async function POST(req: Request) {
           await audit({ entityType: "Payment", entityId: paymentId, action: "PAID", summary: "Stripe checkout completed" });
         }
         await sendPaymentConfirmation(paymentId);
+      } else if (s.mode !== "subscription") {
+        // No app paymentId — e.g. a Stripe Payment Link or a checkout created
+        // outside the app's fee flow. Stripe still returns a healthy 200 here, so
+        // without this the payment would look delivered yet never post. Match it
+        // to an outstanding fee by payer email (the player's or their guardian's)
+        // + exact amount; a single match records PAID in real time. Anything not
+        // uniquely matched is left for the hourly reconcile to import/triage.
+        const email = s.customer_details?.email ?? s.customer_email ?? null;
+        const amount = s.amount_total ?? null;
+        if (email && amount) {
+          const emailEq = { equals: email, mode: "insensitive" as const };
+          const cands = await prisma.payment.findMany({
+            where: {
+              direction: "IN",
+              status: { in: ["REQUESTED", "PENDING"] },
+              amountCents: amount,
+              OR: [
+                { party: { email: emailEq } },
+                { party: { email2: emailEq } },
+                { party: { email3: emailEq } },
+                { party: { guardian: { email: emailEq } } },
+              ],
+            },
+            take: 2,
+          });
+          if (cands.length === 1) {
+            await prisma.payment.update({
+              where: { id: cands[0].id },
+              data: { status: "PAID", paidAt: new Date(), method: "STRIPE", stripePaymentIntentId: s.payment_intent ?? null },
+            });
+            await audit({ entityType: "Payment", entityId: cands[0].id, action: "PAID", summary: "Stripe checkout completed (matched by email + amount, no app id)" });
+            await sendPaymentConfirmation(cands[0].id);
+          }
+        }
       }
       break;
     }
