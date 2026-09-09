@@ -11,6 +11,22 @@ import { resolveAudience, type AudienceType } from "./domain/audience";
 
 export type Channel = "IN_APP" | "EMAIL" | "SMS";
 
+// Run `fn` over `items` with at most `limit` in flight at once, preserving input
+// order in the results. Lets independent provider calls overlap without firing
+// hundreds at once.
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return results;
+}
+
 export type DispatchInput = {
   senderId?: string | null;
   seasonId?: string | null;
@@ -90,61 +106,78 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   let noPhone = 0;
   let noEmail = 0;
 
-  for (const r of recipients) {
-    // In-app is always delivered — it lives in our own database.
-    const inAppStatus = channels.includes("IN_APP") ? "DELIVERED" : "QUEUED";
+  // Phase 1 — plan every recipient's sends up front. This is pure bookkeeping
+  // (no network), and it OWNS the once-per-address dedup, so it must stay
+  // sequential: whoever is planned first "wins" the address; later duplicates
+  // are marked SKIPPED. Deciding this here lets the slow provider calls in
+  // phase 2 run in parallel without racing on the dedup sets or double-sending.
+  const inAppStatus = channels.includes("IN_APP") ? "DELIVERED" : "QUEUED";
+  const optOut = input.triggerType ? "" : "\nReply STOP to opt out.";
+  const smsText = input.smsBody ?? `${subject}\n${input.body}`;
+  type Plan = { r: (typeof recipients)[number]; freshEmails: string[]; emailSkipped: boolean; smsNum: string | null; smsSkipped: boolean };
+  const plans: Plan[] = recipients.map((r) => {
+    let freshEmails: string[] = [];
+    let emailSkipped = false;
+    if (channels.includes("EMAIL")) {
+      const candidates = (hasPicked ? pickedEmails : r.emails.length ? r.emails : r.email ? [r.email] : [])
+        .map((e) => (e ?? "").trim())
+        .filter(Boolean);
+      freshEmails = candidates.filter((e) => {
+        const k = e.toLowerCase();
+        if (sentEmails.has(k)) return false;
+        sentEmails.add(k);
+        return true;
+      });
+      if (!freshEmails.length) {
+        if (candidates.length) emailSkipped = true; // reached via another recipient
+        else noEmail++; // email requested but no address on file
+      }
+    }
+    let smsNum: string | null = null;
+    let smsSkipped = false;
+    if (channels.includes("SMS")) {
+      const num = (r.phone ?? "").trim();
+      const k = num.toLowerCase();
+      if (num && !sentPhones.has(k)) {
+        sentPhones.add(k);
+        smsNum = num;
+      } else if (num) {
+        smsSkipped = true;
+      } else {
+        noPhone++;
+      }
+    }
+    return { r, freshEmails, emailSkipped, smsNum, smsSkipped };
+  });
 
+  // Phase 2 — do the actual provider calls and per-recipient log write. These
+  // are independent per recipient, so run them with bounded concurrency instead
+  // of one-at-a-time: a team blast that took ~a minute sequentially now finishes
+  // in a few seconds. The cap keeps us from hammering the SMS/email providers.
+  const rows = await mapLimit(plans, 8, async (p) => {
     let emailStatus: string | null = null;
     let smsStatus: string | null = null;
     let wasSimulated = false;
     const failureReasons: string[] = [];
 
     if (channels.includes("EMAIL")) {
-      // Hand-picked recipients win; otherwise deliver to every address on file
-      // for this person (both parents + the student).
-      const candidates = (hasPicked ? pickedEmails : r.emails.length ? r.emails : r.email ? [r.email] : [])
-        .map((e) => (e ?? "").trim())
-        .filter(Boolean);
-      // Drop any address already sent to earlier in this dispatch.
-      const fresh = candidates.filter((e) => {
-        const k = e.toLowerCase();
-        if (sentEmails.has(k)) return false;
-        sentEmails.add(k);
-        return true;
-      });
-      if (fresh.length) {
-        const res = await sendEmail(fresh, subject, input.body, input.html, input.attachments);
+      if (p.freshEmails.length) {
+        const res = await sendEmail(p.freshEmails, subject, input.body, input.html, input.attachments);
         emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
         if (!res.ok) failureReasons.push(`email: ${res.error}`);
         if (res.ok && res.simulated) wasSimulated = true;
-      } else if (candidates.length) {
-        // Every address was already reached via another recipient (e.g. the parent).
+      } else if (p.emailSkipped) {
         emailStatus = "SKIPPED";
-      } else {
-        // Email requested but this recipient has no address on file.
-        noEmail++;
       }
     }
     if (channels.includes("SMS")) {
-      // Manual broadcasts (no triggerType — the Messaging composer) carry opt-out
-      // language, as A2P 10DLC best practice / TCPA expects. Transactional texts
-      // (assignment, payment, reminders — each has a triggerType) rely on Twilio's
-      // built-in STOP handling and stay concise.
-      const optOut = input.triggerType ? "" : "\nReply STOP to opt out.";
-      const smsText = input.smsBody ?? `${subject}\n${input.body}`;
-      const num = (r.phone ?? "").trim();
-      const k = num.toLowerCase();
-      if (num && !sentPhones.has(k)) {
-        sentPhones.add(k);
-        const res = await sendSms(r.phone, `${smsText}${optOut}`);
+      if (p.smsNum) {
+        const res = await sendSms(p.smsNum, `${smsText}${optOut}`);
         smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
         if (!res.ok) failureReasons.push(`sms: ${res.error}`);
         if (res.ok && res.simulated) wasSimulated = true;
-      } else if (num) {
+      } else if (p.smsSkipped) {
         smsStatus = "SKIPPED";
-      } else {
-        // SMS requested but this recipient has no phone number on file.
-        noPhone++;
       }
     }
 
@@ -154,18 +187,17 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     } else if (wasSimulated) {
       simulated++;
     }
+    return {
+      messageId: message.id,
+      personId: p.r.personId,
+      inAppStatus,
+      emailStatus,
+      smsStatus,
+      failedReason: failureReasons.length ? failureReasons.join("; ") : null,
+    };
+  });
 
-    await prisma.messageRecipient.create({
-      data: {
-        messageId: message.id,
-        personId: r.personId,
-        inAppStatus,
-        emailStatus,
-        smsStatus,
-        failedReason: failureReasons.length ? failureReasons.join("; ") : null,
-      },
-    });
-  }
+  if (rows.length) await prisma.messageRecipient.createMany({ data: rows });
 
   return { messageId: message.id, recipients: recipients.length, failures, simulated, failureReasons: allFailureReasons, noPhone, noEmail };
 }
