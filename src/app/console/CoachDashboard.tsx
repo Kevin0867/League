@@ -47,8 +47,10 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
   // Sessions still needing attendance: anything scheduled through the end of
   // today (past sessions and today's), so a coach can check players in the day
   // of — not only after the fact.
+  // Only sessions that actually have a team/roster — a session with no team has
+  // nothing to check in, so it shouldn't sit in "Attendance to record."
   const pendingWhere = coach
-    ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfTomorrow() } }
+    ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfTomorrow() }, teams: { some: {} } }
     : undefined;
   const [headTeams, upcoming, pendingAttendance, pendingCount, myCompletedRows, alaEarnedCents] = coach
     ? await Promise.all([
@@ -58,7 +60,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           orderBy: { name: "asc" },
         }),
         prisma.session.findMany({
-          where: { coaches: { some: { coachId: coach.id } }, date: { gte: startOfTomorrow() } },
+          where: { coaches: { some: { coachId: coach.id } }, date: { gte: startOfTomorrow() }, teams: { some: {} } },
           include: { facility: true, teams: { include: { team: { select: { name: true } } } } },
           orderBy: { date: "asc" },
           take: 5,
