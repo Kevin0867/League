@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { allowedContacts, canUseMessagingPerson } from "@/lib/domain/messaging-acl";
-import { inboxItems } from "@/lib/domain/messaging-store";
+import { searchInbox } from "@/lib/domain/messaging-store";
 import { Composer, InboxList } from "@/components/messaging/Messaging";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +25,9 @@ export default async function PortalInboxPage({
   if (!(await canUseMessagingPerson(personId, session.role))) redirect("/portal");
   const ticket = await mintConsoleTicket();
 
+  const q = (sp.q ?? "").trim();
   const [items, contacts] = await Promise.all([
-    personId ? inboxItems(personId) : Promise.resolve([]),
+    personId ? searchInbox(personId, q, false) : Promise.resolve([]),
     personId ? allowedContacts(personId, session.role) : Promise.resolve([]),
   ]);
 
@@ -39,6 +41,15 @@ export default async function PortalInboxPage({
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
       <Composer contacts={contacts} ticket={ticket} returnTo="/portal/inbox" />
+
+      {/* Search across every message — subject, who's in it, or anything said. */}
+      <form method="GET" action="/portal/inbox" className="flex gap-2">
+        <input type="search" name="q" defaultValue={q} placeholder="Search your messages…" className="input flex-1" aria-label="Search messages" />
+        <button className="btn-secondary text-sm">Search</button>
+        {q && <Link href="/portal/inbox" className="btn-back">Clear</Link>}
+      </form>
+      {q && <p className="text-xs text-slate-500">{items.length} result{items.length === 1 ? "" : "s"} for &ldquo;{q}&rdquo;.</p>}
+
       <InboxList items={items} basePath="/portal/inbox" />
     </div>
   );

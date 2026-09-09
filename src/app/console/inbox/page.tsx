@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireStaff } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { allowedContacts, isAdminRole } from "@/lib/domain/messaging-acl";
-import { inboxItems, moderationItems } from "@/lib/domain/messaging-store";
+import { searchInbox } from "@/lib/domain/messaging-store";
 import { Composer, InboxList } from "@/components/messaging/Messaging";
 import { CoachBroadcastComposer, type BroadcastAudience } from "@/components/messaging/CoachBroadcastComposer";
 import { prisma } from "@/lib/db";
@@ -47,8 +47,9 @@ export default async function ConsoleInboxPage({
       })
     : [];
 
+  const q = (sp.q ?? "").trim();
   const [items, contacts] = await Promise.all([
-    moderating ? moderationItems() : (personId ? inboxItems(personId) : Promise.resolve([])),
+    personId ? searchInbox(personId, q, moderating) : Promise.resolve([]),
     personId ? allowedContacts(personId, session.role) : Promise.resolve([]),
   ]);
 
@@ -78,11 +79,28 @@ export default async function ConsoleInboxPage({
           the inbox; the broadcast composer sits below it. */}
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-3">
-          {moderating && (
+          {/* Search every message — subject, who's in the thread, or anything
+              said in it. */}
+          <form method="GET" action="/console/inbox" className="flex gap-2">
+            {moderating && <input type="hidden" name="view" value="all" />}
+            <input
+              type="search"
+              name="q"
+              defaultValue={q}
+              placeholder="Search messages, people, subjects…"
+              className="input flex-1"
+              aria-label="Search messages"
+            />
+            <button className="btn-secondary text-sm">Search</button>
+            {q && <Link href={moderating ? "/console/inbox?view=all" : "/console/inbox"} className="btn-back">Clear</Link>}
+          </form>
+          {q ? (
+            <p className="text-xs text-slate-500">{items.length} result{items.length === 1 ? "" : "s"} for &ldquo;{q}&rdquo;{items.length === 100 ? " (showing the first 100 — refine to narrow)" : ""}.</p>
+          ) : moderating ? (
             <p className="text-xs text-slate-500">
-              Every conversation on the platform, newest first. Open any thread to review it — deleted messages are shown, flagged, and never removed.
+              Every conversation on the platform, newest first. Open any thread to review it — deleted messages are shown, flagged, and never removed. Use search to find older ones.
             </p>
-          )}
+          ) : null}
           <InboxList items={items} basePath="/console/inbox" />
         </div>
         {!moderating && <Composer contacts={contacts} ticket={ticket} returnTo="/console/inbox" />}

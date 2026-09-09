@@ -77,6 +77,57 @@ export async function moderationItems(): Promise<InboxItem[]> {
   });
 }
 
+/**
+ * Search conversations by text — subject, a participant's name, or any message
+ * body — so every message is findable, not just the latest preview. Scoped to
+ * the person's own conversations unless `asModerator` (admins search all). The
+ * preview shows the matching message when the hit is in the body.
+ */
+export async function searchInbox(personId: string, q: string, asModerator: boolean): Promise<InboxItem[]> {
+  const term = q.trim();
+  if (!term) return asModerator ? moderationItems() : inboxItems(personId);
+  const ci = { contains: term, mode: "insensitive" as const };
+  const scope = asModerator ? {} : { participants: { some: { personId, hiddenAt: null } } };
+  const bodyWhere = asModerator ? { body: ci } : { body: ci, deletedAt: null };
+  const convos = await prisma.conversation.findMany({
+    where: {
+      AND: [
+        scope,
+        {
+          OR: [
+            { subject: ci },
+            { participants: { some: { person: { OR: [{ firstName: ci }, { lastName: ci }] } } } },
+            { messages: { some: bodyWhere } },
+          ],
+        },
+      ],
+    },
+    orderBy: { lastMessageAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      subject: true,
+      lastMessageAt: true,
+      participants: { select: { personId: true, person: { select: { firstName: true, lastName: true } } } },
+      // The most recent message that matches the term (for the snippet); empty
+      // when the hit was in the subject or a participant name.
+      messages: { where: bodyWhere, orderBy: { createdAt: "desc" }, take: 1, select: { body: true } },
+    },
+  });
+  return convos.map((c) => {
+    const others = c.participants.filter((pt) => pt.personId !== personId).map((pt) => fullName(pt.person)).join(asModerator ? " ↔ " : ", ");
+    const hit = c.messages[0];
+    return {
+      id: c.id,
+      subject: c.subject,
+      others: others || (asModerator ? "(no one)" : "(no one)"),
+      preview: hit ? hit.body : "Matched subject or participant",
+      lastMessageAt: c.lastMessageAt,
+      unread: false,
+    };
+  });
+}
+
 export type ThreadMessage = {
   id: string;
   body: string;
