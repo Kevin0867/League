@@ -9,9 +9,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
 import { formatTimeRange12, formatDate } from "@/lib/time";
-import { PendingSubmit, ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
-import { AttendanceQuickFill } from "@/components/AttendanceQuickFill";
+import { AttendanceMarker } from "@/components/AttendanceMarker";
+import { decryptField } from "@/lib/crypto";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Session" };
@@ -43,14 +44,6 @@ const COACH_ROLE_LABEL: Record<string, string> = {
   PRIMARY: "Primary", ASSISTANT: "Assistant", SUBSTITUTE: "Substitute", BACKUP: "Backup",
 };
 
-// Attendance choices. `on` holds the peer-checked classes so the tapped option
-// highlights live (green/red/amber) with no JavaScript.
-const ATT_OPTS = [
-  { value: "PRESENT", label: "Present", on: "peer-checked:bg-emerald-600 peer-checked:text-white" },
-  { value: "ABSENT", label: "Absent", on: "peer-checked:bg-rose-600 peer-checked:text-white" },
-  { value: "EXCUSED", label: "Excused", on: "peer-checked:bg-amber-500 peer-checked:text-white" },
-];
-
 export default async function SessionDetail({
   params,
   searchParams,
@@ -66,7 +59,7 @@ export default async function SessionDetail({
     where: { id },
     include: {
       facility: true,
-      teams: { include: { team: { include: { members: { include: { person: true } }, assistantCoaches: { select: { coachId: true } } } } } },
+      teams: { include: { team: { include: { members: { include: { person: { include: { guardian: true } } } }, assistantCoaches: { select: { coachId: true } } } } } },
       coaches: true,
       attendance: true,
     },
@@ -135,7 +128,25 @@ export default async function SessionDetail({
   // cancelled class doesn't pay by default.
   const payableCoaches = s.coaches.filter((c) => c.payable);
   const attMap = new Map(s.attendance.map((a) => [a.personId, a.status]));
-  const roster = s.teams.flatMap((t) => t.team.members.map((m) => ({ ...m, teamName: t.team.name })));
+  // Per-player safety card — emergency contacts, medical notes, and who to call —
+  // decrypted for this authorized coach so it's one tap away from the roster on
+  // the screen that's open when something goes wrong. `noAdult` warns when a minor
+  // has no guardian and no emergency contact on file: no one to call.
+  const roster = s.teams.flatMap((t) =>
+    t.team.members.map((m) => {
+      const p = m.person;
+      const g = p.guardian;
+      const emergency = [
+        { name: decryptField(p.emergencyName), relation: decryptField(p.emergencyRelation), phone: decryptField(p.emergencyPhone) },
+        { name: decryptField(p.emergencyName2), relation: decryptField(p.emergencyRelation2), phone: decryptField(p.emergencyPhone2) },
+      ].filter((e) => e.name || e.phone);
+      const guardianName = g ? `${g.firstName} ${g.lastName}`.trim() : null;
+      const guardianPhone = g?.phone ?? null;
+      const medical = decryptField(p.medicalNotes);
+      const noAdult = p.isMinor && !guardianPhone && emergency.length === 0;
+      return { ...m, teamName: t.team.name, emergency, guardianName, guardianPhone, medical, noAdult };
+    }),
+  );
   const active = s.status === "SCHEDULED" || s.status === "DELIVERED";
   const outcome = cancellationOutcome(s.type);
 
@@ -275,53 +286,21 @@ export default async function SessionDetail({
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Attendance — mobile-first (§18) */}
-        <form id="attendance" method="POST" action="/api/console/schedule" className="card scroll-mt-4 lg:col-span-2">
-          <input type="hidden" name="ticket" value={ticket} />
-          <input type="hidden" name="op" value="attendance" />
-          <input type="hidden" name="returnTo" value={returnTo} />
-          <input type="hidden" name="sessionId" value={s.id} />
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Attendance</h2>
-            <span className="text-xs text-slate-400">{roster.length} players</span>
-          </div>
-          {roster.length === 0 ? (
-            <p className="text-sm text-slate-400">No roster on this session.</p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {roster.map((m) => {
-                const cur = attMap.get(m.personId) ?? "";
-                return (
-                  <li key={m.personId} className="py-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="text-sm font-medium text-slate-800">{m.person.firstName} {m.person.lastName}</span>
-                      {/* Big, full-width tap targets on a phone; compact on desktop.
-                          The radio is the CSS `peer` and the styled span is its
-                          sibling, so the selection highlights live on tap — no
-                          JS, and it still submits with the form. */}
-                      <div className="grid grid-cols-3 gap-1 sm:flex">
-                        {ATT_OPTS.map((opt) => (
-                          <label key={opt.value} className="block cursor-pointer">
-                            <input type="radio" name={`att_${m.personId}`} value={opt.value} defaultChecked={cur === opt.value} className="peer sr-only" />
-                            <span className={`block rounded-lg px-3 py-2.5 text-center text-sm font-medium ring-1 ring-inset ring-transparent bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200 sm:py-1.5 sm:text-xs ${opt.on}`}>
-                              {opt.label}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {roster.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-              <AttendanceQuickFill formId="attendance" />
-              <PendingSubmit label="Save attendance" pendingLabel="Saving…" className="btn-primary w-full sm:w-auto" />
-            </div>
-          )}
-        </form>
+        {/* Attendance — mobile-first, self-saving (§18) */}
+        <AttendanceMarker
+          ticket={ticket}
+          sessionId={s.id}
+          players={roster.map((m) => ({
+            personId: m.personId,
+            name: `${m.person.firstName} ${m.person.lastName}`,
+            status: attMap.get(m.personId) ?? "",
+            emergency: m.emergency,
+            guardianName: m.guardianName,
+            guardianPhone: m.guardianPhone,
+            medical: m.medical,
+            noAdult: m.noAdult,
+          }))}
+        />
 
         {/* Practice recap — a one-tap note to the whole team (players + parents)
             about tonight's practice: what you worked on + homework before next
