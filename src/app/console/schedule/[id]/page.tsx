@@ -62,7 +62,7 @@ export default async function SessionDetail({
     where: { id },
     include: {
       facility: true,
-      teams: { include: { team: { include: { members: { include: { person: true } } } } } },
+      teams: { include: { team: { include: { members: { include: { person: true } }, assistantCoaches: { select: { coachId: true } } } } } },
       coaches: true,
       attendance: true,
     },
@@ -83,7 +83,10 @@ export default async function SessionDetail({
     ? (await prisma.coach.findUnique({ where: { personId: viewer.personId }, select: { id: true } }))?.id ?? null
     : null;
   if (!admin) {
-    const onSession = !!myCoachId && (sessionCoachIds.has(myCoachId) || s.teams.some((t) => t.team.coachId === myCoachId));
+    const onSession = !!myCoachId && (
+      sessionCoachIds.has(myCoachId) ||
+      s.teams.some((t) => t.team.coachId === myCoachId || t.team.assistantCoaches.some((ac) => ac.coachId === myCoachId))
+    );
     if (!onSession) redirect("/console");
   }
   // If the viewer is covering this class as a substitute/backup, note it so they
@@ -148,7 +151,7 @@ export default async function SessionDetail({
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Attendance — mobile-first (§18) */}
-        <form method="POST" action="/api/console/schedule" className="card lg:col-span-2">
+        <form id="attendance" method="POST" action="/api/console/schedule" className="card scroll-mt-4 lg:col-span-2">
           <input type="hidden" name="ticket" value={ticket} />
           <input type="hidden" name="op" value="attendance" />
           <input type="hidden" name="returnTo" value={returnTo} />
