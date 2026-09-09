@@ -11,6 +11,16 @@ import { resolveAudience, type AudienceType } from "./domain/audience";
 
 export type Channel = "IN_APP" | "EMAIL" | "SMS";
 
+// Message trigger types that are internal to STAFF (coaches/admins) and must
+// never surface in a family's portal — sub coordination, coach scheduling, the
+// lounge board, availability escalation. A coach who is also a parent still
+// gets these in the console; they're filtered out of the portal inbox only.
+export const STAFF_ONLY_TRIGGERS = [
+  "SUB_REQUEST", "SUB_OFFER", "SUB_APPROVED", "SUB_DECLINED",
+  "COACH_ASSIGNED_SESSION", "COACH_SCHEDULE_CHANGE", "COACH_SCHEDULE_SET",
+  "COACH_BOARD", "COACH_LESSON_ASSIGNED", "AVAILABILITY_ESCALATION",
+] as const;
+
 // Run `fn` over `items` with at most `limit` in flight at once, preserving input
 // order in the results. Lets independent provider calls overlap without firing
 // hundreds at once.

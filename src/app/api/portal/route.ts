@@ -78,6 +78,41 @@ export async function POST(req: Request) {
       return NextResponse.redirect(new URL("/portal", origin), 303);
     }
 
+    // A family edits their own / a dependent's details — contact, address,
+    // emergency contacts, and medical notes. Scoped to the household; encrypted
+    // fields (address, emergency*, medical) are encrypted transparently on write.
+    // Never touches fees, status, roles, waivers, or the login email.
+    case "updatePerson": {
+      const targetId = String(formData.get("targetId") ?? "");
+      const household = await householdPersonIds(personId);
+      if (!household.includes(targetId)) throw new Error("Not authorized.");
+      const clean = (k: string) => { const v = String(formData.get(k) ?? "").trim(); return v.length ? v : null; };
+      const cleanEmail = (k: string) => { const v = String(formData.get(k) ?? "").trim().toLowerCase(); return v.length ? v : null; };
+      const first = clean("firstName");
+      const last = clean("lastName");
+      const dobRaw = clean("dob");
+      const dob = dobRaw && /^\d{4}-\d{2}-\d{2}$/.test(dobRaw) ? new Date(`${dobRaw}T12:00:00Z`) : null;
+      await prisma.person.update({
+        where: { id: targetId },
+        data: {
+          ...(first ? { firstName: first } : {}),
+          ...(last ? { lastName: last } : {}),
+          email: cleanEmail("email"),
+          phone: clean("phone"),
+          address: clean("address"),
+          dob,
+          emergencyName: clean("emergencyName"),
+          emergencyPhone: clean("emergencyPhone"),
+          emergencyRelation: clean("emergencyRelation"),
+          emergencyName2: clean("emergencyName2"),
+          emergencyPhone2: clean("emergencyPhone2"),
+          emergencyRelation2: clean("emergencyRelation2"),
+          medicalNotes: clean("medicalNotes"),
+        },
+      });
+      return NextResponse.redirect(new URL("/portal?ok=info", origin), 303);
+    }
+
     // Mark a received message as read for the current user's household.
     case "markMessageRead": {
       const recipientId = String(formData.get("recipientId") ?? "");
