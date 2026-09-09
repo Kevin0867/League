@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/rbac";
 import { TeamColorDot } from "@/components/TeamColorDot";
 import { formatTime12, formatSessionDay, phoenixDateInput } from "@/lib/time";
+import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Today" };
@@ -41,22 +42,28 @@ export default async function TodayPage() {
       })
     : [];
 
-  // For each team, pick the ONE session that needs the coach's attention next:
-  // a class today, else the oldest un-recorded past practice (needs attendance),
-  // else the next upcoming practice. Then order the team cards by that session's
-  // date so the most pressing team is first, and teams with nothing are last.
+  // Each team's card features its NEXT class (today or later), and the whole list
+  // is ordered strictly by that class's date + start time — the soonest first, so
+  // today's earliest class leads, then the next, and so on. A team whose only
+  // open item is an un-recorded past practice shows that (needs attendance) and
+  // sorts after the forward schedule; teams with nothing scheduled sort last.
+  // `instant` turns a session's day + Phoenix start time into a true timestamp so
+  // start time — not just the date — drives the order.
   type Kind = "today" | "attention" | "upcoming" | "none";
+  const instant = (s: { date: Date; startTime: string }) => phoenixWallTimeToUtc(s.date, s.startTime).getTime();
   const cards = teams.map((t) => {
     const mine = sessions.filter((s) => s.teams.some((x) => x.teamId === t.id));
-    const todaySession = mine.find((s) => phoenixDateInput(s.date) === today);
-    const attention = mine
+    const next = mine
+      .filter((s) => phoenixDateInput(s.date) >= today)
+      .sort((a, b) => instant(a) - instant(b))[0];
+    const overdue = mine
       .filter((s) => phoenixDateInput(s.date) < today && s.status === "SCHEDULED" && s._count.attendance === 0)
-      .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
-    const upcoming = mine.find((s) => phoenixDateInput(s.date) > today);
-    const pick = todaySession ?? attention ?? upcoming ?? null;
-    const kind: Kind = todaySession ? "today" : attention ? "attention" : upcoming ? "upcoming" : "none";
-    // Sort key: today first (0), needs-attention next by age, upcoming by date, none last.
-    const sortKey = kind === "today" ? 0 : kind === "attention" ? 1e12 + (pick?.date.getTime() ?? 0) : kind === "upcoming" ? 2e12 + (pick?.date.getTime() ?? 0) : 9e15;
+      .sort((a, b) => instant(b) - instant(a))[0];
+    const pick = next ?? overdue ?? null;
+    const kind: Kind = !pick ? "none" : phoenixDateInput(pick.date) === today ? "today" : phoenixDateInput(pick.date) > today ? "upcoming" : "attention";
+    // Forward classes (today + upcoming) order by their real start instant.
+    // Needs-attention (past) sorts after the forward list; none last.
+    const sortKey = kind === "attention" ? 8e15 + instant(pick!) : kind === "none" ? 9e15 : instant(pick!);
     return { team: t, pick, kind, sortKey, checked: pick?._count.attendance ?? 0 };
   });
   cards.sort((a, b) => a.sortKey - b.sortKey);
