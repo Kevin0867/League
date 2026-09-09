@@ -1425,6 +1425,9 @@ model AlaCarteBooking {
   appliedPurePct     Float?
 
   scheduledAt   DateTime?
+  /// When the post-lesson thank-you + review request was sent (so the cron never
+  /// double-sends).
+  feedbackSentAt DateTime?
   createdAt     DateTime @default(now())
 
   @@index([clientId])
