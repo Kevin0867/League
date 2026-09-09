@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
+import { matchFeeByEmailAndAmount } from "@/lib/payments/match";
 
 // Reconcile local Payment rows against Stripe — the safety net for payments that
 // were completed in Stripe but never marked PAID here (a missed / mis-signed
@@ -396,25 +397,10 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
         if (!matched) {
           const email = charge.billing_details?.email ?? charge.receipt_email ?? pi?.receipt_email ?? null;
           if (email) {
-            const emailEq = { equals: email, mode: "insensitive" as const };
-            const cands = await prisma.payment.findMany({
-              where: {
-                direction: "IN",
-                status: { in: ["REQUESTED", "PENDING"] },
-                amountCents: charge.amount,
-                // The payer's email may belong to the player OR to their parent/
-                // guardian (a parent almost always pays for a minor). Match either,
-                // so a parent-paid fee still lands on the child's request.
-                OR: [
-                  { party: { email: emailEq } },
-                  { party: { email2: emailEq } },
-                  { party: { email3: emailEq } },
-                  { party: { guardian: { email: emailEq } } },
-                ],
-              },
-              take: 2,
-            });
-            if (cands.length === 1) matched = cands[0];
+            // Match by payer email (player's OR guardian's) + amount, where the
+            // amount may be the fee alone or fee + apparel + tax combined.
+            const feeId = await matchFeeByEmailAndAmount(email, charge.amount);
+            if (feeId) matched = await prisma.payment.findUnique({ where: { id: feeId } });
           }
         }
 
