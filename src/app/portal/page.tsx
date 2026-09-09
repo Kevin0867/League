@@ -7,10 +7,13 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { NOTICE_DAYS } from "@/lib/domain/availability";
 import { MessageFrame } from "@/components/MessageFrame";
 import { formatTime12, formatDate, formatStamp } from "@/lib/time";
+import { STAFF_ONLY_TRIGGERS } from "@/lib/messaging";
 import { Notice } from "@/components/Notice";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
 import { PayButtons } from "./PayButtons";
 import { installmentChargeDates } from "@/lib/payments/receipt";
+import { decryptField } from "@/lib/crypto";
+import { PortalPersonForm, type PortalPerson } from "@/components/PortalPersonForm";
 
 const PAY_ERRORS: Record<string, { title: string; detail: string }> = {
   notfound: { title: "We couldn't find that invoice", detail: "The payment link may be out of date. Refresh the page and try again, or contact us if it persists." },
@@ -102,7 +105,15 @@ export default async function PortalHome({
     ? await prisma.messageRecipient.findMany({
         // Only in-app announcements belong in the portal inbox; email-only
         // sends (e.g. fee-request resends) deliver by email without cluttering it.
-        where: { personId: { in: peopleIds }, message: { channels: { contains: "IN_APP" } } },
+        // Staff-only coordination (sub requests, coach scheduling) is filtered out
+        // so it never shows to a family — even a coach who is also a parent.
+        where: {
+          personId: { in: peopleIds },
+          message: {
+            channels: { contains: "IN_APP" },
+            OR: [{ triggerType: null }, { triggerType: { notIn: [...STAFF_ONLY_TRIGGERS] } }],
+          },
+        },
         include: { message: true },
         orderBy: { message: { sentAt: "desc" } },
         take: 20,
@@ -114,10 +125,28 @@ export default async function PortalHome({
 
   return (
     <div className="space-y-6">
+      {/* Family equipment discount — links out to the shop. */}
+      <a
+        href="https://purepickleball.com/shop/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block rounded-xl bg-blue-600 px-5 py-4 text-white shadow-sm transition hover:bg-blue-700"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-base font-bold">Players and family get 30% off equipment</div>
+            <div className="mt-0.5 text-sm text-blue-100">Click here to start shopping — use code <span className="font-semibold text-white">PURE20</span> at checkout.</div>
+          </div>
+          <span className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-bold text-blue-700">Shop →</span>
+        </div>
+      </a>
+
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Welcome, {session.name.split(" ")[0]}</h1>
         <p className="text-slate-500">Your season at a glance.</p>
       </div>
+
+      {sp.ok === "info" && <Notice kind="success" title="Saved">Your details are updated.</Notice>}
 
       {sp.payerr && PAY_ERRORS[sp.payerr] && (
         <Notice kind="error" title={PAY_ERRORS[sp.payerr].title}>{PAY_ERRORS[sp.payerr].detail}</Notice>
@@ -154,28 +183,52 @@ export default async function PortalHome({
       {sp.imgok && <Notice kind="success" title="Photo saved">Looks great — the photo is updated.</Notice>}
       {sp.imgerr && <Notice kind="error" title="Couldn't upload the photo">{decodeURIComponent(sp.imgerr)}</Notice>}
 
-      {/* Profile photos — the logged-in player, plus each player in their household */}
+      {/* My household — photo, contact, emergency & medical for the account
+          holder and each player they manage. Editable by the family themselves. */}
       {me && (
         <section className="card">
-          <h2 className="font-semibold text-slate-900">Profile {me.dependents.length ? "photos" : "photo"}</h2>
+          <h2 className="font-semibold text-slate-900">My details {me.dependents.length ? "& players" : ""}</h2>
           <p className="mt-0.5 text-sm text-slate-500">
-            Add a photo for {me.dependents.length ? "each player in your household" : "your profile"} — it shows on their player page and team roster. You can take one right from your phone.
+            Keep your {me.dependents.length ? "household's" : ""} contact, emergency contacts, and medical info current — and add a photo (it shows on the team roster).
           </p>
           <div className="mt-3 space-y-3">
-            {[me, ...me.dependents].map((person) => (
-              <div key={person.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 first:border-0 first:pt-0">
-                <span className="text-sm font-medium text-slate-700">{person.firstName} {person.lastName}</span>
-                <ImageUploadForm
-                  ticket={ticket}
-                  personId={person.id}
-                  returnTo="/portal"
-                  currentUrl={person.imageUrl}
-                  name={`${person.firstName} ${person.lastName}`}
-                  capture
-                  label="Add / change"
-                />
-              </div>
-            ))}
+            {[me, ...me.dependents].map((person) => {
+              const pp: PortalPerson = {
+                id: person.id,
+                firstName: person.firstName,
+                lastName: person.lastName,
+                email: person.email ?? "",
+                phone: person.phone ?? "",
+                address: decryptField(person.address) ?? "",
+                dob: person.dob ? new Date(person.dob).toISOString().slice(0, 10) : "",
+                emergencyName: decryptField(person.emergencyName) ?? "",
+                emergencyRelation: decryptField(person.emergencyRelation) ?? "",
+                emergencyPhone: decryptField(person.emergencyPhone) ?? "",
+                emergencyName2: decryptField(person.emergencyName2) ?? "",
+                emergencyRelation2: decryptField(person.emergencyRelation2) ?? "",
+                emergencyPhone2: decryptField(person.emergencyPhone2) ?? "",
+                medical: decryptField(person.medicalNotes) ?? "",
+              };
+              return (
+                <div key={person.id} className="border-t border-slate-100 pt-3 first:border-0 first:pt-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-slate-700">{person.firstName} {person.lastName}</span>
+                    <ImageUploadForm
+                      ticket={ticket}
+                      personId={person.id}
+                      returnTo="/portal"
+                      currentUrl={person.imageUrl}
+                      name={`${person.firstName} ${person.lastName}`}
+                      capture
+                      label="Add / change photo"
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <PortalPersonForm ticket={ticket} person={pp} isSelf={person.id === me.id} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
