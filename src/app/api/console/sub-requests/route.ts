@@ -87,10 +87,9 @@ export async function POST(req: Request) {
         subject: "Sub needed", body, smsBody,
       });
     }
-    // Also drop a card in the Lounge feed so it's visible even without a notification.
-    await prisma.coachPost.create({
-      data: { authorName: who, body: `🔁 Sub needed — ${label}.${note ? ` ${note}` : ""}`, notify: "TEXT", pinned: false },
-    });
+    // The red "Sub requests" board at the top of the Lounge is the single place
+    // this lives — it stays pinned there until picked up and approved, then
+    // clears itself. No separate (lingering) feed post.
 
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "SUB_REQUESTED", summary: `Sub requested for ${label}` });
     return back("?srok=requested");

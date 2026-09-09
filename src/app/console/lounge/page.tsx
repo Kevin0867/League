@@ -38,11 +38,14 @@ export default async function LoungePage({
   const admin = isAdmin(session.roles ?? [session.role]);
   const myPersonId = session.personId ?? null;
 
-  const posts = await prisma.coachPost.findMany({
+  const allPosts = await prisma.coachPost.findMany({
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
     take: 100,
     include: { replies: { orderBy: { createdAt: "asc" } } },
   });
+  // Sub requests live in the red pinned board above — hide the old auto-posted
+  // "Sub needed" feed cards (superseded) so the board is the single source.
+  const posts = allPosts.filter((p) => !p.body.startsWith("🔁 Sub needed"));
 
   // Open sub requests — the "need a sub" board. Any coach can cover one.
   const myCoach = myPersonId ? await prisma.coach.findUnique({ where: { personId: myPersonId }, select: { id: true } }) : null;
@@ -91,11 +94,15 @@ export default async function LoungePage({
       {sp.srok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{SR_OK[sp.srok] ?? "Done."}</p>}
       {sp.srerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{SR_ERR[sp.srerr] ?? "Something went wrong."}</p>}
 
-      {/* Sub requests board — coaches offer to cover, admins approve. */}
+      {/* Sub requests board — pinned red at the top until each is picked up and
+          approved, then it clears itself. Coaches offer to cover; admins approve. */}
       {openReqs.length > 0 && (
-        <div className="card border-l-4 border-amber-400">
-          <h2 className="font-semibold text-slate-900">🔁 Sub requests — {openReqs.length}</h2>
-          <p className="mt-0.5 text-sm text-slate-500">A coach needs cover. First coach to <strong>pick up the class</strong> is sent to admins to <strong>approve, deny, or assign someone else</strong>. Whoever&apos;s approved covers it and is paid for the class.</p>
+        <div className="rounded-2xl border-2 border-rose-400 bg-rose-50 p-4 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-rose-800">
+            📌 Sub requests
+            <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">{openReqs.length} need action</span>
+          </h2>
+          <p className="mt-0.5 text-sm text-rose-900/80">A coach needs cover. First coach to <strong>pick up the class</strong> is sent to admins to <strong>approve, deny, or assign someone else</strong>. Whoever&apos;s approved covers it and is paid — then it drops off here.</p>
           <ul className="mt-3 divide-y divide-slate-100">
             {openReqs.map((r) => {
               const teams = r.session.teams.map((t) => t.team.name).join(", ") || "a class";
