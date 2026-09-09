@@ -220,7 +220,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         <Stat label="Players" value={playersCoached} />
         <Stat label="Earned to date" value={formatCents(earnedCents)} />
       </div>
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-600">
         Earnings add up automatically: each practice pays once its class time is over (a 4–6 PM class counts after 6 PM) — no check-out needed.
         Covering a class as a sub pays you for it (and not the normal coach). If a session you covered still shows $0, either its time hasn&apos;t passed yet,
         or the sub wasn&apos;t set up as a coach — only coaches can be assigned and paid.
@@ -230,7 +230,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           sends it to an admin to approve. */}
       {(openSubs.length > 0 || myPendingCount > 0) && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Cover a class</h2>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Cover a class</h2>
           <div className="card border-l-4 border-amber-400">
             {myPendingCount > 0 && (
               <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -268,7 +268,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
       {/* My teams — the heart of a coach's job. Each team opens straight to
           Message & notes, with attendance and details one tap away. */}
       <section id="myteams" className="scroll-mt-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">My teams</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">My teams</h2>
         {headTeams.length === 0 ? (
           <div className="card text-sm text-slate-500">You&apos;re not assigned to a team yet. Once you&apos;re cleared, an admin can assign you.</div>
         ) : (
@@ -306,7 +306,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
 
       {upcoming.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Upcoming sessions</h2>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming sessions</h2>
           <div className="card divide-y divide-slate-100">
             {upcoming.map((s) => (
               <Link key={s.id} href={`/console/schedule/${s.id}`} className="flex min-h-[48px] items-center justify-between gap-2 py-2.5 active:bg-slate-50">
@@ -369,7 +369,7 @@ function QuickTile({ href, label, icon }: { href: string; label: string; icon: R
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="card">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 text-2xl font-extrabold text-slate-900">{value}</div>
     </div>
   );

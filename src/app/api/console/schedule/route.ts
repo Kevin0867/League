@@ -279,34 +279,46 @@ export async function POST(req: Request) {
     return back("?ok=cancel");
   }
 
+  // A coach can't call off a class themselves (families plan around it, and a
+  // silent delete has no notice) — instead they ask an admin, who cancels it
+  // properly (with the team notice + pay decision). This just alerts the admins.
+  if (op === "requestCancel") {
+    if (!actor) return back("?err=auth");
+    const sessionId = String(formData.get("sessionId") ?? "");
+    const mode = await schedEditMode(actor, sessionId);
+    if (!mode) return back("?err=auth");
+    const reason = String(formData.get("reason") ?? "").trim();
+    const s = await prisma.session.findUnique({ where: { id: sessionId }, include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } } });
+    if (!s) return back("?err=session");
+    const label = schedLabel(s);
+    await alertAdminsScheduleChange(actor.userId, s.seasonId, `${label}${reason ? ` — reason: ${reason}` : ""}`, "requested cancellation of", `${origin}/console/schedule/${sessionId}`);
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.requestCancel", summary: `Coach requested cancellation${reason ? ` (${reason})` : ""}` });
+    return back("?ok=cancelrequested");
+  }
+
   // Hard-delete a single session — for one created by mistake. Quiet: no team
   // notification (use Cancel for that). Join rows (teams, coaches, attendance)
-  // cascade away.
+  // cascade away. Admins only — a coach uses requestCancel instead.
   if (op === "deleteSession") {
     if (!actor) return back("?err=auth");
     const sessionId = String(formData.get("sessionId") ?? "");
     const mode = await schedEditMode(actor, sessionId);
     if (!mode) return back("?err=auth");
-    // A coach may only delete PRACTICE sessions (not league/championship).
+    // Deleting a session is destructive and silent — restrict it to admins.
+    // A coach who wants a class called off uses requestCancel (alerts admins).
+    if (mode !== "admin") return back("?err=auth");
     const s = await prisma.session.findUnique({ where: { id: sessionId }, include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } } });
     if (!s) return back("?err=session");
-    if (mode === "coach" && s.type !== "PRACTICE") return back("?err=auth");
-    const label = schedLabel(s);
-    const seasonId = s.seasonId;
     try {
       await prisma.session.delete({ where: { id: sessionId } });
     } catch {
       return back("?err=sessionlinked");
     }
-    if (mode === "coach") await alertAdminsScheduleChange(actor.userId, seasonId, label, "deleted");
-    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "DELETE", summary: `Deleted ${s.type} on ${formatDate(s.date)}${mode === "coach" ? " (by coach)" : ""}` });
-    // Don't bounce back to the session we just deleted (that page now 404s). If
-    // returnTo points at this session's own detail page, fall back to the team's
-    // page (coach) or the schedule index (admin).
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "DELETE", summary: `Deleted ${s.type} on ${formatDate(s.date)}` });
+    // Don't bounce back to the session we just deleted (that page now 404s).
     const deletedPath = `/console/schedule/${sessionId}`;
     if (returnTo === deletedPath || returnTo.startsWith(`${deletedPath}?`) || returnTo.startsWith(`${deletedPath}#`)) {
-      const fallback = mode === "coach" && s.teams[0]?.teamId ? `/console/teams/${s.teams[0].teamId}/progress` : "/console/schedule";
-      return NextResponse.redirect(new URL(`${fallback}?ok=deleted`, origin), 303);
+      return NextResponse.redirect(new URL(`/console/schedule?ok=deleted`, origin), 303);
     }
     return back("?ok=deleted");
   }
