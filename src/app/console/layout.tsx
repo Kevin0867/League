@@ -8,6 +8,11 @@ import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 // Never serve a cached/prerendered authed shell — always resolve the session.
 export const dynamic = "force-dynamic";
 
+// Baseline browser-tab title for the console so internal tools never show the
+// public marketing title. Individual pages override this with their own name
+// (the root layout applies the "%s · PURE Academy" template).
+export const metadata = { title: "Console" };
+
 export default async function ConsoleLayout({
   children,
 }: {

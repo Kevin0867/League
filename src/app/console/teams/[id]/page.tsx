@@ -24,6 +24,7 @@ import { TeamPhotoUploadForm } from "@/components/TeamPhotoUploadForm";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Team" };
 
 // Any email on file counts — the player's own (email/email2/email3, where a
 // minor's parent email is stored) or the guardian record's. Only flag "no email"

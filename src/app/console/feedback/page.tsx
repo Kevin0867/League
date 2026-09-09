@@ -8,6 +8,8 @@ import { formatStamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Feedback" };
+
 const OK: Record<string, string> = {
   sent: "Feedback request sent.",
   moderated: "Updated.",

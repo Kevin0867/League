@@ -12,6 +12,8 @@ import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Coaches" };
+
 function parseMarkets(json: string | null): string[] {
   if (!json) return [];
   try {

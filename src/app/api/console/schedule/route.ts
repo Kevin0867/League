@@ -300,6 +300,14 @@ export async function POST(req: Request) {
     }
     if (mode === "coach") await alertAdminsScheduleChange(actor.userId, seasonId, label, "deleted");
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "DELETE", summary: `Deleted ${s.type} on ${formatDate(s.date)}${mode === "coach" ? " (by coach)" : ""}` });
+    // Don't bounce back to the session we just deleted (that page now 404s). If
+    // returnTo points at this session's own detail page, fall back to the team's
+    // page (coach) or the schedule index (admin).
+    const deletedPath = `/console/schedule/${sessionId}`;
+    if (returnTo === deletedPath || returnTo.startsWith(`${deletedPath}?`) || returnTo.startsWith(`${deletedPath}#`)) {
+      const fallback = mode === "coach" && s.teams[0]?.teamId ? `/console/teams/${s.teams[0].teamId}/progress` : "/console/schedule";
+      return NextResponse.redirect(new URL(`${fallback}?ok=deleted`, origin), 303);
+    }
     return back("?ok=deleted");
   }
 
@@ -508,25 +516,33 @@ export async function POST(req: Request) {
     if (!s) return back("?err=session");
 
     const personIds = s.teams.flatMap((t) => t.team.members.map((m) => m.personId));
+    // Only record players the coach actually marked. A blank radio means "not
+    // recorded yet" — never a silent PRESENT — so attendance reflects real
+    // check-in, not an unset default (F-07).
+    let marked = 0;
     for (const personId of personIds) {
-      const status = String(formData.get(`att_${personId}`) ?? "PRESENT");
+      const raw = formData.get(`att_${personId}`);
+      if (raw == null || String(raw) === "") continue;
+      const status = String(raw);
       await prisma.attendance.upsert({
         where: { sessionId_personId: { sessionId, personId } },
         create: { sessionId, personId, status },
         update: { status },
       });
+      marked++;
     }
 
     // Marking attendance confirms a session that has actually happened — but a
     // coach can (and does) check players in for an UPCOMING practice. Only flip
-    // to DELIVERED once the class is over by the clock; otherwise leave it
-    // SCHEDULED so the "Need a sub?" panel and an open sub request stay live.
-    // (Pay accrues on completion by time, not on this status — see coachPay.ts.)
-    if (s.status === "SCHEDULED" && isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status })) {
+    // to DELIVERED once the class is over by the clock AND at least one player
+    // was recorded; otherwise leave it SCHEDULED so the "Need a sub?" panel and
+    // an open sub request stay live. (Pay accrues on completion by time, not on
+    // this status — see coachPay.ts.)
+    if (marked > 0 && s.status === "SCHEDULED" && isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status })) {
       await prisma.session.update({ where: { id: sessionId }, data: { status: "DELIVERED" } });
     }
 
-    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "ATTENDANCE", summary: `Marked attendance for ${personIds.length} player(s)` });
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "ATTENDANCE", summary: `Marked attendance for ${marked} of ${personIds.length} player(s)` });
 
     return back("?ok=attendance");
   }

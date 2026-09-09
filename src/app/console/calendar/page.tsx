@@ -8,6 +8,8 @@ import { ConsolidateDivisions } from "./ConsolidateDivisions";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Calendar" };
+
 const OK_MSG: Record<string, string> = {
   consolidateDivisions: "Divisions consolidated.",
   initSeasonCalendar: "Calendar is now editable — tweak any week below.",

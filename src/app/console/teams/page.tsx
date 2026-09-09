@@ -24,6 +24,8 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Teams" };
+
 const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool.", schedule: "Day, time, and facility saved. Generate practices on the Schedule page.", colors: "Team colors assigned — one distinct color per gender+level group.", merged: "Duplicate teams merged — players consolidated onto the kept team." };
 const ERRORS: Record<string, string> = {
   fields: "Team name and season are required.",

@@ -7,6 +7,8 @@ import { garmentLabel, sizeLabel, APPAREL_GARMENTS, APPAREL_SIZES } from "@/lib/
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "Apparel" };
+
 export default async function ApparelReportPage({
   searchParams,
 }: {
