@@ -5,7 +5,7 @@ import { can } from "@/lib/rbac";
 import { coachedTeamIds } from "@/lib/domain/coachingAccess";
 import { PageHeader } from "@/components/RoadmapNote";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatTime12, formatTimeRange12, formatDate } from "@/lib/time";
+import { formatTime12, formatTimeRange12, formatSessionDay } from "@/lib/time";
 import { ScheduleCalendar, type CalSession } from "@/components/ScheduleCalendar";
 import { PrintButton } from "@/components/PrintButton";
 import { AddPracticeForm } from "./AddPracticeForm";
@@ -350,7 +350,7 @@ export default async function SchedulePage({
               const computedWk = s.weekNumber == null ? weekOfSeason(s.season?.startDate, s.date) : null;
               return (
               <tr key={s.id} className="hover:bg-slate-50">
-                <td className="py-2 text-slate-700">{formatDate(s.date)}</td>
+                <td className="py-2 text-slate-700">{formatSessionDay(s.date, "short")}</td>
                 <td className="hidden text-slate-500 lg:table-cell">
                   {s.weekNumber ?? (computedWk != null ? <span className="text-slate-400" title="Added session — falls in this season week">{computedWk}</span> : "—")}
                 </td>

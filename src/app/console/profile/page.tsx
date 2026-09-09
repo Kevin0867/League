@@ -41,7 +41,7 @@ export default async function CoachProfilePage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="My account" subtitle="Your sign-in, password, and profile details." />
+      <PageHeader title="My Profile" subtitle="Your sign-in, password, and profile details." />
       {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Profile saved.</p>}
       {sp.imgok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Profile photo updated.</p>}
       {sp.imgerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{sp.imgerr}</p>}

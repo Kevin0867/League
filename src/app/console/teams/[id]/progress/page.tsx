@@ -233,10 +233,18 @@ export default async function TeamProgressPage({
       {/* PLAYER NOTES — a clean, tappable list. Each player shows a plain-English
           progress line and a tidy 6-week strip; tap to open and write/send. */}
       <section id="notes" className="scroll-mt-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Notes &amp; feedback for each player</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Notes &amp; feedback for each player</h2>
         {team.members.length === 0 ? (
-          <div className="card py-8 text-center text-sm text-slate-400">No players on this roster yet.</div>
+          <div className="card py-8 text-center text-sm text-slate-500">No players on this roster yet.</div>
         ) : (
+          <>
+          {/* Key first, so the dots below mean something as you read down. */}
+          <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-semibold text-emerald-700">✓</span> sent to parent</span>
+            <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">•</span> saved, not sent</span>
+            <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-slate-200 px-1.5 text-[10px] text-slate-600">Wk</span> nothing yet</span>
+            <span className="text-slate-500">Weeks {weekSlots[0]?.date ? shortDate(weekSlots[0].date) : "1"}–{weekSlots[COACHING_WEEK_COUNT - 1]?.date ? shortDate(weekSlots[COACHING_WEEK_COUNT - 1].date as Date) : COACHING_WEEK_COUNT}{!hasSessions && hasPlan ? " (planned)" : ""}.</span>
+          </div>
           <div className="space-y-2">
             {team.members.map((m) => {
               const weeks = notesByPerson.get(m.personId);
@@ -280,13 +288,8 @@ export default async function TeamProgressPage({
               );
             })}
           </div>
+          </>
         )}
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-semibold text-emerald-700">✓</span> sent to parent</span>
-          <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">•</span> saved, not sent</span>
-          <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-400">Wk</span> nothing yet</span>
-          <span className="text-slate-400">Weeks {weekSlots[0]?.date ? shortDate(weekSlots[0].date) : "1"}–{weekSlots[COACHING_WEEK_COUNT - 1]?.date ? shortDate(weekSlots[COACHING_WEEK_COUNT - 1].date as Date) : COACHING_WEEK_COUNT}{!hasSessions && hasPlan ? " (planned)" : ""}.</span>
-        </div>
       </section>
 
       {/* MESSAGE THE TEAM — one message to every player + parent. */}
