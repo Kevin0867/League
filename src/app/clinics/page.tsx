@@ -37,9 +37,15 @@ export default async function ClinicsPage() {
         {clinics.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
             <p className="text-lg font-semibold text-slate-800">No clinics on the calendar right now</p>
-            <p className="mt-2 text-slate-500">
-              <Link href="/clinics/request" className="text-brand-600 underline">Request a lesson or clinic</Link> and we&apos;ll set one up, or <Link href="/register" className="text-brand-600 underline">register for the season</Link> to join a team.
-            </p>
+            <p className="mt-2 text-slate-500">Request one and we&apos;ll set it up, or register for the season to join a team.</p>
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
+              <Link href="/clinics/request" className="inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+                Request a lesson or clinic
+              </Link>
+              <Link href="/register" className="inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+                Register for the season
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2">
