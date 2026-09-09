@@ -100,6 +100,9 @@ export function ConsoleShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const held = roles && roles.length ? roles : [role];
+  // A coach who holds no admin role lands on Today and has no admin dashboard —
+  // so the "Dashboard" link is hidden for them (it would just bounce to Today).
+  const coachOnly = held.includes("COACH") && !held.some((r) => r === "ADMIN" || r === "COO" || r === "CEO" || r === "DIRECTOR");
   const roleVisible = (n: NavItem) => {
     if (!n.roles) return true;
     // Visible if the user holds ANY role the item allows.
@@ -170,9 +173,11 @@ export function ConsoleShell({
                 {TODAY.label}
               </Link>
             )}
-            <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
-              {DASHBOARD.label}
-            </Link>
+            {!coachOnly && (
+              <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
+                {DASHBOARD.label}
+              </Link>
+            )}
             {sections.map((section) => (
               <div key={section.title} className="mt-4">
                 <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-300/70">

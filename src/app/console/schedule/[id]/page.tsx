@@ -186,7 +186,7 @@ export default async function SessionDetail({
   return (
     <div className="space-y-6">
       <div>
-        <Link href={admin ? "/console/schedule" : "/console"} className="btn-back">← {admin ? "Schedule" : "Home"}</Link>
+        <Link href={admin ? "/console/schedule" : "/console/today"} className="btn-back">← {admin ? "Schedule" : "Today"}</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-900">
             {TYPE_LABEL[s.type] ?? s.type} · {formatSessionDay(s.date, "long")}
