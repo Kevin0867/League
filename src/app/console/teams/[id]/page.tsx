@@ -655,8 +655,12 @@ export default async function TeamDetailPage({
             </div>
             {team.members.length === 0 ? (
               <p className="text-sm text-slate-400">
-                No players yet. Assign from the{" "}
-                <Link href="/console/pools" className="text-brand-600 hover:underline">pool board</Link>.
+                No players yet.{" "}
+                {admin ? (
+                  <>Assign from the <Link href="/console/pools" className="text-brand-600 hover:underline">pool board</Link>.</>
+                ) : (
+                  <>An admin assigns players to this team.</>
+                )}
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">

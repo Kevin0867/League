@@ -89,7 +89,8 @@ export function CoachProfileForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Email</label>
-              <input className="input bg-slate-50" value={email} readOnly />
+              <input type="email" className="input cursor-not-allowed bg-slate-100 text-slate-500" value={email} readOnly aria-readonly aria-label="Login email (read-only)" />
+              <p className="mt-1 text-xs text-slate-400">This is your login email. Ask an admin to change it.</p>
             </div>
             <div>
               <label className="label">Phone</label>
