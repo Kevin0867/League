@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
-import { formatTime12 } from "@/lib/time";
+import { formatTime12, formatDate } from "@/lib/time";
+import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { payableCompletedRows } from "@/lib/domain/coachPay";
@@ -82,6 +83,23 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
     ? Math.round(coach.seasonPayCents / 12)
     : COACH_PER_SESSION_CENTS;
   const earnedCents = myCompletedRows.length * perSessionCents + (alaAgg._sum.coachCents ?? 0);
+
+  // Open sub requests this coach could cover (not their own), + a ticket to act.
+  const [openSubs, subTicket] = coach
+    ? await Promise.all([
+        prisma.subRequest.findMany({
+          where: { status: "OPEN", session: { status: "SCHEDULED" }, requestedByCoachId: { not: coach.id } },
+          orderBy: { createdAt: "asc" },
+          take: 8,
+          include: { session: { include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } } } },
+        }),
+        mintConsoleTicket(),
+      ])
+    : [[] as never[], ""];
+  // Whether this coach has an offer awaiting admin approval, so we can say so.
+  const myPendingCount = coach
+    ? await prisma.subRequest.count({ where: { status: "PENDING", claimedByCoachId: coach.id } })
+    : 0;
 
   const hasLocations = parseMarkets(coach?.marketsCovered ?? null).length > 0;
   const hasDayTimes = (coach?.availabilityBlocks?.length ?? 0) > 0;
@@ -204,6 +222,45 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         Covering a class as a sub pays you for it (and not the normal coach). If a session you covered still shows $0, either its time hasn&apos;t passed yet,
         or the sub wasn&apos;t set up as a coach — only coaches can be assigned and paid.
       </p>
+
+      {/* Cover a class — open sub requests any coach can pick up. Picking one up
+          sends it to an admin to approve. */}
+      {(openSubs.length > 0 || myPendingCount > 0) && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Cover a class</h2>
+          <div className="card border-l-4 border-amber-400">
+            {myPendingCount > 0 && (
+              <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                You&apos;ve offered to cover {myPendingCount} class{myPendingCount === 1 ? "" : "es"} — waiting on an admin to approve.
+              </p>
+            )}
+            {openSubs.length === 0 ? (
+              <p className="text-sm text-slate-500">No open sub requests right now.</p>
+            ) : (
+              <>
+                <p className="mb-2 text-sm text-slate-500">A coach needs cover. Pick one up and an admin will approve it — then it&apos;s yours and you&apos;re paid for it.</p>
+                <ul className="divide-y divide-slate-100">
+                  {openSubs.map((r) => (
+                    <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                      <span className="text-slate-700">
+                        <span className="font-medium text-slate-800">{r.session.teams.map((t) => t.team.name).join(", ") || "a class"}</span>
+                        {" · "}{formatDate(r.session.date)} at {formatTime12(r.session.startTime)}{r.session.facility ? ` · ${r.session.facility.name}` : ""}
+                      </span>
+                      <form method="POST" action="/api/console/sub-requests">
+                        <input type="hidden" name="ticket" value={subTicket} />
+                        <input type="hidden" name="op" value="claim" />
+                        <input type="hidden" name="requestId" value={r.id} />
+                        <input type="hidden" name="returnTo" value="/console" />
+                        <button className="rounded-full bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Pick up this class →</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* My teams — the heart of a coach's job. Each team opens straight to
           Message & notes, with attendance and details one tap away. */}
