@@ -87,6 +87,11 @@ export async function POST(req: Request) {
     data.backgroundCheckCompany = bgChecked ? (g("bgCompany") || null) : null;
   }
 
+  // Scheduling — admin-only: clear a coach to hold overlapping team slots.
+  if (g("concurrentVisible") === "1" && can(actor.role, "manageCoaches")) {
+    data.allowConcurrentTeams = g("allowConcurrentTeams") === "on";
+  }
+
   // Compensation is admin-only. It is written only when the form was rendered
   // with the pay section (payVisible=1) AND the actor may manage coaches — so a
   // coach editing their own profile (where the section isn't shown) can neither

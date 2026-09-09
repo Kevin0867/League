@@ -516,6 +516,12 @@ model Coach {
   /// Pro Coach / Assistant differentiate payout rate (§9)
   isProCoach          Boolean   @default(false)
 
+  /// Normally a coach can't be assigned to two teams whose day/time overlap.
+  /// Set true for a coach who genuinely runs concurrent groups (e.g. two teams
+  /// sharing a court in the same slot) so the day/time clash check is skipped
+  /// for them. Admin-only.
+  allowConcurrentTeams Boolean  @default(false)
+
   /// Show this coach on the public /coaches page. Off by default — publish only
   /// coaches confirmed for the season, not the full prospective roster (§ build
   /// list item 2).

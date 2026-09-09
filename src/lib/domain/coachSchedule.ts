@@ -23,6 +23,12 @@ export function windowsOverlap(aStart: number, aEnd: number, bStart: number, bEn
   return aStart < bEnd && bStart < aEnd;
 }
 
+/** Whether this coach is cleared to hold overlapping day/time assignments. */
+export async function coachAllowsConcurrent(coachId: string): Promise<boolean> {
+  const c = await prisma.coach.findUnique({ where: { id: coachId }, select: { allowConcurrentTeams: true } });
+  return !!c?.allowConcurrentTeams;
+}
+
 export type CoachConflict = { teamId: string; teamName: string; dayOfWeek: string; startTime: string };
 
 /**
@@ -40,6 +46,8 @@ export async function coachTeamConflicts(opts: {
   const { coachId, dayOfWeek, startTime, durationMin = DEFAULT_TEAM_SESSION_MIN, excludeTeamId = null } = opts;
   const start = timeToMinutes(startTime);
   if (!coachId || !dayOfWeek || start == null) return [];
+  // A coach cleared to run concurrent teams never clashes with themselves.
+  if (await coachAllowsConcurrent(coachId)) return [];
   const end = start + durationMin;
 
   // All teams this coach is on (head or assistant) on the same day.
@@ -81,6 +89,8 @@ export async function coachSessionConflicts(opts: {
   const start = timeToMinutes(startTime);
   const end = timeToMinutes(endTime);
   if (!coachId || start == null || end == null) return [];
+  // A coach cleared to run concurrent groups can also cover overlapping classes.
+  if (await coachAllowsConcurrent(coachId)) return [];
 
   // Same calendar day.
   const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0);
