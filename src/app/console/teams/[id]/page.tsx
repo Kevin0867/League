@@ -336,8 +336,8 @@ export default async function TeamDetailPage({
         <p className="mt-0.5 text-sm text-slate-500">Notes, homework, messages, and the practice schedule for {team.name}.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <Link href={`/console/teams/${team.id}/progress`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
-            <div className="text-sm font-semibold text-brand-800">Practice notes &amp; progress →</div>
-            <div className="mt-0.5 text-xs text-slate-500">Weekly notes and homework per player — strengths, growth, a coach&apos;s note — then send the report to the parent.</div>
+            <div className="text-sm font-semibold text-brand-800">Check-in, notes &amp; messages →</div>
+            <div className="mt-0.5 text-xs text-slate-500">Check players in at practice, keep weekly notes &amp; feedback per player, and message the whole team — all in one place.</div>
           </Link>
           <Link href={`/console/schedule?view=calendar&team=${team.id}`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
             <div className="text-sm font-semibold text-brand-800">Practice schedule →</div>

@@ -92,6 +92,19 @@ export default async function TeamProgressPage({
         </p>
       </div>
 
+      {/* Three big green actions — the whole job for a coach, one tap each. */}
+      <div className="grid grid-cols-3 gap-2">
+        <a href="#checkin" className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 px-2 py-3 text-center text-xs font-semibold leading-tight text-white hover:bg-emerald-700 sm:text-sm">
+          <span aria-hidden className="mb-0.5 text-base">✓</span>Check players in
+        </a>
+        <a href="#notes" className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 px-2 py-3 text-center text-xs font-semibold leading-tight text-white hover:bg-emerald-700 sm:text-sm">
+          <span aria-hidden className="mb-0.5 text-base">📝</span>Notes &amp; feedback
+        </a>
+        <a href="#message" className="flex flex-col items-center justify-center rounded-xl bg-emerald-600 px-2 py-3 text-center text-xs font-semibold leading-tight text-white hover:bg-emerald-700 sm:text-sm">
+          <span aria-hidden className="mb-0.5 text-base">💬</span>Message team
+        </a>
+      </div>
+
       {sp.ok === "teamsent" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
           Update sent to {sp.n ?? 0} recipient{sp.n === "1" ? "" : "s"}{sp.failed ? ` · ${sp.failed} failed` : ""}
@@ -182,21 +195,11 @@ export default async function TeamProgressPage({
         )}
       </section>
 
-      {/* MESSAGE THE TEAM — one message to every player + parent. */}
-      <section id="message" className="scroll-mt-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Message the team</h2>
-        <div className="card">
-          <p className="mb-3 text-sm text-slate-500">
-            Sends to every player and parent on {team.name}. Tap the mic to dictate, then edit before sending.
-          </p>
-          <TeamUpdateComposer ticket={ticket} teamId={teamId} teamName={team.name} />
-        </div>
-      </section>
 
       {/* PLAYER NOTES — a clean, tappable list. Each player shows a plain-English
           progress line and a tidy 6-week strip; tap to open and write/send. */}
       <section id="notes" className="scroll-mt-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Player notes</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Notes &amp; feedback for each player</h2>
         {team.members.length === 0 ? (
           <div className="card py-8 text-center text-sm text-slate-400">No players on this roster yet.</div>
         ) : (
@@ -249,6 +252,17 @@ export default async function TeamProgressPage({
           <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">•</span> saved, not sent</span>
           <span className="inline-flex items-center gap-1.5"><span className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-400">Wk</span> nothing yet</span>
           <span className="text-slate-400">Weeks {weekSlots[0]?.date ? shortDate(weekSlots[0].date) : "1"}–{weekSlots[COACHING_WEEK_COUNT - 1]?.date ? shortDate(weekSlots[COACHING_WEEK_COUNT - 1].date as Date) : COACHING_WEEK_COUNT}{!hasSessions && hasPlan ? " (planned)" : ""}.</span>
+        </div>
+      </section>
+
+      {/* MESSAGE THE TEAM — one message to every player + parent. */}
+      <section id="message" className="scroll-mt-4">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Message the team</h2>
+        <div className="card">
+          <p className="mb-3 text-sm text-slate-500">
+            Sends to every player and parent on {team.name}. Tap the mic to dictate, then edit before sending.
+          </p>
+          <TeamUpdateComposer ticket={ticket} teamId={teamId} teamName={team.name} />
         </div>
       </section>
     </div>
