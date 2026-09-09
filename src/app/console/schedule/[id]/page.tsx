@@ -27,6 +27,7 @@ const OK_LABEL: Record<string, string> = {
   edited: "Session updated.",
   subAdded: "Coach added to this class.",
   subRemoved: "Coach removed from this class.",
+  cancelrequested: "Cancellation request sent to the admins.",
 };
 
 const ERR_LABEL: Record<string, string> = {
@@ -377,16 +378,17 @@ export default async function SessionDetail({
                 <button className="btn-primary w-full">Save changes</button>
               </div>
             </form>
-            <div className="card border border-rose-200">
-              <h2 className="mb-1 font-semibold text-rose-700">Remove practice</h2>
-              <p className="mb-3 text-xs text-slate-500">Deletes this practice (no notice to the team). Admins are notified. To call it off with a notice to families, ask an admin to Cancel it.</p>
-              <ConfirmSubmit
-                action="/api/console/schedule"
-                fields={{ ticket, op: "deleteSession", sessionId: s.id, returnTo }}
-                label="Delete practice"
-                confirm={`Delete this practice on ${formatDate(s.date)}? The team isn't notified, and admins are alerted.`}
-                className="w-full rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-              />
+            <div className="card border border-amber-200">
+              <h2 className="mb-1 font-semibold text-slate-900">Need this class called off?</h2>
+              <p className="mb-3 text-xs text-slate-500">Only an admin can cancel a class, so families get proper notice. Send them a heads-up and they&apos;ll take it from there.</p>
+              <form method="POST" action="/api/console/schedule" className="space-y-2">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="requestCancel" />
+                <input type="hidden" name="sessionId" value={s.id} />
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <textarea name="reason" rows={2} maxLength={300} placeholder="Optional — why (weather, facility, etc.)" className="input w-full" />
+                <button className="btn-secondary w-full text-sm">Request cancellation</button>
+              </form>
             </div>
           </div>
         )}

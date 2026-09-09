@@ -4,6 +4,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { requireStaff } from "@/lib/rbac";
 import { isAdmin } from "@/lib/rbac";
 import { formatStamp, formatDate, formatTime12 } from "@/lib/time";
+import { LoungeComposer } from "@/components/LoungeComposer";
 
 export const dynamic = "force-dynamic";
 
@@ -173,40 +174,10 @@ export default async function LoungePage({
 
       {/* Composer */}
       <div className="card">
-        <form method="POST" action="/api/console/lounge" className="space-y-3">
-          {hidden}
-          <input type="hidden" name="op" value="post" />
-          <textarea
-            name="body"
-            required
-            rows={3}
-            maxLength={4000}
-            placeholder="Say something to the coaches… (banter, a heads-up, or 'need a sub for Mesa MID this Thursday')"
-            className="input w-full"
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="text-sm text-slate-600">
-              Notify staff:{" "}
-              <select name="notify" defaultValue="INAPP" className="input ml-1 inline-block w-auto py-1 text-sm">
-                <option value="NONE">Just post (no ping)</option>
-                <option value="INAPP">On the board + in-app</option>
-                <option value="EMAIL">Email everyone</option>
-                <option value="TEXT">Text everyone (important)</option>
-              </select>
-            </label>
-            <div className="flex items-center gap-3">
-              {admin && (
-                <label className="flex items-center gap-1.5 text-sm text-slate-600">
-                  <input type="checkbox" name="pinned" className="accent-brand-600" /> Pin (announcement)
-                </label>
-              )}
-              <button className="btn-accent text-sm">Post</button>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400">
-            Text and email go to every coach and admin. Use them for real asks; keep the jokes on &ldquo;Just post&rdquo; or &ldquo;in-app.&rdquo;
-          </p>
-        </form>
+        <LoungeComposer ticket={ticket} admin={admin} />
+        <p className="mt-3 text-xs text-slate-500">
+          Text and email go to every coach and admin. Use them for real asks; keep the jokes on &ldquo;Just post&rdquo; or &ldquo;in-app.&rdquo;
+        </p>
       </div>
 
       {/* Feed */}
