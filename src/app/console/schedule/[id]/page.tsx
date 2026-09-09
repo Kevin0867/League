@@ -8,7 +8,7 @@ import { isAdmin } from "@/lib/rbac";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
-import { formatTimeRange12, formatDate } from "@/lib/time";
+import { formatTimeRange12, formatDate, formatSessionDay } from "@/lib/time";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
 import { AttendanceMarker } from "@/components/AttendanceMarker";
@@ -156,7 +156,7 @@ export default async function SessionDetail({
         <Link href={admin ? "/console/schedule" : "/console"} className="text-sm text-brand-600 hover:underline">← {admin ? "Schedule" : "Home"}</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-900">
-            {TYPE_LABEL[s.type] ?? s.type} · {formatDate(s.date)}
+            {TYPE_LABEL[s.type] ?? s.type} · {formatSessionDay(s.date, "long")}
           </h1>
           <StatusBadge status={s.status} />
         </div>
