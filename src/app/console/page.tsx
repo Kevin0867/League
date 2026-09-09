@@ -8,7 +8,7 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { formatDate, formatTime12 } from "@/lib/time";
 import { computeEnrollmentBreakdown, type BreakdownRow } from "@/lib/domain/enrollmentBreakdown";
-import { CoachDashboard } from "./CoachDashboard";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard" };
@@ -19,11 +19,13 @@ export default async function ConsoleDashboard({
   searchParams?: Promise<Record<string, string | undefined>>;
 }) {
   const sp = (await searchParams) ?? {};
-  // Coaches get their own home (their teams / sessions / earnings), not the
-  // academy-wide admin dashboard.
+  // Coaches land on Today — their teams and sessions, in order — not the
+  // academy-wide admin dashboard. (A coach who is also an admin keeps the
+  // admin dashboard and reaches Today from the nav.)
   const session = await getSession();
-  if (session?.role === "COACH" && session.personId) {
-    return <CoachDashboard personId={session.personId} firstName={session.name.split(" ")[0]} />;
+  const heldRoles = session ? (session.roles ?? [session.role]) : [];
+  if (session?.personId && heldRoles.includes("COACH") && !isAdmin(heldRoles)) {
+    redirect("/console/today");
   }
 
   const SUB_MSG: Record<string, string> = {
