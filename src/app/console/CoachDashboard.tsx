@@ -199,6 +199,11 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         <Stat label="Players" value={playersCoached} />
         <Stat label="Earned to date" value={formatCents(earnedCents)} />
       </div>
+      <p className="text-xs text-slate-400">
+        Earnings add up automatically: each practice pays once its class time is over (a 4–6 PM class counts after 6 PM) — no check-out needed.
+        Covering a class as a sub pays you for it (and not the normal coach). If a session you covered still shows $0, either its time hasn&apos;t passed yet,
+        or the sub wasn&apos;t set up as a coach — only coaches can be assigned and paid.
+      </p>
 
       {/* My teams — the heart of a coach's job. Each team opens straight to
           Message & notes, with attendance and details one tap away. */}

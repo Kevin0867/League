@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { mintConsoleTicket } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
+import { can } from "@/lib/rbac";
+import { coachedTeamIds } from "@/lib/domain/coachingAccess";
+import { CoachTeamsView } from "./CoachTeamsView";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatTime12 } from "@/lib/time";
 import {
@@ -52,6 +55,31 @@ export default async function TeamBuildBoard({
     },
     orderBy: [{ market: "asc" }, { name: "asc" }],
   });
+
+  // Coaches get a tailored Teams screen — "My Teams" (theirs, editable) and "All
+  // Teams" (read-only). They never see the admin build board and can't create a
+  // team. Admins fall through to the full board below.
+  const viewer = await getSession();
+  const isTeamAdmin = can(viewer?.roles ?? (viewer?.role ? [viewer.role] : []), "manageTeams");
+  if (!isTeamAdmin) {
+    const myTeamIds = await coachedTeamIds();
+    const tab = sp.tab === "all" ? "all" : "mine";
+    const cards = teams.map((t) => ({
+      id: t.id,
+      name: t.name,
+      color: t.color,
+      market: t.market,
+      dayOfWeek: t.dayOfWeek,
+      startTime: t.startTime,
+      divisionName: t.division?.name ?? null,
+      facilityName: t.facility?.name ?? null,
+      coachName: t.coach ? `${t.coach.person.firstName} ${t.coach.person.lastName}` : null,
+      memberCount: t._count.members,
+      memberNames: t.members.map((m) => `${m.person.firstName} ${m.person.lastName}`),
+      launched: !!t.launchedAt,
+    }));
+    return <CoachTeamsView teams={cards} myTeamIds={myTeamIds} tab={tab} />;
+  }
 
   // Per-team waitlist: people who signed up through a team link while it was full
   // (WAITLISTED + tagged to that team). Shown on the card so staff can place them
