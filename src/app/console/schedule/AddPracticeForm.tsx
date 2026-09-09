@@ -3,7 +3,7 @@
 import { DateField } from "@/components/DateField";
 import { TimeSelect } from "@/components/TimeSelect";
 import { useMemo, useState } from "react";
-import { formatTime12 } from "@/lib/time";
+import { formatTime12, phoenixTodayInput } from "@/lib/time";
 
 type Slot = { day: string; start: string; end: string };
 const WD = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -74,7 +74,7 @@ export function AddPracticeForm({
         </div>
         <div>
           <label className="label">Date</label>
-          <DateField name="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" required />
+          <DateField name="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" min={phoenixTodayInput()} required />
         </div>
         <div>
           <label className="label">Start</label>

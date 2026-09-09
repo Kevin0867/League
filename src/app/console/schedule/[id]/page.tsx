@@ -100,9 +100,9 @@ export default async function SessionDetail({
   const coachCanEdit = !admin && isTeamCoachHere && s.type === "PRACTICE";
 
   // Active sub request for this class (if any) — drives the "Need a sub?" card.
-  const activeSub = (s.status === "SCHEDULED")
-    ? await prisma.subRequest.findFirst({ where: { sessionId: id, status: { in: ["OPEN", "PENDING"] } }, select: { id: true, note: true, status: true, requestedByCoachId: true, claimedByCoachId: true } })
-    : null;
+  // Query regardless of session status so an open request stays approvable and
+  // cancellable even if the class was marked delivered (F-05).
+  const activeSub = await prisma.subRequest.findFirst({ where: { sessionId: id, status: { in: ["OPEN", "PENDING"] } }, select: { id: true, note: true, status: true, requestedByCoachId: true, claimedByCoachId: true } });
   const subOfferName = activeSub?.claimedByCoachId
     ? (await prisma.coach.findUnique({ where: { id: activeSub.claimedByCoachId }, select: { person: { select: { firstName: true, lastName: true } } } }))
     : null;
@@ -187,7 +187,7 @@ export default async function SessionDetail({
 
       {/* Need a sub? — the coach who can't make this class asks for cover here;
           other coaches claim it from the Coaches' Lounge. */}
-      {canRequestSub && (
+      {(canRequestSub || activeSub) && (
         <div className="card border-l-4 border-amber-400">
           {activeSub ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
