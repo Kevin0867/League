@@ -114,24 +114,29 @@ export default async function TeamProgressPage({
             // day/time — show the planned weekly schedule so it's clear the team
             // DOES have practices, and where check-in will appear.
             <div className="card">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Planned practices</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Practices</div>
               <p className="mt-0.5 text-xs text-slate-500">
-                From the season and this team&apos;s day &amp; time. Check-in opens for each date once the schedule is generated on the Schedule page.
+                Your team&apos;s practice days from the season and its day &amp; time. Tap <strong>Check in</strong> to open a practice and mark players present or absent.
               </p>
               <ul className="mt-2 divide-y divide-slate-100">
                 {plannedDates.map((p) => (
-                  <li key={p.week} className="flex items-center justify-between py-2 text-sm">
+                  <li key={p.week} className="flex items-center justify-between gap-2 py-2 text-sm">
                     <span className="text-slate-700">
                       <span className="mr-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500">Wk {p.week}</span>
                       {weekdayShort(p.date)}
+                      <span className="ml-2 text-xs text-slate-400">{team.startTime ? formatTime12(team.startTime) : "time TBA"}</span>
                     </span>
-                    <span className="text-xs text-slate-500">{team.startTime ? formatTime12(team.startTime) : "time TBA"}</span>
+                    <form method="POST" action="/api/console/schedule">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="ensurePractice" />
+                      <input type="hidden" name="teamId" value={teamId} />
+                      <input type="hidden" name="date" value={p.date.toISOString().slice(0, 10)} />
+                      <input type="hidden" name="returnTo" value={`/console/teams/${teamId}/progress`} />
+                      <button className="shrink-0 rounded-full bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white active:bg-brand-700">Check in →</button>
+                    </form>
                   </li>
                 ))}
               </ul>
-              <Link href="/console/schedule" className="mt-3 inline-block text-xs font-semibold text-brand-600 hover:underline">
-                Generate the schedule →
-              </Link>
             </div>
           ) : (
             <div className="card text-sm text-slate-500">

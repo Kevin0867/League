@@ -301,6 +301,70 @@ export async function POST(req: Request) {
     return back("?ok=relocate");
   }
 
+  // Make a planned practice real so a coach can check players in — the one-tap
+  // path from the team's "Check players in" list. Ensures a PRACTICE session
+  // exists for the given date, generating the whole season the first time (no
+  // notification — the coach triggered it), then lands on that session's
+  // attendance screen. Admins for any team; a coach for their own team.
+  if (op === "ensurePractice") {
+    if (!actor) return back("?err=auth");
+    const teamId = String(formData.get("teamId") ?? "");
+    const dateStr = String(formData.get("date") ?? "").trim();
+    const team = await prisma.team.findUnique({ where: { id: teamId }, include: { season: { select: { startDate: true } } } });
+    if (!team) return back("?err=team");
+    if (!can(actor.roles, "manageScheduling")) {
+      const mine = await coachedTeamIdsForUser(actor.userId);
+      if (!mine.includes(teamId)) return back("?err=notyourteam");
+    }
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+    if (!m) return back("?err=adddate");
+    const target = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));
+    const dayStart = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate()));
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    const endTime = addMinutes(team.startTime ?? "17:00", DEFAULT_DURATION_MIN);
+
+    // First check-in for this team: generate the season so the schedule is whole
+    // (never a partial one-off set), quietly — no coach email.
+    const existingCount = await prisma.session.count({ where: { type: "PRACTICE", teams: { some: { teamId } } } });
+    if (existingCount === 0 && team.dayOfWeek && team.startTime && team.season?.startDate) {
+      const blackouts = (await prisma.blackoutDate.findMany({ where: { OR: [{ facilityId: null }, { facilityId: team.facilityId }] } })).map((b) => b.date);
+      const dates = generatePracticeDates(team.season.startDate, team.dayOfWeek, PRACTICE_WEEKS, blackouts);
+      for (let i = 0; i < dates.length; i++) {
+        await prisma.session.create({
+          data: {
+            seasonId: team.seasonId, type: "PRACTICE", facilityId: team.facilityId,
+            date: dates[i], startTime: team.startTime, endTime, courtCount: DEFAULT_COURTS,
+            status: "SCHEDULED", weekNumber: i + 1,
+            teams: { create: { teamId } },
+            ...(team.coachId ? { coaches: { create: { coachId: team.coachId, role: "PRIMARY" } } } : {}),
+          },
+        });
+      }
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "GENERATE_SCHEDULE", summary: `Generated ${dates.length} practices (check-in)` });
+    }
+
+    // Find the session for the requested day; create a single one if it's still
+    // missing (e.g. a make-up date outside the six generated weeks).
+    let sess = await prisma.session.findFirst({
+      where: { type: "PRACTICE", teams: { some: { teamId } }, date: { gte: dayStart, lt: dayEnd } },
+      select: { id: true },
+    });
+    if (!sess) {
+      const created = await prisma.session.create({
+        data: {
+          seasonId: team.seasonId, type: "PRACTICE", facilityId: team.facilityId,
+          date: target, startTime: team.startTime ?? "17:00", endTime, courtCount: DEFAULT_COURTS,
+          status: "SCHEDULED",
+          teams: { create: { teamId } },
+          ...(team.coachId ? { coaches: { create: { coachId: team.coachId, role: "PRIMARY" } } } : {}),
+        },
+        select: { id: true },
+      });
+      sess = created;
+    }
+    return NextResponse.redirect(new URL(`/console/schedule/${sess.id}#attendance`, origin), 303);
+  }
+
   // Add a single one-off practice for a team and (by default) notify the team.
   // Complements bulk "generate" — for a make-up session or an extra practice.
   // Admins may add for any team; a coach may add ONLY for a team they head or
