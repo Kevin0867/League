@@ -264,6 +264,7 @@ export default async function EditCoachPage({
           backgroundCheck: !!coach?.backgroundCheckDate,
           backgroundCheckDate: coach?.backgroundCheckDate ? new Date(coach.backgroundCheckDate).toISOString().slice(0, 10) : "",
           backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
+          allowConcurrentTeams: coach?.allowConcurrentTeams ?? false,
         }}
         pay={{
           seasonRate: coach?.seasonPayCents != null ? (coach.seasonPayCents / 100).toFixed(2) : "",

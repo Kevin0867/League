@@ -102,6 +102,7 @@ export default async function CoachProfilePage({
           backgroundCheck: !!coach?.backgroundCheckDate,
           backgroundCheckDate: coach?.backgroundCheckDate ? new Date(coach.backgroundCheckDate).toISOString().slice(0, 10) : "",
           backgroundCheckCompany: coach?.backgroundCheckCompany ?? "",
+          allowConcurrentTeams: coach?.allowConcurrentTeams ?? false,
         }}
       />
       )}

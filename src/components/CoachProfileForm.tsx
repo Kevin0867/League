@@ -40,6 +40,7 @@ export function CoachProfileForm({
     backgroundCheck: boolean;
     backgroundCheckDate: string;
     backgroundCheckCompany: string;
+    allowConcurrentTeams: boolean;
   };
   /** Admin-only compensation. Present only in the admin edit context, so a
    *  coach editing their own profile never sees (or can post) pay fields. */
@@ -198,6 +199,22 @@ export function CoachProfileForm({
           </div>
         )}
       </section>
+
+      {/* Scheduling — admin only. Lets an admin clear a coach to hold two teams
+          in the same day/time slot (the assignment clash check is skipped). */}
+      {editableIdentity && (
+        <section className="card space-y-3">
+          <h2 className="font-semibold text-slate-900">Scheduling</h2>
+          <input type="hidden" name="concurrentVisible" value="1" />
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input type="checkbox" name="allowConcurrentTeams" value="on" defaultChecked={initial.allowConcurrentTeams} className="mt-0.5 accent-brand-600" />
+            <span>
+              Allow coaching concurrent teams (same day &amp; time)
+              <span className="mt-0.5 block text-xs text-slate-500">Skips the &ldquo;already coaches another team at this time&rdquo; check for this coach — e.g. two groups sharing a court in one slot.</span>
+            </span>
+          </label>
+        </section>
+      )}
 
       {pay && (
         <section className="card space-y-4 ring-1 ring-amber-200 bg-amber-50/40">
