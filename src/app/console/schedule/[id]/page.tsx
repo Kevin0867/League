@@ -10,6 +10,7 @@ import { CANCEL_REASON } from "@/lib/enums";
 import { cancellationOutcome } from "@/lib/domain/schedule";
 import { formatTimeRange12, formatDate } from "@/lib/time";
 import { PendingSubmit, ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { TeamUpdateComposer } from "@/components/TeamUpdateComposer";
 
 export const dynamic = "force-dynamic";
 
@@ -317,6 +318,27 @@ export default async function SessionDetail({
             </div>
           )}
         </form>
+
+        {/* Practice recap — a one-tap note to the whole team (players + parents)
+            about tonight's practice: what you worked on + homework before next
+            time. One composer per team on the session. */}
+        {s.teams.length > 0 && s.status !== "CANCELLED" && (
+          <div className="lg:col-span-2 space-y-3">
+            {s.teams.map((t) => (
+              <div key={t.teamId} className="card">
+                <h2 className="font-semibold text-slate-900">Message {s.teams.length > 1 ? t.team.name : "the team"} about this practice</h2>
+                <p className="mb-3 mt-0.5 text-sm text-slate-500">A quick recap to every player &amp; parent — what you worked on tonight and what to practice before next time.</p>
+                <TeamUpdateComposer
+                  ticket={ticket}
+                  teamId={t.teamId}
+                  teamName={t.team.name}
+                  placeholder={"e.g. Great practice tonight! We worked on serves, returns, and dinking. Before next practice, please have your player work on their third-shot drop and footwork."}
+                  submitLabel="Send recap to team"
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Coach-editable practice controls — the team's own coach can reschedule
             or remove this practice; admins are alerted automatically. */}
