@@ -885,9 +885,9 @@ model RateConfig {
   tankPriceCents    Int      @default(2500)
 
   // À la carte split (§0, §11) — court cost off the top, then split net
-  alaCoachSharePct     Float @default(0.5)  // assigned coach teaches
+  alaCoachSharePct     Float @default(0.6)  // assigned coach teaches (same as director-teaches)
   alaDirectorSharePct  Float @default(0.1)
-  alaPurePct           Float @default(0.4)
+  alaPurePct           Float @default(0.3)
   // Director-teaches variant: coach line moves to director (70% total), PURE 30%
   alaDirCoachSharePct  Float @default(0.6)
   alaDirDirectorSharePct Float @default(0.1)
