@@ -13,7 +13,7 @@ import { encryptField } from "./crypto";
 // email, phone) are therefore protected by at-rest encryption + access control,
 // not this layer. `address` is safe — it's displayed, never queried.
 export const ENCRYPTED_FIELDS: Record<string, string[]> = {
-  person: ["address", "emergencyName", "emergencyPhone", "emergencyRelation", "medicalNotes"],
+  person: ["address", "emergencyName", "emergencyPhone", "emergencyRelation", "emergencyName2", "emergencyPhone2", "emergencyRelation2", "medicalNotes"],
   registration: ["medicalDisclosures"],
 };
 

@@ -80,6 +80,9 @@ export async function POST(req: Request) {
       emergencyName: clean(formData.get("emergencyName")),
       emergencyPhone: clean(formData.get("emergencyPhone")),
       emergencyRelation: clean(formData.get("emergencyRelation")),
+      emergencyName2: clean(formData.get("emergencyName2")),
+      emergencyPhone2: clean(formData.get("emergencyPhone2")),
+      emergencyRelation2: clean(formData.get("emergencyRelation2")),
       medicalNotes: clean(formData.get("medicalNotes")),
     },
   });

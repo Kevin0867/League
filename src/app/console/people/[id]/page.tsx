@@ -42,6 +42,9 @@ export default async function PersonDetail({
   const emergencyName = decryptField(person.emergencyName);
   const emergencyPhone = decryptField(person.emergencyPhone);
   const emergencyRelation = decryptField(person.emergencyRelation);
+  const emergencyName2 = decryptField(person.emergencyName2);
+  const emergencyPhone2 = decryptField(person.emergencyPhone2);
+  const emergencyRelation2 = decryptField(person.emergencyRelation2);
   const medicalNotes = decryptField(person.medicalNotes);
 
   return (
@@ -78,10 +81,17 @@ export default async function PersonDetail({
           </div>
           <div className="rounded-lg border-l-4 border-brand-300 bg-slate-50 p-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Protected — encrypted at rest</p>
+            <p className="mb-1 text-xs font-medium text-slate-500">Emergency contact 1</p>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div><label className="label">Emergency contact name</label><input name="emergencyName" className="input" defaultValue={emergencyName ?? ""} /></div>
+              <div><label className="label">Name</label><input name="emergencyName" className="input" defaultValue={emergencyName ?? ""} /></div>
               <div><label className="label">Relationship</label><input name="emergencyRelation" className="input" defaultValue={emergencyRelation ?? ""} /></div>
-              <div><label className="label">Emergency phone</label><input name="emergencyPhone" type="tel" className="input" defaultValue={emergencyPhone ?? ""} /></div>
+              <div><label className="label">Phone</label><input name="emergencyPhone" type="tel" className="input" defaultValue={emergencyPhone ?? ""} /></div>
+            </div>
+            <p className="mb-1 mt-3 text-xs font-medium text-slate-500">Emergency contact 2</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div><label className="label">Name</label><input name="emergencyName2" className="input" defaultValue={emergencyName2 ?? ""} /></div>
+              <div><label className="label">Relationship</label><input name="emergencyRelation2" className="input" defaultValue={emergencyRelation2 ?? ""} /></div>
+              <div><label className="label">Phone</label><input name="emergencyPhone2" type="tel" className="input" defaultValue={emergencyPhone2 ?? ""} /></div>
             </div>
             <div className="mt-3"><label className="label">Medical disclosures</label><textarea name="medicalNotes" rows={2} className="input" defaultValue={medicalNotes ?? ""} /></div>
           </div>
@@ -109,12 +119,22 @@ export default async function PersonDetail({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <h3 className="text-xs font-medium uppercase tracking-wide text-slate-400">Emergency contact</h3>
-              {emergencyName ? (
-                <p className="mt-1 text-sm text-slate-800">
-                  {emergencyName}{emergencyRelation ? ` (${emergencyRelation})` : ""}<br />
-                  <span className="text-slate-500">{emergencyPhone ?? "—"}</span>
-                </p>
+              <h3 className="text-xs font-medium uppercase tracking-wide text-slate-400">Emergency contacts</h3>
+              {emergencyName || emergencyName2 ? (
+                <div className="mt-1 space-y-2">
+                  {emergencyName && (
+                    <p className="text-sm text-slate-800">
+                      {emergencyName}{emergencyRelation ? ` (${emergencyRelation})` : ""}<br />
+                      <span className="text-slate-500">{emergencyPhone ?? "—"}</span>
+                    </p>
+                  )}
+                  {emergencyName2 && (
+                    <p className="text-sm text-slate-800">
+                      {emergencyName2}{emergencyRelation2 ? ` (${emergencyRelation2})` : ""}<br />
+                      <span className="text-slate-500">{emergencyPhone2 ?? "—"}</span>
+                    </p>
+                  )}
+                </div>
               ) : <p className="mt-1 text-sm text-slate-400">Not on file.</p>}
             </div>
             <div>

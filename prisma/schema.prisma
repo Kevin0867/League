@@ -182,10 +182,13 @@ model Person {
   /// Stripe customer id carried over from the source enrollment system
   stripeCustomerId   String?
 
-  // Emergency contact
+  // Emergency contacts (up to two — a primary and a backup).
   emergencyName      String?
   emergencyPhone     String?
   emergencyRelation  String?
+  emergencyName2     String?
+  emergencyPhone2    String?
+  emergencyRelation2 String?
 
   // DUPR (Dynamic Universal Pickleball Rating)
   duprId             String?

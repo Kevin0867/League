@@ -53,6 +53,9 @@ export async function POST(req: Request) {
         emergencyName: encryptField(g("emergencyName") || null),
         emergencyPhone: encryptField(g("emergencyPhone") || null),
         emergencyRelation: encryptField(g("emergencyRelation") || null),
+        emergencyName2: encryptField(g("emergencyName2") || null),
+        emergencyPhone2: encryptField(g("emergencyPhone2") || null),
+        emergencyRelation2: encryptField(g("emergencyRelation2") || null),
         medicalNotes: encryptField(g("medicalNotes") || null),
       },
     });
