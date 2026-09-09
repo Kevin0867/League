@@ -56,6 +56,7 @@ export default async function MessagesPage({
 
   const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });
 
+  const msgQuery = (sp.q ?? "").trim();
   const [teams, divisions, coaches, people, messages] = await Promise.all([
     // Coaches can only address their own team.
     prisma.team.findMany({
@@ -67,8 +68,11 @@ export default async function MessagesPage({
     prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } }),
     prisma.person.findMany({ select: { id: true, firstName: true, lastName: true }, orderBy: { lastName: "asc" }, take: 500 }),
     prisma.message.findMany({
+      where: msgQuery
+        ? { OR: [{ subject: { contains: msgQuery, mode: "insensitive" } }, { body: { contains: msgQuery, mode: "insensitive" } }] }
+        : {},
       orderBy: { sentAt: "desc" },
-      take: 25,
+      take: msgQuery ? 100 : 25,
       include: { recipients: { select: { failedReason: true } }, sender: { include: { person: true } } },
     }),
   ]);
@@ -145,9 +149,18 @@ export default async function MessagesPage({
 
         <div className="space-y-6">
           <div className="card">
-            <h2 className="mb-3 font-semibold text-slate-900">Recent messages</h2>
+            <h2 className="mb-3 font-semibold text-slate-900">{msgQuery ? "Message search" : "Recent messages"}</h2>
+            {/* Search every broadcast/announcement by subject or body. */}
+            <form method="GET" action="/console/messages" className="mb-3 flex gap-2">
+              <input type="search" name="q" defaultValue={msgQuery} placeholder="Search sent messages…" className="input flex-1" aria-label="Search sent messages" />
+              <button className="btn-secondary text-sm">Search</button>
+              {msgQuery && <Link href="/console/messages" className="btn-back">Clear</Link>}
+            </form>
+            {msgQuery && (
+              <p className="mb-2 text-xs text-slate-500">{messages.length} result{messages.length === 1 ? "" : "s"} for &ldquo;{msgQuery}&rdquo;{messages.length === 100 ? " (first 100)" : ""}.</p>
+            )}
             {messages.length === 0 ? (
-              <p className="text-sm text-slate-400">No messages sent yet.</p>
+              <p className="text-sm text-slate-400">{msgQuery ? "No messages match that search." : "No messages sent yet."}</p>
             ) : (
               <ul className="divide-y divide-slate-100 text-sm">
                 {messages.map((m) => {

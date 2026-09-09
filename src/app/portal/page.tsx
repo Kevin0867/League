@@ -121,6 +121,8 @@ export default async function PortalHome({
   // Which household member is on each fixture's team?
   const memberByTeam = new Map(memberships.map((m) => [m.teamId, m.person]));
 
+  // Search announcements by subject or body when a term is present.
+  const annQ = (sp.q ?? "").trim();
   const inbox = peopleIds.length
     ? await prisma.messageRecipient.findMany({
         // Only in-app announcements belong in the portal inbox; email-only
@@ -132,11 +134,12 @@ export default async function PortalHome({
           message: {
             channels: { contains: "IN_APP" },
             OR: [{ triggerType: null }, { triggerType: { notIn: [...STAFF_ONLY_TRIGGERS] } }],
+            ...(annQ ? { AND: [{ OR: [{ subject: { contains: annQ, mode: "insensitive" } }, { body: { contains: annQ, mode: "insensitive" } }] }] } : {}),
           },
         },
         include: { message: true },
         orderBy: { message: { sentAt: "desc" } },
-        take: 20,
+        take: annQ ? 100 : 20,
       })
     : [];
   const unread = inbox.filter((r) => !r.readAt).length;
@@ -383,8 +386,15 @@ export default async function PortalHome({
             </div>
           )}
         </div>
+        {/* Search announcements by subject or text. */}
+        <form method="GET" action="/portal" className="mb-2 flex gap-2">
+          <input type="search" name="q" defaultValue={annQ} placeholder="Search announcements…" className="input flex-1" aria-label="Search announcements" />
+          <button className="btn-secondary text-sm">Search</button>
+          {annQ && <Link href="/portal" className="btn-back">Clear</Link>}
+        </form>
+        {annQ && <p className="mb-2 text-xs text-slate-500">{inbox.length} result{inbox.length === 1 ? "" : "s"} for &ldquo;{annQ}&rdquo;.</p>}
         {inbox.length === 0 ? (
-          <div className="card text-sm text-slate-500">No messages yet.</div>
+          <div className="card text-sm text-slate-500">{annQ ? "No announcements match that search." : "No messages yet."}</div>
         ) : (
           <div className="space-y-2">
             {inbox.map((r) => {
