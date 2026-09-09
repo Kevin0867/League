@@ -114,7 +114,10 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Welcome, {firstName}</h1>
-        <p className="text-slate-500">Your teams, sessions, and earnings.</p>
+        <p className="text-slate-500">
+          This is your coach home. From here you check players in at practice, message your teams and keep progress notes,
+          and see what you&apos;ve earned. Your teams are at the bottom — tap one to open it.
+        </p>
       </div>
 
       {/* Quick actions — the whole job in four big buttons. When a coach has one
