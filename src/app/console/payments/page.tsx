@@ -271,6 +271,39 @@ export default async function PaymentsPage({
   });
   const importedTotal = imported.reduce((s, p) => s + p.amountCents, 0);
 
+  // Players Stripe named on a CSV charge that we couldn't find here (a spelling
+  // mismatch between the Stripe line item and the person record). Parse them back
+  // from the reconcile result and, for each, offer a best-guess match by last
+  // name so the admin can jump straight to the right record and fix the spelling
+  // (or confirm it's a genuinely missing player).
+  type CsvUnmatched = { who: string; amountCents: number; suggestions: { id: string; name: string }[] };
+  let csvUnmatched: CsvUnmatched[] = [];
+  if (sp.csvunmatched) {
+    try {
+      const parsed = JSON.parse(sp.csvunmatched) as Array<{ w: string; c: number }>;
+      // One query for all candidate last names, then match in memory.
+      const lastNames = [...new Set(parsed.map((u) => (u.w || "").trim().split(/\s+/).pop() ?? "").filter((n) => n.length > 1))];
+      const near = lastNames.length
+        ? await prisma.person.findMany({
+            where: { OR: lastNames.map((ln) => ({ lastName: { equals: ln, mode: "insensitive" as const } })) },
+            select: { id: true, firstName: true, lastName: true },
+            take: 200,
+          })
+        : [];
+      csvUnmatched = parsed.map((u) => {
+        const who = (u.w || "").trim();
+        const last = who.split(/\s+/).pop()?.toLowerCase() ?? "";
+        const suggestions = near
+          .filter((p) => p.lastName.toLowerCase() === last)
+          .slice(0, 3)
+          .map((p) => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }));
+        return { who: who || "(no name)", amountCents: u.c ?? 0, suggestions };
+      });
+    } catch {
+      csvUnmatched = [];
+    }
+  }
+
   // Replies from families who told us why they can't pay by the deadline (from
   // the pay page). Most recent first — a call list for staff follow-up.
   const payerResponses = await prisma.auditLog.findMany({
@@ -417,6 +450,41 @@ export default async function PaymentsPage({
             {sp.csverrs && sp.csverrs !== "0" && <li className="text-rose-700">• Rows with errors: <strong>{sp.csverrs}</strong></li>}
           </ul>
           <p className="mt-1.5 text-xs text-emerald-900/70">Matches each charge to its player by the name on the Stripe line item, so a payment lands on the right person even when billed to a parent. Idempotent — paid stays paid and plan counts only move forward, so re-uploading never double-counts.</p>
+
+          {csvUnmatched.length > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900">
+              <div className="text-sm font-semibold">
+                {csvUnmatched.length} paid {csvUnmatched.length === 1 ? "charge names a player" : "charges name players"} we couldn&apos;t find here — fix the spelling and re-upload
+              </div>
+              <p className="mt-0.5 text-xs text-amber-800">
+                Stripe has these names on the charge, but no player record matches. Open the likely record below and set the name to match Stripe exactly (or add the player if they&apos;re genuinely missing), then upload the CSV again — it will mark them paid without touching anything already recorded.
+              </p>
+              <ul className="mt-2 divide-y divide-amber-200/70 text-sm">
+                {csvUnmatched.map((u, i) => (
+                  <li key={`${u.who}-${i}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5">
+                    <span className="font-medium text-amber-900">
+                      &ldquo;{u.who}&rdquo; <span className="font-normal text-amber-700">· {formatCents(u.amountCents)}</span>
+                    </span>
+                    <span className="text-xs">
+                      {u.suggestions.length > 0 ? (
+                        <>
+                          Likely:{" "}
+                          {u.suggestions.map((s, j) => (
+                            <span key={s.id}>
+                              {j > 0 ? ", " : ""}
+                              <Link href={`/console/people/${s.id}`} className="font-medium underline hover:text-amber-950">{s.name}</Link>
+                            </span>
+                          ))}
+                        </>
+                      ) : (
+                        <span className="text-amber-700">No close match — this player may need to be added.</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
       {sp.csvundo && (

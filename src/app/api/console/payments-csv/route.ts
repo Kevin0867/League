@@ -59,6 +59,15 @@ export async function POST(req: Request) {
       params.set("csverrs", String(r.errors));
       if (r.problems[0]) params.set("csvprob", `${r.problems[0].note} (${r.problems[0].chargeId})`.slice(0, 200));
     }
+    // Pass back the specific players Stripe named that we couldn't find here, so
+    // the page can show WHICH ones need a spelling fix (not just the count) with a
+    // best-guess of who they are. Compact + capped so the redirect URL stays sane.
+    if (r.unmatched.length) {
+      params.set(
+        "csvunmatched",
+        JSON.stringify(r.unmatched.slice(0, 25).map((u) => ({ w: u.who, c: u.amountCents }))).slice(0, 1800),
+      );
+    }
     return back(`?${params.toString()}`);
   } catch (e) {
     console.error("CSV reconcile failed", e);
