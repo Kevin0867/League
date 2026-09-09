@@ -7,6 +7,7 @@ import { PendingSubmit } from "@/components/ConfirmSubmit";
 import { RecipientChecklist } from "@/components/RecipientChecklist";
 import { SpeechToTextArea } from "@/components/SpeechToTextArea";
 import { formatStamp, BUSINESS_TZ } from "@/lib/time";
+import { decryptField } from "@/lib/crypto";
 import {
   COACHING_WEEKS,
   COACHING_WEEK_COUNT,
@@ -26,7 +27,7 @@ const OK: Record<string, string> = {
   saved: "Note saved — the parent was NOT notified. Use “Send report” below to send it to them.",
   sent: "Progress report sent to the parent/guardian.",
   sentsim: "Report generated — the email/SMS provider isn't configured, so nothing was actually delivered.",
-  contact: "Contact info saved.",
+  contact: "Player details saved.",
 };
 const ERR: Record<string, string> = {
   auth: "You can only manage progress notes for your own teams.",
@@ -66,6 +67,14 @@ export default async function StudentProgressPage({
   if (!member) redirect(`/console/teams/${teamId}?err=notfound`);
 
   const student = member.person;
+  // These fields are encrypted at rest — decrypt for the coach to view/edit their
+  // own player's details. Access is already scoped to this team's roster above.
+  const emergencyName = decryptField(student.emergencyName);
+  const emergencyPhone = decryptField(student.emergencyPhone);
+  const emergencyRelation = decryptField(student.emergencyRelation);
+  const address = decryptField(student.address);
+  const medicalNotes = decryptField(student.medicalNotes);
+  const dobInput = student.dob ? new Date(student.dob).toISOString().slice(0, 10) : "";
   const byWeek = new Map(notes.map((n) => [n.week, n]));
   const { slots: weekSlots } = await teamWeekSchedule(team, team.seasonId, COACHING_WEEK_COUNT);
   const dateByWeek = new Map(weekSlots.map((s) => [s.week, s.date]));
@@ -94,19 +103,21 @@ export default async function StudentProgressPage({
         </p>
       )}
 
-      {/* Contact info — coaches can fix a player's or parent's email/phone here.
+      {/* Player details — the full profile a coach can keep current: contact,
+          emergency contact, and any medical notes that matter courtside.
           Collapsed by default so the week notes stay the focus. */}
       <details className="card">
         <summary className="cursor-pointer list-none font-semibold text-slate-900">
-          Contact info
-          <span className="ml-2 text-sm font-normal text-slate-400">— update email &amp; mobile</span>
+          Player details &amp; emergency contact
+          <span className="ml-2 text-sm font-normal text-slate-400">— contact, emergency, medical</span>
         </summary>
-        <form method="POST" action="/api/console/coach-contact" className="mt-4 space-y-4">
+        <form method="POST" action="/api/console/coach-contact" className="mt-4 space-y-5">
           <input type="hidden" name="ticket" value={ticket} />
           <input type="hidden" name="teamId" value={teamId} />
           <input type="hidden" name="personId" value={personId} />
+
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Player</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Player contact</div>
             <div className="mt-2 grid gap-3 sm:grid-cols-2">
               <div><label className="label">First name</label><input name="firstName" defaultValue={student.firstName} className="input" /></div>
               <div><label className="label">Last name</label><input name="lastName" defaultValue={student.lastName} className="input" /></div>
@@ -114,8 +125,27 @@ export default async function StudentProgressPage({
               <div><label className="label">Mobile</label><input name="phone" type="tel" defaultValue={student.phone ?? ""} className="input" /></div>
               <div><label className="label">Additional email</label><input name="email2" type="email" defaultValue={student.email2 ?? ""} className="input" /></div>
               <div><label className="label">Additional email</label><input name="email3" type="email" defaultValue={student.email3 ?? ""} className="input" /></div>
+              <div className="sm:col-span-2"><label className="label">Address</label><input name="address" defaultValue={address ?? ""} className="input" /></div>
+              <div><label className="label">Date of birth</label><input name="dob" type="date" defaultValue={dobInput} className="input" /></div>
+              <div><label className="label">Gender</label><input name="gender" defaultValue={student.gender ?? ""} className="input" /></div>
             </div>
           </div>
+
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Emergency contact</div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              <div><label className="label">Name</label><input name="emergencyName" defaultValue={emergencyName ?? ""} className="input" placeholder="e.g. Jane Doe" /></div>
+              <div><label className="label">Relationship</label><input name="emergencyRelation" defaultValue={emergencyRelation ?? ""} className="input" placeholder="e.g. Mother" /></div>
+              <div><label className="label">Phone</label><input name="emergencyPhone" type="tel" defaultValue={emergencyPhone ?? ""} className="input" /></div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Medical notes</div>
+            <p className="mt-1 text-xs text-slate-400">Allergies, conditions, or anything to know at practice. Kept private to staff.</p>
+            <textarea name="medicalNotes" rows={3} defaultValue={medicalNotes ?? ""} className="input mt-2 w-full" placeholder="e.g. Peanut allergy — carries an EpiPen. Mild asthma." />
+          </div>
+
           {student.guardian ? (
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -130,7 +160,7 @@ export default async function StudentProgressPage({
             <p className="text-xs text-slate-400">No parent/guardian is linked to this player.</p>
           )}
           <div className="flex justify-end">
-            <button className="btn-primary text-sm">Save contact</button>
+            <button className="btn-primary text-sm">Save details</button>
           </div>
         </form>
       </details>

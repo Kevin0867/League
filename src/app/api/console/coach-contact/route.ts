@@ -5,9 +5,10 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import type { Role } from "@/lib/enums";
 
-// Coach-editable player/parent CONTACT info. A coach can fix a player's or their
-// parent's name, emails, and phone from the player's page — but only for players
-// on a team they coach, and only contact fields (never fees, status, or roles).
+// Coach-editable player details. A coach can keep a player's profile current
+// from the player's page — contact (name, emails, phone, address, DOB, gender),
+// emergency contact, medical notes, and the parent/guardian's contact — but only
+// for players on a team they coach, and never fees, status, roles, or waivers.
 // Admins may edit anyone. Everything else stays on the admin registration record.
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,10 @@ export async function POST(req: Request) {
 
   const firstName = clean(formData.get("firstName"));
   const lastName = clean(formData.get("lastName"));
+  // Date of birth: anchor to UTC noon so the stored day matches what was entered
+  // regardless of timezone (a bare date parsed as UTC midnight reads a day early).
+  const dobRaw = clean(formData.get("dob"));
+  const dob = dobRaw && /^\d{4}-\d{2}-\d{2}$/.test(dobRaw) ? new Date(`${dobRaw}T12:00:00Z`) : null;
   await prisma.person.update({
     where: { id: personId },
     data: {
@@ -67,6 +72,15 @@ export async function POST(req: Request) {
       email2: cleanEmail(formData.get("email2")),
       email3: cleanEmail(formData.get("email3")),
       phone: clean(formData.get("phone")),
+      // Demographics + emergency + medical. The prisma encryption extension
+      // transparently encrypts address / emergency* / medicalNotes on write.
+      address: clean(formData.get("address")),
+      dob,
+      gender: clean(formData.get("gender")),
+      emergencyName: clean(formData.get("emergencyName")),
+      emergencyPhone: clean(formData.get("emergencyPhone")),
+      emergencyRelation: clean(formData.get("emergencyRelation")),
+      medicalNotes: clean(formData.get("medicalNotes")),
     },
   });
 
@@ -81,6 +95,6 @@ export async function POST(req: Request) {
     });
   }
 
-  await audit({ actorId: actor!.userId, entityType: "Person", entityId: personId, action: "contact.update", summary: "Coach updated player/parent contact" });
+  await audit({ actorId: actor!.userId, entityType: "Person", entityId: personId, action: "contact.update", summary: "Coach updated player details (contact / emergency / medical)" });
   return back("?ok=contact");
 }
