@@ -6,7 +6,7 @@ import { formatCents } from "@/lib/money";
 import { mintConsoleTicket } from "@/lib/auth";
 import { NOTICE_DAYS } from "@/lib/domain/availability";
 import { MessageFrame } from "@/components/MessageFrame";
-import { formatTime12, formatDate, formatStamp } from "@/lib/time";
+import { formatTime12, formatDate, formatStamp, formatSessionDay, phoenixDateInput } from "@/lib/time";
 import { STAFF_ONLY_TRIGGERS } from "@/lib/messaging";
 import { Notice } from "@/components/Notice";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
@@ -81,6 +81,26 @@ export default async function PortalHome({
 
   // Upcoming league fixtures for the household's teams (§14 — 7-day notice + 48h).
   const teamIds = memberships.map((m) => m.teamId);
+
+  // The next practice date per team, for a glance on each team card.
+  const nextPracticeByTeam = new Map<string, { date: Date; startTime: string }>();
+  if (teamIds.length) {
+    const todayStr = phoenixDateInput(new Date());
+    const ups = await prisma.session.findMany({
+      where: { teams: { some: { teamId: { in: teamIds } } }, type: "PRACTICE", status: { in: ["SCHEDULED", "RESCHEDULED"] } },
+      orderBy: { date: "asc" },
+      select: { date: true, startTime: true, teams: { select: { teamId: true } } },
+    });
+    for (const s of ups) {
+      if (phoenixDateInput(s.date) < todayStr) continue;
+      for (const t of s.teams) {
+        if (teamIds.includes(t.teamId) && !nextPracticeByTeam.has(t.teamId)) {
+          nextPracticeByTeam.set(t.teamId, { date: s.date, startTime: s.startTime });
+        }
+      }
+    }
+  }
+
   const now = new Date();
   const horizon = new Date(now.getTime() + NOTICE_DAYS * 24 * 60 * 60 * 1000);
   const fixtures = teamIds.length
@@ -321,11 +341,16 @@ export default async function PortalHome({
                   </Link>
                 </div>
                 <dl className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-600">
-                  <div><dt className="text-xs text-slate-400">Coach</dt><dd>{m.team.coach ? `${m.team.coach.person.firstName} ${m.team.coach.person.lastName}` : "TBA"}</dd></div>
-                  <div><dt className="text-xs text-slate-400">Location</dt><dd>{m.team.facility?.name ?? "TBA"}</dd></div>
-                  <div><dt className="text-xs text-slate-400">Day / time</dt><dd>{m.team.dayOfWeek ?? "TBA"} {formatTime12(m.team.startTime)}</dd></div>
-                  <div><dt className="text-xs text-slate-400">Player</dt><dd>{m.person.firstName}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Coach</dt><dd>{m.team.coach ? `${m.team.coach.person.firstName} ${m.team.coach.person.lastName}` : "TBA"}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Location</dt><dd>{m.team.facility?.name ?? "TBA"}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Day / time</dt><dd>{m.team.dayOfWeek ?? "TBA"} {formatTime12(m.team.startTime)}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Player</dt><dd>{m.person.firstName}</dd></div>
                 </dl>
+                {nextPracticeByTeam.get(m.teamId) && (
+                  <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
+                    <span className="font-semibold">Next practice:</span> {formatSessionDay(nextPracticeByTeam.get(m.teamId)!.date, "long")} · {formatTime12(nextPracticeByTeam.get(m.teamId)!.startTime)}
+                  </div>
+                )}
               </div>
             ))}
           </div>
