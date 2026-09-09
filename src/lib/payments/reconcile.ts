@@ -396,12 +396,21 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
         if (!matched) {
           const email = charge.billing_details?.email ?? charge.receipt_email ?? pi?.receipt_email ?? null;
           if (email) {
+            const emailEq = { equals: email, mode: "insensitive" as const };
             const cands = await prisma.payment.findMany({
               where: {
                 direction: "IN",
                 status: { in: ["REQUESTED", "PENDING"] },
                 amountCents: charge.amount,
-                party: { email: { equals: email, mode: "insensitive" } },
+                // The payer's email may belong to the player OR to their parent/
+                // guardian (a parent almost always pays for a minor). Match either,
+                // so a parent-paid fee still lands on the child's request.
+                OR: [
+                  { party: { email: emailEq } },
+                  { party: { email2: emailEq } },
+                  { party: { email3: emailEq } },
+                  { party: { guardian: { email: emailEq } } },
+                ],
               },
               take: 2,
             });
@@ -463,7 +472,16 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
           charge.receipt_email ??
           (pi?.receipt_email ?? null);
         const person = email
-          ? await prisma.person.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } })
+          ? await prisma.person.findFirst({
+              where: {
+                OR: [
+                  { email: { equals: email, mode: "insensitive" } },
+                  { email2: { equals: email, mode: "insensitive" } },
+                  { email3: { equals: email, mode: "insensitive" } },
+                ],
+              },
+              select: { id: true },
+            })
           : null;
 
         const created = await prisma.payment.create({
