@@ -360,7 +360,7 @@ export default async function SchedulePage({
                 <td className="text-slate-500">{formatTimeRange12(s.startTime, s.endTime)}</td>
                 <td><StatusBadge status={s.status} /></td>
                 <td className="text-right">
-                  <Link href={`/console/schedule/${s.id}`} className="text-xs font-medium text-brand-600 hover:underline">
+                  <Link href={`/console/schedule/${s.id}`} className="btn-link text-xs">
                     open →
                   </Link>
                 </td>

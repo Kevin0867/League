@@ -96,7 +96,7 @@ export default async function TeamProgressPage({
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
-        <Link href={`/console/teams/${teamId}`} className="text-sm text-brand-600 hover:underline">← {team.name}</Link>
+        <Link href={`/console/teams/${teamId}`} className="btn-back">← {team.name}</Link>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">{team.name}</h1>
         <p className="text-sm text-slate-500">Check players in, message your team, and keep notes — all here.</p>
         <p className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">

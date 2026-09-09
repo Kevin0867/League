@@ -137,9 +137,9 @@ export default async function SeasonCalendarPage({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
-          <Link href="/console/schedule" className="text-brand-600 hover:underline">Practice schedule →</Link>
-          <Link href="/console/league" className="text-brand-600 hover:underline">League matches →</Link>
-          <Link href="/console/championship" className="text-brand-600 hover:underline">Championship →</Link>
+          <Link href="/console/schedule" className="btn-link">Practice schedule →</Link>
+          <Link href="/console/league" className="btn-link">League matches →</Link>
+          <Link href="/console/championship" className="btn-link">Championship →</Link>
           {admin && season && calendarEditable && (
             <form method="POST" action="/api/console/setup" className="ml-auto">
               <input type="hidden" name="ticket" value={ticket} />

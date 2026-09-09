@@ -25,7 +25,7 @@ export default async function AcpEnterPage({
     <div>
       <PublicNav />
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <Link href="/acp" className="text-sm text-slate-500 hover:text-brand-700 hover:underline">
+        <Link href="/acp" className="btn-back">
           ← Arizona Club Pickleball
         </Link>
         <h1 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">Enter your team</h1>

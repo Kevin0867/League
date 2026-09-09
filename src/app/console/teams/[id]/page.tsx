@@ -273,7 +273,7 @@ export default async function TeamDetailPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/console/teams" className="text-sm text-brand-600 hover:underline">← All teams</Link>
+          <Link href="/console/teams" className="btn-back">← All teams</Link>
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold text-slate-900">
             <TeamColorDot color={team.color} size={16} />
             {team.name}
@@ -572,7 +572,7 @@ export default async function TeamDetailPage({
                   {s.status !== "SCHEDULED" && <span className="ml-2 badge bg-slate-100 text-slate-600 lowercase">{s.status.toLowerCase()}</span>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <Link href={`/console/schedule/${s.id}`} className="text-xs font-semibold text-brand-600 hover:underline">open / reschedule →</Link>
+                  <Link href={`/console/schedule/${s.id}`} className="btn-link text-xs">open / reschedule →</Link>
                   <ConfirmSubmit
                     action="/api/console/schedule"
                     fields={{ ticket, op: "deleteSession", sessionId: s.id, returnTo: `/console/teams/${team.id}` }}
@@ -806,7 +806,7 @@ export default async function TeamDetailPage({
                             return <span className={`ml-1 text-xs ${c}`}>{d.check ? "✓ " : ""}{d.label}</span>;
                           })()}
                         </span>
-                        <a href={`/pay/${fp.id}?test=1`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700 hover:underline">Open pay page ↗</a>
+                        <a href={`/pay/${fp.id}?test=1`} target="_blank" rel="noreferrer" className="btn-link text-xs">Open pay page ↗</a>
                       </li>
                     ))}
                   </ul>

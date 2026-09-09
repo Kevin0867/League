@@ -160,7 +160,7 @@ export default async function RegistrationDetail({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/console/registrations" className="text-sm text-slate-500 hover:underline">← Registrations</Link>
+          <Link href="/console/registrations" className="btn-back">← Registrations</Link>
           <h1 className="text-2xl font-bold text-slate-900">{p.firstName} {p.lastName}</h1>
           <p className="text-sm text-slate-500">{reg.season?.name} · <StatusBadge status={reg.status} /></p>
         </div>

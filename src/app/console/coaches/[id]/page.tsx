@@ -125,7 +125,7 @@ export default async function EditCoachPage({
           </form>
         </div>
       )}
-      <Link href="/console/coaches" className="text-sm text-slate-500 hover:underline">← Back to coaches</Link>
+      <Link href="/console/coaches" className="btn-back">← Back to coaches</Link>
 
       {/* Invite / set-password link. Shown after create or a "Send invite" — and
           because email delivery may not be configured, we always surface the

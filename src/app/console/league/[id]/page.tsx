@@ -146,7 +146,7 @@ export default async function FixtureDetail({
         </p>
       )}
       <div>
-        <Link href="/console/league" className="text-sm text-brand-600 hover:underline">← League</Link>
+        <Link href="/console/league" className="btn-back">← League</Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-slate-900">
             {fixture.homeTeam?.name} <span className="text-slate-400">vs</span> {fixture.awayTeam?.name}

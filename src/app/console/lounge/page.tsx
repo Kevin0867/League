@@ -142,7 +142,7 @@ export default async function LoungePage({
                       </>
                     )}
                     {pending && admin && (
-                      <a href={`/console/schedule/${r.session.id}`} className="text-xs font-medium text-brand-600 hover:underline">Assign someone else →</a>
+                      <a href={`/console/schedule/${r.session.id}`} className="btn-link text-xs">Assign someone else →</a>
                     )}
                     {pending && !admin && <span className="text-xs text-amber-700">awaiting admin approval</span>}
                     {!pending && isMine && (

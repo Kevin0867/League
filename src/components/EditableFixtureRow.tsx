@@ -69,7 +69,7 @@ export function EditableFixtureRow({
         </td>
         <td className="whitespace-nowrap text-right">
           <button onClick={() => setEdit(true)} className="mr-3 text-xs font-medium text-brand-700 hover:underline">Edit</button>
-          <Link href={`/console/league/${fixture.id}`} className="text-xs font-medium text-brand-600 hover:underline">match night →</Link>
+          <Link href={`/console/league/${fixture.id}`} className="btn-link text-xs">match night →</Link>
         </td>
       </tr>
     );

@@ -90,7 +90,7 @@ export default async function StudentProgressPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href={`/console/teams/${teamId}/progress`} className="text-sm text-brand-600 hover:underline">← {team.name} roster</Link>
+        <Link href={`/console/teams/${teamId}/progress`} className="btn-back">← {team.name} roster</Link>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">{student.firstName} {student.lastName}</h1>
         <p className="text-sm text-slate-500">Progress notes · {team.name}</p>
       </div>

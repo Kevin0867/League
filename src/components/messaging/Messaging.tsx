@@ -81,7 +81,7 @@ export function ConversationView({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Link href={basePath} className="text-sm text-slate-500 hover:underline">← All messages</Link>
+        <Link href={basePath} className="btn-back">← All messages</Link>
         {canPost && (
           <form method="POST" action="/api/messages">
             <input type="hidden" name="ticket" value={ticket} />

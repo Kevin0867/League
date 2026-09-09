@@ -195,7 +195,7 @@ export function AssignmentBoard({
         <Link
           href={`/console/teams/${col.id}`}
           draggable={false}
-          className="mt-2 block border-t border-slate-100 pt-2 text-right text-[11px] font-medium text-brand-600 hover:underline"
+          className="btn-link mt-2 text-xs"
         >
           Manage team →
         </Link>
