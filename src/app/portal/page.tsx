@@ -336,7 +336,7 @@ export default async function PortalHome({
               <div key={m.id} className="card">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold text-slate-800">{m.team.name}</div>
-                  <Link href={`/portal/team/${m.teamId}`} className="text-sm font-medium text-brand-700 hover:underline">
+                  <Link href={`/portal/team/${m.teamId}`} className="btn-link">
                     View team →
                   </Link>
                 </div>

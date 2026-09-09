@@ -149,7 +149,7 @@ export default async function PayPage({
           </>
         )}
 
-        <Link href="/portal" className="mt-5 inline-block text-sm text-slate-400 hover:underline">
+        <Link href="/portal" className="btn-back mt-5">
           ← Back to my portal
         </Link>
       </div>

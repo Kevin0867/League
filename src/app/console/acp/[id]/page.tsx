@@ -60,7 +60,7 @@ export default async function AcpEntryDetail({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/console/acp" className="text-sm text-slate-500 hover:underline">← Arizona Club Pickleball</Link>
+        <Link href="/console/acp" className="btn-back">← Arizona Club Pickleball</Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-slate-900">{entry.clubName}</h1>
           <span className="badge bg-slate-100 text-slate-600">{entry.status.toLowerCase()}</span>

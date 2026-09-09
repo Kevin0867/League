@@ -140,7 +140,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           )}
         </dl>
         {mapsLink && (
-          <a href={mapsLink} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline">
+          <a href={mapsLink} target="_blank" rel="noopener noreferrer" className="btn-link mt-3">
             Get directions →
           </a>
         )}

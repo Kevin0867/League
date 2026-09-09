@@ -74,7 +74,7 @@ export default async function PublicCoachPage({ params }: { params: Promise<{ id
     <div>
       <PublicNav />
       <div className="mx-auto max-w-4xl px-4 py-10">
-        <Link href="/coaches" className="text-sm text-slate-500 hover:text-brand-700 hover:underline">← All coaches</Link>
+        <Link href="/coaches" className="btn-back">← All coaches</Link>
 
         <div className="mt-4 grid gap-8 sm:grid-cols-[minmax(0,320px)_1fr]">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-100 to-slate-100 shadow-sm">

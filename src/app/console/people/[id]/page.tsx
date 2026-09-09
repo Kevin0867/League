@@ -50,7 +50,7 @@ export default async function PersonDetail({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/console/registrations" className="text-sm text-brand-600 hover:underline">← Registrations</Link>
+        <Link href="/console/registrations" className="btn-back">← Registrations</Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-slate-900">{person.firstName} {person.lastName}</h1>
           {person.isMinor && <span className="badge bg-amber-100 text-amber-800">minor</span>}

@@ -181,7 +181,7 @@ export default async function ConsoleDashboard({
                     {subCoaches.map((c) => <option key={c.id} value={c.id}>{c.person.firstName} {c.person.lastName}</option>)}
                   </select>
                   <button className="btn-secondary text-sm">Assign &amp; approve</button>
-                  <Link href={`/console/schedule/${r.sessionId}`} className="text-xs font-medium text-brand-600 hover:underline">open class →</Link>
+                  <Link href={`/console/schedule/${r.sessionId}`} className="btn-link text-xs">open class →</Link>
                 </form>
               </li>
             ))}

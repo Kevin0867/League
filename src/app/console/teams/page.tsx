@@ -564,7 +564,7 @@ export default async function TeamBuildBoard({
                     <span className={g.ok ? "text-emerald-600" : "text-amber-600"}>{g.ok ? "✓" : "!"}</span>
                     <Link href={facetHref({ level: g.label, segment: segOf(g.label) })} className="font-medium text-brand-700 hover:underline">{g.label}</Link>
                     <span className="text-xs text-slate-400">{g.teams.length} teams</span>
-                    <Link href={facetHref({ level: g.label, segment: segOf(g.label) })} className="ml-auto text-xs font-medium text-brand-600 hover:underline">Open →</Link>
+                    <Link href={facetHref({ level: g.label, segment: segOf(g.label) })} className="btn-link ml-auto text-xs">Open →</Link>
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {g.teams.map((t, i) => (
@@ -638,7 +638,7 @@ export default async function TeamBuildBoard({
           {anyFilter && (
             <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
               <span className="text-slate-500">{shownTeams.length} team{shownTeams.length === 1 ? "" : "s"} match</span>
-              <Link href="/console/teams" className="font-medium text-brand-700 hover:underline">Clear filters</Link>
+              <Link href="/console/teams" className="btn-link">Clear filters</Link>
             </div>
           )}
         </div>
@@ -814,7 +814,7 @@ export default async function TeamBuildBoard({
                   ) : (
                     <span />
                   )}
-                  <Link href={`/console/teams/${t.id}`} className="text-xs font-medium text-brand-600 hover:underline">
+                  <Link href={`/console/teams/${t.id}`} className="btn-link text-xs">
                     Manage team →
                   </Link>
                 </div>
