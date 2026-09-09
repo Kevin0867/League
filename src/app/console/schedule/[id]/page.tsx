@@ -350,11 +350,33 @@ export default async function SessionDetail({
           }))}
         />
 
+        {/* After check-in — the clear fork: leave notes/feedback, message the
+            team, or move on to the next class. Coaches can go back and forth. */}
+        {s.teams.length > 0 && s.status !== "CANCELLED" && (
+          <div className="card border-l-4 border-brand-400 lg:col-span-2">
+            <h2 className="font-semibold text-slate-900">Checked in? Here&apos;s what&apos;s next</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Leave notes or player feedback, send a recap, or move to your next class — in any order.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {s.teams.map((t) => (
+                <a key={t.teamId} href={`/console/teams/${t.teamId}/progress#notes`} className="btn-link">
+                  Notes &amp; player feedback{s.teams.length > 1 ? ` · ${t.team.name}` : ""} →
+                </a>
+              ))}
+              <a href="#recap" className="btn-link">Message the team ↓</a>
+              {otherClasses.length > 0 && (
+                <a href={`/console/schedule/${otherClasses[0].id}#attendance`} className="btn-primary text-sm">
+                  Next class: {otherClasses[0].name} →
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Practice recap — a one-tap note to the whole team (players + parents)
             about tonight's practice: what you worked on + homework before next
             time. One composer per team on the session. */}
         {s.teams.length > 0 && s.status !== "CANCELLED" && (
-          <div className="lg:col-span-2 space-y-3">
+          <div id="recap" className="lg:col-span-2 space-y-3 scroll-mt-4">
             {s.teams.map((t) => (
               <div key={t.teamId} className="card">
                 <h2 className="font-semibold text-slate-900">Message {s.teams.length > 1 ? t.team.name : "the team"} about this practice</h2>
