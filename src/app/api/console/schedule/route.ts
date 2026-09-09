@@ -11,6 +11,7 @@ import { icsInvite, phoenixWallTimeToUtc, type IcsEvent } from "@/lib/domain/ics
 import { coachSessionConflicts } from "@/lib/domain/coachSchedule";
 import { isBookable, DOW } from "@/lib/domain/facilityWindows";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
+import { assignSessionSub } from "@/lib/domain/coachSub";
 
 // Schedule mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -480,49 +481,13 @@ export async function POST(req: Request) {
       const clashes = await coachSessionConflicts({ coachId, date: session.date, startTime: session.startTime, endTime: session.endTime, excludeSessionId: sessionId });
       if (clashes.length) return back("?err=subclash");
     }
-    await prisma.sessionCoach.upsert({
-      where: { sessionId_coachId: { sessionId, coachId } },
-      create: { sessionId, coachId, role, payable: true },
-      update: { role, payable: true },
+    await assignSessionSub({ sessionId, coachId, role, actorId: actor.userId, origin });
+
+    // Assigning a coach clears any open sub request for this class.
+    await prisma.subRequest.updateMany({
+      where: { sessionId, status: "OPEN" },
+      data: { status: "CLAIMED", claimedByCoachId: coachId },
     });
-
-    // A SUBSTITUTE works this class INSTEAD of the normal coach: pay follows the
-    // sub, so suppress the primary's pay for this one session. (Assistants
-    // co-coach and keep their 50% line; backups are additive.) This is per
-    // session — the normal coach is unaffected on every other class.
-    if (role === "SUBSTITUTE") {
-      await prisma.sessionCoach.updateMany({
-        where: { sessionId, role: "PRIMARY", coachId: { not: coachId } },
-        data: { payable: false },
-      });
-    }
-
-    // Notify the assigned coach, with an emailed .ics invite for this class plus
-    // their calendar-sync link.
-    const assigned = await prisma.coach.findUnique({ where: { id: coachId }, select: { id: true, personId: true, person: { select: { email: true } } } });
-    const sessDetail = await prisma.session.findUnique({ where: { id: sessionId }, include: { facility: true, teams: { include: { team: { select: { name: true } } } } } });
-    if (assigned?.personId && sessDetail) {
-      const feed = `${origin}/api/calendar/${await ensureCoachCalendarToken(assigned.id)}`;
-      const teams = sessDetail.teams.map((t) => t.team.name).join(", ");
-      const event: IcsEvent = {
-        uid: `session-${sessDetail.id}@pureacademy`,
-        start: phoenixWallTimeToUtc(sessDetail.date, sessDetail.startTime),
-        end: phoenixWallTimeToUtc(sessDetail.date, sessDetail.endTime),
-        summary: `${teams || "Session"} (${role.toLowerCase()})`,
-        location: sessDetail.facility?.name ?? null,
-        description: "PURE Academy",
-      };
-      const attachments = assigned.person?.email ? [icsInvite(teams || "PURE Academy session", [event], assigned.person.email)] : undefined;
-      const classLink = `${origin}/console/schedule/${sessDetail.id}`;
-      await dispatchMessage({
-        senderId: actor.userId, seasonId: sessDetail.seasonId,
-        audienceType: "SINGLE_PERSON", audienceRef: assigned.personId,
-        channels: ["IN_APP", "EMAIL"], triggerType: "COACH_ASSIGNED_SESSION",
-        subject: "You've been added to a class",
-        body: `You're set as ${role.toLowerCase()} for ${teams || "a session"} on ${formatDate(sessDetail.date)} at ${formatTime12(sessDetail.startTime)}${sessDetail.facility ? ` · ${sessDetail.facility.name}` : ""}. Open the class to check players in, add notes, and message the team: ${classLink}. You'll also get a text with this link about 15 minutes before it starts. The attached invite adds it to your calendar; subscribe to keep it in sync: ${feed}`,
-        attachments,
-      });
-    }
 
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "session.addCoach", summary: `Added ${role.toLowerCase()} coach ${coachId}` });
     return back("?ok=subAdded");

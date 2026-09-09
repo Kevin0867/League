@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { mintConsoleTicket } from "@/lib/auth";
 import { requireStaff } from "@/lib/rbac";
 import { isAdmin } from "@/lib/rbac";
-import { formatStamp } from "@/lib/time";
+import { formatStamp, formatDate, formatTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +44,34 @@ export default async function LoungePage({
     include: { replies: { orderBy: { createdAt: "asc" } } },
   });
 
+  // Open sub requests — the "need a sub" board. Any coach can cover one.
+  const myCoach = myPersonId ? await prisma.coach.findUnique({ where: { personId: myPersonId }, select: { id: true } }) : null;
+  const myCoachId = myCoach?.id ?? null;
+  const openReqs = await prisma.subRequest.findMany({
+    where: { status: "OPEN", session: { status: "SCHEDULED" } },
+    orderBy: { createdAt: "asc" },
+    include: { session: { include: { facility: { select: { name: true } }, teams: { include: { team: { select: { name: true } } } } } } },
+  });
+  const reqCoachIds = [...new Set(openReqs.map((r) => r.requestedByCoachId))];
+  const reqCoaches = reqCoachIds.length
+    ? await prisma.coach.findMany({ where: { id: { in: reqCoachIds } }, select: { id: true, person: { select: { firstName: true, lastName: true } } } })
+    : [];
+  const reqNameById = new Map(reqCoaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`]));
+  const SR_OK: Record<string, string> = {
+    requested: "Sub requested — coaches notified.",
+    claimed: "You're covering that class — it's on your schedule now.",
+    cancelled: "Sub request cancelled.",
+    already: "There's already an open request for that class.",
+  };
+  const SR_ERR: Record<string, string> = {
+    clash: "That overlaps another class you cover — can't claim it.",
+    taken: "Someone already covered that one.",
+    self: "You can't cover your own request.",
+    notcoach: "Only a coach can cover a class.",
+    auth: "Not allowed.",
+    notfound: "That request is gone.",
+  };
+
   const hidden = (
     <>
       <input type="hidden" name="ticket" value={ticket} />
@@ -56,6 +84,52 @@ export default async function LoungePage({
 
       {sp.ok && OK[sp.ok] && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok]}</p>}
       {sp.err && ERR[sp.err] && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{ERR[sp.err]}</p>}
+      {sp.srok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{SR_OK[sp.srok] ?? "Done."}</p>}
+      {sp.srerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{SR_ERR[sp.srerr] ?? "Something went wrong."}</p>}
+
+      {/* Sub requests board — open "need a sub" asks any coach can cover. */}
+      {openReqs.length > 0 && (
+        <div className="card border-l-4 border-amber-400">
+          <h2 className="font-semibold text-slate-900">🔁 Sub requests — {openReqs.length} open</h2>
+          <p className="mt-0.5 text-sm text-slate-500">A coach needs cover. Tap <strong>Cover this class</strong> — it&apos;s added to your schedule and you&apos;re paid for it.</p>
+          <ul className="mt-3 divide-y divide-slate-100">
+            {openReqs.map((r) => {
+              const teams = r.session.teams.map((t) => t.team.name).join(", ") || "a class";
+              const isMine = r.requestedByCoachId === myCoachId;
+              return (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                  <div className="text-slate-700">
+                    <span className="font-medium text-slate-800">{teams}</span> · {formatDate(r.session.date)} at {formatTime12(r.session.startTime)}
+                    {r.session.facility ? ` · ${r.session.facility.name}` : ""}
+                    <div className="text-xs text-slate-400">
+                      asked by {reqNameById.get(r.requestedByCoachId) ?? "a coach"}{r.note ? ` — “${r.note}”` : ""}
+                    </div>
+                  </div>
+                  {isMine ? (
+                    <form method="POST" action="/api/console/sub-requests">
+                      {hidden}
+                      <input type="hidden" name="op" value="cancel" />
+                      <input type="hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="returnTo" value="/console/lounge" />
+                      <button className="text-xs text-slate-500 hover:underline">Your request · cancel</button>
+                    </form>
+                  ) : myCoachId ? (
+                    <form method="POST" action="/api/console/sub-requests">
+                      {hidden}
+                      <input type="hidden" name="op" value="claim" />
+                      <input type="hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="returnTo" value="/console/lounge" />
+                      <button className="rounded-full bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Cover this class →</button>
+                    </form>
+                  ) : (
+                    <span className="text-xs text-slate-400">coaches can cover</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* Composer */}
       <div className="card">
