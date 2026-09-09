@@ -94,22 +94,30 @@ export default async function SessionDetail({
   const myRole = myCoachId ? s.coaches.find((c) => c.coachId === myCoachId)?.role ?? null : null;
   const coveringSub = !admin && (myRole === "SUBSTITUTE" || myRole === "BACKUP");
 
-  // Open sub request for this class (if any) — drives the "Need a sub?" card.
-  const openSub = (s.status === "SCHEDULED")
-    ? await prisma.subRequest.findFirst({ where: { sessionId: id, status: "OPEN" }, select: { id: true, note: true, requestedByCoachId: true } })
+  // Active sub request for this class (if any) — drives the "Need a sub?" card.
+  const activeSub = (s.status === "SCHEDULED")
+    ? await prisma.subRequest.findFirst({ where: { sessionId: id, status: { in: ["OPEN", "PENDING"] } }, select: { id: true, note: true, status: true, requestedByCoachId: true, claimedByCoachId: true } })
     : null;
+  const subOfferName = activeSub?.claimedByCoachId
+    ? (await prisma.coach.findUnique({ where: { id: activeSub.claimedByCoachId }, select: { person: { select: { firstName: true, lastName: true } } } }))
+    : null;
+  const offerName = subOfferName ? `${subOfferName.person.firstName} ${subOfferName.person.lastName}` : null;
   const canRequestSub = (admin || !!myCoachId) && s.status === "SCHEDULED";
   const SR_OK: Record<string, string> = {
-    requested: "Sub requested — coaches have been notified and it's posted in the Coaches' Lounge.",
+    requested: "Sub requested — coaches and admins have been texted, and it's posted in the Coaches' Lounge.",
     already: "There's already an open sub request for this class.",
-    claimed: "You're covering this class — it's on your schedule now.",
+    offered: "Thanks — your offer to cover was sent to admins for approval.",
+    approved: "Approved — the sub is covering this class now.",
+    declined: "Offer declined — the request is open again.",
     cancelled: "Sub request cancelled.",
   };
   const SR_ERR: Record<string, string> = {
-    auth: "You're not able to request a sub for this class.",
+    auth: "Only an admin can approve a sub.",
     notfound: "That class or request is gone.",
-    clash: "That overlaps another class you cover — can't claim it.",
-    taken: "Someone already covered that request.",
+    clash: "That overlaps another class you cover — can't offer it.",
+    taken: "That request is no longer open.",
+    pending: "That request already has an offer awaiting approval.",
+    notpending: "That offer isn't awaiting approval anymore.",
     self: "You can't cover your own request.",
     notcoach: "Only a coach can cover a class.",
     nocoach: "No coach on this class to request for.",
@@ -176,44 +184,64 @@ export default async function SessionDetail({
           other coaches claim it from the Coaches' Lounge. */}
       {canRequestSub && (
         <div className="card border-l-4 border-amber-400">
-          {openSub ? (
+          {activeSub ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="font-semibold text-slate-900">Sub requested — waiting for a coach to cover</h2>
-                <p className="mt-0.5 text-sm text-slate-500">
-                  Posted to the Coaches&apos; Lounge. You&apos;ll be texted the moment someone covers it.
-                  {openSub.note ? <> Note: “{openSub.note}”.</> : null}
-                </p>
+                {activeSub.status === "PENDING" ? (
+                  <>
+                    <h2 className="font-semibold text-slate-900">{offerName ?? "A coach"} offered to cover — needs admin approval</h2>
+                    <p className="mt-0.5 text-sm text-slate-500">An admin approves before it&apos;s put in place. {admin ? "Approve or decline below." : "You'll be texted when it's approved."}</p>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="font-semibold text-slate-900">Sub requested — waiting for a coach to offer</h2>
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      Coaches and admins were texted, and it&apos;s in the Coaches&apos; Lounge.{activeSub.note ? <> Note: “{activeSub.note}”.</> : null}
+                    </p>
+                  </>
+                )}
               </div>
-              {(admin || openSub.requestedByCoachId === myCoachId) && (
-                <form method="POST" action="/api/console/sub-requests">
-                  <input type="hidden" name="ticket" value={ticket} />
-                  <input type="hidden" name="op" value="cancel" />
-                  <input type="hidden" name="requestId" value={openSub.id} />
-                  <input type="hidden" name="returnTo" value={returnTo} />
-                  <button className="btn-ghost text-sm">Cancel request</button>
-                </form>
-              )}
+              <div className="flex items-center gap-2">
+                {activeSub.status === "PENDING" && admin && (
+                  <>
+                    <form method="POST" action="/api/console/sub-requests">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="approve" />
+                      <input type="hidden" name="requestId" value={activeSub.id} />
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <button className="rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">Approve</button>
+                    </form>
+                    <form method="POST" action="/api/console/sub-requests">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="decline" />
+                      <input type="hidden" name="requestId" value={activeSub.id} />
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <button className="text-sm text-rose-600 hover:underline">Decline</button>
+                    </form>
+                  </>
+                )}
+                {(admin || activeSub.requestedByCoachId === myCoachId) && (
+                  <form method="POST" action="/api/console/sub-requests">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="cancel" />
+                    <input type="hidden" name="requestId" value={activeSub.id} />
+                    <input type="hidden" name="returnTo" value={returnTo} />
+                    <button className="btn-ghost text-sm">Cancel request</button>
+                  </form>
+                )}
+              </div>
             </div>
           ) : (
             <details>
               <summary className="cursor-pointer font-semibold text-slate-900">Can&apos;t make this class? Request a sub</summary>
-              <p className="mt-1 text-sm text-slate-500">Notifies every coach and posts it to the Coaches&apos; Lounge, where another coach can cover it in one tap. Whoever covers is paid for the class.</p>
+              <p className="mt-1 text-sm text-slate-500">Texts every coach and admin and posts it to the Coaches&apos; Lounge, where another coach offers to cover it. An admin approves before it&apos;s put in place; whoever covers is paid for the class.</p>
               <form method="POST" action="/api/console/sub-requests" className="mt-3 space-y-2">
                 <input type="hidden" name="ticket" value={ticket} />
                 <input type="hidden" name="op" value="request" />
                 <input type="hidden" name="sessionId" value={s.id} />
                 <input type="hidden" name="returnTo" value={returnTo} />
                 <textarea name="note" rows={2} maxLength={500} placeholder="Optional — e.g. running late, out sick, family thing." className="input w-full" />
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-sm text-slate-600">
-                    Notify coaches:{" "}
-                    <select name="notify" defaultValue="TEXT" className="input ml-1 inline-block w-auto py-1 text-sm">
-                      <option value="INAPP">In the app</option>
-                      <option value="EMAIL">Email</option>
-                      <option value="TEXT">Text</option>
-                    </select>
-                  </label>
+                <div className="flex justify-end">
                   <button className="btn-primary text-sm">Request a sub</button>
                 </div>
               </form>
