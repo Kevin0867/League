@@ -20,7 +20,7 @@ const ERR: Record<string, string> = {
   noconsent: "That family didn't consent to publishing — can't publish it.",
 };
 
-const PHASE_LABEL: Record<string, string> = { MIDSEASON: "Mid-season", ENDSEASON: "End of season", GENERAL: "General" };
+const PHASE_LABEL: Record<string, string> = { MIDSEASON: "Mid-season", ENDSEASON: "End of season", GENERAL: "General", ALACARTE: "Private / clinic" };
 
 export default async function FeedbackConsole({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requireAdmin();

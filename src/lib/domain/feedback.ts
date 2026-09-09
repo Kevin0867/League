@@ -8,10 +8,10 @@ import { SignJWT, jwtVerify } from "jose";
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-secret-change-me");
 const SCOPE = "feedback";
 
-export type FeedbackTokenData = { personId: string; seasonId: string | null; phase: string };
+export type FeedbackTokenData = { personId: string; seasonId: string | null; phase: string; coachId: string | null };
 
-export async function signFeedbackToken(personId: string, seasonId: string | null, phase: string, ttlDays = 60): Promise<string> {
-  return new SignJWT({ personId, seasonId: seasonId ?? "", phase, scope: SCOPE, kind: "feedback" })
+export async function signFeedbackToken(personId: string, seasonId: string | null, phase: string, coachId: string | null = null, ttlDays = 60): Promise<string> {
+  return new SignJWT({ personId, seasonId: seasonId ?? "", phase, coachId: coachId ?? "", scope: SCOPE, kind: "feedback" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(Math.floor(Date.now() / 1000) + ttlDays * 86400)
@@ -27,6 +27,7 @@ export async function verifyFeedbackToken(token: string | undefined | null): Pro
       personId: String(payload.personId),
       seasonId: payload.seasonId ? String(payload.seasonId) : null,
       phase: String(payload.phase ?? "GENERAL"),
+      coachId: payload.coachId ? String(payload.coachId) : null,
     };
   } catch {
     return null;

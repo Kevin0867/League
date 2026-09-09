@@ -4,7 +4,7 @@ import { useState } from "react";
 
 // Star rating + testimonial + optional coach + publish consent. Posts to the
 // public feedback API with the signed token.
-export function FeedbackForm({ token, coaches, defaultName }: { token: string; coaches: { id: string; name: string }[]; defaultName: string }) {
+export function FeedbackForm({ token, coaches, defaultName, defaultCoachId }: { token: string; coaches: { id: string; name: string }[]; defaultName: string; defaultCoachId?: string | null }) {
   const [rating, setRating] = useState(0);
   const [pending, setPending] = useState(false);
 
@@ -33,7 +33,7 @@ export function FeedbackForm({ token, coaches, defaultName }: { token: string; c
       {coaches.length > 0 && (
         <div>
           <label className="block text-sm font-semibold text-slate-700" htmlFor="coachId">Which coach? (optional)</label>
-          <select id="coachId" name="coachId" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+          <select id="coachId" name="coachId" defaultValue={defaultCoachId ?? ""} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
             <option value="">— the program overall —</option>
             {coaches.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>

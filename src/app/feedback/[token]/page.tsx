@@ -55,17 +55,26 @@ export default async function FeedbackPage({
     if (t.coach) coachMap.set(t.coach.id, `${t.coach.person.firstName} ${t.coach.person.lastName}`);
     for (const ac of t.assistantCoaches) coachMap.set(ac.coach.id, `${ac.coach.person.firstName} ${ac.coach.person.lastName}`);
   }
+  // If the link names a coach (e.g. after a private lesson), make sure they're an
+  // option and pre-selected.
+  if (data.coachId && !coachMap.has(data.coachId)) {
+    const c = await prisma.coach.findUnique({ where: { id: data.coachId }, select: { person: { select: { firstName: true, lastName: true } } } });
+    if (c) coachMap.set(data.coachId, `${c.person.firstName} ${c.person.lastName}`);
+  }
   const coaches = [...coachMap.entries()].map(([id, name]) => ({ id, name }));
 
-  const phaseLabel = data.phase === "MIDSEASON" ? "how the season is going so far" : data.phase === "ENDSEASON" ? "the Fall season" : "your experience";
+  const afterLesson = data.phase === "ALACARTE";
+  const phaseLabel = afterLesson
+    ? "your session"
+    : data.phase === "MIDSEASON" ? "how the season is going so far" : data.phase === "ENDSEASON" ? "the Fall season" : "your experience";
 
   return shell(
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Thanks for a great season! 🎾</h1>
+      <h1 className="text-2xl font-bold text-slate-900">{afterLesson ? "Thanks for training with us! 🎾" : "Thanks for a great season! 🎾"}</h1>
       <p className="mt-2 text-slate-600">
-        {person ? `Hi ${person.firstName}! ` : ""}Thank you for being part of the PURE Academy Fall Season. We&apos;d love a quick note on {phaseLabel} — and if a coach made a difference, tell us (we may feature it on their profile).
+        {person ? `Hi ${person.firstName}! ` : ""}Thank you for {afterLesson ? "your session with PURE Academy" : "being part of the PURE Academy Fall Season"}. We&apos;d love a quick note on {phaseLabel} — and if a coach made a difference, tell us (we may feature it on their profile).
       </p>
-      <FeedbackForm token={token} coaches={coaches} defaultName={person ? `${person.firstName} ${person.lastName}` : ""} />
+      <FeedbackForm token={token} coaches={coaches} defaultCoachId={data.coachId} defaultName={person ? `${person.firstName} ${person.lastName}` : ""} />
     </div>
   );
 }
