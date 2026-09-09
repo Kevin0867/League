@@ -196,13 +196,15 @@ export default async function TeamBuildBoard({
     t.divisionCode ?? deriveDivisionCode(t.division?.name) ?? t.division?.name ?? null;
   const segOf = (code: string | null): "M" | "W" | "YOUTH" | null => {
     if (!code) return null;
+    // Youth codes first — MID (middle school) starts with "M" but is NOT Men's,
+    // so it must be caught before the /^M/ adult check.
+    if (/^(ELE|MID|HS)$/.test(code)) return "YOUTH";
     if (/^M/.test(code)) return "M";
     if (/^W/.test(code)) return "W";
-    if (/^(ELE|MID|HS)$/.test(code)) return "YOUTH";
     return null;
   };
   const SEG_LABEL: Record<string, string> = { M: "Men's", W: "Women's", YOUTH: "Youth" };
-  const LEVEL_LABEL: Record<string, string> = { ELE: "Elementary", MID: "Middle", HS: "High School" };
+  const LEVEL_LABEL: Record<string, string> = { ELE: "Elementary", MID: "Middle School", HS: "High School" };
   const levelLabel = (code: string) => LEVEL_LABEL[code] ?? code;
 
   // Gender: use the team's stored gender when set; otherwise adults derive it
