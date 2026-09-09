@@ -13,6 +13,8 @@ type NavItem = { href: string; label: string; roles?: Role[]; match?: string[] }
 type NavSection = { title: string; items: NavItem[] };
 
 const DASHBOARD: NavItem = { href: "/console", label: "Dashboard" };
+// Coaches lead with "Today" — their day-of home (today's classes + check-in).
+const TODAY: NavItem = { href: "/console/today", label: "Today", roles: ["COACH"] };
 
 // Grouped into logical clusters so a first-time admin can find where a task
 // lives instead of scanning one long flat list.
@@ -146,7 +148,7 @@ export function ConsoleShell({
       <div className="mx-auto flex max-w-7xl">
         {/* Sidebar — dark navy rail */}
         <aside
-          className={`${open ? "block" : "hidden"} w-full shrink-0 bg-brand-900 md:block md:w-64`}
+          className={`${open ? "block" : "hidden"} w-full shrink-0 bg-brand-900 md:sticky md:top-0 md:block md:h-screen md:w-64 md:self-start md:overflow-y-auto`}
         >
           <Link href="/console" className="hidden items-center gap-3 px-5 py-4 md:flex" aria-label="PURE Academy Console">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -157,6 +159,11 @@ export function ConsoleShell({
             </div>
           </Link>
           <nav className="px-3 pb-6 pt-2">
+            {roleVisible(TODAY) && (
+              <Link href={TODAY.href} onClick={() => setOpen(false)} className={`${linkClass(isActiveItem(TODAY))} mb-1.5`}>
+                {TODAY.label}
+              </Link>
+            )}
             <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
               {DASHBOARD.label}
             </Link>
