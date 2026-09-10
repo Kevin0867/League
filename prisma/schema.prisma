@@ -559,6 +559,38 @@ model Coach {
   payouts             CoachPayoutLine[]
   alaCarteOfferings   AlaCarteOffering[]
   alaCarteBookings    AlaCarteBooking[] @relation("AlaCarteCoach")
+  coachingAgreements  CoachingAgreement[]
+}
+
+/// A digital coaching agreement for a season: the coach reviews their
+/// auto-filled assignment (teams, day/times, locations, role), signs, and it is
+/// sent to PURE for an admin to counter-sign. A signed copy is retained and
+/// shown in both the coach's and admins' views. Assignment is snapshotted as
+/// JSON so the signed record is fixed even if the schedule changes later.
+model CoachingAgreement {
+  id            String    @id @default(cuid())
+  coachId       String
+  coach         Coach     @relation(fields: [coachId], references: [id])
+  seasonId      String?
+  season        Season?   @relation(fields: [seasonId], references: [id])
+  /// SENT (awaiting coach) | COACH_SIGNED (awaiting countersign) | COUNTERSIGNED
+  status        String    @default("SENT")
+  /// Snapshot of the assignment at signing (teams + role + day/time + facility).
+  assignment    Json?
+  coachName     String?
+  coachEmail    String?
+  coachPhone    String?
+  coachSignature String?
+  coachSignedAt DateTime?
+  adminName     String?
+  adminTitle    String?
+  adminSignedById String?
+  adminSignedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([coachId])
+  @@index([status])
 }
 
 /// Coach availability by day + time block (§5), matched against facility court
@@ -1029,6 +1061,7 @@ model Season {
   fixtures      Fixture[]
   messages      Message[]
   leagueTeams   LeagueTeam[]
+  coachingAgreements CoachingAgreement[]
 }
 
 /// A stored record of express consent to receive email / SMS messages — the
