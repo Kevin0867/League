@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { RegisterForm } from "@/components/RegisterForm";
+import { SeasonOverview } from "@/components/SeasonOverview";
 import { prisma } from "@/lib/db";
 import { ACADEMY_MARKETS, TEAM_CAP } from "@/lib/enums";
 import { formatDate, closeDayLabel } from "@/lib/time";
@@ -207,6 +208,8 @@ export default async function RegisterPage({
             </p>
           </div>
         ) : null}
+        <SeasonOverview className="mb-6" />
+
         <RegisterForm
           seasonId={season.id}
           locations={locations}

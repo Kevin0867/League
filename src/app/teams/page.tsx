@@ -7,6 +7,7 @@ import { teamDisplayName, teamShortName, teamSlug, PURE_MARKETS } from "@/lib/do
 import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 import { formatDate } from "@/lib/time";
 import { TeamsFilter } from "@/components/TeamsFilter";
+import { listOpenSpotTeams } from "@/lib/domain/openSpots";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,13 @@ export default async function TeamsPage() {
   const markets = new Set(teams.map((t) => t.market).filter(Boolean));
   const players = teams.reduce((n, t) => n + t._count.members, 0);
   const season = await prisma.season.findFirst({ where: { active: true, isTest: false, program: "ACP" } });
+
+  // Teams currently advertising open spots (any active season), so we can point
+  // families straight at the signup page.
+  const academySeason =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
+  const openTeams = academySeason ? await listOpenSpotTeams(academySeason.id) : [];
   const teamIdentity = { club: true, market: true, divisionCode: true, color: true } as const;
   const [gamesPlayed, ratedPlayers, gamesToDupr, fixtures] = await Promise.all([
     prisma.fixture.count({ where: { status: "COMPLETED" } }),
@@ -86,6 +94,29 @@ export default async function TeamsPage() {
           Every PURE Academy team across the Valley. A 2.5 beginner in Gilbert and a 5.0 competitor in Mesa play
           for the same club.
         </p>
+
+        {openTeams.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-accent-400 bg-accent-50 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-bold text-brand-900">
+                🎾 Open spots available — join a team now
+              </h2>
+              <Link href="/open-spots" className="btn-accent whitespace-nowrap text-xs uppercase tracking-wide">Sign up →</Link>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {openTeams.map((t) => (
+                <Link
+                  key={t.id}
+                  href={`/register?team=${t.id}`}
+                  className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm transition hover:border-brand-400 hover:text-brand-800"
+                >
+                  <span className="font-semibold">{t.name}</span>
+                  <span className="rounded-full bg-accent-100 px-1.5 text-xs font-bold text-brand-900">{t.spotsLeft} left</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Club-wide record */}
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { prisma } from "@/lib/db";
 import { listOpenSpotTeams, getOpenSpotsCopy } from "@/lib/domain/openSpots";
 import { formatCents } from "@/lib/money";
+import { SeasonOverview } from "@/components/SeasonOverview";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ export default async function OpenSpotsPage() {
         <p className="eyebrow">Join a team</p>
         <h1 className="display mt-3 text-3xl text-brand-900 sm:text-4xl">{copy.headline}</h1>
         <p className="mt-3 max-w-2xl whitespace-pre-line text-slate-600">{copy.intro}</p>
+
+        <SeasonOverview className="mt-6" />
 
         {teams.length === 0 ? (
           <div className="mt-10 rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
