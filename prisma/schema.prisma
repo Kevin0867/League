@@ -652,6 +652,9 @@ model Facility {
   isPrivate        Boolean   @default(false)
   generalArea      String?   // public-safe descriptor, e.g. "North Scottsdale"
   exactAddress     String?   // behind login, released to assigned players only
+  /// Public-safe cross streets for a private home (e.g. "Hayden & Shea"). Shown
+  /// publicly instead of the owner name / street address when advertising spots.
+  crossStreets     String?
   accessInstructions String?
 
   /// Court lighting: "" / null = unspecified, LIGHTS = playable after dark,

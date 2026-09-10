@@ -199,7 +199,7 @@ export default async function FacilitiesPage({
                       weekdayRateCents: f.weekdayRateCents, weekendRateCents: f.weekendRateCents,
                       percentageRate: f.percentageRate, primaryContact: f.primaryContact,
                       contactEmail: f.contactEmail, contactPhone: f.contactPhone, isPrivate: f.isPrivate,
-                      generalArea: f.generalArea, exactAddress: f.exactAddress,
+                      generalArea: f.generalArea, exactAddress: f.exactAddress, crossStreets: f.crossStreets,
                       lights: f.lights, notes: f.notes,
                       photos: Array.isArray(f.photos) ? (f.photos as unknown as { url: string; type: "IMAGE" | "VIDEO"; name: string }[]) : [],
                       alaCarteAllowed: f.alaCarteAllowed, acpLeagueOption: f.acpLeagueOption,

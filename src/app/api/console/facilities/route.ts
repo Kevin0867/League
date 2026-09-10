@@ -104,6 +104,7 @@ export async function POST(req: Request) {
     isPrivate,
     generalArea: String(formData.get("generalArea") ?? "").trim() || null,
     exactAddress: String(formData.get("exactAddress") ?? "").trim() || null,
+    crossStreets: String(formData.get("crossStreets") ?? "").trim() || null,
     lights: String(formData.get("lights") ?? "").trim() || null,
     notes: String(formData.get("notes") ?? "").trim() || null,
     photos: parsePhotos(formData.get("attachments")),

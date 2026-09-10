@@ -26,6 +26,7 @@ export type FacilityInitial = {
   isPrivate: boolean;
   generalArea: string | null;
   exactAddress: string | null;
+  crossStreets: string | null;
   lights: string | null;
   notes: string | null;
   photos: PhotoInit[];
@@ -310,6 +311,11 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                   <label className="label">Exact address (behind login)</label>
                   <input name="exactAddress" className="input" defaultValue={facility?.exactAddress ?? ""} />
                   <p className="mt-1 text-xs text-slate-400">Released only to assigned players.</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="label">Cross streets</label>
+                  <input name="crossStreets" className="input" placeholder="e.g. Hayden Rd &amp; Shea Blvd" defaultValue={facility?.crossStreets ?? ""} />
+                  <p className="mt-1 text-xs text-slate-400">Shown publicly when advertising open spots — with the city, never the owner name or street address.</p>
                 </div>
               </div>
             ) : (

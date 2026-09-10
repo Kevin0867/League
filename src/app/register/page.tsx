@@ -57,7 +57,7 @@ export default async function RegisterPage({
             id: true, club: true, market: true, divisionCode: true, color: true, gender: true,
             dayOfWeek: true, startTime: true, coachPlays: true, capacity: true,
             division: { select: { name: true } },
-            facility: { select: { name: true, isPrivate: true, generalArea: true } },
+            facility: { select: { name: true, isPrivate: true, generalArea: true, crossStreets: true } },
             _count: { select: { members: true } },
           },
         })
@@ -74,7 +74,11 @@ export default async function RegisterPage({
         dayTime: [dayOfWeekPlural(teamRow.dayOfWeek), practiceTimeRange(teamRow.startTime)].filter(Boolean).join(", ") || null,
         location: [
           teamRow.market,
-          teamRow.facility && !teamRow.facility.isPrivate ? teamRow.facility.name : teamRow.facility?.generalArea ?? null,
+          // A private home never shows the facility (owner) name — cross streets
+          // (or general area) only.
+          teamRow.facility && !teamRow.facility.isPrivate
+            ? teamRow.facility.name
+            : teamRow.facility?.crossStreets ?? teamRow.facility?.generalArea ?? null,
         ].filter((v, i, a) => v && a.indexOf(v) === i).join(" · ") || null,
         spotsLeft: Math.max(0, (teamRow.capacity && teamRow.capacity > 0 ? teamRow.capacity : TEAM_CAP) - (teamRow._count.members + (teamRow.coachPlays ? 1 : 0))),
       }
