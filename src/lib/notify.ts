@@ -26,10 +26,20 @@ function brandSms(body: string): string {
   return new RegExp(`^\\s*${SMS_BRAND}`, "i").test(body) ? body : `${SMS_BRAND}: ${body}`;
 }
 
+// Carrier/A2P compliance: every outbound text must carry an opt-out notice.
+// Centralized here so it's guaranteed on EVERY SMS regardless of the caller.
+export const SMS_OPT_OUT = 'To opt-out of text messages from PURE Pickleball & Padel, reply with "STOP".';
+function withOptOut(body: string): string {
+  // Idempotent — don't double up if a caller already included STOP opt-out text.
+  return /\bstop\b/i.test(body) && /opt[\s-]?out|unsubscribe|reply/i.test(body)
+    ? body
+    : `${body}\n\n${SMS_OPT_OUT}`;
+}
+
 /** Send an SMS via Twilio's REST API (no SDK needed). */
 export async function sendSms(to: string | null | undefined, rawBody: string): Promise<SendResult> {
   if (!to) return { ok: false, simulated: false, error: "no phone number on record" };
-  const body = brandSms(rawBody);
+  const body = withOptOut(brandSms(rawBody));
   if (!smsConfigured()) {
     console.log(`[SMS simulated] → ${to}: ${body}`);
     return { ok: true, simulated: true };
