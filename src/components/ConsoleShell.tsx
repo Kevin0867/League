@@ -75,7 +75,7 @@ const SECTIONS: NavSection[] = [
       { href: "/console/apparel", label: "Apparel", roles: ["COO", "DIRECTOR"] },
       { href: "/console/sponsorships", label: "Sponsorships", roles: ["COO", "DIRECTOR"], match: ["/console/sponsorships"] },
       { href: "/console/inbox", label: "Inbox", roles: ["COO", "DIRECTOR", "COACH"] },
-      { href: "/console/announcements", label: "Announcements", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/announcements", label: "Messages", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/lounge", label: "Coaches' Lounge", roles: ["ADMIN", "COO", "CEO", "DIRECTOR", "COACH"] },
       { href: "/console/messages", label: "Messaging", roles: ["COO", "DIRECTOR"] },
       { href: "/console/compliance", label: "Compliance", roles: ["COO", "DIRECTOR"] },
@@ -233,7 +233,7 @@ export function ConsoleShell({
                 className="mb-4 flex items-center gap-3 rounded-lg border border-accent-400 bg-accent-50 px-4 py-3 text-sm font-medium text-brand-900 hover:bg-accent-100"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-900 text-xs font-bold text-white">{unread}</span>
-                You have {unread} unread {unread === 1 ? "message" : "messages"} — open your inbox to read {unread === 1 ? "it" : "them"} →
+                You have {unread} unread direct {unread === 1 ? "message / reply" : "messages / replies"} — open your inbox →
               </Link>
             )}
             {announcements > 0 && (
@@ -242,7 +242,7 @@ export function ConsoleShell({
                 className="mb-4 flex items-center gap-3 rounded-lg border border-brand-300 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-900 hover:bg-brand-100"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-700 text-xs font-bold text-white">{announcements}</span>
-                You have {announcements} unread {announcements === 1 ? "announcement" : "announcements"} — read {announcements === 1 ? "it" : "them"} →
+                You have {announcements} unread {announcements === 1 ? "message" : "messages"} — read {announcements === 1 ? "it" : "them"} →
               </Link>
             )}
             {children}

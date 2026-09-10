@@ -95,6 +95,37 @@ export async function POST(req: Request) {
     return back(`${base}/${conversationId}`);
   }
 
+  // Reply to a message you RECEIVED (a broadcast/announcement/team update) — the
+  // reply is delivered to whoever SENT it as a direct message: it lands in their
+  // in-app inbox AND texts (+emails) them, so questions get a fast response.
+  // Replying to something you received is always allowed (no canReach gate).
+  if (op === "replyToMessage") {
+    const broadcastId = String(fd.get("broadcastMessageId") ?? "").trim();
+    const body = String(fd.get("body") ?? "").trim();
+    const rt = rawReturn.startsWith("/console/") || rawReturn.startsWith("/portal") ? rawReturn : base;
+    const backRT = (qs: string) => NextResponse.redirect(new URL(`${rt}${qs}`, origin), 303);
+    if (!broadcastId || !body) return backRT("?msgreply=err");
+    const msg = await prisma.message.findUnique({ where: { id: broadcastId }, select: { sender: { select: { personId: true } } } });
+    const senderPersonId = msg?.sender?.personId ?? null;
+    if (!senderPersonId) return backRT("?msgreply=nosender");
+    if (senderPersonId === myPersonId) return backRT("?msgreply=self");
+    // Find or reuse the 1:1 thread with the sender, then append + notify them.
+    const existing = await prisma.conversation.findFirst({
+      where: {
+        participants: { every: { personId: { in: [myPersonId, senderPersonId] } } },
+        AND: [{ participants: { some: { personId: myPersonId } } }, { participants: { some: { personId: senderPersonId } } }],
+      },
+      select: { id: true },
+    });
+    const convId = existing?.id ?? (await prisma.conversation.create({
+      data: { createdById: myPersonId, participants: { create: [{ personId: myPersonId }, { personId: senderPersonId }] } },
+      select: { id: true },
+    })).id;
+    await appendMessage(convId, myPersonId, body, { email: true, sms: true }, null);
+    await audit({ actorId: actor.userId, entityType: "Conversation", entityId: convId, action: "message.reply", summary: `Replied to message ${broadcastId} (sent to sender)` });
+    return backRT("?msgreply=1");
+  }
+
   if (op === "deleteMessage") {
     const messageId = String(fd.get("messageId") ?? "").trim();
     const conversationId = String(fd.get("conversationId") ?? "").trim();

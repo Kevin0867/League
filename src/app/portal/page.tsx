@@ -138,7 +138,7 @@ export default async function PortalHome({
             ...(annQ ? { AND: [{ OR: [{ subject: { contains: annQ, mode: "insensitive" } }, { body: { contains: annQ, mode: "insensitive" } }] }] } : {}),
           },
         },
-        include: { message: true },
+        include: { message: { include: { sender: { select: { personId: true, person: { select: { firstName: true, lastName: true } } } } } } },
         orderBy: { message: { sentAt: "desc" } },
         take: annQ ? 100 : 20,
       })
@@ -185,6 +185,10 @@ export default async function PortalHome({
       </Link>
 
       {sp.ok === "info" && <Notice kind="success" title="Saved">Your details are updated.</Notice>}
+      {sp.msgreply === "1" && <Notice kind="success" title="Reply sent">The sender got your reply in their inbox and by text.</Notice>}
+      {sp.msgreply && sp.msgreply !== "1" && (
+        <Notice kind="error" title="Couldn't send reply">{sp.msgreply === "nosender" ? "That message was automated — there's no one to reply to." : "Please try again."}</Notice>
+      )}
 
       {sp.payerr && PAY_ERRORS[sp.payerr] && (
         <Notice kind="error" title={PAY_ERRORS[sp.payerr].title}>{PAY_ERRORS[sp.payerr].detail}</Notice>
@@ -417,7 +421,7 @@ export default async function PortalHome({
                 ? outstandingByPerson.get(r.message.audienceRef)
                 : null;
               return (
-                <div key={r.id} className={`card ${!r.readAt ? "border-l-4 border-brand-400" : ""}`}>
+                <div key={r.id} className={`card ${!r.readAt ? "bg-brand-50 ring-2 ring-brand-300" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-medium text-slate-800">{r.message.subject ?? "Message from PURE Academy"}</div>
@@ -457,6 +461,21 @@ export default async function PortalHome({
                     <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{r.message.body}</p>
                   )}
                   {r.message.attachmentUrl && <Attachment url={r.message.attachmentUrl} type={r.message.attachmentType} />}
+                  {r.message.sender?.personId && r.message.sender.personId !== session.personId && (
+                    <details className="mt-3 border-t border-slate-100 pt-2">
+                      <summary className="cursor-pointer text-xs font-semibold text-brand-700">
+                        Reply{r.message.sender.person ? ` to ${r.message.sender.person.firstName}` : ""} →
+                      </summary>
+                      <form method="POST" action="/api/messages" className="mt-2 space-y-2">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="replyToMessage" />
+                        <input type="hidden" name="broadcastMessageId" value={r.messageId} />
+                        <input type="hidden" name="returnTo" value="/portal" />
+                        <textarea name="body" rows={2} required className="input" placeholder="Write your reply…" />
+                        <button className="btn-secondary text-sm">Send reply</button>
+                      </form>
+                    </details>
+                  )}
                 </div>
               );
             })}

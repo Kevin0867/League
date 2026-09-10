@@ -66,7 +66,11 @@ export function InboxList({ items, basePath }: { items: InboxItem[]; basePath: s
   return (
     <div className="card divide-y divide-slate-100 p-0">
       {items.map((it) => (
-        <Link key={it.id} href={`${basePath}/${it.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50">
+        <Link
+          key={it.id}
+          href={`${basePath}/${it.id}`}
+          className={`flex items-start gap-3 px-4 py-3 ${it.unread ? "bg-brand-50 hover:bg-brand-100" : "hover:bg-slate-50"}`}
+        >
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${it.unread ? "bg-brand-600" : "bg-transparent"}`} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
