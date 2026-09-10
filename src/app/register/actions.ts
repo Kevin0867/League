@@ -12,6 +12,8 @@ import {
 } from "@/lib/domain/registrationEmail";
 import { pushContactToZoho } from "@/lib/integrations/zoho";
 import { placementPayLink } from "@/lib/payments/familyFee";
+import { sendSms } from "@/lib/notify";
+import { appUrl } from "@/lib/stripe";
 
 export type RegisterState = { error?: string };
 
@@ -219,7 +221,7 @@ export async function registerAction(
   // Past the deadline — OR whenever waitlist mode is switched on — we don't turn
   // people away: we accept them onto the WAITLIST and tell them registration has
   // closed. Only the "not open yet" window above is a hard stop.
-  const waitlisted = !!windowSeason.waitlistMode || !!(windowSeason.closesOn && windowSeason.closesOn < nowTs);
+  let waitlisted = !!windowSeason.waitlistMode || !!(windowSeason.closesOn && windowSeason.closesOn < nowTs);
 
   const mode = g("mode") || "adult"; // "adult" | "child" | "both"
   const adultPlaying = mode === "adult" || mode === "both";
@@ -247,9 +249,11 @@ export async function registerAction(
   if (!phone) return { error: "A phone number is required." };
   if (!waiverSigned || !signatureName)
     return { error: "The liability waiver must be read, agreed to, and signed." };
-  if (password && password.length < 8)
-    return { error: "Password must be at least 8 characters." };
-  if (password && password !== passwordConfirm)
+  // Portal access is required — everyone gets an account so we can text them a
+  // sign-in link and they can get familiar with the app.
+  if (!password || password.length < 8)
+    return { error: "Choose a password (at least 8 characters) to create your portal login." };
+  if (password !== passwordConfirm)
     return { error: "Passwords don't match." };
 
   // Shared preferences.
@@ -286,6 +290,9 @@ export async function registerAction(
         .catch(() => null)
     : null;
   const targetTeamId = targetTeam?.id ?? null;
+  // An open-spots signup is a real, open signup even after the general window
+  // closed — we're advertising those spots — so it never files as a waitlist.
+  if (targetTeamId) waitlisted = false;
 
   // Reuse an existing adult person by email so families don't create duplicates.
   // Scoped to non-minors: a child may now carry the guardian's email as a
@@ -420,7 +427,7 @@ export async function registerAction(
     }
   }
 
-  // Optional portal login. Adult-only → PLAYER; guardian present → PARENT.
+  // Portal login (required). Adult-only → PLAYER; guardian present → PARENT.
   if (password && email) {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (!existingUser) {
@@ -432,6 +439,17 @@ export async function registerAction(
           personId: primaryId,
         },
       });
+    }
+  }
+
+  // Text them the sign-in link so they can log in right away and get familiar
+  // with the portal (their team, messages, payments). Transactional account
+  // message; best-effort — never blocks a successful registration.
+  if (phone) {
+    try {
+      await sendSms(phone, `PURE Academy — your account is ready! Sign in with your email and the password you just set to see your team, messages, and payments: ${appUrl()}/login`);
+    } catch {
+      // swallow — registration already succeeded
     }
   }
 

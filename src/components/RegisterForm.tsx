@@ -231,8 +231,8 @@ export function RegisterForm({
         </div>
       </Section>
 
-      <Section title="Portal access (optional)" subtitle="Create a password to track placement and pay later. Payment is requested only after you're assigned a team.">
-        <PasswordField name="password" label="Choose a password" confirm required={false} hint="Optional — at least 8 characters if you set one." />
+      <Section title="Create your portal login" subtitle="Choose a password to set up your account. We'll text you a link so you can sign in, see your team, messages, and payments, and get familiar with everything.">
+        <PasswordField name="password" label="Choose a password" confirm required hint="At least 8 characters." />
       </Section>
 
       {state?.error && (
