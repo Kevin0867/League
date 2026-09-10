@@ -258,6 +258,16 @@ export default async function TeamDetailPage({
   for (const it of apparelItems) {
     (tally[it.garment] ??= {})[it.size] = (tally[it.garment]?.[it.size] ?? 0) + it.quantity;
   }
+  // Each player's own apparel order (garment + size), shown inline in the roster
+  // so a coach — not just an admin — can see what every player ordered, and
+  // whether it's still unpaid.
+  const apparelByPerson = new Map<string, { label: string; paid: boolean }[]>();
+  for (const it of apparelItems) {
+    if (!it.personId) continue;
+    const arr = apparelByPerson.get(it.personId) ?? [];
+    arr.push({ label: `${it.quantity} × ${garmentLabel(it.garment)} ${sizeLabel(it.size)}`, paid: it.payment.status === "PAID" });
+    apparelByPerson.set(it.personId, arr);
+  }
 
   // This team's practices (for the Schedule card on the team page). Only
   // PRACTICE sessions — league/championship are managed from their own pages.
@@ -679,6 +689,16 @@ export default async function TeamDetailPage({
                         {!hasFamilyEmail(m.person) && <span className="ml-2 text-amber-600">⚠ no email</span>}
                         {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
                       </div>
+                      {/* Apparel this player ordered — visible to coaches too. */}
+                      {(apparelByPerson.get(m.personId)?.length ?? 0) > 0 ? (
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          👕 {apparelByPerson.get(m.personId)!.map((a, i) => (
+                            <span key={i}>{i > 0 ? ", " : ""}{a.label}{!a.paid ? <span className="text-amber-600"> (unpaid)</span> : ""}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-0.5 text-xs text-slate-300">No apparel ordered</div>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <details className="text-xs">
