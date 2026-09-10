@@ -25,3 +25,14 @@ export async function unreadInboxCount(personId: string | null | undefined): Pro
   }
   return unread.size;
 }
+
+// Unread broadcast/announcement messages this person received in-app (readAt
+// null). Drives the "Announcements" banner + badge so a coach/admin sees a new
+// announcement, not just families. Counts IN_APP messages only — email/SMS-only
+// sends never clutter the in-app list.
+export async function unreadBroadcastCount(personId: string | null | undefined): Promise<number> {
+  if (!personId) return 0;
+  return prisma.messageRecipient.count({
+    where: { personId, readAt: null, message: { channels: { contains: "IN_APP" } } },
+  });
+}
