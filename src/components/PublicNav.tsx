@@ -5,6 +5,7 @@ import { isStaff } from "@/lib/rbac";
 
 const LINKS = [
   { href: "/programs", label: "Programs" },
+  { href: "/open-spots", label: "Open Spots" },
   { href: "/coaches", label: "Coaches" },
   { href: "/teams", label: "Teams" },
   { href: "/clinics", label: "Clinics and lessons" },

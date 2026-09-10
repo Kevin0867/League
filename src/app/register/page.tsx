@@ -51,10 +51,10 @@ export default async function RegisterPage({
   const teamRow = teamParam && season
     ? await prisma.team
         .findFirst({
-          where: { id: teamParam, seasonId: season.id, isTest: false },
+          where: { id: teamParam, seasonId: season.id, isTest: false, acceptingSignups: true },
           select: {
             id: true, club: true, market: true, divisionCode: true, color: true, gender: true,
-            dayOfWeek: true, startTime: true, coachPlays: true,
+            dayOfWeek: true, startTime: true, coachPlays: true, capacity: true,
             division: { select: { name: true } },
             facility: { select: { name: true, isPrivate: true, generalArea: true } },
             _count: { select: { members: true } },
@@ -75,7 +75,7 @@ export default async function RegisterPage({
           teamRow.market,
           teamRow.facility && !teamRow.facility.isPrivate ? teamRow.facility.name : teamRow.facility?.generalArea ?? null,
         ].filter((v, i, a) => v && a.indexOf(v) === i).join(" · ") || null,
-        spotsLeft: Math.max(0, TEAM_CAP - (teamRow._count.members + (teamRow.coachPlays ? 1 : 0))),
+        spotsLeft: Math.max(0, (teamRow.capacity && teamRow.capacity > 0 ? teamRow.capacity : TEAM_CAP) - (teamRow._count.members + (teamRow.coachPlays ? 1 : 0))),
       }
     : null;
 
@@ -181,8 +181,8 @@ export default async function RegisterPage({
 
             <p className="mt-3 border-t border-emerald-200 pt-2 text-sm text-slate-600">
               {targetTeam.spotsLeft > 0
-                ? `${targetTeam.spotsLeft} spot${targetTeam.spotsLeft === 1 ? "" : "s"} left. Complete signup and you'll join this team and go straight to pay your season fee and pick your gear.`
-                : "This team is full right now — sign up and we'll add you to its waitlist. You won't be charged unless a spot opens and you're placed."}
+                ? `${targetTeam.spotsLeft} spot${targetTeam.spotsLeft === 1 ? "" : "s"} left. Complete signup and go straight to pay your season fee and pick your gear — you'll be on the team as soon as your payment clears.`
+                : "This team just filled up — sign up and pay to claim a spot; if it's genuinely full our team will review and place or refund you."}
             </p>
           </div>
         ) : (preselectedDivision || effectiveLocation || facilityLabel) ? (
