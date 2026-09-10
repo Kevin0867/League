@@ -16,6 +16,7 @@ export function AssignCsvChargeRow({
   amount,
   amountCents,
   who,
+  isPlan,
   remaining,
 }: {
   ticket: string;
@@ -24,6 +25,9 @@ export function AssignCsvChargeRow({
   amountCents: number;
   /** What Stripe had on the charge — usually the payer's email. */
   who: string;
+  /** True when this charge is a subscription installment (a 3-payment plan) — the
+   *  assignment records it as paying-by-plan (1st installment), not paid-in-full. */
+  isPlan: boolean;
   /** The full unmatched list (raw param), so the route can re-show the rest
    *  after this one is assigned — no CSV re-upload needed between assignments. */
   remaining: string;
@@ -58,10 +62,13 @@ export function AssignCsvChargeRow({
       <input type="hidden" name="amountCents" value={String(amountCents)} />
       <input type="hidden" name="payerEmail" value={isEmail ? who : ""} />
       <input type="hidden" name="personId" value={picked?.id ?? ""} />
+      <input type="hidden" name="isPlan" value={isPlan ? "1" : "0"} />
       <input type="hidden" name="remaining" value={remaining} />
 
       <div className="w-24 shrink-0 font-semibold text-amber-900">{amount}</div>
-      <div className="w-52 shrink-0 truncate text-xs text-amber-700" title={who}>{who}</div>
+      <div className="w-52 shrink-0 truncate text-xs text-amber-700" title={who}>
+        {who}{isPlan ? <span className="ml-1 rounded bg-brand-100 px-1 py-0.5 text-[10px] font-semibold text-brand-800">PLAN</span> : null}
+      </div>
 
       {/* Person picker */}
       <div className="relative min-w-[200px] flex-1">
@@ -105,7 +112,7 @@ export function AssignCsvChargeRow({
         className="btn-primary shrink-0 px-4 py-1.5 text-sm disabled:opacity-40"
         title={picked ? "" : "Pick a player first"}
       >
-        Mark paid
+        {isPlan ? "Record 1st plan payment" : "Mark paid"}
       </button>
     </form>
   );

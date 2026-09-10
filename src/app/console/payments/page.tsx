@@ -135,6 +135,13 @@ export default async function PaymentsPage({
   }, 0);
   const subsRemainingCents = Math.max(0, allActiveSubs.reduce((s, p) => s + p.amountCents, 0) - subsCollectedCents);
 
+  // Headline counts the user asked for: how many season fees are fully paid vs.
+  // how many are on an active payment plan. "Paid in full" = a settled fee
+  // (one-time OR a completed 3/3 plan); "on a plan" = a plan still paying.
+  const paidInFullCount = await prisma.payment.count({
+    where: { direction: "IN", category: "PLAYER_FEE", status: "PAID" },
+  });
+
   // Resolve the players a shown payment COVERS (family invoices bill the guardian),
   // so each row can name who it's actually for — that's how a payment made under a
   // parent shows up as the child's paid fee.
@@ -297,14 +304,14 @@ export default async function PaymentsPage({
   // from the reconcile result and, for each, offer a best-guess match by last
   // name so the admin can jump straight to the right record and fix the spelling
   // (or confirm it's a genuinely missing player).
-  type CsvUnmatched = { who: string; amountCents: number; chargeId: string };
+  type CsvUnmatched = { who: string; amountCents: number; chargeId: string; isPlan: boolean };
   let csvUnmatched: CsvUnmatched[] = [];
   if (sp.csvunmatched) {
     try {
-      const parsed = JSON.parse(sp.csvunmatched) as Array<{ w: string; c: number; id?: string }>;
+      const parsed = JSON.parse(sp.csvunmatched) as Array<{ w: string; c: number; id?: string; p?: number }>;
       csvUnmatched = parsed
         .filter((u) => u.id)
-        .map((u) => ({ who: (u.w || "").trim() || "(no name)", amountCents: u.c ?? 0, chargeId: String(u.id) }));
+        .map((u) => ({ who: (u.w || "").trim() || "(no name)", amountCents: u.c ?? 0, chargeId: String(u.id), isPlan: u.p === 1 }));
     } catch {
       csvUnmatched = [];
     }
@@ -471,7 +478,7 @@ export default async function PaymentsPage({
             {csvUnmatched.length} paid {csvUnmatched.length === 1 ? "charge couldn’t be matched to a player" : "charges couldn’t be matched to a player"} — assign each one here
           </div>
           <p className="mt-0.5 text-xs text-slate-500">
-            Stripe has only the payer&apos;s email on these charges (no player name), and that email isn&apos;t on any record — so they couldn&apos;t auto-match. Pick the player each one belongs to and it&apos;s marked paid on the spot. We record the charge so a later CSV re-upload never double-counts it, and save the email to the player so their next payment matches automatically.
+            Stripe has only the payer&apos;s email on these charges (no player name), and that email isn&apos;t on any record — so they couldn&apos;t auto-match. Pick the player each one belongs to and it&apos;s recorded on the spot. Rows tagged <span className="rounded bg-brand-100 px-1 py-0.5 text-[10px] font-semibold text-brand-800">PLAN</span> are subscription installments — they&apos;re recorded as paying-by-plan (1st payment in), not paid in full. We stamp the Stripe charge so a re-upload never double-counts, and save the email to the player so their next payment matches automatically.
           </p>
           <div className="mt-2">
             {csvUnmatched.map((u, i) => (
@@ -482,6 +489,7 @@ export default async function PaymentsPage({
                 amount={formatCents(u.amountCents)}
                 amountCents={u.amountCents}
                 who={u.who}
+                isPlan={u.isPlan}
                 remaining={sp.csvunmatched ?? ""}
               />
             ))}
@@ -695,6 +703,10 @@ export default async function PaymentsPage({
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Collected{usingStripe ? "" : " (recorded)"}</div>
           <div className="mt-1 text-2xl font-extrabold text-emerald-700">{formatCents(collectedTotal)}</div>
+          <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs font-medium text-slate-500">
+            <span><strong className="text-slate-700">{paidInFullCount}</strong> paid in full</span>
+            <span><strong className="text-slate-700">{subsCount}</strong> on a payment plan</span>
+          </div>
           <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
             <div className="flex justify-between"><dt>Season fees</dt><dd className="font-semibold text-slate-700">{formatCents(seasonFeeCents)}</dd></div>
             {installmentLineCents > 0 && <div className="flex justify-between"><dt>Installments</dt><dd className="font-semibold text-slate-700">{formatCents(installmentLineCents)}</dd></div>}
