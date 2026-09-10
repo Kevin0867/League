@@ -51,7 +51,9 @@ export async function POST(req: Request) {
         where: { id: recipientId, personId: me.personId },
         data: { readAt: read ? new Date() : null, inAppStatus: read ? "READ" : "DELIVERED" },
       });
-      return back(read ? "?ok=read" : "?ok=unread");
+      // Anchor back to the message so the reload keeps the reader in place
+      // instead of jumping to the top of the list.
+      return back(`${read ? "?ok=read" : "?ok=unread"}#msg-${recipientId}`);
     }
 
     case "send": {

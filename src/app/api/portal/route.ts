@@ -122,7 +122,8 @@ export async function POST(req: Request) {
         where: { id: recipientId, personId: { in: household }, readAt: null },
         data: { readAt: new Date(), inAppStatus: "READ" },
       });
-      return NextResponse.redirect(new URL("/portal", origin), 303);
+      // Anchor back to the message so the reload doesn't jump to the top.
+      return NextResponse.redirect(new URL(`/portal#msg-${recipientId}`, origin), 303);
     }
 
     case "markMessageUnread": {
@@ -132,7 +133,7 @@ export async function POST(req: Request) {
         where: { id: recipientId, personId: { in: household } },
         data: { readAt: null, inAppStatus: "DELIVERED" },
       });
-      return NextResponse.redirect(new URL("/portal", origin), 303);
+      return NextResponse.redirect(new URL(`/portal#msg-${recipientId}`, origin), 303);
     }
 
     case "deleteMessage": {

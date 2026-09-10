@@ -68,7 +68,7 @@ export default async function AnnouncementsPage({
             const senderName = r.message.sender?.person ? `${r.message.sender.person.firstName} ${r.message.sender.person.lastName}` : null;
             const canReply = !!r.message.sender?.personId && r.message.sender.personId !== personId;
             return (
-              <div key={r.id} className={`card ${!r.readAt ? "bg-brand-50 ring-2 ring-brand-300" : ""}`}>
+              <div key={r.id} id={`msg-${r.id}`} className={`card scroll-mt-20 ${!r.readAt ? "bg-brand-50 ring-2 ring-brand-300" : ""}`}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h2 className="font-semibold text-slate-900">{r.message.subject || "Message"}</h2>

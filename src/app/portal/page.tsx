@@ -421,7 +421,7 @@ export default async function PortalHome({
                 ? outstandingByPerson.get(r.message.audienceRef)
                 : null;
               return (
-                <div key={r.id} className={`card ${!r.readAt ? "bg-brand-50 ring-2 ring-brand-300" : ""}`}>
+                <div key={r.id} id={`msg-${r.id}`} className={`card scroll-mt-20 ${!r.readAt ? "bg-brand-50 ring-2 ring-brand-300" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-medium text-slate-800">{r.message.subject ?? "Message from PURE Academy"}</div>
