@@ -179,9 +179,11 @@ async function appendMessage(
   await notifyOtherParticipants(conversationId, senderId, previewBody, notify);
 }
 
-/** Notify the other people on a thread — by the sender's chosen channels. */
+/** Notify the other people on a thread. Staff (admins/coaches) are ALWAYS
+ *  emailed and texted so an inbound question is never missed — regardless of
+ *  what the sender toggled. For non-staff recipients we honor the sender's
+ *  chosen channels. */
 async function notifyOtherParticipants(conversationId: string, senderId: string, body: string, notify: NotifyChoice) {
-  if (!notify.email && !notify.sms) return;
   try {
     const [sender, parts] = await Promise.all([
       prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true } }),
@@ -195,8 +197,12 @@ async function notifyOtherParticipants(conversationId: string, senderId: string,
     for (const p of parts) {
       const per = p.person;
       const staff = per.user?.role ? isStaff(per.user.role as Role) : false;
+      // Staff must never miss an inbound message — always email + text them.
+      const doEmail = staff || notify.email;
+      const doSms = staff || notify.sms;
+      if (!doEmail && !doSms) continue;
       const link = `${appUrl()}${staff ? "/console/inbox" : "/portal/inbox"}/${conversationId}`;
-      if (notify.email) {
+      if (doEmail) {
         const emails = [per.email, per.email2, per.email3].filter((e): e is string => !!e);
         if (emails.length) {
           await sendEmail(
@@ -206,7 +212,7 @@ async function notifyOtherParticipants(conversationId: string, senderId: string,
           );
         }
       }
-      if (notify.sms && per.phone) {
+      if (doSms && per.phone) {
         await sendSms(per.phone, `New message from ${senderName}: “${preview}”. Read & reply: ${link}`);
       }
     }

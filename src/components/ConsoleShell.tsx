@@ -99,6 +99,7 @@ export function ConsoleShell({
   unread = 0,
   announcements = 0,
   agreementAction = false,
+  agreementsPending = 0,
 }: {
   /** Primary role — used only for the sidebar badge label. */
   role: Role;
@@ -116,6 +117,9 @@ export function ConsoleShell({
   /** Coach's agreement was returned for correction — flags "Needs attention"
    *  on the My Agreement nav item and a banner. */
   agreementAction?: boolean;
+  /** Agreements signed by a coach and awaiting an admin countersignature —
+   *  drives the Agreements nav badge + banner (admins only). */
+  agreementsPending?: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -213,6 +217,9 @@ export function ConsoleShell({
                       {item.href === "/console/agreement" && agreementAction && (
                         <span className="ml-2 inline-flex items-center rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-900">Needs attention</span>
                       )}
+                      {item.href === "/console/agreements" && agreementsPending > 0 && (
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">{agreementsPending}</span>
+                      )}
                     </Link>
                   ))}
                 </div>
@@ -243,6 +250,15 @@ export function ConsoleShell({
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">!</span>
                 Your coaching agreement needs correction — open it to fix the details and re-sign →
+              </Link>
+            )}
+            {agreementsPending > 0 && (
+              <Link
+                href="/console/agreements"
+                className="mb-4 flex items-center gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 hover:bg-amber-100"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">{agreementsPending}</span>
+                {agreementsPending === 1 ? "A coaching agreement is" : `${agreementsPending} coaching agreements are`} signed and waiting for your countersignature — review {agreementsPending === 1 ? "it" : "them"} →
               </Link>
             )}
             {unread > 0 && (
