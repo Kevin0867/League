@@ -135,6 +135,8 @@ export type ThreadMessage = {
   deleted: boolean;
   mine: boolean;
   senderName: string;
+  attachmentUrl: string | null;
+  attachmentType: string | null;
 };
 
 export type Thread = {
@@ -169,6 +171,8 @@ export async function getThread(
           createdAt: true,
           deletedAt: true,
           senderId: true,
+          attachmentUrl: true,
+          attachmentType: true,
           sender: { select: { firstName: true, lastName: true } },
         },
       },
@@ -185,6 +189,9 @@ export async function getThread(
     deleted: !!m.deletedAt,
     mine: m.senderId === viewerPersonId,
     senderName: fullName(m.sender),
+    // A deleted message's attachment is withheld too (moderators see the note).
+    attachmentUrl: m.deletedAt ? null : m.attachmentUrl,
+    attachmentType: m.deletedAt ? null : m.attachmentType,
   }));
 
   return {

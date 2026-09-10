@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MediaAttach } from "@/components/MediaAttach";
 
 // The Coaches' Lounge post box. Posting is harmless, but "Email everyone" and
 // "Text everyone" reach every coach and admin — so those confirm first, with the
@@ -31,12 +32,12 @@ export function LoungeComposer({ ticket, admin }: { ticket: string; admin: boole
       <input type="hidden" name="op" value="post" />
       <textarea
         name="body"
-        required
         rows={3}
         maxLength={4000}
         placeholder="Say something to the coaches… (banter, a heads-up, or 'need a sub for Mesa MID this Thursday')"
         className="input w-full"
       />
+      <MediaAttach label="Add photo / video" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="text-sm text-slate-600">
           Notify staff:{" "}

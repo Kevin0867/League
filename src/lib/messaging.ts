@@ -53,6 +53,10 @@ export type DispatchInput = {
   smsBody?: string;
   /** Optional email attachments (e.g. an .ics calendar invite). */
   attachments?: EmailAttachment[];
+  /** Optional in-app photo/video attachment (Vercel Blob URL + IMAGE|VIDEO) —
+   *  e.g. a coach sharing a practice clip with the team. */
+  attachmentUrl?: string | null;
+  attachmentType?: string | null;
   triggerType?: string | null;
   /** Explicit, hand-picked email recipients (from a "Send to" checklist). When
    *  set, the EMAIL channel goes to exactly these addresses and guardian
@@ -99,6 +103,8 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
       subject: input.subject ?? null,
       body: input.body,
       html: input.html ?? null,
+      attachmentUrl: input.attachmentUrl ?? null,
+      attachmentType: input.attachmentType ?? null,
     },
   });
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Attachment } from "@/components/Attachment";
 import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -455,6 +456,7 @@ export default async function PortalHome({
                   ) : (
                     <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{r.message.body}</p>
                   )}
+                  {r.message.attachmentUrl && <Attachment url={r.message.attachmentUrl} type={r.message.attachmentType} />}
                 </div>
               );
             })}

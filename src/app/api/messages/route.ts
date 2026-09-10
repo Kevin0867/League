@@ -39,11 +39,16 @@ export async function POST(req: Request) {
   // How the sender chose to notify the recipient (in-app is always recorded).
   // Unchecked checkboxes aren't submitted, so absence = off.
   const notify = { email: fd.get("notifyEmail") != null, sms: fd.get("notifySms") != null };
+  // Optional photo/video attachment (uploaded to Blob client-side; the form
+  // carries its URL + kind).
+  const attachmentUrl = String(fd.get("attachmentUrl") ?? "").trim() || null;
+  const attachmentType = String(fd.get("attachmentType") ?? "").trim() || null;
+  const attach = attachmentUrl ? { url: attachmentUrl, type: attachmentType } : null;
 
   if (op === "start") {
     const recipientId = String(fd.get("recipientId") ?? "").trim();
     const body = String(fd.get("body") ?? "").trim();
-    if (!recipientId || !body) return back(`${base}?err=fields`);
+    if (!recipientId || (!body && !attach)) return back(`${base}?err=fields`);
     if (!(await canReachPerson(myPersonId, actor.role, recipientId))) return back(`${base}?err=perm`);
 
     // Reuse an existing 1:1 thread between exactly these two people.
@@ -72,7 +77,7 @@ export async function POST(req: Request) {
       conversationId = convo.id;
     }
 
-    await appendMessage(conversationId, myPersonId, body, notify);
+    await appendMessage(conversationId, myPersonId, body, notify, attach);
     await audit({ actorId: actor.userId, entityType: "Conversation", entityId: conversationId, action: "message.start", summary: `Messaged ${recipientId}` });
     return back(`${base}/${conversationId}`);
   }
@@ -80,13 +85,13 @@ export async function POST(req: Request) {
   if (op === "reply") {
     const conversationId = String(fd.get("conversationId") ?? "").trim();
     const body = String(fd.get("body") ?? "").trim();
-    if (!conversationId || !body) return back(`${base}?err=fields`);
+    if (!conversationId || (!body && !attach)) return back(`${base}?err=fields`);
     const part = await prisma.conversationParticipant.findFirst({
       where: { conversationId, personId: myPersonId },
       select: { id: true },
     });
     if (!part) return back(`${base}?err=perm`);
-    await appendMessage(conversationId, myPersonId, body, notify);
+    await appendMessage(conversationId, myPersonId, body, notify, attach);
     return back(`${base}/${conversationId}`);
   }
 
@@ -118,8 +123,16 @@ export async function POST(req: Request) {
 type NotifyChoice = { email: boolean; sms: boolean };
 
 /** Append a message, resurface the thread for everyone, and bump its sort time. */
-async function appendMessage(conversationId: string, senderId: string, body: string, notify: NotifyChoice = { email: true, sms: false }) {
-  await prisma.chatMessage.create({ data: { conversationId, senderId, body } });
+async function appendMessage(
+  conversationId: string,
+  senderId: string,
+  body: string,
+  notify: NotifyChoice = { email: true, sms: false },
+  attach: { url: string; type: string | null } | null = null,
+) {
+  await prisma.chatMessage.create({
+    data: { conversationId, senderId, body, attachmentUrl: attach?.url ?? null, attachmentType: attach?.type ?? null },
+  });
   const now = new Date();
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
   // A new message un-archives the thread for every participant…
@@ -131,7 +144,8 @@ async function appendMessage(conversationId: string, senderId: string, body: str
   });
   // Notify every OTHER participant by the channels the sender chose (in-app is
   // always recorded on the thread). Best-effort: never block the send on it.
-  await notifyOtherParticipants(conversationId, senderId, body, notify);
+  const previewBody = body || (attach ? (attach.type === "VIDEO" ? "📹 sent a video" : "📷 sent a photo") : "");
+  await notifyOtherParticipants(conversationId, senderId, previewBody, notify);
 }
 
 /** Notify the other people on a thread — by the sender's chosen channels. */

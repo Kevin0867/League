@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
+import { Attachment } from "@/components/Attachment";
 import { mintConsoleTicket } from "@/lib/auth";
 import { requireStaff } from "@/lib/rbac";
 import { isAdmin } from "@/lib/rbac";
@@ -213,6 +214,7 @@ export default async function LoungePage({
                 </div>
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{p.body}</p>
+              {p.attachmentUrl && <Attachment url={p.attachmentUrl} type={p.attachmentType} />}
 
               {/* Replies */}
               {p.replies.length > 0 && (

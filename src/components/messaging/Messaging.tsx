@@ -2,6 +2,8 @@ import Link from "next/link";
 import { formatDateTime12 } from "@/lib/time";
 import type { InboxItem, Thread } from "@/lib/domain/messaging-store";
 import type { Contact } from "@/lib/domain/messaging-acl";
+import { MediaAttach } from "@/components/MediaAttach";
+import { Attachment } from "@/components/Attachment";
 
 // Shared server components for the direct-messaging UI, rendered in both the
 // console (admin, coach) and the family portal (parent). All actions are native
@@ -34,8 +36,9 @@ export function Composer({ contacts, ticket, returnTo }: { contacts: Contact[]; 
       </div>
       <div>
         <label className="label">Message</label>
-        <textarea name="body" rows={3} className="input" required placeholder="Write a message…" />
+        <textarea name="body" rows={3} className="input" placeholder="Write a message…" />
       </div>
+      <MediaAttach />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <NotifyByPicker />
         <button type="submit" className="btn-primary">Send</button>
@@ -129,6 +132,7 @@ export function ConversationView({
                   <div className="whitespace-pre-wrap break-words">
                     {m.body}
                     {m.deleted && isModerator && <span className="ml-2 rounded bg-rose-200 px-1 text-[10px] font-semibold text-rose-800 align-middle">DELETED</span>}
+                    {m.attachmentUrl && <Attachment url={m.attachmentUrl} type={m.attachmentType} />}
                   </div>
                 )}
                 <div className={`mt-1 flex items-center gap-2 text-[11px] ${m.mine ? "text-white/70" : "text-slate-400"}`}>
@@ -156,7 +160,8 @@ export function ConversationView({
           <input type="hidden" name="op" value="reply" />
           <input type="hidden" name="conversationId" value={thread.id} />
           <input type="hidden" name="returnTo" value={basePath} />
-          <textarea name="body" rows={2} className="input" required placeholder="Write a reply…" />
+          <textarea name="body" rows={2} className="input" placeholder="Write a reply…" />
+          <MediaAttach />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <NotifyByPicker />
             <button type="submit" className="btn-primary">Send</button>
