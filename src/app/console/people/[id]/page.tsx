@@ -6,8 +6,6 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { decryptField } from "@/lib/crypto";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatCents } from "@/lib/money";
-import { feeStateOf } from "@/lib/domain/feeStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -46,20 +44,12 @@ export default async function PersonDetail({
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )[0] ?? null;
 
-  // Season fee(s) covering this player (billed to them or to their guardian on a
-  // family invoice), scoped to the primary registration's season when we have one.
-  const feePayments = await prisma.payment.findMany({
-    where: {
-      category: "PLAYER_FEE",
-      ...(primaryReg ? { seasonId: primaryReg.seasonId } : {}),
-      OR: [{ partyId: person.id }, { coveredPersonIds: { array_contains: person.id } }],
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  const paidFee = feePayments.find((x) => x.status === "PAID");
-  const subFee = !paidFee ? feePayments.find((x) => feeStateOf(x) === "subscription") : undefined;
-  const outstandingFee = !paidFee && !subFee ? feePayments.find((x) => ["REQUESTED", "PENDING", "FAILED"].includes(x.status)) : undefined;
-  const returnTo = `/console/people/${person.id}`;
+  // A registered person's FULL record lives on the registration page — fee,
+  // team placement, apparel, subscription, custom charges, AND all contact /
+  // emergency / medical editing in one place. Send admins straight there so
+  // clicking a person from anywhere opens the complete record. People with no
+  // registration (guardians, staff-only records) stay on this lighter view.
+  if (primaryReg) redirect(`/console/registrations/${primaryReg.id}`);
 
   // Decrypt sensitive fields for this authorized view only.
   const emergencyName = decryptField(person.emergencyName);
@@ -180,92 +170,6 @@ export default async function PersonDetail({
             limited to the COO and Academy Director.
           </p>
         </div>
-      </div>
-
-      {/* Season fee & payments — status plus the two most-used actions (request /
-          mark paid offline), so this record can be settled without hopping to the
-          registration page. Full apparel, custom-payment and resend tools live on
-          the registration record, linked below. */}
-      <div className="card">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold text-slate-900">Season fee &amp; payments</h2>
-          {primaryReg && (
-            <Link href={`/console/registrations/${primaryReg.id}`} className="btn-secondary py-1 text-xs">
-              Full payment &amp; apparel record →
-            </Link>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-xs uppercase tracking-wide text-slate-400">Status</span>
-          {paidFee ? (
-            <span className="badge bg-emerald-100 text-emerald-800">
-              ✓ Paid {formatCents(paidFee.amountCents)}{paidFee.method === "MANUAL" ? " · offline" : ""}
-            </span>
-          ) : subFee ? (
-            <span className="badge bg-emerald-100 text-emerald-800">
-              On payment plan · {subFee.installmentsPaid ?? 1}/{subFee.installmentsTotal ?? 3} paid
-            </span>
-          ) : outstandingFee ? (
-            <span className="badge bg-amber-100 text-amber-800">
-              {outstandingFee.status === "FAILED" ? "Payment failed" : outstandingFee.status === "PENDING" ? "In checkout" : "Requested"} · {formatCents(outstandingFee.amountCents)}
-            </span>
-          ) : (
-            <span className="badge bg-slate-100 text-slate-600">No season fee on file yet</span>
-          )}
-        </div>
-
-        {!primaryReg ? (
-          <p className="mt-3 text-sm text-slate-400">
-            This person has no registration this season, so there&apos;s no fee to manage yet.
-          </p>
-        ) : !paidFee ? (
-          <div className="mt-4 flex flex-wrap items-start gap-4 border-t border-slate-100 pt-4">
-            {/* Request (or re-send) the season fee — emails/texts a secure pay link. */}
-            <form method="POST" action="/api/console/registrations">
-              <input type="hidden" name="ticket" value={ticket} />
-              <input type="hidden" name="op" value="requestFee" />
-              <input type="hidden" name="personId" value={person.id} />
-              <input type="hidden" name="registrationId" value={primaryReg.id} />
-              <input type="hidden" name="returnTo" value={returnTo} />
-              <button className="btn-secondary py-1.5 text-sm">
-                {outstandingFee ? "Resend fee request" : "Request season fee"}
-              </button>
-            </form>
-
-            {/* Mark paid outside Stripe — check, Class Wallet, cash, in-kind. */}
-            <details className="min-w-[260px] flex-1">
-              <summary className="cursor-pointer text-sm font-semibold text-emerald-700 hover:underline">Mark paid (offline)…</summary>
-              <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg border border-slate-200 p-3">
-                <input type="hidden" name="ticket" value={ticket} />
-                <input type="hidden" name="op" value="markPaidOffline" />
-                <input type="hidden" name="personId" value={person.id} />
-                <input type="hidden" name="registrationId" value={primaryReg.id} />
-                <input type="hidden" name="returnTo" value={returnTo} />
-                <div className="flex flex-wrap gap-2">
-                  <div>
-                    <label className="label">Amount ($)</label>
-                    <input
-                      name="amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="input py-1.5 text-sm"
-                      placeholder="e.g. 495.00"
-                      defaultValue={((outstandingFee?.amountCents ?? subFee?.amountCents ?? 0) / 100 || "").toString()}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="label">How it was paid</label>
-                    <input name="note" required className="input py-1.5 text-sm" placeholder="e.g. Check #1042 · Class Wallet · Cash" />
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500">Records the fee as paid in the roster, reports and reminders. No card is charged and no email is sent.</p>
-                <button className="btn-secondary py-1.5 text-sm">Mark paid</button>
-              </form>
-            </details>
-          </div>
-        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

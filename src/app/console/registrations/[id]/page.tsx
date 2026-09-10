@@ -533,11 +533,19 @@ export default async function RegistrationDetail({
           <Select label="Gender" name="gender" defaultValue={p.gender ?? ""} options={GENDERS.map((g) => ({ value: g, label: g || "—" }))} />
           <Field label="Address" name="address" defaultValue={dec(p.address)} />
           <Field label="How heard" name="howHeard" defaultValue={p.howHeard ?? ""} />
-          <Field label="Emergency contact" name="emergencyName" defaultValue={dec(p.emergencyName)} />
-          <Field label="Emergency phone" name="emergencyPhone" type="tel" defaultValue={dec(p.emergencyPhone)} />
-          <div className="sm:col-span-2">
-            <label className="label">Medical disclosures</label>
-            <textarea name="medical" rows={2} className="input" defaultValue={dec(p.medicalNotes)} />
+          <div className="sm:col-span-2 grid gap-3 rounded-lg border-l-4 border-brand-300 bg-slate-50 p-3 sm:grid-cols-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-3">Emergency contact 1 — encrypted at rest</p>
+            <Field label="Name" name="emergencyName" defaultValue={dec(p.emergencyName)} />
+            <Field label="Relationship" name="emergencyRelation" defaultValue={dec(p.emergencyRelation)} />
+            <Field label="Phone" name="emergencyPhone" type="tel" defaultValue={dec(p.emergencyPhone)} />
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-3">Emergency contact 2</p>
+            <Field label="Name" name="emergencyName2" defaultValue={dec(p.emergencyName2)} />
+            <Field label="Relationship" name="emergencyRelation2" defaultValue={dec(p.emergencyRelation2)} />
+            <Field label="Phone" name="emergencyPhone2" type="tel" defaultValue={dec(p.emergencyPhone2)} />
+            <div className="sm:col-span-3">
+              <label className="label">Medical disclosures</label>
+              <textarea name="medical" rows={2} className="input" defaultValue={dec(p.medicalNotes)} />
+            </div>
           </div>
         </div>
 
