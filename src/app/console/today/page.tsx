@@ -87,7 +87,6 @@ export default async function TodayPage() {
         >
           <div>
             <div className="text-base font-bold text-slate-900">📘 Coaching Handbook</div>
-            <div className="mt-0.5 text-xs text-slate-500">Read the handbook &amp; agreement</div>
           </div>
           <span className="shrink-0 text-brand-600">→</span>
         </Link>
