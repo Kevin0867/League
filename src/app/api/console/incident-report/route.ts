@@ -97,7 +97,9 @@ export async function POST(req: Request) {
   const html = `<pre style="font-family:Menlo,Consolas,monospace;white-space:pre-wrap;font-size:13px;color:#0f172a">${esc(body)}</pre>${mediaHtml}`;
 
   try {
-    const res = await sendEmail(TEAM_INBOX, subj, body, html);
+    // Confidential: ONLY the team inbox — never the parent/player/coach, and no
+    // org-wide BCC copy. Nothing is stored in the app or shown back to the coach.
+    const res = await sendEmail(TEAM_INBOX, subj, body, html, undefined, { skipBcc: true });
     await audit({
       actorId: actor.userId, entityType: "IncidentReport", entityId: "submit", action: "SUBMITTED",
       summary: `Incident report emailed to ${TEAM_INBOX} — ${g("incidentDate")}${g("participantName") ? ` · ${g("participantName")}` : ""} by ${who}${attachments.length ? ` · ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}` : ""}${res.simulated ? " (email simulated — provider off)" : ""}`,

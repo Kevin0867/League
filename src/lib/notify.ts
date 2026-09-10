@@ -72,7 +72,10 @@ export async function sendEmail(
   subject: string,
   body: string,
   html?: string,
-  attachments?: EmailAttachment[]
+  attachments?: EmailAttachment[],
+  /** `skipBcc` suppresses the org-wide EMAIL_BCC copy — used for confidential
+   *  mail (e.g. an incident report) that must reach ONLY its named recipient. */
+  opts?: { skipBcc?: boolean }
 ): Promise<SendResult> {
   const recipients = (Array.isArray(to) ? to : [to])
     .map((t) => (t ?? "").trim())
@@ -94,8 +97,9 @@ export async function sendEmail(
         to: recipients,
         // Replies go to the team inbox by default (override with EMAIL_REPLY_TO).
         reply_to: process.env.EMAIL_REPLY_TO ?? "team@purepickleball.com",
-        // Optionally copy every outbound email to a shared inbox for a record.
-        ...(process.env.EMAIL_BCC ? { bcc: process.env.EMAIL_BCC } : {}),
+        // Optionally copy every outbound email to a shared inbox for a record —
+        // unless the caller opts out (confidential mail must go only to `to`).
+        ...(process.env.EMAIL_BCC && !opts?.skipBcc ? { bcc: process.env.EMAIL_BCC } : {}),
         subject,
         text: body,
         ...(html ? { html } : {}),
