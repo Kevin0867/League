@@ -18,6 +18,22 @@ export async function POST(req: Request) {
   const actor = await actorFromForm(fd);
   if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
 
+  const op = String(fd.get("op") ?? "save");
+  const rawReturn = String(fd.get("returnTo") ?? "");
+
+  // Single-team toggle from the Teams page (doesn't touch the page copy).
+  if (op === "setTeam") {
+    const teamId = String(fd.get("teamId") ?? "").trim();
+    if (!teamId) return back("?err=team");
+    const accepting = fd.get(`signup_${teamId}`) != null || fd.get("acceptingSignups") != null;
+    const capRaw = parseInt(String(fd.get(`cap_${teamId}`) ?? fd.get("capacity") ?? ""), 10);
+    const capacity = Number.isFinite(capRaw) && capRaw > 0 ? capRaw : null;
+    await prisma.team.update({ where: { id: teamId }, data: { acceptingSignups: accepting, capacity } }).catch(() => {});
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "OPEN_SPOTS", summary: accepting ? "Advertised open spots" : "Stopped advertising open spots" });
+    const dest = rawReturn.startsWith("/console/") ? rawReturn : "/console/open-spots";
+    return NextResponse.redirect(new URL(`${dest}${dest.includes("?") ? "&" : "?"}ok=openspots`, origin), 303);
+  }
+
   // Editable marketing copy.
   const headline = String(fd.get("headline") ?? "").trim();
   const intro = String(fd.get("intro") ?? "").trim();

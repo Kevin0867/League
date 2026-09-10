@@ -737,28 +737,40 @@ export default async function TeamBuildBoard({
                     spots auto-place + pay; a full team lands them on the waitlist,
                     no charge. */}
                 {!t.isTest && (() => {
-                  const open = TEAM_CAP - roster.effective;
-                  return open > 0 ? (
-                    <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-emerald-800">
-                          {open} open spot{open === 1 ? "" : "s"} — share signup link
-                        </span>
-                        <CopyLinkButton path={`/register?team=${t.id}`} label="Copy signup link" />
-                      </div>
-                      <p className="mt-1 text-[11px] text-emerald-700/80">
-                        They&apos;ll sign up, sign the waiver, pick apparel, and pay — and land on this team automatically.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-slate-600">Team full — waitlist link</span>
-                        <CopyLinkButton path={`/register?team=${t.id}`} label="Copy waitlist link" />
-                      </div>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Share to collect waitlist names — they sign up with no charge, and we place them here the moment a spot opens.
-                      </p>
+                  const cap = t.capacity && t.capacity > 0 ? t.capacity : TEAM_CAP;
+                  const open = Math.max(0, cap - roster.effective);
+                  return (
+                    <div className={`mt-3 rounded-lg border px-3 py-2 ${t.acceptingSignups ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50"}`}>
+                      {/* The public Open Spots control lives right on the team: check to
+                          advertise it on academy.purepickleball.com/open-spots and accept
+                          self-serve signups; uncheck to hide it. */}
+                      <form method="POST" action="/api/console/open-spots" className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="setTeam" />
+                        <input type="hidden" name="teamId" value={t.id} />
+                        <input type="hidden" name="returnTo" value="/console/teams" />
+                        <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                          <input type="checkbox" name="acceptingSignups" defaultChecked={t.acceptingSignups} className="h-4 w-4 accent-emerald-600" />
+                          Show on Open Spots page &amp; accept signups
+                        </label>
+                        <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                          Target size
+                          <input type="number" name="capacity" min={1} defaultValue={t.capacity ?? ""} placeholder={String(TEAM_CAP)} className="input w-16 py-0.5 text-xs" />
+                        </label>
+                        <button className="rounded-md bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-900">Save</button>
+                      </form>
+                      {t.acceptingSignups ? (
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-100 pt-2">
+                          <span className="text-[11px] font-semibold text-emerald-800">
+                            {open > 0 ? `${open} open spot${open === 1 ? "" : "s"} advertised` : "Advertised, but full — it drops off the page until a spot opens"}
+                          </span>
+                          <CopyLinkButton path={`/register?team=${t.id}`} label="Copy signup link" />
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Not shown publicly. Check the box to advertise {open > 0 ? `${open} open spot${open === 1 ? "" : "s"}` : "this team"} on the Open Spots page.
+                        </p>
+                      )}
                     </div>
                   );
                 })()}
