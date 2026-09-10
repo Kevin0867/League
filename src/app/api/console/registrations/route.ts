@@ -829,6 +829,10 @@ export async function POST(req: Request) {
           // (e.g. undecryptable on this key) never clobbers existing ciphertext.
           ...(g("emergencyName") ? { emergencyName: g("emergencyName") } : {}),
           ...(g("emergencyPhone") ? { emergencyPhone: g("emergencyPhone") } : {}),
+          ...(g("emergencyRelation") ? { emergencyRelation: g("emergencyRelation") } : {}),
+          ...(g("emergencyName2") ? { emergencyName2: g("emergencyName2") } : {}),
+          ...(g("emergencyPhone2") ? { emergencyPhone2: g("emergencyPhone2") } : {}),
+          ...(g("emergencyRelation2") ? { emergencyRelation2: g("emergencyRelation2") } : {}),
           ...(g("medical") ? { medicalNotes: g("medical") } : {}),
         },
       });
