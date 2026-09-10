@@ -357,6 +357,9 @@ export default async function PaymentsPage({
           {Number(sp.paid ?? 0) > 0
             ? <><strong>{sp.paid} existing {Number(sp.paid) === 1 ? "payment" : "payments"} newly marked paid</strong> ({formatCents(Number(sp.cents ?? 0))}). </>
             : ""}
+          {Number(sp.byname ?? 0) > 0
+            ? <><strong>{sp.byname} matched to a player by the Stripe line items</strong> (read the payer&apos;s checkout &ldquo;items&rdquo; and applied to that player).{" "}</>
+            : ""}
           {Number(sp.imported ?? 0) > 0
             ? <><strong>{sp.imported} charge{Number(sp.imported) === 1 ? "" : "s"} imported</strong> that had no record here ({formatCents(Number(sp.impcents ?? 0))} added to Collected).{" "}</>
             : ""}
@@ -364,7 +367,7 @@ export default async function PaymentsPage({
             ? <span className="text-amber-800">{sp.unattributed} imported {Number(sp.unattributed) === 1 ? "charge" : "charges"} couldn&apos;t be matched to a person — find {Number(sp.unattributed) === 1 ? "it" : "them"} in the ledger below (payer&apos;s email is in the description) and attach the right family. </span>
             : ""}
           {Number(sp.refunds ?? 0) > 0 ? <><strong>{sp.refunds} refund{sp.refunds === "1" ? "" : "s"} recorded</strong> ({formatCents(Number(sp.refcents ?? 0))}). </> : ""}
-          {Number(sp.paid ?? 0) === 0 && Number(sp.imported ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 ? "No new changes — everything scanned already matched your books." : ""}
+          {Number(sp.paid ?? 0) === 0 && Number(sp.imported ?? 0) === 0 && Number(sp.refunds ?? 0) === 0 && Number(sp.byname ?? 0) === 0 ? "No new changes — everything scanned already matched your books." : ""}
           {sp.recerrs && sp.recerrs !== "0" ? (
             <span className="mt-1 block text-amber-800">
               {sp.recerrs} charge{sp.recerrs === "1" ? "" : "s"} couldn&apos;t be checked{sp.recerrwhy ? <> — <span className="font-mono text-xs">{sp.recerrwhy}</span></> : ""}. If this keeps happening, it usually means the Stripe key can&apos;t read charges/invoices (a restricted key) — use a key with read access, or check the webhook banner below.

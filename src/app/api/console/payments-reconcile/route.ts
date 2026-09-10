@@ -9,6 +9,9 @@ import { reconcileStripePayments, undoStripeImport } from "@/lib/payments/reconc
 // Reconcile local payments against Stripe: find any payment completed in Stripe
 // but not yet recorded PAID here, and record it. Idempotent — safe to re-run.
 export const dynamic = "force-dynamic";
+// Reading each unmatched charge's line items adds Stripe calls, so give the
+// reconcile room to finish on a large season without timing out.
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
@@ -214,6 +217,7 @@ export async function POST(req: Request) {
       scanned: String(r.scanned + r.chargesScanned),
       paid: String(r.nowPaid),
       updated: String(r.updated),
+      byname: String(r.matchedByName),
       cents: String(r.recoveredCents),
       imported: String(r.imported),
       impcents: String(r.importedCents),

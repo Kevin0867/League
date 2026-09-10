@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
-import { matchFeeByEmailAndAmount } from "@/lib/payments/match";
+import { matchFeeByEmailAndAmount, matchFeeByPlayerName, playerNameFromText } from "@/lib/payments/match";
 
 // Reconcile local Payment rows against Stripe — the safety net for payments that
 // were completed in Stripe but never marked PAID here (a missed / mis-signed
@@ -39,6 +39,8 @@ export type ReconcileResult = {
   unmatchedBeforeFloorCents: number;
   /** Imported charges we couldn't attribute to a known person (need a name). */
   importedUnattributed: number;
+  /** Fees settled by reading the player's name out of the charge's line items. */
+  matchedByName: number;
   errors: number;
   /** The first error message seen this run — so "reconcile isn't working" is
    *  actionable (e.g. a restricted Stripe key, an API-permission problem). */
@@ -67,6 +69,40 @@ type PaymentRow = {
 
 const paidAtFromUnix = (secs: number | null | undefined): Date | null =>
   secs ? new Date(secs * 1000) : null;
+
+/**
+ * Read the charge's line-item text ("items") from Stripe — where the player's
+ * name lives ("… season fee — Emma Williams · …") even though the payments CSV
+ * export doesn't include it. Tries, in order: the Checkout Session's line items,
+ * the PaymentIntent description, then the invoice lines (subscriptions). Every
+ * call is guarded, so a charge without retrievable items just yields "" and the
+ * pass falls through to its other matching strategies.
+ */
+async function lineItemTextForCharge(client: Stripe, charge: Stripe.Charge, piId: string | null): Promise<string> {
+  if (piId) {
+    try {
+      const sess = await client.checkout.sessions.list({ payment_intent: piId, limit: 1 });
+      const s0 = sess.data[0];
+      if (s0) {
+        const li = await client.checkout.sessions.listLineItems(s0.id, { limit: 20 });
+        const txt = li.data.map((x) => x.description ?? "").filter(Boolean).join(" ; ");
+        if (txt) return txt;
+      }
+    } catch { /* no checkout session behind this charge */ }
+    try {
+      const pi = await client.paymentIntents.retrieve(piId);
+      if (pi.description) return pi.description;
+    } catch { /* ignore */ }
+  }
+  if (charge.invoice) {
+    try {
+      const inv = await client.invoices.retrieve(typeof charge.invoice === "string" ? charge.invoice : charge.invoice.id);
+      const txt = (inv.lines?.data ?? []).map((l) => l.description ?? "").filter(Boolean).join(" ; ");
+      if (txt) return txt;
+    } catch { /* ignore */ }
+  }
+  return charge.description ?? "";
+}
 
 // The IMPORT FLOOR: the earliest a charge may be *imported* as a new row. This
 // exists so reconciliation can never again pull the historical Stripe backlog
@@ -300,6 +336,11 @@ export async function undoCsvImport(): Promise<{ removed: number; removedCents: 
 async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floorUnix: number, activeSeasonId: string | null): Promise<void> {
   const client = stripe();
   const PAGE_CAP = 25; // ≤ 2,500 charges per run — a hard stop against runaways.
+  // Reading line items is 1–3 extra Stripe calls per unmatched charge, so cap it
+  // per run to keep reconcile well under its time budget. The unmatched charges
+  // are few relative to the total, so this comfortably covers a season.
+  const nameLookups = { n: 0 };
+  const NAME_LOOKUP_CAP = 400;
 
   let startingAfter: string | undefined;
   for (let page = 0; page < PAGE_CAP; page++) {
@@ -401,6 +442,48 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
             // amount may be the fee alone or fee + apparel + tax combined.
             const feeId = await matchFeeByEmailAndAmount(email, charge.amount);
             if (feeId) matched = await prisma.payment.findUnique({ where: { id: feeId } });
+          }
+        }
+
+        // ---- Line-item "items" name match (the real fix for JotForm / Payment
+        // Element charges) ----
+        // These carry no app paymentId and the payer is often the parent, so id
+        // and email both miss — but the charge's line items name the PLAYER
+        // ("… season fee — Emma Williams"). Read them from Stripe and apply to
+        // that player's outstanding fee: a one-time charge marks it paid; a
+        // subscription installment (has an invoice) records paying-by-plan.
+        if (!matched && nameLookups.n < NAME_LOOKUP_CAP) {
+          nameLookups.n++;
+          const itemText = await lineItemTextForCharge(client, charge, piId);
+          const name = playerNameFromText(itemText);
+          if (name) {
+            const hit = await matchFeeByPlayerName(name);
+            if (hit) {
+              const fee = await prisma.payment.findUnique({ where: { id: hit.feeId } });
+              if (fee && fee.direction === "IN" && fee.status !== "PAID") {
+                if (charge.invoice) {
+                  const total = fee.installmentsTotal ?? 3;
+                  await prisma.payment.update({
+                    where: { id: fee.id },
+                    data: { installmentPlan: true, installmentsTotal: total, installmentsPaid: Math.max(1, fee.installmentsPaid ?? 0), status: "PENDING", method: "STRIPE", stripePaymentIntentId: piId ?? fee.stripePaymentIntentId },
+                  });
+                  await audit({ entityType: "Payment", entityId: fee.id, action: "SCHEDULED", summary: `Matched by Stripe items — ${name} (subscription installment)` });
+                  res.updated++; res.matchedByName++;
+                  res.details.push({ paymentId: fee.id, note: `matched by items: ${name} (plan)`, amountCents: fee.amountCents, nowPaid: false });
+                } else {
+                  await prisma.payment.update({
+                    where: { id: fee.id },
+                    data: { status: "PAID", paidAt: fee.paidAt ?? paidAtFromUnix(charge.created) ?? new Date(), method: "STRIPE", stripePaymentIntentId: piId ?? fee.stripePaymentIntentId },
+                  });
+                  await audit({ entityType: "Payment", entityId: fee.id, action: "RECONCILED", summary: `Matched by Stripe items — ${name} (paid in full)` });
+                  res.updated++; res.nowPaid++; res.matchedByName++; res.recoveredCents += fee.amountCents;
+                  res.details.push({ paymentId: fee.id, note: `matched by items: ${name}`, amountCents: fee.amountCents, nowPaid: true });
+                }
+              }
+              res.alreadyRecorded++;
+              res.alreadyRecordedCents += charge.amount;
+              continue; // this charge belongs to a real player fee — handled
+            }
           }
         }
 
@@ -512,7 +595,7 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
     scanned: 0, updated: 0, nowPaid: 0, recoveredCents: 0, refundsRecorded: 0, refundedCents: 0,
     imported: 0, importedCents: 0, chargesScanned: 0, chargesScannedCents: 0,
     alreadyRecorded: 0, alreadyRecordedCents: 0, unmatchedBeforeFloor: 0, unmatchedBeforeFloorCents: 0,
-    importedUnattributed: 0, errors: 0, details: [],
+    importedUnattributed: 0, matchedByName: 0, errors: 0, details: [],
   };
   if (!isStripeConfigured()) return res;
 
