@@ -90,6 +90,10 @@ export default async function RegisterPage({
   const now = new Date();
   const notYetOpen = season?.opensOn && season.opensOn > now;
   const alreadyClosed = season?.waitlistMode || (season?.closesOn && season.closesOn < now);
+  // An open-spots signup (?team= to a team advertising spots) is a REAL, open
+  // signup even after the general window closes — we're marketing those spots, so
+  // it must never read as "closed / waitlist".
+  const showWaitlist = !!alreadyClosed && !targetTeam;
 
   // Past the deadline we keep the form OPEN for waitlist sign-ups (handled
   // below). Only "no season" or "not open yet" fully closes the page.
@@ -127,7 +131,7 @@ export default async function RegisterPage({
     <div>
       <PublicNav />
       <div className="mx-auto max-w-3xl px-4 py-10">
-        {alreadyClosed && (
+        {showWaitlist && (
           <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
             <p className="font-semibold text-amber-900">Registration for {season.name} has closed{season.closesOn ? ` (${closeDayLabel(season.closesOn)})` : ""}.</p>
             <p className="mt-1 text-sm text-amber-800">
@@ -137,13 +141,13 @@ export default async function RegisterPage({
         )}
         <div className="mb-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-            {season.name} · {alreadyClosed ? "Waitlist Sign-up" : "Player Enrollment"}
+            {season.name} · {showWaitlist ? "Waitlist Sign-up" : "Player Enrollment"}
           </p>
-          <h1 className="display text-3xl text-brand-900 sm:text-4xl">{alreadyClosed ? "Join the PURE Academy waitlist" : "PURE Academy enrollment"}</h1>
+          <h1 className="display text-3xl text-brand-900 sm:text-4xl">{showWaitlist ? "Join the PURE Academy waitlist" : "PURE Academy enrollment"}</h1>
           <p className="mt-2 text-slate-600">
-            Tell us about the player. Our team matches you to the right team, coach, and
-            location — then reaches out to confirm. Enroll today, pay later: we&apos;ll request
-            the ${(49500 / 100).toFixed(0)} season fee only after you&apos;re assigned a team.
+            {targetTeam
+              ? `Grab your spot on this team. Complete signup, then pay the $${(49500 / 100).toFixed(0)} season fee and pick your apparel — you'll be on the team as soon as your payment clears.`
+              : <>Tell us about the player. Our team matches you to the right team, coach, and location — then reaches out to confirm. Enroll today, pay later: we&apos;ll request the ${(49500 / 100).toFixed(0)} season fee only after you&apos;re assigned a team.</>}
           </p>
           <p className="mt-2 text-sm text-slate-500">
             Registering a whole family? Choose <strong>&ldquo;Myself and my child(ren)&rdquo;</strong> —
@@ -210,7 +214,7 @@ export default async function RegisterPage({
           preselectedLocation={teamRow?.market ?? effectiveLocation}
           preferredFacility={preferredFacility ? { id: preferredFacility.id, label: facilityLabel ?? "" } : null}
           targetTeamId={targetTeam?.id ?? null}
-          waitlist={!!alreadyClosed}
+          waitlist={showWaitlist}
         />
       </div>
       <SiteFooter />
