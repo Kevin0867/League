@@ -3,6 +3,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { formatDateTime12 } from "@/lib/time";
+import { Attachment } from "@/components/Attachment";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Announcements" };
@@ -76,6 +77,7 @@ export default async function AnnouncementsPage({
                 </form>
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{r.message.body}</p>
+              {r.message.attachmentUrl && <Attachment url={r.message.attachmentUrl} type={r.message.attachmentType} />}
             </div>
           ))}
         </div>

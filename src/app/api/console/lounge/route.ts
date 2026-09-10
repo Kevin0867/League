@@ -72,10 +72,12 @@ export async function POST(req: Request) {
 
   if (op === "post") {
     const body = String(fd.get("body") ?? "").trim().slice(0, 4000);
-    if (!body) return back("?err=empty");
+    const attachmentUrl = String(fd.get("attachmentUrl") ?? "").trim() || null;
+    const attachmentType = String(fd.get("attachmentType") ?? "").trim() || null;
+    if (!body && !attachmentUrl) return back("?err=empty");
     const notify = NOTIFY.has(String(fd.get("notify") ?? "")) ? String(fd.get("notify")) : "INAPP";
     const pinned = admin && fd.get("pinned") === "on";
-    const post = await prisma.coachPost.create({ data: { authorPersonId: myPersonId, authorName: myName, body, notify, pinned } });
+    const post = await prisma.coachPost.create({ data: { authorPersonId: myPersonId, authorName: myName, body, notify, pinned, attachmentUrl, attachmentType } });
     await audit({ actorId: actor.userId, entityType: "CoachPost", entityId: post.id, action: "CREATE", summary: `Lounge post (${notify})` });
     await notifyStaff(notify, myPersonId, myName, body);
     return back("?ok=posted");

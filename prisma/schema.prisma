@@ -1475,6 +1475,10 @@ model Message {
   /// Optional branded HTML mirror of the message, so the in-app announcement can
   /// replicate the emailed notification exactly (with its action buttons).
   html         String?
+  /// Optional photo/video attachment (Vercel Blob URL) + its kind (IMAGE|VIDEO) —
+  /// e.g. a coach sharing a practice clip with the team.
+  attachmentUrl  String?
+  attachmentType String?
 
   sentAt       DateTime @default(now())
   createdAt    DateTime @default(now())
@@ -1548,6 +1552,9 @@ model ChatMessage {
   senderId       String
   sender         Person       @relation("ChatMessageSender", fields: [senderId], references: [id])
   body           String
+  /// Optional photo/video attachment (Vercel Blob URL) + its kind (IMAGE|VIDEO).
+  attachmentUrl  String?
+  attachmentType String?
   /// Soft-delete: hidden from participants, retained for Admin moderation.
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
@@ -1755,6 +1762,9 @@ model CoachPost {
   pinned         Boolean  @default(false)
   /// NONE | INAPP | EMAIL | TEXT — how staff were notified when this posted.
   notify         String   @default("INAPP")
+  /// Optional photo/video attachment (Vercel Blob URL) + its kind (IMAGE|VIDEO).
+  attachmentUrl  String?
+  attachmentType String?
   createdAt      DateTime @default(now())
   replies        CoachReply[]
 

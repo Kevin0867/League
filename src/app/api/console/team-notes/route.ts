@@ -39,7 +39,9 @@ export async function POST(req: Request) {
   if (!allowed) return back("?err=auth");
 
   const body = String(fd.get("body") ?? "").trim();
-  if (!body) return back("?err=empty");
+  const attachmentUrl = String(fd.get("attachmentUrl") ?? "").trim() || null;
+  const attachmentType = String(fd.get("attachmentType") ?? "").trim() || null;
+  if (!body && !attachmentUrl) return back("?err=empty");
   const alsoText = fd.get("channel_SMS") === "on";
 
   const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "Your PURE coach";
@@ -54,9 +56,11 @@ export async function POST(req: Request) {
     subject: email.subject,
     body: email.text,
     html: email.html,
+    attachmentUrl,
+    attachmentType,
     // The email body is long-form; the SMS gets the coach's raw note prefixed
     // with the team name so it reads cleanly as a text.
-    smsBody: `${team.name} update from ${coachName}:\n${body}`,
+    smsBody: `${team.name} update from ${coachName}:\n${body || (attachmentType === "VIDEO" ? "shared a video" : "shared a photo")}`,
   });
 
   await audit({
