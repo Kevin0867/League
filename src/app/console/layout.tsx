@@ -4,7 +4,7 @@ import { requireStaff, isAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
-import { unreadInboxCount } from "@/lib/domain/inbox";
+import { unreadInboxCount, unreadBroadcastCount } from "@/lib/domain/inbox";
 
 // Never serve a cached/prerendered authed shell — always resolve the session.
 export const dynamic = "force-dynamic";
@@ -46,9 +46,12 @@ export default async function ConsoleLayout({
     : null;
   // Unread direct messages — surfaced at the top of the console so a new message
   // is never missed.
-  const unread = await unreadInboxCount(session.personId).catch(() => 0);
+  const [unread, announcements] = await Promise.all([
+    unreadInboxCount(session.personId).catch(() => 0),
+    unreadBroadcastCount(session.personId).catch(() => 0),
+  ]);
   return (
-    <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask} unread={unread}>
+    <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask} unread={unread} announcements={announcements}>
       {children}
     </ConsoleShell>
   );

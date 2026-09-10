@@ -28,6 +28,32 @@ export async function POST(req: Request) {
   const op = String(formData.get("op") ?? "");
 
   switch (op) {
+    // Mark a received broadcast/announcement read or unread — scoped to the
+    // signed-in staff person's own recipient row, so the Announcements badge and
+    // banner clear. "markAllRead" clears everything they've received.
+    case "markBroadcastRead":
+    case "markBroadcastUnread":
+    case "markAllBroadcastsRead": {
+      if (!actor) return back("?err=auth");
+      const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
+      if (!me?.personId) return back("?err=perm");
+      if (op === "markAllBroadcastsRead") {
+        await prisma.messageRecipient.updateMany({
+          where: { personId: me.personId, readAt: null },
+          data: { readAt: new Date(), inAppStatus: "READ" },
+        });
+        return back("?ok=readall");
+      }
+      const recipientId = String(formData.get("recipientId") ?? "").trim();
+      if (!recipientId) return back("?err=body");
+      const read = op === "markBroadcastRead";
+      await prisma.messageRecipient.updateMany({
+        where: { id: recipientId, personId: me.personId },
+        data: { readAt: read ? new Date() : null, inAppStatus: read ? "READ" : "DELIVERED" },
+      });
+      return back(read ? "?ok=read" : "?ok=unread");
+    }
+
     case "send": {
       if (!actor) return back("?err=auth");
 

@@ -68,6 +68,7 @@ const SECTIONS: NavSection[] = [
       { href: "/console/apparel", label: "Apparel", roles: ["COO", "DIRECTOR"] },
       { href: "/console/sponsorships", label: "Sponsorships", roles: ["COO", "DIRECTOR"], match: ["/console/sponsorships"] },
       { href: "/console/inbox", label: "Inbox", roles: ["COO", "DIRECTOR", "COACH"] },
+      { href: "/console/announcements", label: "Announcements", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/lounge", label: "Coaches' Lounge", roles: ["ADMIN", "COO", "CEO", "DIRECTOR", "COACH"] },
       { href: "/console/messages", label: "Messaging", roles: ["COO", "DIRECTOR"] },
       { href: "/console/compliance", label: "Compliance", roles: ["COO", "DIRECTOR"] },
@@ -87,6 +88,7 @@ export function ConsoleShell({
   children,
   ask,
   unread = 0,
+  announcements = 0,
 }: {
   /** Primary role — used only for the sidebar badge label. */
   role: Role;
@@ -99,6 +101,8 @@ export function ConsoleShell({
   ask?: { ticket: string; configured: boolean } | null;
   /** Unread direct-message threads — drives the top banner + Inbox nav badge. */
   unread?: number;
+  /** Unread broadcast announcements — drives its own banner + nav badge. */
+  announcements?: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -190,8 +194,8 @@ export function ConsoleShell({
                   {section.items.map((item) => (
                     <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`${linkClass(isActiveItem(item))} flex items-center justify-between`}>
                       <span>{item.label}</span>
-                      {item.href === "/console/inbox" && unread > 0 && (
-                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">{unread}</span>
+                      {((item.href === "/console/inbox" && unread > 0) || (item.href === "/console/announcements" && announcements > 0)) && (
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">{item.href === "/console/inbox" ? unread : announcements}</span>
                       )}
                     </Link>
                   ))}
@@ -223,6 +227,15 @@ export function ConsoleShell({
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-900 text-xs font-bold text-white">{unread}</span>
                 You have {unread} unread {unread === 1 ? "message" : "messages"} — open your inbox to read {unread === 1 ? "it" : "them"} →
+              </Link>
+            )}
+            {announcements > 0 && (
+              <Link
+                href="/console/announcements"
+                className="mb-4 flex items-center gap-3 rounded-lg border border-brand-300 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-900 hover:bg-brand-100"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-700 text-xs font-bold text-white">{announcements}</span>
+                You have {announcements} unread {announcements === 1 ? "announcement" : "announcements"} — read {announcements === 1 ? "it" : "them"} →
               </Link>
             )}
             {children}

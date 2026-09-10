@@ -36,8 +36,23 @@ export function Composer({ contacts, ticket, returnTo }: { contacts: Contact[]; 
         <label className="label">Message</label>
         <textarea name="body" rows={3} className="input" required placeholder="Write a message…" />
       </div>
-      <button type="submit" className="btn-primary">Send</button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <NotifyByPicker />
+        <button type="submit" className="btn-primary">Send</button>
+      </div>
     </form>
+  );
+}
+
+/** How to notify the recipient a message arrived (in-app is always on). The
+ *  sender picks Email, Text, or both — read by /api/messages. */
+function NotifyByPicker() {
+  return (
+    <div className="flex items-center gap-3 text-sm text-slate-600">
+      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Notify by</span>
+      <label className="flex items-center gap-1.5"><input type="checkbox" name="notifyEmail" defaultChecked /> Email</label>
+      <label className="flex items-center gap-1.5"><input type="checkbox" name="notifySms" /> Text</label>
+    </div>
   );
 }
 
@@ -142,7 +157,8 @@ export function ConversationView({
           <input type="hidden" name="conversationId" value={thread.id} />
           <input type="hidden" name="returnTo" value={basePath} />
           <textarea name="body" rows={2} className="input" required placeholder="Write a reply…" />
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <NotifyByPicker />
             <button type="submit" className="btn-primary">Send</button>
           </div>
         </form>
