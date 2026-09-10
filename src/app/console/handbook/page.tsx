@@ -19,7 +19,7 @@ export default async function HandbookPage() {
       <header className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-brand-700">PURE Pickleball &amp; Padel — Scottsdale</div>
         <h1 className="mt-0.5 text-2xl font-bold text-slate-900">Coaches Workbook</h1>
-        <p className="text-sm text-slate-600">The coaching handbook &amp; agreement. Tap to open the full document.</p>
+        <p className="text-sm text-slate-600">Tap to open the full document.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <a href={PDF} target="_blank" rel="noopener noreferrer" className="btn-primary text-sm">📘 Open the workbook (PDF)</a>
           <a href={PDF} download className="btn-secondary text-sm">Download</a>
