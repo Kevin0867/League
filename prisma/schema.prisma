@@ -577,6 +577,9 @@ model CoachingAgreement {
   status        String    @default("SENT")
   /// Snapshot of the assignment at signing (teams + role + day/time + facility).
   assignment    Json?
+  /// Coach-entered pre-season credentials (SafeSport + background check dates)
+  /// that the admin verifies before countersigning.
+  credentials   Json?
   coachName     String?
   coachEmail    String?
   coachPhone    String?
@@ -586,6 +589,8 @@ model CoachingAgreement {
   adminTitle    String?
   adminSignedById String?
   adminSignedAt DateTime?
+  /// When an admin returns the agreement for correction, why (shown to the coach).
+  adminNote     String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

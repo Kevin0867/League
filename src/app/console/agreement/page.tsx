@@ -3,7 +3,7 @@ import { requireStaff } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AgreementDocument } from "@/components/AgreementDocument";
-import { coachAssignmentForAgreement, type AgreementAssignment } from "@/lib/domain/coachingAgreement";
+import { coachAssignmentForAgreement, CREDENTIAL_FIELDS, type AgreementAssignment, type AgreementCredentials } from "@/lib/domain/coachingAgreement";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Coaching Agreement" };
@@ -45,6 +45,8 @@ export default async function CoachAgreementPage({
       ? (agreement.assignment as unknown as AgreementAssignment)
       : liveAssignment;
   const signed = !!agreement && agreement.status !== "SENT";
+  const priorCreds = (agreement?.credentials as unknown as AgreementCredentials | null) ?? null;
+  const returnedNote = agreement?.status === "SENT" ? agreement?.adminNote : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -55,7 +57,15 @@ export default async function CoachAgreementPage({
           <strong>Signed — thank you.</strong> Your agreement was sent to PURE for countersignature. A copy stays here on your account.
         </div>
       )}
-      {sp.err && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{sp.err === "agree" ? "Please check the box to agree, and type your name to sign." : "Couldn't submit — please try again."}</div>}
+      {sp.err && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{sp.err === "agree" ? "Please check the box to agree, type your name to sign, and complete the required credential fields." : "Couldn't submit — please try again."}</div>}
+
+      {returnedNote && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Returned for correction.</strong> PURE reviewed your agreement and needs it redone with the correct information:
+          <div className="mt-1 whitespace-pre-wrap text-amber-800">{returnedNote}</div>
+          <div className="mt-1 text-amber-800">Please fix the details below and sign again.</div>
+        </div>
+      )}
 
       {agreement?.status === "COUNTERSIGNED" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -73,6 +83,7 @@ export default async function CoachAgreementPage({
         coachEmail={agreement?.coachEmail ?? coach.person.email}
         coachPhone={agreement?.coachPhone ?? coach.person.phone}
         assignment={assignment}
+        credentials={signed ? priorCreds : null}
         coachSig={agreement && agreement.status !== "SENT" ? { name: agreement.coachName, signature: agreement.coachSignature, at: agreement.coachSignedAt } : null}
         adminSig={agreement?.status === "COUNTERSIGNED" ? { name: agreement.adminName, title: agreement.adminTitle, at: agreement.adminSignedAt } : null}
       />
@@ -83,7 +94,28 @@ export default async function CoachAgreementPage({
           <input type="hidden" name="op" value="coachSign" />
           <input type="hidden" name="returnTo" value="/console/agreement" />
           <h3 className="text-sm font-bold uppercase tracking-wide text-brand-800">Sign the agreement</h3>
-          <p className="text-sm text-slate-600">Review your assignment and the terms above. Type your full name to sign — an electronic signature counts as your signature.</p>
+          <p className="text-sm text-slate-600">Review the full agreement, your assignment, and the terms above. Type your full name to sign — an electronic signature counts as your signature.</p>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-sm font-semibold text-slate-800">Credentials &amp; screening</div>
+            <p className="mt-0.5 text-xs text-slate-500">Enter your current SafeSport, background-check, and CPR details. PURE verifies these before countersigning; if anything is wrong the agreement is returned for correction.</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              {CREDENTIAL_FIELDS.map((f) => (
+                <div key={f.key}>
+                  <label className="label">{f.label}{f.required ? " *" : ""}</label>
+                  <input
+                    name={`cred_${f.key}`}
+                    type={f.type}
+                    className="input"
+                    placeholder={f.placeholder}
+                    defaultValue={priorCreds?.[f.key] ?? ""}
+                    required={f.required}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
           <label className="flex items-start gap-2 text-sm text-slate-700">
             <input type="checkbox" name="agree" value="1" className="mt-1 accent-brand-600" />
             I have read and agree to the PURE Coaching Handbook &amp; Agreement and this assignment.
