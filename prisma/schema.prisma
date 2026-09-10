@@ -407,6 +407,14 @@ model Team {
   published     Boolean   @default(false)
   publishedAt   DateTime?
 
+  /// Open-spots marketing: when true, the team is advertised on the public
+  /// /open-spots page and accepts self-serve signups for its remaining spots.
+  /// Independent of `published` (which controls the team's public profile page).
+  acceptingSignups Boolean @default(false)
+  /// Admin-set target roster size for open-spots (spots left = capacity − roster).
+  /// Null falls back to the standard TEAM_CAP.
+  capacity      Int?
+
   forfeitCount  Int       @default(0)
   /// Championship eligibility; two forfeits ends it (§12). Restorable only by
   /// joint Director+COO override, recorded explicitly.
@@ -1823,4 +1831,12 @@ model CoachReply {
   createdAt      DateTime  @default(now())
 
   @@index([postId, createdAt])
+}
+
+/// Small key-value store for admin-editable public content (e.g. the /open-spots
+/// page headline & intro). One row per key.
+model SiteContent {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }

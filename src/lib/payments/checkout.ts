@@ -4,6 +4,7 @@ import { stripe, isStripeConfigured, appUrl } from "@/lib/stripe";
 import { INSTALLMENT_COUNT, INSTALLMENT_INTERVAL_DAYS, sendPaymentConfirmation } from "@/lib/payments/receipt";
 import { apparelLineItems } from "@/lib/payments/apparel";
 import { audit } from "@/lib/audit";
+import { placeTeamRecruitForPayment } from "@/lib/domain/openSpots";
 
 // Shared season-fee checkout. Used by both the authenticated portal (which adds
 // a household authorization check before calling this) and the PUBLIC pay page
@@ -67,6 +68,7 @@ export async function createCheckoutRedirect(opts: {
     });
     await audit({ actorId, entityType: "Payment", entityId: payment.id, action: installments ? "SCHEDULED" : "PAID", summary: "Simulated checkout (no Stripe keys)" });
     await sendPaymentConfirmation(payment.id);
+    await placeTeamRecruitForPayment(payment.id);
     return { ok: true, redirectUrl: `${base}/pay/success?sim=1&payment=${payment.id}` };
   }
 

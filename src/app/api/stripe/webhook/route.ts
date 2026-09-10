@@ -6,6 +6,7 @@ import { sendPaymentConfirmation } from "@/lib/payments/receipt";
 import { notifyAdminsPaymentFailed } from "@/lib/payments/adminAlert";
 import { syncRefundsForCharge, paymentForIntent } from "@/lib/payments/refunds";
 import { matchFeeByEmailAndAmount } from "@/lib/payments/match";
+import { placeTeamRecruitForPayment } from "@/lib/domain/openSpots";
 
 // Resolve the local Payment for a Stripe subscription. Normally it's linked by
 // stripeSubscriptionId (set on checkout.session.completed), but the first
@@ -84,6 +85,9 @@ export async function POST(req: Request) {
           await audit({ entityType: "Payment", entityId: paymentId, action: "PAID", summary: "Stripe checkout completed" });
         }
         await sendPaymentConfirmation(paymentId);
+        // Auto-assign an open-spots recruit onto their team now that they've paid
+        // (or committed to the 3-payment plan).
+        await placeTeamRecruitForPayment(paymentId);
       } else if (s.mode !== "subscription") {
         // No app paymentId — e.g. a Stripe Payment Link or a checkout created
         // outside the app's fee flow. Stripe still returns a healthy 200 here, so
@@ -104,6 +108,7 @@ export async function POST(req: Request) {
             });
             await audit({ entityType: "Payment", entityId: feeId, action: "PAID", summary: "Stripe checkout completed (matched by email + amount, no app id)" });
             await sendPaymentConfirmation(feeId);
+            await placeTeamRecruitForPayment(feeId);
           }
         }
       }

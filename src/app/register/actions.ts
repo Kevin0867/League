@@ -12,7 +12,6 @@ import {
 } from "@/lib/domain/registrationEmail";
 import { pushContactToZoho } from "@/lib/integrations/zoho";
 import { placementPayLink } from "@/lib/payments/familyFee";
-import { TEAM_CAP } from "@/lib/enums";
 
 export type RegisterState = { error?: string };
 
@@ -276,13 +275,14 @@ export async function registerAction(
     : null;
   const preferredFacilityMarket = preferredFacility?.market ?? null;
 
-  // "Fill this team" link — the signup is tagged to a specific team (?team=<id>).
-  // We auto-place the recruit on it if a spot is open, then send them straight to
-  // pay + apparel. Validate it belongs to this season and isn't a test team.
+  // "Fill this team" / open-spots link — the signup is tagged to a specific team
+  // (?team=<id>). Only honored when the team is accepting signups; the recruit is
+  // placed on it when their payment clears (auto-assign on payment). Validate it
+  // belongs to this season, isn't a test team, and is advertising open spots.
   const targetTeamIdRaw = g("targetTeamId") || null;
   const targetTeam = targetTeamIdRaw
     ? await prisma.team
-        .findFirst({ where: { id: targetTeamIdRaw, seasonId, isTest: false }, select: { id: true } })
+        .findFirst({ where: { id: targetTeamIdRaw, seasonId, isTest: false, acceptingSignups: true }, select: { id: true } })
         .catch(() => null)
     : null;
   const targetTeamId = targetTeam?.id ?? null;
@@ -471,43 +471,21 @@ export async function registerAction(
     }
   }
 
-  // "Fill this team" auto-placement. If the signup came through a team link and a
-  // spot is genuinely open, place the recruit on that team and send them straight
-  // to pay + apparel (waiver was signed above). If the team filled up first, they
-  // stay on the waitlist for it — with no charge — and we say so.
+  // Open-spots signup: auto-assign on PAYMENT. We don't place them on the team
+  // yet — we send them straight to pay their season fee + apparel (waiver signed
+  // above), and they're placed on the team the moment their payment clears
+  // (handled in the payment-completion path). This way an abandoned checkout
+  // never locks a spot, and if the last spot fills while they pay they're held
+  // for admin review instead of overselling.
   if (targetTeamId && recruit) {
-    const placed = await prisma
-      .$transaction(async (tx) => {
-        const team = await tx.team.findUnique({
-          where: { id: targetTeamId },
-          select: { id: true, coachPlays: true, _count: { select: { members: true } } },
-        });
-        if (!team) return false;
-        const already = await tx.teamMember.findUnique({
-          where: { teamId_personId: { teamId: team.id, personId: recruit!.personId } },
-        });
-        const effective = team._count.members + (team.coachPlays ? 1 : 0);
-        if (!already && effective >= TEAM_CAP) return false; // full — waitlist instead
-        await tx.teamMember.upsert({
-          where: { teamId_personId: { teamId: team.id, personId: recruit!.personId } },
-          create: { teamId: team.id, personId: recruit!.personId, roleOnTeam: "PLAYER" },
-          update: {},
-        });
-        await tx.registration.update({ where: { id: recruit!.registrationId }, data: { status: "ASSIGNED" } });
-        return true;
-      })
-      .catch(() => false);
-
-    if (placed) {
-      // Create/reuse the season-fee invoice and send them to the pay + apparel page.
-      const link = await placementPayLink(recruit.personId, seasonId).catch(() => null);
-      if (link?.payUrl) redirect(link.payUrl);
-      redirect("/register/thanks?placed=1"); // fee waived → nothing to pay
-    } else {
-      // Team filled before they finished — keep them on that team's waitlist, no charge.
-      await prisma.registration.update({ where: { id: recruit.registrationId }, data: { status: "WAITLISTED" } }).catch(() => {});
-      redirect("/register/thanks?full=1");
-    }
+    const link = await placementPayLink(recruit.personId, seasonId).catch(() => null);
+    if (link?.payUrl) redirect(link.payUrl);
+    // Fee waived (e.g. a coach who plays) → nothing to pay, so place immediately.
+    await prisma.teamMember
+      .create({ data: { teamId: targetTeamId, personId: recruit.personId, roleOnTeam: "PLAYER" } })
+      .catch(() => {});
+    await prisma.registration.update({ where: { id: recruit.registrationId }, data: { status: "ASSIGNED" } }).catch(() => {});
+    redirect("/register/thanks?placed=1");
   }
 
   redirect(waitlisted ? "/register/thanks?waitlist=1" : "/register/thanks");
