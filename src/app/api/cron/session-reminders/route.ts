@@ -125,5 +125,77 @@ export async function GET(req: Request) {
     reminded++;
   }
 
-  return NextResponse.json({ scanned: candidates.length, reminded, texted, players });
+  // ── Second pass: the ~2-hours-before "your class is today" reminder ─────────
+  // A friendly heads-up to each player + guardian (SMS-opted-in) with the time,
+  // the location, the address, and a one-tap directions link. Separate marker
+  // (reminder2hSentAt) so it's independent of the 15-min check-in reminder, and
+  // it skips sessions already inside the check-in window so nobody is
+  // double-texted back to back.
+  let players2h = 0;
+  let reminded2h = 0;
+  const soon = await prisma.session.findMany({
+    where: {
+      status: { in: ["SCHEDULED", "DELIVERED"] },
+      reminder2hSentAt: null,
+      date: { gte: from, lte: to },
+    },
+    include: {
+      facility: { select: { name: true, exactAddress: true, generalArea: true } },
+      teams: {
+        include: {
+          team: {
+            select: {
+              name: true,
+              members: {
+                select: {
+                  person: {
+                    select: {
+                      id: true, firstName: true, phone: true, smsConsentAt: true,
+                      guardian: { select: { firstName: true, phone: true, smsConsentAt: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  for (const s of soon) {
+    const startUtc = phoenixWallTimeToUtc(s.date, s.startTime);
+    const minsUntil = (startUtc.getTime() - now.getTime()) / 60000;
+    // ~2 hours out, and not already inside the 15-min check-in window.
+    if (minsUntil > 123 || minsUntil <= LEAD_MINUTES) continue;
+
+    const teamNames = s.teams.map((t) => t.team.name).join(", ") || "your class";
+    const when = formatTime12(s.startTime);
+    const facilityName = s.facility?.name ?? null;
+    const address = s.facility?.exactAddress || s.facility?.generalArea || null;
+    // A tappable directions link (opens the maps app to the address, or the
+    // facility name if we only have that).
+    const mapQuery = address || facilityName;
+    const directions = mapQuery ? ` Directions: https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}` : "";
+    const wherePart = [facilityName, address].filter(Boolean).join(", ");
+    const whereText = wherePart ? ` at ${wherePart}` : "";
+
+    const roster = s.teams.flatMap((st) => st.team.members.map((m) => m.person));
+    const sentTo = new Set<string>();
+    for (const p of roster) {
+      const recips: { phone: string; name: string }[] = [];
+      if (p.phone && p.smsConsentAt) recips.push({ phone: p.phone, name: p.firstName });
+      if (p.guardian?.phone && p.guardian.smsConsentAt) recips.push({ phone: p.guardian.phone, name: p.firstName });
+      for (const r of recips) {
+        if (sentTo.has(r.phone)) continue;
+        sentTo.add(r.phone);
+        const body = `PURE Academy — reminder: ${r.name}'s ${teamNames} class is today at ${when}${whereText}.${directions}`;
+        const res = await sendSms(r.phone, body);
+        if (res.ok) players2h++;
+      }
+    }
+    await prisma.session.update({ where: { id: s.id }, data: { reminder2hSentAt: now } });
+    reminded2h++;
+  }
+
+  return NextResponse.json({ scanned: candidates.length, reminded, texted, players, reminded2h, players2h });
 }

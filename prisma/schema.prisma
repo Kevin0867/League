@@ -756,6 +756,9 @@ model Session {
   /// When the ~15-minutes-before check-in reminder text was sent to the
   /// coach(es), so the reminder cron never double-sends.
   checkinReminderSentAt DateTime?
+  /// When the ~2-hours-before "your class is today" reminder text was sent to
+  /// players + guardians, so the reminder cron never double-sends.
+  reminder2hSentAt DateTime?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
