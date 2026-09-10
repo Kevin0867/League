@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { sendEmail } from "@/lib/notify";
+import { appUrl } from "@/lib/stripe";
+
+// Where pay-page questions/replies land so the team sees them immediately.
+const TEAM_INBOX = process.env.TEAM_INBOX_EMAIL ?? "team@purepickleball.com";
 
 // Public "why can't you pay by the deadline?" capture from the pay page. The
 // payment id in the URL is the capability token (same model as the pay page
@@ -36,5 +41,34 @@ export async function POST(req: Request) {
     summary: `${who}: ${REASONS[reason]}${note ? ` — “${note}”` : ""}`,
     metadata: { reason, note, partyId: pay.partyId },
   });
+
+  // Email the team inbox so they see it immediately — the pay page captures these
+  // silently otherwise. Includes who, why, their note, and their contact info +
+  // a console link for fast follow-up. Never block the payer's redirect on it.
+  try {
+    const email = pay.party?.email ?? null;
+    const phone = pay.party?.phone ?? null;
+    const link = `${appUrl()}/console/payments`;
+    const lines = [
+      `${who} responded on the payment page:`,
+      ``,
+      `Reason: ${REASONS[reason]}`,
+      ...(note ? [`Note: “${note}”`] : []),
+      ``,
+      ...(email ? [`Email: ${email}`] : []),
+      ...(phone ? [`Phone: ${phone}`] : []),
+      `Amount: $${(pay.amountCents / 100).toFixed(2)} — ${pay.description ?? pay.category}`,
+      ``,
+      `Open Payments → “Why families haven’t paid”: ${link}`,
+    ];
+    await sendEmail(
+      TEAM_INBOX,
+      `Pay page: ${REASONS[reason]} — ${who}`,
+      lines.join("\n"),
+    );
+  } catch (e) {
+    console.error("payer-response team email failed", e);
+  }
+
   return back("?heard=1");
 }

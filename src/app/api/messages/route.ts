@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { canUseMessagingPerson, canReachPerson } from "@/lib/domain/messaging-acl";
+import { sendEmail } from "@/lib/notify";
+import { appUrl } from "@/lib/stripe";
+import { isStaff } from "@/lib/rbac";
+import type { Role } from "@/lib/enums";
 
 // Direct-messaging mutations (start / reply / delete a message / archive a
 // thread) as native-form POSTs with ticket auth, shared by the console (admin,
@@ -120,4 +124,37 @@ async function appendMessage(conversationId: string, senderId: string, body: str
     where: { conversationId, personId: senderId },
     data: { lastReadAt: now },
   });
+  // Email every OTHER participant so a new message or reply is never missed —
+  // in-app alone is too easy to overlook. Routed to their inbox (console for
+  // staff, portal for families). Best-effort: never block the send on it.
+  await notifyOtherParticipants(conversationId, senderId, body);
+}
+
+/** Email the other people on a thread that a new message arrived. */
+async function notifyOtherParticipants(conversationId: string, senderId: string, body: string) {
+  try {
+    const [sender, parts] = await Promise.all([
+      prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true } }),
+      prisma.conversationParticipant.findMany({
+        where: { conversationId, personId: { not: senderId } },
+        select: { person: { select: { email: true, email2: true, email3: true, user: { select: { role: true } } } } },
+      }),
+    ]);
+    const senderName = sender ? `${sender.firstName} ${sender.lastName}`.trim() : "PURE Academy";
+    const preview = body.length > 160 ? `${body.slice(0, 160)}…` : body;
+    for (const p of parts) {
+      const per = p.person;
+      const emails = [per.email, per.email2, per.email3].filter((e): e is string => !!e);
+      if (!emails.length) continue;
+      const staff = per.user?.role ? isStaff(per.user.role as Role) : false;
+      const link = `${appUrl()}${staff ? "/console/inbox" : "/portal/inbox"}/${conversationId}`;
+      await sendEmail(
+        emails,
+        `New message from ${senderName}`,
+        `${senderName} sent you a message on PURE Academy:\n\n“${preview}”\n\nRead & reply: ${link}\n\nYou can reply from your inbox — they’ll be notified.`,
+      );
+    }
+  } catch (e) {
+    console.error("new-message notification failed", e);
+  }
 }

@@ -17,6 +17,7 @@ import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { describeTeamPractice } from "@/lib/domain/practiceInfo";
+import { formatTime12 } from "@/lib/time";
 import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
 import { TEAM_CAP, TEAM_MAX } from "@/lib/enums";
 import { personEmails } from "@/lib/domain/audience";
@@ -417,8 +418,16 @@ export async function POST(req: Request) {
           }
         }
       }
+      const prevAssign = await prisma.team.findUnique({ where: { id: teamId }, select: { coachId: true } });
       await prisma.team.update({ where: { id: teamId }, data: { coachId } });
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: (coachId ? `Assigned coach ${coachId}` : "Cleared coach") + overrideNote });
+      // Notify the incoming coach they're on, and the outgoing coach they're off.
+      if (prevAssign?.coachId && prevAssign.coachId !== coachId) {
+        await notifyCoachTeamChange({ actorUserId: actor.userId, coachId: prevAssign.coachId, teamId, added: false, role: "head" });
+      }
+      if (coachId && coachId !== prevAssign?.coachId) {
+        await notifyCoachTeamChange({ actorUserId: actor.userId, coachId, teamId, added: true, role: "head" });
+      }
       return go(`?ok=${coachId ? "assignedCoach" : "clearedCoach"}`);
     }
 
@@ -443,8 +452,9 @@ export async function POST(req: Request) {
       let applied = 0;
       const skipped: string[] = [];
       for (const ch of changes) {
-        const team = await prisma.team.findUnique({ where: { id: ch.teamId }, select: { name: true, dayOfWeek: true, startTime: true } });
+        const team = await prisma.team.findUnique({ where: { id: ch.teamId }, select: { name: true, dayOfWeek: true, startTime: true, coachId: true } });
         if (!team) { skipped.push(ch.teamId); continue; }
+        const prevCoachId = team.coachId;
         let bulkOverride = "";
         if (ch.coachId) {
           const coach = await prisma.coach.findUnique({ where: { id: ch.coachId } });
@@ -460,6 +470,12 @@ export async function POST(req: Request) {
         }
         await prisma.team.update({ where: { id: ch.teamId }, data: { coachId: ch.coachId } });
         await audit({ actorId: actor.userId, entityType: "Team", entityId: ch.teamId, action: "ASSIGN_COACH", summary: (ch.coachId ? `Assigned coach ${ch.coachId} (bulk)` : "Cleared coach (bulk)") + bulkOverride });
+        if (prevCoachId && prevCoachId !== ch.coachId) {
+          await notifyCoachTeamChange({ actorUserId: actor.userId, coachId: prevCoachId, teamId: ch.teamId, added: false, role: "head" });
+        }
+        if (ch.coachId && ch.coachId !== prevCoachId) {
+          await notifyCoachTeamChange({ actorUserId: actor.userId, coachId: ch.coachId, teamId: ch.teamId, added: true, role: "head" });
+        }
         applied++;
       }
       const qs = new URLSearchParams({ ok: "bulkCoaches", n: String(applied) });
@@ -494,6 +510,7 @@ export async function POST(req: Request) {
       // Pay them for the team's already-scheduled sessions too (assistant rate).
       await addTeamAssistantToSessions(teamId, coachId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ADD_COACH", summary: `Added ${role.toLowerCase()} coach ${coachId}${addOverride}` });
+      await notifyCoachTeamChange({ actorUserId: actor.userId, coachId, teamId, added: true, role: "assistant" });
       return back("?ok=addTeamCoach");
     }
 
@@ -505,6 +522,7 @@ export async function POST(req: Request) {
       // Stop paying them for this team's sessions (removes only ASSISTANT rows).
       await removeTeamAssistantFromSessions(teamId, coachId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "REMOVE_COACH", summary: `Removed additional coach ${coachId}` });
+      await notifyCoachTeamChange({ actorUserId: actor.userId, coachId, teamId, added: false, role: "assistant" });
       return back("?ok=removeTeamCoach");
     }
 
@@ -937,5 +955,54 @@ export async function POST(req: Request) {
 
     default:
       return back("?err=op");
+  }
+}
+
+// Notify a coach — in-app + email + text — that they were added to or removed
+// from a team, so a staffing change never happens silently. Best-effort: a
+// delivery failure never blocks the assignment itself.
+async function notifyCoachTeamChange(opts: {
+  actorUserId: string;
+  coachId: string;
+  teamId: string;
+  added: boolean;
+  role?: "head" | "assistant";
+}): Promise<void> {
+  try {
+    const [coach, team] = await Promise.all([
+      prisma.coach.findUnique({
+        where: { id: opts.coachId },
+        select: { person: { select: { id: true, firstName: true, email: true, email2: true, email3: true } } },
+      }),
+      prisma.team.findUnique({
+        where: { id: opts.teamId },
+        select: { name: true, seasonId: true, dayOfWeek: true, startTime: true, facility: { select: { name: true } } },
+      }),
+    ]);
+    const per = coach?.person;
+    if (!per || !team) return;
+    const emails = [per.email, per.email2, per.email3].filter((e): e is string => !!e);
+    const roleWord = opts.role === "head" ? "head coach" : opts.role === "assistant" ? "assistant coach" : "coach";
+    const when = team.dayOfWeek && team.startTime ? `${team.dayOfWeek} ${formatTime12(team.startTime)}` : null;
+    const where = team.facility?.name ?? null;
+    const detail = [when, where].filter(Boolean).join(" · ");
+    const subject = opts.added ? `You're now coaching ${team.name}` : `You've been removed from ${team.name}`;
+    const body = opts.added
+      ? `Hi ${per.firstName}, you've been assigned as ${roleWord} of ${team.name}${detail ? ` (${detail})` : ""}. Log in to your console to see the roster and schedule.`
+      : `Hi ${per.firstName}, you've been removed as a coach of ${team.name}. If this is unexpected, please contact the office.`;
+    await dispatchMessage({
+      senderId: opts.actorUserId,
+      seasonId: team.seasonId,
+      audienceType: "SINGLE_PERSON",
+      audienceRef: per.id,
+      channels: ["IN_APP", "EMAIL", "SMS"],
+      triggerType: opts.added ? "COACH_ASSIGNED" : "COACH_REMOVED",
+      subject,
+      body,
+      smsBody: `PURE Academy: ${body}`,
+      toEmails: emails,
+    });
+  } catch (e) {
+    console.error("coach team-change notification failed", e);
   }
 }
