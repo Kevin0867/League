@@ -169,6 +169,20 @@ export default async function PortalHome({
         <p className="text-slate-500">Your season at a glance.</p>
       </div>
 
+      {/* Book a private lesson or clinic — a prominent CTA straight to the form. */}
+      <Link
+        href="/portal/lessons"
+        className="block rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm transition hover:bg-emerald-100"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-base font-bold text-emerald-900">Book a private lesson or clinic</div>
+            <div className="mt-0.5 text-sm text-emerald-700">One-on-one, semi-private, or a clinic — pick the type, a coach, and a time.</div>
+          </div>
+          <span className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-bold text-white">Book →</span>
+        </div>
+      </Link>
+
       {sp.ok === "info" && <Notice kind="success" title="Saved">Your details are updated.</Notice>}
 
       {sp.payerr && PAY_ERRORS[sp.payerr] && (
