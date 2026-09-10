@@ -77,6 +77,32 @@ export default async function TodayPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
+      {/* Quick access to the two coach documents — handbook (read) and the
+          incident report (fill + submit). Kept at the very top so they're one
+          tap from login. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/console/handbook"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-white px-4 py-4 shadow-sm transition hover:bg-brand-50"
+        >
+          <div>
+            <div className="text-base font-bold text-slate-900">📘 Coaching Handbook</div>
+            <div className="mt-0.5 text-xs text-slate-500">Read the handbook &amp; agreement</div>
+          </div>
+          <span className="shrink-0 text-brand-600">→</span>
+        </Link>
+        <Link
+          href="/console/incident-report"
+          className="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 shadow-sm transition hover:bg-amber-100"
+        >
+          <div>
+            <div className="text-base font-bold text-amber-900">🚑 Incident Report</div>
+            <div className="mt-0.5 text-xs text-amber-700">Fill out &amp; submit to the office</div>
+          </div>
+          <span className="shrink-0 text-amber-700">→</span>
+        </Link>
+      </div>
+
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Today</h1>
         <p className="text-sm text-slate-500">{niceToday}{summary ? ` · ${summary}` : ""}</p>

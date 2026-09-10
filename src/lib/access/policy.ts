@@ -24,6 +24,8 @@ export const COACH_CONSOLE_PREFIXES = [
   "/console/inbox", // messaging with admins/coaches/their team families
   "/console/announcements", // announcements sent to them (read + mark read)
   "/console/lounge", // the Coaches' Lounge — staff space, coaches included
+  "/console/handbook", // the Coaching Handbook & Agreement (read)
+  "/console/incident-report", // submit a digital incident report
 ];
 
 export function isAdminRole(roles: string[]): boolean {
