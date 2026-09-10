@@ -97,7 +97,7 @@ export const COMP_TERMS: { item: string; term: string }[] = [
   { item: "Payment", term: "Monthly, in arrears, within 5 days after end of month." },
   { item: "PURE-cancelled sessions", term: "Where PURE cancels a session for weather, heat, or facility closure, Coach is paid for that session. Academy practices are not rescheduled; ACP league matches and the Championship may be rescheduled as directed by PURE/ACP." },
   { item: "Player-Coach season fee", term: "When Coach plays on the team they coach, the $495 season fee is waived for that team; session compensation is unchanged; and Coach registers as a player in the normal way." },
-  { item: "À la carte programming", term: "60% of net revenue after court cost to Coach; 10% to Academy Director; 30% to PURE. PURE sets all prices and has final pricing authority." },
+  { item: "Private lessons / clinics", term: "60% of net revenue after court cost to Coach; 10% to Academy Director; 30% to PURE. PURE sets all prices and has final pricing authority." },
   { item: "Expenses", term: "PURE pays court fees and provides PURE apparel and program equipment. Coach provides their own transportation unless otherwise agreed in writing." },
 ];
 
