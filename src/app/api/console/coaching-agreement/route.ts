@@ -6,7 +6,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
-import { coachAssignmentForAgreement } from "@/lib/domain/coachingAgreement";
+import { coachAssignmentForAgreement, CREDENTIAL_FIELDS, type AgreementCredentials } from "@/lib/domain/coachingAgreement";
 
 // Digital coaching-agreement signing. A coach signs (op=coachSign) → the record
 // is created/updated as COACH_SIGNED and emailed to the team inbox for an admin
@@ -35,7 +35,14 @@ export async function POST(req: Request) {
     if (!coach) return back(`${rt}?err=nocoach`);
     const agree = fd.get("agree") === "1";
     const signature = String(fd.get("signature") ?? "").trim();
-    if (!agree || !signature) return back(`${rt}?err=agree`);
+    // Collect the coach-entered credentials; require the mandatory ones.
+    const credentials: AgreementCredentials = {};
+    for (const f of CREDENTIAL_FIELDS) {
+      const v = String(fd.get(`cred_${f.key}`) ?? "").trim();
+      if (v) credentials[f.key] = v;
+    }
+    const missingRequired = CREDENTIAL_FIELDS.some((f) => f.required && !credentials[f.key]);
+    if (!agree || !signature || missingRequired) return back(`${rt}?err=agree`);
 
     const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })
       ?? await prisma.season.findFirst({ where: { active: true }, select: { id: true } });
@@ -50,11 +57,13 @@ export async function POST(req: Request) {
     const data = {
       status: "COACH_SIGNED",
       assignment: assignment as unknown as Prisma.InputJsonValue,
+      credentials: credentials as unknown as Prisma.InputJsonValue,
       coachName,
       coachEmail: coach.person.email,
       coachPhone: coach.person.phone,
       coachSignature: signature,
       coachSignedAt: new Date(),
+      adminNote: null, // clear any prior return-for-correction note on re-sign
     };
     const rec = existing
       ? await prisma.coachingAgreement.update({ where: { id: existing.id }, data })
@@ -66,6 +75,7 @@ export async function POST(req: Request) {
     try {
       const link = `${appUrl()}/console/agreements/${rec.id}`;
       const teamLines = assignment.teams.map((t) => `  • ${t.team} (${t.role}) — ${t.dayTime} — ${t.location}`);
+      const credLines = CREDENTIAL_FIELDS.filter((f) => credentials[f.key]).map((f) => `  • ${f.label}: ${credentials[f.key]}`);
       await sendEmail(
         TEAM_INBOX,
         `Coaching agreement signed — ${coachName} (needs countersignature)`,
@@ -76,7 +86,10 @@ export async function POST(req: Request) {
           "Assignment:",
           ...(teamLines.length ? teamLines : ["  (no teams assigned yet)"]),
           "",
-          `Countersign here: ${link}`,
+          "Credentials & screening (verify before countersigning):",
+          ...(credLines.length ? credLines : ["  (none entered)"]),
+          "",
+          `Verify and countersign here: ${link}`,
         ].filter(Boolean).join("\n"),
       );
     } catch (e) {
@@ -91,15 +104,17 @@ export async function POST(req: Request) {
     const adminName = String(fd.get("adminName") ?? "").trim();
     const adminTitle = String(fd.get("adminTitle") ?? "").trim();
     const signature = String(fd.get("signature") ?? "").trim();
+    const verified = fd.get("verified") === "1";
     if (!id || !signature || !adminName) return back(`/console/agreements/${id}?err=fields`);
+    if (!verified) return back(`/console/agreements/${id}?err=verify`);
     const rec = await prisma.coachingAgreement.findUnique({ where: { id }, select: { id: true, status: true, coachName: true, coachEmail: true } });
     if (!rec) return back("/console/agreements?err=notfound");
     if (rec.status !== "COACH_SIGNED") return back(`/console/agreements/${id}?err=state`);
     await prisma.coachingAgreement.update({
       where: { id },
-      data: { status: "COUNTERSIGNED", adminName, adminTitle: adminTitle || null, adminSignedById: actor.userId, adminSignedAt: new Date() },
+      data: { status: "COUNTERSIGNED", adminName, adminTitle: adminTitle || null, adminSignedById: actor.userId, adminSignedAt: new Date(), adminNote: null },
     });
-    await audit({ actorId: actor.userId, entityType: "CoachingAgreement", entityId: id, action: "COUNTERSIGNED", summary: `${adminName} countersigned ${rec.coachName ?? "coach"}'s agreement` });
+    await audit({ actorId: actor.userId, entityType: "CoachingAgreement", entityId: id, action: "COUNTERSIGNED", summary: `${adminName} verified credentials and countersigned ${rec.coachName ?? "coach"}'s agreement` });
     // Let the coach know it's fully executed (their copy is on their account).
     try {
       if (rec.coachEmail) {
@@ -107,6 +122,39 @@ export async function POST(req: Request) {
       }
     } catch (e) { console.error("agreement coach email failed", e); }
     return back(`/console/agreements/${id}?ok=countersigned`);
+  }
+
+  if (op === "returnForCorrection") {
+    if (!can(actor.role, "manageCoaches")) return back("/console/agreements?err=auth");
+    const id = String(fd.get("agreementId") ?? "").trim();
+    const note = String(fd.get("note") ?? "").trim();
+    if (!id || !note) return back(`/console/agreements/${id}?err=note`);
+    const rec = await prisma.coachingAgreement.findUnique({ where: { id }, select: { id: true, status: true, coachName: true, coachEmail: true } });
+    if (!rec) return back("/console/agreements?err=notfound");
+    if (rec.status !== "COACH_SIGNED") return back(`/console/agreements/${id}?err=state`);
+    // Reset to unsigned so the coach must redo it with the correct info; keep the
+    // credentials they entered so they only fix what's wrong.
+    await prisma.coachingAgreement.update({
+      where: { id },
+      data: { status: "SENT", coachSignature: null, coachSignedAt: null, adminNote: note },
+    });
+    await audit({ actorId: actor.userId, entityType: "CoachingAgreement", entityId: id, action: "RETURNED_FOR_CORRECTION", summary: `Returned ${rec.coachName ?? "coach"}'s agreement for correction` });
+    try {
+      if (rec.coachEmail) {
+        await sendEmail(
+          rec.coachEmail,
+          "Your PURE coaching agreement needs correction",
+          [
+            "PURE reviewed your coaching agreement and it needs to be redone with the correct information:",
+            "",
+            note,
+            "",
+            `Please fix the details and sign again: ${appUrl()}/console/agreement`,
+          ].join("\n"),
+        );
+      }
+    } catch (e) { console.error("agreement return email failed", e); }
+    return back(`/console/agreements/${id}?ok=returned`);
   }
 
   return back("/console/agreements?err=op");

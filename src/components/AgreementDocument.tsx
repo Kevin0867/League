@@ -1,9 +1,11 @@
-import { ACK_CLAUSES, COMP_TERMS, SEASON_LINE, AGREEMENT_VERSION, type AgreementAssignment } from "@/lib/domain/coachingAgreement";
+import { ACK_CLAUSES, AGREEMENT_BODY, COMP_TERMS, CREDENTIAL_FIELDS, SEASON_LINE, AGREEMENT_VERSION, type AgreementAssignment, type AgreementCredentials } from "@/lib/domain/coachingAgreement";
 
-// Renders the full digital coaching agreement: header, the coach's Appendix A
+// Renders the full digital coaching agreement: header, the entire handbook body
+// (so the agreement is inseparable from the signature), the coach's Appendix A
 // assignment (teams / role / day-time / location), the acknowledgment clauses,
-// compensation terms, and the two-party signature status. Pure presentational
-// (no hooks) so it renders in both the coach and admin server pages.
+// compensation terms, coach-entered credentials, and the two-party signature
+// status. Pure presentational (no hooks) so it renders in both the coach and
+// admin server pages.
 type Sig = { name?: string | null; signature?: string | null; at?: Date | null; title?: string | null };
 
 export function AgreementDocument({
@@ -11,6 +13,7 @@ export function AgreementDocument({
   coachEmail,
   coachPhone,
   assignment,
+  credentials,
   coachSig,
   adminSig,
 }: {
@@ -18,10 +21,17 @@ export function AgreementDocument({
   coachEmail?: string | null;
   coachPhone?: string | null;
   assignment: AgreementAssignment;
+  credentials?: AgreementCredentials | null;
   coachSig?: Sig | null;
   adminSig?: Sig | null;
 }) {
   const fmt = (d?: Date | null) => (d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—");
+  const fmtCred = (v?: string) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  };
+  const hasCreds = credentials && Object.values(credentials).some(Boolean);
   return (
     <div className="space-y-5">
       <header className="rounded-xl border border-brand-200 bg-brand-50 px-5 py-4">
@@ -29,6 +39,23 @@ export function AgreementDocument({
         <h2 className="mt-0.5 text-xl font-bold text-slate-900">Coaching Agreement</h2>
         <p className="text-sm text-slate-600">Youth, Adult &amp; Academy Programs · {AGREEMENT_VERSION}</p>
       </header>
+
+      {/* The full handbook body — rendered inline so signing covers the entire agreement */}
+      <section className="card">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-brand-800">The Agreement</h3>
+        <div className="mt-3 space-y-4">
+          {AGREEMENT_BODY.map((s) => (
+            <div key={s.title}>
+              <h4 className="text-sm font-semibold text-slate-900">{s.title}</h4>
+              <div className="mt-1 space-y-1.5">
+                {s.paras.map((p, i) => (
+                  <p key={i} className="text-[13px] leading-relaxed text-slate-600">{p}</p>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Appendix A — the coach's assignment, auto-filled */}
       <section className="card">
@@ -81,6 +108,27 @@ export function AgreementDocument({
           ))}
         </div>
       </section>
+
+      {/* Coach-entered credentials (SafeSport + background check + CPR) */}
+      {hasCreds && (
+        <section className="card">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-brand-800">Credentials &amp; Screening</h3>
+          <p className="mt-1 text-xs text-slate-500">Entered by the coach. PURE verifies these are correct before countersigning.</p>
+          <dl className="mt-3 space-y-1.5 text-sm">
+            {CREDENTIAL_FIELDS.map((f) => {
+              const raw = credentials?.[f.key];
+              if (!raw) return null;
+              const value = f.type === "date" ? fmtCred(raw) : raw;
+              return (
+                <div key={f.key} className="sm:flex sm:gap-2">
+                  <dt className="shrink-0 font-semibold text-slate-700 sm:w-64">{f.label}</dt>
+                  <dd className="text-slate-600">{value}</dd>
+                </div>
+              );
+            })}
+          </dl>
+        </section>
+      )}
 
       {/* Signature status */}
       <section className="card">
