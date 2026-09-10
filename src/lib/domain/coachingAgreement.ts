@@ -174,3 +174,9 @@ export async function coachAgreementNeedsAttention(personId: string | null | und
   });
   return !!returned;
 }
+
+/** How many agreements are signed by a coach and waiting for an admin to verify
+ *  & countersign. Drives the admin "Agreements" nav badge + banner. */
+export async function agreementsPendingCountersign(): Promise<number> {
+  return prisma.coachingAgreement.count({ where: { status: "COACH_SIGNED" } });
+}
