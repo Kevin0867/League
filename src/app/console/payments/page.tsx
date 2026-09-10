@@ -874,7 +874,7 @@ export default async function PaymentsPage({
                       <tr key={l.id}>
                         <td className="px-3 py-1.5 text-slate-700"><Link href={`/console/coaches/${l.coach.person.id}`} className="hover:text-brand-700 hover:underline">{l.coach.person.firstName} {l.coach.person.lastName}</Link></td>
                         <td className="text-slate-500">{l.sessionsDelivered} sessions</td>
-                        <td className="text-slate-500">{formatCents(l.sessionPayCents)} + {formatCents(l.alaCarteCents)} à la carte</td>
+                        <td className="text-slate-500">{formatCents(l.sessionPayCents)} + {formatCents(l.alaCarteCents)} private lessons/clinics</td>
                         <td className="px-3 text-right font-medium text-slate-800">{formatCents(l.totalCents)}</td>
                       </tr>
                     ))}
