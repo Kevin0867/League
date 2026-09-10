@@ -20,6 +20,7 @@ import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
 import { feeStateOf } from "@/lib/domain/feeStatus";
 import { payableCompletedRows } from "@/lib/domain/coachPay";
+import { personSearchOR } from "@/lib/domain/personSearch";
 
 export const dynamic = "force-dynamic";
 
@@ -46,10 +47,13 @@ export default async function PaymentsPage({
   // by a PLAYER it covers. A family invoice is billed to the guardian (e.g. a kid
   // paid under a parent, or via Class Wallet), so the player it's for must still
   // turn up when you search that player's name.
+  // Search a payer/player across EVERY field on the record — name, all three
+  // emails, and phone — plus their guardian's contacts (a minor billed under a
+  // parent). Shared with registrations and global search so results always agree.
   const matchIds = qRaw
     ? (
         await prisma.person.findMany({
-          where: { OR: [{ firstName: { contains: qRaw, mode: "insensitive" } }, { lastName: { contains: qRaw, mode: "insensitive" } }] },
+          where: { OR: personSearchOR(qRaw) },
           select: { id: true },
           take: 500,
         })
@@ -58,7 +62,9 @@ export default async function PaymentsPage({
   const nameFilter = qRaw
     ? {
         OR: [
-          { party: { is: { OR: [{ firstName: { contains: qRaw, mode: "insensitive" as const } }, { lastName: { contains: qRaw, mode: "insensitive" as const } }] } } },
+          { party: { is: { OR: personSearchOR(qRaw) } } },
+          // A parent's email/phone finds a payment billed to or covering their child.
+          { party: { is: { guardian: { is: { OR: personSearchOR(qRaw) } } } } },
           ...matchIds.map((id) => ({ coveredPersonIds: { array_contains: id } })),
         ],
       }
@@ -923,7 +929,7 @@ function Ledger({
               type="search"
               name="q"
               defaultValue={search.q}
-              placeholder="Search a payer by name…"
+              placeholder="Search by name, email, or phone…"
               className="input py-1 text-sm"
             />
             {search.payView !== "all" && <input type="hidden" name="pay" value={search.payView} />}
