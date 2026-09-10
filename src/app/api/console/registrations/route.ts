@@ -570,9 +570,14 @@ export async function POST(req: Request) {
     // Request the season fee from this one player (single-person version of §8).
     // Per-player season-fee invoice (billed to the paying adult), then emailed.
     case "requestFee": {
-      if (!reg) return back("?err=fields");
+      // Honor a caller-supplied return path (e.g. the person record) so the admin
+      // lands back where they acted; otherwise the registration detail page.
+      const rawReturnRF = String(fd.get("returnTo") ?? "");
+      const rtRF = rawReturnRF.startsWith("/console/") ? rawReturnRF : null;
+      const backRF = (qs: string) => NextResponse.redirect(new URL(`${rtRF ?? (reg ? `/console/registrations/${reg.id}` : "/console/registrations")}${qs}`, origin), 303);
+      if (!reg) return backRF("?err=fields");
       const person = await prisma.person.findUnique({ where: { id: personId } });
-      if (!person) return back("?err=fields");
+      if (!person) return backRF("?err=fields");
 
       const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
       const feeCents = rate?.seasonFeeCents ?? 49500;
@@ -593,7 +598,7 @@ export async function POST(req: Request) {
         });
       }
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: res.paymentId, action: "REQUESTED", summary: `Fee ${res.created ? "requested" : "re-sent"} for ${person.firstName} ${person.lastName}` });
-      return back("?ok=fee");
+      return backRF("?ok=fee");
     }
 
     // Mark a fee PAID outside Stripe — a check, Class Wallet, cash, or an in-kind
@@ -601,18 +606,21 @@ export async function POST(req: Request) {
     // outstanding (or partially-paid subscription) invoice; if no fee has been
     // invoiced yet, one is accrued first so the payment has something to land on.
     case "markPaidOffline": {
-      if (!reg) return back("?err=fields");
+      const rawReturnMP = String(fd.get("returnTo") ?? "");
+      const rtMP = rawReturnMP.startsWith("/console/") ? rawReturnMP : null;
+      const backMP = (qs: string) => NextResponse.redirect(new URL(`${rtMP ?? (reg ? `/console/registrations/${reg.id}` : "/console/registrations")}${qs}`, origin), 303);
+      if (!reg) return backMP("?err=fields");
       const note = String(fd.get("note") ?? "").trim().slice(0, 300);
-      if (!note) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=nonote`, origin), 303);
+      if (!note) return backMP("?err=nonote");
       // The dollar amount actually received offline. Blank falls back to the
       // invoice amount; a bad or non-positive figure is rejected.
       const amountRaw = String(fd.get("amount") ?? "").trim();
       const enteredCents = amountRaw ? Math.round(parseFloat(amountRaw) * 100) : null;
       if (amountRaw && (!Number.isFinite(enteredCents) || (enteredCents ?? 0) <= 0)) {
-        return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=amount`, origin), 303);
+        return backMP("?err=amount");
       }
       const person = await prisma.person.findUnique({ where: { id: personId } });
-      if (!person) return back("?err=fields");
+      if (!person) return backMP("?err=fields");
 
       // Find the fee covering this player that isn't already settled/refunded —
       // an outstanding request, a failed charge, or a subscription still paying.
@@ -625,7 +633,7 @@ export async function POST(req: Request) {
         orderBy: { createdAt: "desc" },
       });
       if (covering.some((x) => x.status === "PAID")) {
-        return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=alreadypaid`, origin), 303);
+        return backMP("?err=alreadypaid");
       }
       let target = covering.find((x) => ["REQUESTED", "PENDING", "FAILED"].includes(x.status));
       if (!target) {
@@ -637,7 +645,7 @@ export async function POST(req: Request) {
         const res = await accruePlayerSeasonFee({ playerId: personId, seasonId: reg.seasonId, feeCents, seasonName: season?.name ?? "Season" });
         target = (await prisma.payment.findUnique({ where: { id: res.paymentId } })) ?? undefined;
       }
-      if (!target) return back("?err=fields");
+      if (!target) return backMP("?err=fields");
 
       const settledCents = enteredCents ?? target.amountCents;
       await prisma.payment.update({
@@ -655,7 +663,7 @@ export async function POST(req: Request) {
         },
       });
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: target.id, action: "PAID", summary: `Marked paid offline — ${(settledCents / 100).toFixed(2)} (${note}) for ${person.firstName} ${person.lastName}` });
-      return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=paidoffline`, origin), 303);
+      return backMP("?ok=paidoffline");
     }
 
     // Mark a fee as PAYING BY PLAN (subscription) — for a player who set up a
