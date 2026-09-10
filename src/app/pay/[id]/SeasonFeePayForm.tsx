@@ -82,6 +82,9 @@ export function SeasonFeePayForm({
   apparelOnly?: boolean;
 }) {
   const [lines, setLines] = useState<Line[]>([]);
+  // Which plan the buyer picked — drives the card highlight so tapping either
+  // option lights it up (a submit button below then checks out with the choice).
+  const [plan, setPlan] = useState<"full" | "installments">(recommendInstall ? "installments" : "full");
 
   // Sections: one per known player, or a single anonymous section otherwise.
   const sections: { id: string | null; name: string | null }[] = players.length
@@ -196,25 +199,27 @@ export function SeasonFeePayForm({
         ) : (
           <>
             <button
-              name="plan"
-              value="full"
-              disabled={!canCheckout}
-              className={`w-full rounded-xl border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
-                recommendInstall ? "border-slate-200 bg-white hover:border-slate-300" : "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
+              type="button"
+              onClick={() => setPlan("full")}
+              aria-pressed={plan === "full"}
+              className={`relative w-full rounded-xl border px-4 py-3 text-left transition-colors ${
+                plan === "full" ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
               }`}
             >
+              {plan === "full" && <span className="absolute right-3 top-3 text-brand-600" aria-hidden="true">✓</span>}
               <span className="block font-semibold text-slate-900">Pay in full — {formatCents(totalCents)}</span>
               <span className="block text-xs text-slate-500">One secure payment now (season fee + apparel{taxCents > 0 ? " + tax" : ""}).</span>
             </button>
 
             <button
-              name="plan"
-              value="installments"
-              disabled={!canCheckout}
-              className={`w-full rounded-xl border px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
-                recommendInstall ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
+              type="button"
+              onClick={() => setPlan("installments")}
+              aria-pressed={plan === "installments"}
+              className={`relative w-full rounded-xl border px-4 py-3 text-left transition-colors ${
+                plan === "installments" ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500" : "border-slate-200 bg-white hover:border-slate-300"
               }`}
             >
+              {plan === "installments" && <span className="absolute right-3 top-3 text-brand-600" aria-hidden="true">✓</span>}
               <span className="block font-semibold text-slate-900">
                 Pay in {installmentCount} — {formatCents(perInstallmentCents + apparelCents + taxCents)} today, then 2 more
               </span>
@@ -222,6 +227,16 @@ export function SeasonFeePayForm({
                 The season fee splits into {installmentCount} equal payments 30 days apart; apparel{taxCents > 0 ? " and tax are" : " is"} included in
                 today&apos;s first payment.
               </span>
+            </button>
+
+            {/* Single checkout button — submits the plan the buyer selected above. */}
+            <button
+              name="plan"
+              value={plan}
+              disabled={!canCheckout}
+              className="w-full rounded-xl bg-brand-600 px-4 py-3 text-center font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Continue to payment · {plan === "full" ? formatCents(totalCents) : `${formatCents(perInstallmentCents + apparelCents + taxCents)} today`}
             </button>
           </>
         )}
