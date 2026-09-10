@@ -62,6 +62,7 @@ const SECTIONS: NavSection[] = [
     title: "Operations",
     items: [
       { href: "/console/facilities", label: "Facilities", roles: ["COO", "CEO", "DIRECTOR"] },
+      { href: "/console/locations", label: "Locations", roles: ["COACH"] },
       { href: "/console/schedule", label: "Schedule", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/league", label: "League", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/championship", label: "Championship", roles: ["COO", "DIRECTOR"] },
