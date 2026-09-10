@@ -74,12 +74,13 @@ export function InboxList({ items, basePath }: { items: InboxItem[]; basePath: s
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${it.unread ? "bg-brand-600" : "bg-transparent"}`} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <span className={`truncate text-sm ${it.unread ? "font-semibold text-slate-900" : "font-medium text-slate-700"}`}>
-                {it.others}
+              <span className={`flex min-w-0 items-center gap-2 truncate text-sm ${it.unread ? "font-semibold text-slate-900" : "font-medium text-slate-700"}`}>
+                <span className="truncate">{it.others}</span>
+                {it.unread && <span className="shrink-0 rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">New</span>}
               </span>
               <span className="shrink-0 text-xs text-slate-400">{formatDateTime12(it.lastMessageAt)}</span>
             </div>
-            <p className="truncate text-sm text-slate-500">{it.preview}</p>
+            <p className={`truncate text-sm ${it.unread ? "text-slate-700" : "text-slate-500"}`}>{it.preview}</p>
           </div>
         </Link>
       ))}

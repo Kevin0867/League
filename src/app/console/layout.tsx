@@ -4,7 +4,7 @@ import { requireStaff, isAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
-import { unreadInboxCount, unreadBroadcastCount } from "@/lib/domain/inbox";
+import { unreadInboxCount, unreadBroadcastCount, firstUnreadInboxId } from "@/lib/domain/inbox";
 import { coachAgreementNeedsAttention, agreementsPendingCountersign } from "@/lib/domain/coachingAgreement";
 
 // Never serve a cached/prerendered authed shell — always resolve the session.
@@ -47,14 +47,16 @@ export default async function ConsoleLayout({
     : null;
   // Unread direct messages — surfaced at the top of the console so a new message
   // is never missed.
-  const [unread, announcements, agreementAction, agreementsPending] = await Promise.all([
+  const [unread, announcements, agreementAction, agreementsPending, firstUnreadId] = await Promise.all([
     unreadInboxCount(session.personId).catch(() => 0),
     unreadBroadcastCount(session.personId).catch(() => 0),
     coachAgreementNeedsAttention(session.personId).catch(() => false),
     admin ? agreementsPendingCountersign().catch(() => 0) : Promise.resolve(0),
+    firstUnreadInboxId(session.personId).catch(() => null),
   ]);
+  const unreadHref = firstUnreadId ? `/console/inbox/${firstUnreadId}` : "/console/inbox";
   return (
-    <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask} unread={unread} announcements={announcements} agreementAction={agreementAction} agreementsPending={agreementsPending}>
+    <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask} unread={unread} announcements={announcements} agreementAction={agreementAction} agreementsPending={agreementsPending} unreadHref={unreadHref}>
       {children}
     </ConsoleShell>
   );

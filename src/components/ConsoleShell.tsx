@@ -101,6 +101,7 @@ export function ConsoleShell({
   announcements = 0,
   agreementAction = false,
   agreementsPending = 0,
+  unreadHref = "/console/inbox",
 }: {
   /** Primary role — used only for the sidebar badge label. */
   role: Role;
@@ -121,6 +122,9 @@ export function ConsoleShell({
   /** Agreements signed by a coach and awaiting an admin countersignature —
    *  drives the Agreements nav badge + banner (admins only). */
   agreementsPending?: number;
+  /** Where the unread-DM banner links — the unread thread itself when there is
+   *  one, so tapping it opens and marks it read (falls back to the inbox list). */
+  unreadHref?: string;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -264,7 +268,7 @@ export function ConsoleShell({
             )}
             {unread > 0 && (
               <Link
-                href="/console/inbox"
+                href={unreadHref}
                 className="mb-4 flex items-center gap-3 rounded-lg border border-accent-400 bg-accent-50 px-4 py-3 text-sm font-medium text-brand-900 hover:bg-accent-100"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-900 text-xs font-bold text-white">{unread}</span>
