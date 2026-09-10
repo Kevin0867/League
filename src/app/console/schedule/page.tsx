@@ -61,17 +61,22 @@ export default async function SchedulePage({
   const roles = viewer?.roles ?? (viewer?.role ? [viewer.role] : []);
   const scheduleAdmin = can(roles, "manageScheduling");
   const myTeamIds = scheduleAdmin ? null : new Set(await coachedTeamIds());
+  // A non-admin coach only ever sees the teams they coach — never every team's
+  // schedule. This list scopes both the sessions and the team chips to them.
+  const coachTeamIdList = myTeamIds ? [...myTeamIds] : null;
   const isCalendar = view === "calendar";
-  const teamFilter = team && team !== "all" ? team : null;
+  // A coach may only filter to one of their own teams; ignore any other team id.
+  const teamFilter = team && team !== "all" && (!myTeamIds || myTeamIds.has(team)) ? team : null;
   const now = new Date();
   const [sessions, teams, facilities, blackoutRows] = await Promise.all([
     prisma.session.findMany({
+      where: coachTeamIdList ? { teams: { some: { teamId: { in: coachTeamIdList } } } } : undefined,
       include: { facility: true, teams: { include: { team: true } }, season: { select: { startDate: true } } },
       orderBy: { date: "asc" },
       take: 200,
     }),
     prisma.team.findMany({
-      where: { origin: "PURE_ACADEMY", isTest: false },
+      where: { origin: "PURE_ACADEMY", isTest: false, ...(coachTeamIdList ? { id: { in: coachTeamIdList } } : {}) },
       include: { _count: { select: { sessions: true } }, season: { select: { startDate: true } }, facility: { select: { name: true } } },
       orderBy: { name: "asc" },
     }),
@@ -204,9 +209,9 @@ export default async function SchedulePage({
         </div>
       ) : (
         <div className="card border-l-4 border-brand-500">
-          <h2 className="font-semibold text-slate-900">Your team schedule</h2>
+          <h2 className="font-semibold text-slate-900">{(coachTeamIdList?.length ?? 0) === 1 ? "Your Team's Schedule" : "Your Teams' Schedule"}</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Your teams&apos; practices, league matches, and championship sessions. An admin generates the season&apos;s weekly practices;
+            Only the teams you coach — their practices, league matches, and championship sessions. An admin generates the season&apos;s weekly practices;
             you can add a <span className="font-medium">one-off practice</span> (a make-up or an extra session) for a team you coach below.
           </p>
         </div>
@@ -291,7 +296,7 @@ export default async function SchedulePage({
             href={filterHref(null)}
             className={`rounded-full px-3 py-1 text-sm font-medium ${!teamFilter ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
           >
-            All teams
+            {scheduleAdmin ? "All teams" : "All my teams"}
           </Link>
           {teamsWithSessions.map((t) => (
             <Link
