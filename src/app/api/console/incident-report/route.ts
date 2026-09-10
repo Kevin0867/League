@@ -49,6 +49,17 @@ export async function POST(req: Request) {
   const actions = ACTION_FLAGS.filter(([k]) => g(k) === "1").map(([, l]) => l);
   const actionBlock = ["8. Actions taken / immediate follow-up", actions.length ? "  " + actions.join(", ") : "  (none checked)", ...(g("additionalActions") ? ["  Additional: " + g("additionalActions")] : []), ""];
 
+  // Uploaded photos/video (already on Blob) — parsed from the form's JSON field.
+  type Attach = { url: string; type: string; name: string };
+  let attachments: Attach[] = [];
+  try {
+    const parsed = JSON.parse(g("attachments") || "[]");
+    if (Array.isArray(parsed)) attachments = parsed.filter((a) => a && typeof a.url === "string");
+  } catch { /* ignore malformed */ }
+  const photoBlock = attachments.length
+    ? ["9. Photos / video", ...attachments.map((a) => `  ${a.type === "VIDEO" ? "Video" : "Photo"}: ${a.url}`), ""]
+    : [];
+
   // Assemble in the form's section order.
   const body = [
     "PURE INCIDENT REPORT — CONFIDENTIAL",
@@ -62,18 +73,34 @@ export async function POST(req: Request) {
     ...sectionText("6. Supervision / pickup details", SECTIONS[3], g),
     ...sectionText("7. Witnesses", SECTIONS[4], g),
     ...actionBlock,
-    ...sectionText("9. Coach certification", SECTIONS[5], g),
+    ...photoBlock,
+    ...sectionText("10. Coach certification", SECTIONS[5], g),
     `Submitted: ${new Date().toLocaleString("en-US", { timeZone: "America/Phoenix" })} (Phoenix)`,
   ].join("\n");
 
   const who = g("coachName") || "A coach";
   const subj = `Incident Report — ${g("incidentDate")}${g("participantName") ? ` · ${g("participantName")}` : ""} (${who})`;
 
+  // HTML mirror: the full report (monospace) plus the photos embedded inline and
+  // videos as watch links, so the office sees the media right in the email.
+  const esc = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch] as string));
+  const mediaHtml = attachments.length
+    ? `<h3 style="font-family:Arial,sans-serif;color:#0f172a;margin:20px 0 8px">Photos / video (${attachments.length})</h3>` +
+      attachments
+        .map((a) =>
+          a.type === "VIDEO"
+            ? `<p style="margin:6px 0"><a href="${esc(a.url)}" style="display:inline-block;background:#059669;color:#fff;font-weight:700;text-decoration:none;padding:10px 16px;border-radius:8px">▶ Watch video${a.name ? ` — ${esc(a.name)}` : ""}</a></p>`
+            : `<p style="margin:6px 0"><a href="${esc(a.url)}"><img src="${esc(a.url)}" alt="${esc(a.name || "photo")}" style="max-width:100%;border-radius:8px" /></a></p>`
+        )
+        .join("")
+    : "";
+  const html = `<pre style="font-family:Menlo,Consolas,monospace;white-space:pre-wrap;font-size:13px;color:#0f172a">${esc(body)}</pre>${mediaHtml}`;
+
   try {
-    const res = await sendEmail(TEAM_INBOX, subj, body);
+    const res = await sendEmail(TEAM_INBOX, subj, body, html);
     await audit({
       actorId: actor.userId, entityType: "IncidentReport", entityId: "submit", action: "SUBMITTED",
-      summary: `Incident report emailed to ${TEAM_INBOX} — ${g("incidentDate")}${g("participantName") ? ` · ${g("participantName")}` : ""} by ${who}${res.simulated ? " (email simulated — provider off)" : ""}`,
+      summary: `Incident report emailed to ${TEAM_INBOX} — ${g("incidentDate")}${g("participantName") ? ` · ${g("participantName")}` : ""} by ${who}${attachments.length ? ` · ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}` : ""}${res.simulated ? " (email simulated — provider off)" : ""}`,
     });
     return back("?ok=1");
   } catch (e) {

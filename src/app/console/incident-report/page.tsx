@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireStaff } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { MediaAttachMulti } from "@/components/MediaAttachMulti";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Incident Report" };
@@ -157,7 +158,16 @@ export default async function IncidentReportPage({
           </div>
         </Section>
 
-        <Section n="9" title="Coach certification">
+        <Section n="9" title="Photos / video (optional)">
+          <p className="mb-2 text-sm text-slate-600">
+            Add any pictures or video that show the incident or injury (a hazard, the court/equipment, a visible injury with
+            appropriate consent). These are sent with the report to the office. Large videos are fine — wait for the upload to
+            finish before submitting.
+          </p>
+          <MediaAttachMulti />
+        </Section>
+
+        <Section n="10" title="Coach certification">
           <p className="mb-3 text-xs text-slate-500">
             I certify that this report is accurate to the best of my knowledge and reflects the facts known to me when completed.
             Serious injuries, suspected abuse or misconduct, missing participants, unauthorized-release concerns, and other
