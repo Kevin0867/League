@@ -654,6 +654,10 @@ model Facility {
   /// gate codes context, house rules, anything staff and coaches should know.
   notes            String?
 
+  /// Photos/videos of the venue attached to Notes & access — parking, gates,
+  /// court layout. Array of { url, type: "IMAGE"|"VIDEO", name }.
+  photos           Json?
+
   /// À la carte eligibility must be negotiated per agreement, not assumed (§11)
   alaCarteAllowed  Boolean   @default(false)
 

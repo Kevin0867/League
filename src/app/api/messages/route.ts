@@ -104,7 +104,7 @@ export async function POST(req: Request) {
     const body = String(fd.get("body") ?? "").trim();
     const rt = rawReturn.startsWith("/console/") || rawReturn.startsWith("/portal") ? rawReturn : base;
     const backRT = (qs: string) => NextResponse.redirect(new URL(`${rt}${qs}`, origin), 303);
-    if (!broadcastId || !body) return backRT("?msgreply=err");
+    if (!broadcastId || (!body && !attach)) return backRT("?msgreply=err");
     const msg = await prisma.message.findUnique({ where: { id: broadcastId }, select: { sender: { select: { personId: true } } } });
     const senderPersonId = msg?.sender?.personId ?? null;
     if (!senderPersonId) return backRT("?msgreply=nosender");
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
       data: { createdById: myPersonId, participants: { create: [{ personId: myPersonId }, { personId: senderPersonId }] } },
       select: { id: true },
     })).id;
-    await appendMessage(convId, myPersonId, body, { email: true, sms: true }, null);
+    await appendMessage(convId, myPersonId, body, { email: true, sms: true }, attach);
     await audit({ actorId: actor.userId, entityType: "Conversation", entityId: convId, action: "message.reply", summary: `Replied to message ${broadcastId} (sent to sender)` });
     return backRT("?msgreply=1");
   }

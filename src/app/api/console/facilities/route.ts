@@ -15,6 +15,25 @@ function dollarsToCents(v: FormDataEntryValue | null): number {
   return isNaN(n) ? 0 : Math.round(n * 100);
 }
 
+// Validate the `attachments` JSON the photo picker submits: only http(s) URLs
+// and IMAGE/VIDEO kinds, never trusting the client blindly.
+function parsePhotos(raw: FormDataEntryValue | null): { url: string; type: "IMAGE" | "VIDEO"; name: string }[] {
+  try {
+    const arr = JSON.parse(String(raw ?? "[]"));
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((x) => x && typeof x.url === "string" && /^https?:\/\//.test(x.url))
+      .slice(0, 30)
+      .map((x) => ({
+        url: String(x.url),
+        type: x.type === "VIDEO" ? "VIDEO" : "IMAGE",
+        name: typeof x.name === "string" ? x.name.slice(0, 120) : "",
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const back = (qs: string) =>
@@ -87,6 +106,7 @@ export async function POST(req: Request) {
     exactAddress: String(formData.get("exactAddress") ?? "").trim() || null,
     lights: String(formData.get("lights") ?? "").trim() || null,
     notes: String(formData.get("notes") ?? "").trim() || null,
+    photos: parsePhotos(formData.get("attachments")),
     alaCarteAllowed: formData.get("alaCarteAllowed") === "on",
     acpLeagueOption: formData.get("acpLeagueOption") === "on",
   };

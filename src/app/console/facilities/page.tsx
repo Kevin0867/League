@@ -174,6 +174,20 @@ export default async function FacilitiesPage({
                       <span className="font-medium text-slate-500">Notes: </span>{f.notes}
                     </p>
                   )}
+                  {Array.isArray(f.photos) && (f.photos as unknown as { url: string; type: string; name?: string }[]).length > 0 && (
+                    <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                      {(f.photos as unknown as { url: string; type: string; name?: string }[]).map((p, i) => (
+                        <a key={i} href={p.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg ring-1 ring-slate-200" title={p.name || "Open"}>
+                          {p.type === "VIDEO" ? (
+                            <video src={p.url} className="h-20 w-full object-cover" />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.url} alt={p.name || "Facility photo"} className="h-20 w-full object-cover" />
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
@@ -187,6 +201,7 @@ export default async function FacilitiesPage({
                       contactEmail: f.contactEmail, contactPhone: f.contactPhone, isPrivate: f.isPrivate,
                       generalArea: f.generalArea, exactAddress: f.exactAddress,
                       lights: f.lights, notes: f.notes,
+                      photos: Array.isArray(f.photos) ? (f.photos as unknown as { url: string; type: "IMAGE" | "VIDEO"; name: string }[]) : [],
                       alaCarteAllowed: f.alaCarteAllowed, acpLeagueOption: f.acpLeagueOption,
                       courtBlocks: f.courtBlocks.map((b) => ({ dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime, courtCount: b.courtCount, kind: b.kind })),
                     }}

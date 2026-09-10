@@ -10,8 +10,18 @@ type Item = { url: string; type: "IMAGE" | "VIDEO"; name: string };
 // serverless body limit); the collected list is serialized into one hidden
 // input the form submits as `attachments` (JSON). The form's Send/Submit
 // button(s) are disabled while any upload is in flight.
-export function MediaAttachMulti({ name = "attachments" }: { name?: string }) {
-  const [items, setItems] = useState<Item[]>([]);
+export function MediaAttachMulti({
+  name = "attachments",
+  prefix = "incident",
+  initial = [],
+}: {
+  name?: string;
+  /** Blob key folder, e.g. "facility" or "incident". */
+  prefix?: string;
+  /** Existing items to preload (e.g. a facility's saved photos when editing). */
+  initial?: Item[];
+}) {
+  const [items, setItems] = useState<Item[]>(initial);
   const [pending, setPending] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -37,7 +47,7 @@ export function MediaAttachMulti({ name = "attachments" }: { name?: string }) {
       try {
         const isVideo = file.type.startsWith("video/");
         const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60) || (isVideo ? "clip.mp4" : "photo.jpg");
-        const blob = await upload(`incident/${Date.now()}-${safe}`, file, {
+        const blob = await upload(`${prefix}/${Date.now()}-${safe}`, file, {
           access: "public",
           handleUploadUrl: "/api/blob/upload",
           contentType: file.type,
