@@ -86,6 +86,7 @@ export function ConsoleShell({
   name,
   children,
   ask,
+  unread = 0,
 }: {
   /** Primary role — used only for the sidebar badge label. */
   role: Role;
@@ -96,6 +97,8 @@ export function ConsoleShell({
   children: React.ReactNode;
   /** When present (admin only), floats the "Ask Brett" assistant on every page. */
   ask?: { ticket: string; configured: boolean } | null;
+  /** Unread direct-message threads — drives the top banner + Inbox nav badge. */
+  unread?: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -185,8 +188,11 @@ export function ConsoleShell({
                 </div>
                 <div className="space-y-1.5">
                   {section.items.map((item) => (
-                    <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={linkClass(isActiveItem(item))}>
-                      {item.label}
+                    <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`${linkClass(isActiveItem(item))} flex items-center justify-between`}>
+                      <span>{item.label}</span>
+                      {item.href === "/console/inbox" && unread > 0 && (
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">{unread}</span>
+                      )}
                     </Link>
                   ))}
                 </div>
@@ -209,7 +215,18 @@ export function ConsoleShell({
               <Link href="/logout" prefetch={false} className="whitespace-nowrap text-sm font-semibold text-white/80 hover:text-white">Sign out</Link>
             </div>
           </div>
-          <div className="p-4 md:p-6">{children}</div>
+          <div className="p-4 md:p-6">
+            {unread > 0 && (
+              <Link
+                href="/console/inbox"
+                className="mb-4 flex items-center gap-3 rounded-lg border border-accent-400 bg-accent-50 px-4 py-3 text-sm font-medium text-brand-900 hover:bg-accent-100"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-900 text-xs font-bold text-white">{unread}</span>
+                You have {unread} unread {unread === 1 ? "message" : "messages"} — open your inbox to read {unread === 1 ? "it" : "them"} →
+              </Link>
+            )}
+            {children}
+          </div>
         </main>
       </div>
       {ask && <AskBrett ticket={ask.ticket} configured={ask.configured} />}
