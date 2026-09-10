@@ -160,3 +160,17 @@ export async function coachAssignmentForAgreement(coachId: string): Promise<Agre
   const roleSummary = anyHead && anyAsst ? "Coach / Assistant Coach" : anyAsst ? "Assistant Coach" : "Coach";
   return { teams: rows, roleSummary };
 }
+
+/** Whether this person (as a coach) has an agreement PURE returned for
+ *  correction and still needs to fix and re-sign. Drives the "Needs attention"
+ *  flag in the console. Returns false for anyone who isn't a coach. */
+export async function coachAgreementNeedsAttention(personId: string | null | undefined): Promise<boolean> {
+  if (!personId) return false;
+  const coach = await prisma.coach.findUnique({ where: { personId }, select: { id: true } });
+  if (!coach) return false;
+  const returned = await prisma.coachingAgreement.findFirst({
+    where: { coachId: coach.id, status: "SENT", NOT: { adminNote: null } },
+    select: { id: true },
+  });
+  return !!returned;
+}
