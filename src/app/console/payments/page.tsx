@@ -121,6 +121,20 @@ export default async function PaymentsPage({
     take: 200,
   });
 
+  // Aggregate of ALL active plans (not just the shown page / current search), so
+  // the Subscriptions header shows a real count that moves when plans are added —
+  // whether they started via Stripe checkout or were marked as paying-by-plan.
+  const allActiveSubs = await prisma.payment.findMany({
+    where: { direction: "IN", installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 } },
+    select: { amountCents: true, installmentsPaid: true, installmentsTotal: true },
+  });
+  const subsCount = allActiveSubs.length;
+  const subsCollectedCents = allActiveSubs.reduce((s, p) => {
+    const total = p.installmentsTotal ?? 3;
+    return s + Math.round(p.amountCents / total) * Math.min(p.installmentsPaid ?? 1, total);
+  }, 0);
+  const subsRemainingCents = Math.max(0, allActiveSubs.reduce((s, p) => s + p.amountCents, 0) - subsCollectedCents);
+
   // Resolve the players a shown payment COVERS (family invoices bill the guardian),
   // so each row can name who it's actually for — that's how a payment made under a
   // parent shows up as the child's paid fee.
@@ -895,7 +909,7 @@ export default async function PaymentsPage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Ledger title="Fees in" rows={inboundRows} search={{ q: qRaw, payView }} />
-        <SubscriptionsLedger rows={subscriptionRows} />
+        <SubscriptionsLedger rows={subscriptionRows} count={subsCount} collectedCents={subsCollectedCents} remainingCents={subsRemainingCents} />
         <Ledger title="Payments out" rows={outbound} />
       </div>
     </div>
@@ -981,14 +995,27 @@ function Ledger({
 // sub-line shows how many of the 3 charges have cleared and the collected share.
 function SubscriptionsLedger({
   rows,
+  count,
+  collectedCents,
+  remainingCents,
 }: {
   rows: Array<{ id: string; partyId: string | null; amountCents: number; installmentsPaid: number; installmentsTotal: number | null; category: string; coveredNames?: string | null; party: { firstName: string; lastName: string } | null }>;
+  count: number;
+  collectedCents: number;
+  remainingCents: number;
 }) {
   return (
     <div className="card">
-      <h2 className="mb-3 font-semibold text-slate-900">Subscriptions</h2>
+      <div className="mb-3">
+        <h2 className="font-semibold text-slate-900">Subscriptions</h2>
+        {count > 0 && (
+          <p className="mt-0.5 text-xs text-slate-500">
+            <strong>{count}</strong> active {count === 1 ? "plan" : "plans"} · {formatCents(collectedCents)} collected so far · {formatCents(remainingCents)} still to bill
+          </p>
+        )}
+      </div>
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-400">No active payment plans.</p>
+        <p className="text-sm text-slate-400">{count > 0 ? "No active payment plans match your search." : "No active payment plans."}</p>
       ) : (
         <ul className="divide-y divide-slate-100 text-sm">
           {rows.map((p) => {
