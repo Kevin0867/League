@@ -57,7 +57,7 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
     select: {
       id: true, name: true, divisionCode: true, levelBand: true, market: true,
       dayOfWeek: true, startTime: true, coachPlays: true, capacity: true,
-      facility: { select: { name: true } },
+      facility: { select: { name: true, isPrivate: true, crossStreets: true, generalArea: true } },
       _count: { select: { members: true } },
     },
     orderBy: [{ market: "asc" }, { name: "asc" }],
@@ -65,12 +65,18 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
   const rows = teams.map((t) => {
     const capacity = teamCapacity(t.capacity);
     const roster = t._count.members + (t.coachPlays ? 1 : 0);
+    // For a private home never reveal the facility name (often the owner's name)
+    // or street address — show the cross streets (or general area) + city only.
+    const f = t.facility;
+    const locationBits = f?.isPrivate
+      ? [f.crossStreets || f.generalArea, t.market]
+      : [f?.name, t.market];
     return {
       id: t.id,
       name: t.name,
       category: t.divisionCode || t.levelBand || null,
       dayTime: t.dayOfWeek && t.startTime ? `${t.dayOfWeek} ${formatTime12(t.startTime)}` : null,
-      location: [t.facility?.name, t.market].filter(Boolean).join(" · ") || null,
+      location: locationBits.filter(Boolean).join(" · ") || null,
       capacity,
       roster,
       spotsLeft: Math.max(0, capacity - roster),
