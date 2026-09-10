@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   const alsoText = fd.get("channel_SMS") === "on";
 
   const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "Your PURE coach";
-  const email = teamUpdateEmail({ teamName: team.name, coachName, body });
+  const email = teamUpdateEmail({ teamName: team.name, coachName, body, attachmentUrl, attachmentType });
   const res = await dispatchMessage({
     senderId: actor.userId,
     seasonId: team.seasonId,

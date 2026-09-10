@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 
 // A photo/video attachment picker for message forms. Uploads the file directly
@@ -14,12 +14,28 @@ export function MediaAttach({ label = "Add photo / video" }: { label?: string })
   const [type, setType] = useState<"IMAGE" | "VIDEO" | null>(null);
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // While a file is uploading, disable the surrounding form's Send button(s) so a
+  // message can't be sent before its attachment finishes (a big video takes a
+  // moment). Our own controls (inside wrapRef) are left alone. Works whether the
+  // parent form is a server or client component.
+  function setFormBusy(busy: boolean) {
+    const form = wrapRef.current?.closest("form");
+    if (!form) return;
+    form.querySelectorAll("button").forEach((b) => {
+      if (wrapRef.current?.contains(b)) return;
+      const t = (b.getAttribute("type") ?? "submit").toLowerCase();
+      if (t === "submit") (b as HTMLButtonElement).disabled = busy;
+    });
+  }
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setErr(null);
     setPending(true);
+    setFormBusy(true);
     try {
       const isVideo = file.type.startsWith("video/");
       const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60) || (isVideo ? "clip.mp4" : "photo.jpg");
@@ -34,11 +50,12 @@ export function MediaAttach({ label = "Add photo / video" }: { label?: string })
       setErr(e instanceof Error ? e.message : "Upload failed — try again.");
     } finally {
       setPending(false);
+      setFormBusy(false);
     }
   }
 
   return (
-    <div className="text-sm">
+    <div ref={wrapRef} className="text-sm">
       {url && <input type="hidden" name="attachmentUrl" value={url} />}
       {type && <input type="hidden" name="attachmentType" value={type} />}
 
@@ -67,7 +84,7 @@ export function MediaAttach({ label = "Add photo / video" }: { label?: string })
             disabled={pending}
             className="hidden"
           />
-          📎 {pending ? "Uploading…" : label}
+          📎 {pending ? "Uploading… please wait to send" : label}
         </label>
       )}
       {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
