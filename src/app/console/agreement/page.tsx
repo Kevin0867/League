@@ -98,7 +98,7 @@ export default async function CoachAgreementPage({
 
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="text-sm font-semibold text-slate-800">Credentials &amp; screening</div>
-            <p className="mt-0.5 text-xs text-slate-500">Enter your current SafeSport, background-check, and CPR details. PURE verifies these before countersigning; if anything is wrong the agreement is returned for correction.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Enter your current SafeSport and background-check details. CPR / AED / First Aid is <strong>not required</strong> — enter N/A if it doesn&apos;t apply. PURE verifies these before countersigning; if anything is wrong the agreement is returned for correction.</p>
             <div className="mt-2 grid gap-3 sm:grid-cols-2">
               {CREDENTIAL_FIELDS.map((f) => (
                 <div key={f.key}>

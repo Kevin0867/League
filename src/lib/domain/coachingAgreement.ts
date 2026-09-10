@@ -129,8 +129,8 @@ export const CREDENTIAL_FIELDS: {
   { key: "safeSportExpires", label: "SafeSport — expiration date", type: "date" },
   { key: "backgroundProvider", label: "Background check — provider/agency", type: "text", required: true, placeholder: "e.g. NCSI, Sterling" },
   { key: "backgroundCompleted", label: "Background check — completion date", type: "date", required: true },
-  { key: "cprProvider", label: "CPR / AED / First Aid — provider", type: "text", placeholder: "e.g. American Red Cross" },
-  { key: "cprExpires", label: "CPR / AED / First Aid — expiration date", type: "date" },
+  { key: "cprProvider", label: "CPR / AED / First Aid — provider (not required)", type: "text", placeholder: "e.g. American Red Cross, or N/A" },
+  { key: "cprExpires", label: "CPR / AED / First Aid — expiration (not required)", type: "text", placeholder: "MM/DD/YYYY, or N/A" },
 ];
 
 export function credentialLabel(key: keyof AgreementCredentials): string {
