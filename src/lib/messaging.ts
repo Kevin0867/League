@@ -128,7 +128,8 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // are marked SKIPPED. Deciding this here lets the slow provider calls in
   // phase 2 run in parallel without racing on the dedup sets or double-sending.
   const inAppStatus = channels.includes("IN_APP") ? "DELIVERED" : "QUEUED";
-  const optOut = input.triggerType ? "" : "\nReply STOP to opt out.";
+  // The STOP opt-out notice is appended centrally in sendSms (on every text),
+  // so we don't add one here.
   const smsText = input.smsBody ?? `${subject}\n${input.body}`;
   type Plan = { r: (typeof recipients)[number]; freshEmails: string[]; emailSkipped: boolean; smsNum: string | null; smsSkipped: boolean };
   const plans: Plan[] = recipients.map((r) => {
@@ -188,7 +189,7 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
     }
     if (channels.includes("SMS")) {
       if (p.smsNum) {
-        const res = await sendSms(p.smsNum, `${smsText}${optOut}`);
+        const res = await sendSms(p.smsNum, smsText);
         smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
         if (!res.ok) failureReasons.push(`sms: ${res.error}`);
         if (res.ok && res.simulated) wasSimulated = true;
