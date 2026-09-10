@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import { sendEmail } from "@/lib/notify";
+import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
 import { coachAssignmentForAgreement, CREDENTIAL_FIELDS, type AgreementCredentials } from "@/lib/domain/coachingAgreement";
 
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
     const id = String(fd.get("agreementId") ?? "").trim();
     const note = String(fd.get("note") ?? "").trim();
     if (!id || !note) return back(`/console/agreements/${id}?err=note`);
-    const rec = await prisma.coachingAgreement.findUnique({ where: { id }, select: { id: true, status: true, coachName: true, coachEmail: true } });
+    const rec = await prisma.coachingAgreement.findUnique({ where: { id }, select: { id: true, status: true, coachName: true, coachEmail: true, coachPhone: true } });
     if (!rec) return back("/console/agreements?err=notfound");
     if (rec.status !== "COACH_SIGNED") return back(`/console/agreements/${id}?err=state`);
     // Reset to unsigned so the coach must redo it with the correct info; keep the
@@ -139,6 +139,9 @@ export async function POST(req: Request) {
       data: { status: "SENT", coachSignature: null, coachSignedAt: null, adminNote: note },
     });
     await audit({ actorId: actor.userId, entityType: "CoachingAgreement", entityId: id, action: "RETURNED_FOR_CORRECTION", summary: `Returned ${rec.coachName ?? "coach"}'s agreement for correction` });
+    // Notify the coach by email AND text so they know to fix it. Their console
+    // also flags "Needs attention" on the agreement until they re-sign.
+    const link = `${appUrl()}/console/agreement`;
     try {
       if (rec.coachEmail) {
         await sendEmail(
@@ -149,11 +152,16 @@ export async function POST(req: Request) {
             "",
             note,
             "",
-            `Please fix the details and sign again: ${appUrl()}/console/agreement`,
+            `Please fix the details and sign again: ${link}`,
           ].join("\n"),
         );
       }
     } catch (e) { console.error("agreement return email failed", e); }
+    try {
+      if (rec.coachPhone) {
+        await sendSms(rec.coachPhone, `Your PURE coaching agreement needs correction: ${note} Fix & re-sign: ${link}`);
+      }
+    } catch (e) { console.error("agreement return sms failed", e); }
     return back(`/console/agreements/${id}?ok=returned`);
   }
 
