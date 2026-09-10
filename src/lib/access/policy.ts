@@ -22,6 +22,7 @@ export const COACH_CONSOLE_PREFIXES = [
   "/console/teams", // teams (view others; their roster + progress notes)
   "/console/profile", // their own coach profile & account
   "/console/inbox", // messaging with admins/coaches/their team families
+  "/console/announcements", // announcements sent to them (read + mark read)
   "/console/lounge", // the Coaches' Lounge — staff space, coaches included
 ];
 
