@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Attachment } from "@/components/Attachment";
+import { MediaAttach } from "@/components/MediaAttach";
 import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -471,7 +472,8 @@ export default async function PortalHome({
                         <input type="hidden" name="op" value="replyToMessage" />
                         <input type="hidden" name="broadcastMessageId" value={r.messageId} />
                         <input type="hidden" name="returnTo" value="/portal" />
-                        <textarea name="body" rows={2} required className="input" placeholder="Write your reply…" />
+                        <textarea name="body" rows={2} className="input" placeholder="Write your reply…" />
+                        <MediaAttach label="Add a photo / video" />
                         <button className="btn-secondary text-sm">Send reply</button>
                       </form>
                     </details>

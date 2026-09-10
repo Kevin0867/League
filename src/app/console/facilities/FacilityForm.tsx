@@ -1,7 +1,10 @@
 "use client";
 
 import { TimeSelect } from "@/components/TimeSelect";
+import { MediaAttachMulti } from "@/components/MediaAttachMulti";
 import { useState } from "react";
+
+type PhotoInit = { url: string; type: "IMAGE" | "VIDEO"; name: string };
 
 type CourtBlockInit = { dayOfWeek: string; startTime: string; endTime: string; courtCount: number; kind?: string };
 type BlockedInit = { dayOfWeek: string; startTime: string; endTime: string };
@@ -25,6 +28,7 @@ export type FacilityInitial = {
   exactAddress: string | null;
   lights: string | null;
   notes: string | null;
+  photos: PhotoInit[];
   alaCarteAllowed: boolean;
   acpLeagueOption: boolean;
   courtBlocks: CourtBlockInit[];
@@ -316,7 +320,7 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
             )}
           </Section>
 
-          <Section title="Notes & access" hint="Details about the venue — where to park, how to get in, gate/door codes context, house rules, anything staff and coaches should know.">
+          <Section title="Notes & access" hint="Details about the venue — where to park, how to get in, gate/door codes context, house rules, anything staff and coaches should know. Add photos or a short video of the parking, gate, or courts to make it obvious.">
             <textarea
               name="notes"
               rows={4}
@@ -324,6 +328,10 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
               placeholder={"Park in the north lot off Elm. Enter through the side gate — code on the day-of text. Dogs on the property. Bring your own water; no vending on site."}
               defaultValue={facility?.notes ?? ""}
             />
+            <div className="mt-3">
+              <span className="label">Photos / video</span>
+              <MediaAttachMulti prefix="facility" initial={facility?.photos ?? []} />
+            </div>
           </Section>
         </div>
 

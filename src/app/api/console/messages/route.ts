@@ -4,6 +4,7 @@ import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { dispatchMessage, type Channel } from "@/lib/messaging";
 import type { AudienceType } from "@/lib/domain/audience";
+import { broadcastEmailHtml, broadcastSmsWithMedia } from "@/lib/domain/broadcastEmail";
 
 // Message compose as a native-form-POST route handler with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -68,11 +69,13 @@ export async function POST(req: Request) {
       }
       const subject = String(formData.get("subject") ?? "").trim();
       const body = String(formData.get("body") ?? "").trim();
+      const attachmentUrl = String(formData.get("attachmentUrl") ?? "").trim() || null;
+      const attachmentType = String(formData.get("attachmentType") ?? "").trim() || null;
       const channels = (["IN_APP", "EMAIL", "SMS"] as Channel[]).filter(
         (c) => formData.get(`channel_${c}`) === "on"
       );
 
-      if (!body) return back("?err=body");
+      if (!body && !attachmentUrl) return back("?err=body");
       if (channels.length === 0) return back("?err=channels");
 
       // Authorization.
@@ -113,6 +116,10 @@ export async function POST(req: Request) {
         channels,
         subject: subject || undefined,
         body,
+        attachmentUrl,
+        attachmentType,
+        html: attachmentUrl ? broadcastEmailHtml({ subject, body, attachmentUrl, attachmentType }) : undefined,
+        smsBody: attachmentUrl ? broadcastSmsWithMedia({ subject, body, attachmentUrl, attachmentType }) : undefined,
       });
 
       if (result.recipients === 0) return back("?err=norecipients");
@@ -131,8 +138,10 @@ export async function POST(req: Request) {
 
       const subject = String(formData.get("subject") ?? "").trim();
       const body = String(formData.get("body") ?? "").trim();
+      const attachmentUrl = String(formData.get("attachmentUrl") ?? "").trim() || null;
+      const attachmentType = String(formData.get("attachmentType") ?? "").trim() || null;
       const channels = (["IN_APP", "EMAIL", "SMS"] as Channel[]).filter((c) => formData.get(`channel_${c}`) === "on");
-      if (!body) return back("?err=body");
+      if (!body && !attachmentUrl) return back("?err=body");
       if (channels.length === 0) return back("?err=channels");
 
       const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" } });
@@ -144,6 +153,10 @@ export async function POST(req: Request) {
         channels,
         subject: subject || undefined,
         body,
+        attachmentUrl,
+        attachmentType,
+        html: attachmentUrl ? broadcastEmailHtml({ subject, body, attachmentUrl, attachmentType }) : undefined,
+        smsBody: attachmentUrl ? broadcastSmsWithMedia({ subject, body, attachmentUrl, attachmentType }) : undefined,
       });
       if (result.recipients === 0) return back("?err=norecipients");
       return back(`?ok=1&n=${result.recipients}&failed=${result.failures}`);

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { formatDateTime12 } from "@/lib/time";
 import { Attachment } from "@/components/Attachment";
+import { MediaAttach } from "@/components/MediaAttach";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Messages" };
@@ -95,7 +96,8 @@ export default async function AnnouncementsPage({
                       <input type="hidden" name="op" value="replyToMessage" />
                       <input type="hidden" name="broadcastMessageId" value={r.messageId} />
                       <input type="hidden" name="returnTo" value="/console/announcements" />
-                      <textarea name="body" rows={2} required className="input" placeholder={`Reply to ${senderName ?? "the sender"}…`} />
+                      <textarea name="body" rows={2} className="input" placeholder={`Reply to ${senderName ?? "the sender"}…`} />
+                      <MediaAttach label="Add a photo / video" />
                       <button className="btn-secondary text-sm">Send reply</button>
                     </form>
                   </details>

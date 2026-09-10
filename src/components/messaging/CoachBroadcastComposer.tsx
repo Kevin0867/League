@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MediaAttach } from "@/components/MediaAttach";
 
 // A coach's broadcast composer: message a whole group at once. Defaults to the
 // coach's own team (the common case), shows how many people the chosen audience
@@ -41,7 +42,8 @@ export function CoachBroadcastComposer({
         onSubmit={(e) => {
           const form = e.currentTarget;
           const body = (form.elements.namedItem("body") as HTMLTextAreaElement | null)?.value?.trim();
-          if (!body) {
+          const hasAttachment = !!(form.elements.namedItem("attachmentUrl") as HTMLInputElement | null)?.value;
+          if (!body && !hasAttachment) {
             e.preventDefault();
             return;
           }
@@ -79,7 +81,10 @@ export function CoachBroadcastComposer({
         </div>
         <div>
           <label className="label">Message</label>
-          <textarea name="body" required rows={4} className="input" placeholder="Write your message…" />
+          <textarea name="body" rows={4} className="input" placeholder="Write your message…" />
+          <div className="mt-2">
+            <MediaAttach label="Attach a photo / video" />
+          </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-4">

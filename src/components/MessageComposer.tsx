@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MediaAttach } from "@/components/MediaAttach";
 
 type Opt = { id: string; name: string };
 
@@ -77,7 +78,12 @@ export function MessageComposer({
 
       <div>
         <label className="label" htmlFor="body">Message</label>
-        <textarea id="body" name="body" rows={4} className="input" required placeholder="What do they need to know?" />
+        <textarea id="body" name="body" rows={4} className="input" placeholder="What do they need to know?" />
+      </div>
+
+      <div>
+        <span className="label">Photo / video</span>
+        <MediaAttach label="Attach a photo / video" />
       </div>
 
       <div>
