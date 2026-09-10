@@ -40,7 +40,7 @@ export type CsvReconcileResult = {
   noPersonMatch: number;
   errors: number;
   appliedCents: number; // total $ newly marked paid / newly collected
-  unmatched: { who: string; amountCents: number; chargeId: string }[];
+  unmatched: { who: string; amountCents: number; chargeId: string; isPlan: boolean }[];
   problems: { chargeId: string; who: string; note: string }[];
 };
 
@@ -239,7 +239,7 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
       }
       // 2/3) By player name, then email → their fee row.
       const personId = resolvePerson(rec);
-      if (!personId) { res.noPersonMatch++; res.unmatched.push({ who: rec.name || rec.email || "(unknown)", amountCents: rec.amountCents, chargeId: rec.chargeId }); continue; }
+      if (!personId) { res.noPersonMatch++; res.unmatched.push({ who: rec.name || rec.email || "(unknown)", amountCents: rec.amountCents, chargeId: rec.chargeId, isPlan: false }); continue; }
       const fee = pickFee(feesByPerson.get(personId) ?? []);
       if (fee) {
         if (fee.status === "PAID") { res.alreadyDone++; continue; }
@@ -308,7 +308,7 @@ export async function reconcileFromCsv(text: string, seasonId: string | null): P
   }
   for (const rec of subUnresolved) {
     res.noPersonMatch++;
-    res.unmatched.push({ who: rec.name || rec.email || "(unknown)", amountCents: rec.amountCents, chargeId: rec.chargeId });
+    res.unmatched.push({ who: rec.name || rec.email || "(unknown)", amountCents: rec.amountCents, chargeId: rec.chargeId, isPlan: true });
   }
 
   await audit({

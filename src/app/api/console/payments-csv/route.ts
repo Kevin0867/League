@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     if (r.unmatched.length) {
       params.set(
         "csvunmatched",
-        JSON.stringify(r.unmatched.slice(0, 25).map((u) => ({ w: u.who, c: u.amountCents, id: u.chargeId }))).slice(0, 3500),
+        JSON.stringify(r.unmatched.slice(0, 25).map((u) => ({ w: u.who, c: u.amountCents, id: u.chargeId, p: u.isPlan ? 1 : 0 }))).slice(0, 3500),
       );
     }
     return back(`?${params.toString()}`);

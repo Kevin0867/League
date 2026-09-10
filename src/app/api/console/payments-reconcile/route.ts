@@ -87,13 +87,17 @@ export async function POST(req: Request) {
     const personId = String(fd.get("personId") ?? "").trim();
     const amountCents = Math.max(0, Math.round(Number(fd.get("amountCents") ?? 0)));
     const payerEmail = String(fd.get("payerEmail") ?? "").trim().toLowerCase();
+    // A subscription installment (3-payment plan): record paying-by-plan (1st
+    // installment in), NOT paid-in-full. The charge is one installment, so a
+    // brand-new plan row's full total is that installment × 3.
+    const isPlan = String(fd.get("isPlan") ?? "") === "1";
     if (!personId || !chargeId || !amountCents) return back("?recerr=missing");
     try {
       // Idempotency: this exact charge already recorded here — just make sure it's
-      // attached to the chosen player and paid, never a second row.
+      // attached to the chosen player and settled the right way, never a 2nd row.
       const existing = await prisma.payment.findFirst({
         where: { direction: "IN", stripePaymentIntentId: chargeId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, installmentsPaid: true, amountCents: true },
       });
       const activeSeason = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } });
       if (existing) {
@@ -101,35 +105,41 @@ export async function POST(req: Request) {
           where: { id: existing.id },
           data: {
             partyId: personId,
-            ...(existing.status !== "PAID" ? { status: "PAID", paidAt: new Date() } : {}),
+            ...(isPlan
+              ? { installmentPlan: true, installmentsTotal: 3, installmentsPaid: Math.max(1, existing.installmentsPaid ?? 0), status: "PENDING", method: "STRIPE" }
+              : existing.status !== "PAID" ? { status: "PAID", paidAt: new Date() } : {}),
             ...(activeSeason ? { seasonId: activeSeason.id } : {}),
           },
         });
-        await audit({ actorId: actor.userId, entityType: "Payment", entityId: existing.id, action: "ATTRIBUTED", summary: `Assigned Stripe charge ${chargeId} to person ${personId}` });
+        await audit({ actorId: actor.userId, entityType: "Payment", entityId: existing.id, action: isPlan ? "SCHEDULED" : "ATTRIBUTED", summary: `Assigned Stripe ${isPlan ? "plan installment" : "charge"} ${chargeId} to person ${personId}` });
       } else {
-        // Prefer marking their real outstanding season fee paid (so the request
-        // they were sent shows settled), else record the money against them.
+        // Prefer settling their real outstanding season fee (so the request they
+        // were sent reflects reality), else record the money against them.
         const fee = await prisma.payment.findFirst({
           where: { direction: "IN", category: "PLAYER_FEE", partyId: personId, status: { in: ["REQUESTED", "PENDING", "FAILED"] } },
           orderBy: { createdAt: "desc" },
-          select: { id: true, paidAt: true },
+          select: { id: true, paidAt: true, installmentsPaid: true },
         });
         if (fee) {
           await prisma.payment.update({
             where: { id: fee.id },
-            data: { status: "PAID", paidAt: fee.paidAt ?? new Date(), method: "STRIPE", stripePaymentIntentId: chargeId },
+            data: isPlan
+              ? { installmentPlan: true, installmentsTotal: 3, installmentsPaid: Math.max(1, fee.installmentsPaid ?? 0), status: "PENDING", method: "STRIPE", stripePaymentIntentId: chargeId }
+              : { status: "PAID", paidAt: fee.paidAt ?? new Date(), method: "STRIPE", stripePaymentIntentId: chargeId },
           });
-          await audit({ actorId: actor.userId, entityType: "Payment", entityId: fee.id, action: "PAID", summary: `Marked season fee paid from Stripe charge ${chargeId} (assigned by admin)` });
+          await audit({ actorId: actor.userId, entityType: "Payment", entityId: fee.id, action: isPlan ? "SCHEDULED" : "PAID", summary: `${isPlan ? "Marked season fee as paying-by-plan (1st installment)" : "Marked season fee paid"} from Stripe charge ${chargeId} (assigned by admin)` });
         } else {
           const created = await prisma.payment.create({
             data: {
-              direction: "IN", method: "STRIPE", status: "PAID", category: "PLAYER_FEE",
-              amountCents, partyId: personId, seasonId: activeSeason?.id ?? null,
-              stripePaymentIntentId: chargeId, paidAt: new Date(),
-              description: "Assigned from Stripe CSV (no fee request on file)",
+              direction: "IN", method: "STRIPE", category: "PLAYER_FEE",
+              partyId: personId, seasonId: activeSeason?.id ?? null,
+              stripePaymentIntentId: chargeId,
+              ...(isPlan
+                ? { status: "PENDING", installmentPlan: true, installmentsTotal: 3, installmentsPaid: 1, amountCents: amountCents * 3, description: "Assigned from Stripe CSV — 3-payment plan (no fee request on file)" }
+                : { status: "PAID", paidAt: new Date(), amountCents, description: "Assigned from Stripe CSV (no fee request on file)" }),
             },
           });
-          await audit({ actorId: actor.userId, entityType: "Payment", entityId: created.id, action: "IMPORTED", summary: `Recorded Stripe charge ${chargeId} as paid fee (assigned by admin)` });
+          await audit({ actorId: actor.userId, entityType: "Payment", entityId: created.id, action: isPlan ? "SCHEDULED" : "IMPORTED", summary: `Recorded Stripe charge ${chargeId} as ${isPlan ? "3-payment plan (1st installment)" : "paid fee"} (assigned by admin)` });
         }
       }
       // Save the payer email to an empty slot so this family auto-matches next time.
