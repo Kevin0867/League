@@ -18,6 +18,7 @@ export const COACH_CONSOLE_PREFIXES = [
   "/console/today", // the coach's day — today's classes + check-in
   "/console/calendar", // season calendar (view)
   "/console/schedule", // their practices
+  "/console/locations", // venues directory (view) — directions + site contacts
   "/console/league", // league standings/fixtures (view)
   "/console/teams", // teams (view others; their roster + progress notes)
   "/console/profile", // their own coach profile & account
