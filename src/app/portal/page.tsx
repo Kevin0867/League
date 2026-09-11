@@ -369,6 +369,19 @@ export default async function PortalHome({
                   <div><dt className="text-xs text-slate-500">Day / time</dt><dd>{m.team.dayOfWeek ?? "TBA"} {formatTime12(m.team.startTime)}</dd></div>
                   <div><dt className="text-xs text-slate-500">Player</dt><dd>{m.person.firstName}</dd></div>
                 </dl>
+                {(() => {
+                  const f = m.team.facility;
+                  if (!f) return null;
+                  const addr = f.exactAddress || f.crossStreets || f.generalArea || null;
+                  const q = f.exactAddress || [f.crossStreets, f.generalArea, f.market].filter(Boolean).join(" ") || f.name;
+                  if (!addr && !q) return null;
+                  return (
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                      <span className="text-slate-600">{addr ?? f.name}</span>
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer" className="shrink-0 font-medium text-brand-700 hover:underline">Directions →</a>
+                    </div>
+                  );
+                })()}
                 {nextPracticeByTeam.get(m.teamId) && (
                   <div className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
                     <span className="font-semibold">Next practice:</span> {formatSessionDay(nextPracticeByTeam.get(m.teamId)!.date, "long")} · {formatTime12(nextPracticeByTeam.get(m.teamId)!.startTime)}

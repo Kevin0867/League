@@ -126,6 +126,12 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
               <dd className="text-right font-medium text-slate-800">{address}</dd>
             </div>
           )}
+          {team.facility?.crossStreets && (
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Cross streets</dt>
+              <dd className="text-right text-slate-600">{team.facility.crossStreets}</dd>
+            </div>
+          )}
           {team.facility?.accessInstructions && (
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Access</dt>
@@ -144,6 +150,24 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
             Get directions →
           </a>
         )}
+        {(() => {
+          const photos = Array.isArray(team.facility?.photos) ? (team.facility!.photos as unknown as { url: string; type: string; name?: string }[]) : [];
+          if (photos.length === 0) return null;
+          return (
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {photos.map((p, i) => (
+                <a key={i} href={p.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg ring-1 ring-slate-200" title={p.name || "Open"}>
+                  {p.type === "VIDEO" ? (
+                    <video src={p.url} className="h-20 w-full object-cover" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.url} alt={p.name || "Location photo"} className="h-20 w-full object-cover" />
+                  )}
+                </a>
+              ))}
+            </div>
+          );
+        })()}
       </section>
 
       {/* Upcoming practices — the real dates, so families can plan. */}
