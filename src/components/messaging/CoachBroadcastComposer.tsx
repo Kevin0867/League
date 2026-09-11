@@ -83,7 +83,7 @@ export function CoachBroadcastComposer({
           <label className="label">Message</label>
           <textarea name="body" rows={4} className="input" placeholder="Write your message…" />
           <div className="mt-2">
-            <MediaAttach label="Attach a photo / video" />
+            <MediaAttach label="Attach a photo / video" library />
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">

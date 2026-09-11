@@ -9,7 +9,7 @@ import { Attachment } from "@/components/Attachment";
 // console (admin, coach) and the family portal (parent). All actions are native
 // form POSTs to /api/messages carrying a console ticket.
 
-export function Composer({ contacts, ticket, returnTo }: { contacts: Contact[]; ticket: string; returnTo: string }) {
+export function Composer({ contacts, ticket, returnTo, library = false }: { contacts: Contact[]; ticket: string; returnTo: string; library?: boolean }) {
   if (contacts.length === 0) {
     return (
       <div className="card text-sm text-slate-500">
@@ -38,7 +38,7 @@ export function Composer({ contacts, ticket, returnTo }: { contacts: Contact[]; 
         <label className="label">Message</label>
         <textarea name="body" rows={3} className="input" placeholder="Write a message…" />
       </div>
-      <MediaAttach />
+      <MediaAttach library={library} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <NotifyByPicker />
         <button type="submit" className="btn-primary">Send</button>
@@ -94,12 +94,14 @@ export function ConversationView({
   basePath,
   canPost,
   isModerator,
+  library = false,
 }: {
   thread: Thread;
   ticket: string;
   basePath: string;
   canPost: boolean;
   isModerator: boolean;
+  library?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -166,7 +168,7 @@ export function ConversationView({
           <input type="hidden" name="conversationId" value={thread.id} />
           <input type="hidden" name="returnTo" value={basePath} />
           <textarea name="body" rows={2} className="input" placeholder="Write a reply…" />
-          <MediaAttach />
+          <MediaAttach library={library} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <NotifyByPicker />
             <button type="submit" className="btn-primary">Send</button>

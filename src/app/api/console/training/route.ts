@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { actorFromForm } from "@/lib/auth";
+import { actorFromForm, getSession } from "@/lib/auth";
 import { isStaff } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+
+// Library list for the "attach from library" picker in message composers.
+// Staff only (coaches + admins) — players never attach from the staff library.
+export async function GET() {
+  const session = await getSession();
+  if (!session || !isStaff(session.role)) return NextResponse.json({ videos: [] }, { status: 401 });
+  const videos = await prisma.trainingVideo.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: { id: true, title: true, category: true, skillLevel: true, videoUrl: true, videoType: true },
+  });
+  return NextResponse.json({ videos });
+}
 
 // Training-video library mutations (native-form POST + ticket auth). Admins and
 // coaches can add, edit, share/unshare, and delete library videos. The video

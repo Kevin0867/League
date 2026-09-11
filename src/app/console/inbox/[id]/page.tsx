@@ -28,6 +28,7 @@ export default async function ConsoleThreadPage({ params }: { params: Promise<{ 
       basePath="/console/inbox"
       canPost={canPost}
       isModerator={isAdmin && !isParticipant}
+      library
     />
   );
 }

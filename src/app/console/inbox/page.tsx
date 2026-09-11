@@ -103,7 +103,7 @@ export default async function ConsoleInboxPage({
           ) : null}
           <InboxList items={items} basePath="/console/inbox" />
         </div>
-        {!moderating && <Composer contacts={contacts} ticket={ticket} returnTo="/console/inbox" />}
+        {!moderating && <Composer contacts={contacts} ticket={ticket} returnTo="/console/inbox" library />}
       </div>
 
       {/* Broadcast composer — coaches message a whole group at once. Defaults to

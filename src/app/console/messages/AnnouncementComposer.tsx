@@ -49,7 +49,7 @@ export function AnnouncementComposer({ ticket, counts }: { ticket: string; count
         </div>
         <input name="subject" className="input" placeholder="Subject (optional)" />
         <textarea name="body" rows={4} className="input" placeholder="Write your announcement…" />
-        <MediaAttach label="Attach a photo / video" />
+        <MediaAttach label="Attach a photo / video" library />
         <div className="flex flex-wrap items-center gap-4">
           <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Send by</span>
           <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_IN_APP" defaultChecked /> In-app</label>

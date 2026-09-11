@@ -48,7 +48,7 @@ export function TeamUpdateComposer({
         ariaLabel="Team update message"
         placeholder={placeholder ?? "e.g. Great work today on dinks and resets. This week, please work on your third-shot drop — we'll move on to drives next week."}
       />
-      <div className="mt-2"><MediaAttach label="Attach a photo / practice video" /></div>
+      <div className="mt-2"><MediaAttach label="Attach a photo / practice video" library /></div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" name="channel_SMS" value="on" defaultChecked /> Also text this to the team
