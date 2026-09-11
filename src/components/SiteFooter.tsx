@@ -17,6 +17,7 @@ const SITE = "https://purepickleball.com";
 const PARTNERS: { name: string; href: string; logo: string }[] = [
   { name: "HonorHealth", href: "https://www.honorhealth.com/medical-services/sports-medicine", logo: "/brand/partner-honorhealth.png" },
   { name: "Wolfgang Puck Catering", href: "https://wolfgangpuckcatering.com/", logo: "/brand/partner-wolfgangpuck.png" },
+  { name: "RacketPro", href: "https://racketpro.org/", logo: "/brand/partner-racketpro.svg" },
 ];
 
 // Academy-specific links kept above the mirrored PURE footer, so the compliance
