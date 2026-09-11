@@ -20,20 +20,26 @@ const TEAM_INBOX = "team@purepickleball.com";
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 const twiml = () => new NextResponse(EMPTY_TWIML, { status: 200, headers: { "Content-Type": "text/xml" } });
 
-/** Validate Twilio's X-Twilio-Signature. Returns true when valid, or when we
- *  can't validate because no auth token is configured (dev/simulated). */
-function validTwilioSignature(url: string, params: Record<string, string>, signature: string | null): boolean {
+/** Does the X-Twilio-Signature verify against ANY of the candidate URLs?
+ *  Twilio signs against the exact URL it called; behind proxies the app can see
+ *  a different host than the public one, so we try every plausible URL (the
+ *  configured one plus the request's own reconstructed URL) and accept if one
+ *  matches. Returns true when no auth token is configured (dev/simulated). */
+function signatureMatchesAny(urls: string[], params: Record<string, string>, signature: string | null): boolean {
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!token) return true; // unconfigured (dev) — allow so the flow is testable
   if (!signature) return false;
-  // Twilio: base64(HMAC-SHA1(token, url + concat(sortedKey + value)))
-  const data = Object.keys(params).sort().reduce((acc, k) => acc + k + params[k], url);
-  const expected = crypto.createHmac("sha1", token).update(Buffer.from(data, "utf-8")).digest("base64");
-  try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-  } catch {
-    return false;
+  const sortedParams = Object.keys(params).sort().reduce((acc, k) => acc + k + params[k], "");
+  for (const url of urls) {
+    // Twilio: base64(HMAC-SHA1(token, url + concat(sortedKey + value)))
+    const expected = crypto.createHmac("sha1", token).update(Buffer.from(url + sortedParams, "utf-8")).digest("base64");
+    try {
+      if (expected.length === signature.length && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return true;
+    } catch {
+      // length mismatch — try the next candidate
+    }
   }
+  return false;
 }
 
 export async function POST(req: Request) {
@@ -41,8 +47,21 @@ export async function POST(req: Request) {
   const params: Record<string, string> = {};
   for (const [k, v] of fd.entries()) params[k] = String(v);
 
-  const url = process.env.TWILIO_INBOUND_URL ?? `${appUrl()}/api/messages/inbound`;
-  if (!validTwilioSignature(url, params, req.headers.get("x-twilio-signature"))) {
+  // Candidate URLs Twilio may have signed against: an explicit override, the
+  // configured public app URL, and the request's own URL reconstructed from the
+  // forwarded host/proto headers (what a proxy rewrote it to).
+  const path = "/api/messages/inbound";
+  const fwdHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const fwdProto = req.headers.get("x-forwarded-proto") ?? "https";
+  const candidates = [
+    process.env.TWILIO_INBOUND_URL,
+    `${appUrl()}${path}`,
+    fwdHost ? `${fwdProto}://${fwdHost}${path}` : null,
+    new URL(req.url).toString(),
+  ].filter((u): u is string => !!u);
+
+  if (!signatureMatchesAny(candidates, params, req.headers.get("x-twilio-signature"))) {
+    console.error("inbound SMS: signature did not match any candidate URL", candidates);
     return new NextResponse("invalid signature", { status: 403 });
   }
 
