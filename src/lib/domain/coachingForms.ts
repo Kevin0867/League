@@ -9,8 +9,8 @@ export type ReusableForm = { slug: string; title: string; desc: string; built: b
 export const REUSABLE_FORMS: ReusableForm[] = [
   { slug: "serve-return", title: "Serve & Return Progress Tracker", desc: "Weekly serve % and return % for each player.", built: true },
   { slug: "development", title: "Player Development Tracker", desc: "Skill ratings across serve/return, 3rd shot, transition, kitchen, strategy, competition, partnership.", built: true },
-  { slug: "kitchen-arrival", title: "Kitchen Arrival Tracker", desc: "How often each player/pair gets to the kitchen line, by week.", built: false },
-  { slug: "ladder", title: "Weekly Ladder & Challenge Match Tracker", desc: "Wins, losses, points, and rank from ladder & challenge matches.", built: false },
+  { slug: "kitchen-arrival", title: "Kitchen Arrival Tracker", desc: "How often each player/pair gets to the kitchen line, by week.", built: true },
+  { slug: "ladder", title: "Weekly Ladder & Challenge Match Tracker", desc: "Wins, losses, points, and rank from ladder & challenge matches.", built: true },
   { slug: "lineup", title: "League Lineup Worksheet", desc: "Set lines 1–4 with pairings and matchup notes.", built: false },
   { slug: "match-plan", title: "Team Match Plan", desc: "Serving/return targets, opponent weakness, transition & kitchen strategy.", built: false },
   { slug: "scouting", title: "Match-Day Scouting Sheet", desc: "Opponent observations, game plan, and after-match notes.", built: false },
@@ -39,3 +39,20 @@ export const DEV_RATINGS: { value: string; label: string }[] = [
   { value: "3", label: "Strength" },
 ];
 export const DEV_NOTE = "DEV_NOTE";
+
+// Kitchen Arrival Tracker — a weekly count/percentage of how often each player
+// gets established at the kitchen line. One number per week (weeks 1–6) + note.
+export const KA_METRIC = "KITCHEN_ARRIVAL";
+export const KA_NOTE = "KA_NOTE";
+
+// Weekly Ladder & Challenge Match Tracker — per-player standings snapshot
+// (week 0). Wins/losses/points-for/points-against/rank are quantifiable; a note
+// captures challenge-match observations.
+export const LADDER_COLUMNS: { key: string; label: string; int?: boolean }[] = [
+  { key: "LADDER_WINS", label: "Wins", int: true },
+  { key: "LADDER_LOSSES", label: "Losses", int: true },
+  { key: "LADDER_PF", label: "Pts For", int: true },
+  { key: "LADDER_PA", label: "Pts Against", int: true },
+  { key: "LADDER_RANK", label: "Rank", int: true },
+];
+export const LADDER_NOTE = "LADDER_NOTE";

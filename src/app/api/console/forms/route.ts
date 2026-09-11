@@ -4,7 +4,7 @@ import { actorFromForm } from "@/lib/auth";
 import { isStaff, isAdmin } from "@/lib/rbac";
 import type { Role } from "@/lib/enums";
 import { audit } from "@/lib/audit";
-import { PROGRESS_WEEKS, SR_SERVE, SR_RETURN, SR_NOTE, DEV_CATEGORIES, DEV_NOTE } from "@/lib/domain/coachingForms";
+import { PROGRESS_WEEKS, SR_SERVE, SR_RETURN, SR_NOTE, DEV_CATEGORIES, DEV_NOTE, KA_METRIC, KA_NOTE, LADDER_COLUMNS, LADDER_NOTE } from "@/lib/domain/coachingForms";
 
 // Save coaching-form data. Staff only; a coach may only write for a team they
 // coach (admins any). Entries upsert into PlayerProgressEntry so they're
@@ -87,6 +87,64 @@ export async function POST(req: Request) {
     }
     await Promise.all(writes).catch((e) => console.error("development save failed", e));
     await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FORM_DEVELOPMENT", summary: `Saved Player Development tracker for ${personIds.length} player(s)` });
+    return back("&ok=1");
+  }
+
+  if (op === "saveKitchenArrival") {
+    const personIds = String(fd.get("personIds") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
+    const seasonId = team?.seasonId ?? null;
+    const num = (v: FormDataEntryValue | null) => {
+      const s = String(v ?? "").trim();
+      if (s === "") return null;
+      const n = parseFloat(s.replace(/[^0-9.]/g, ""));
+      return Number.isFinite(n) ? n : null;
+    };
+    const writes: Promise<unknown>[] = [];
+    const upsert = (personId: string, week: number, metric: string, value: number | null, note: string | null) =>
+      prisma.playerProgressEntry.upsert({
+        where: { teamId_personId_week_metric: { teamId, personId, week, metric } },
+        create: { teamId, personId, seasonId, week, metric, value, note, recordedById: actor.userId },
+        update: { value, note, recordedById: actor.userId },
+      });
+    for (const personId of personIds) {
+      for (let wk = 1; wk <= PROGRESS_WEEKS; wk++) {
+        writes.push(upsert(personId, wk, KA_METRIC, num(fd.get(`ka_${personId}_${wk}`)), null));
+      }
+      const note = String(fd.get(`note_${personId}`) ?? "").trim() || null;
+      writes.push(upsert(personId, 0, KA_NOTE, null, note));
+    }
+    await Promise.all(writes).catch((e) => console.error("kitchen-arrival save failed", e));
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FORM_KITCHEN_ARRIVAL", summary: `Saved Kitchen Arrival tracker for ${personIds.length} player(s)` });
+    return back("&ok=1");
+  }
+
+  if (op === "saveLadder") {
+    const personIds = String(fd.get("personIds") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
+    const seasonId = team?.seasonId ?? null;
+    const num = (v: FormDataEntryValue | null) => {
+      const s = String(v ?? "").trim();
+      if (s === "") return null;
+      const n = parseFloat(s.replace(/[^0-9.]/g, ""));
+      return Number.isFinite(n) ? n : null;
+    };
+    const writes: Promise<unknown>[] = [];
+    const upsert = (personId: string, metric: string, value: number | null, note: string | null) =>
+      prisma.playerProgressEntry.upsert({
+        where: { teamId_personId_week_metric: { teamId, personId, week: 0, metric } },
+        create: { teamId, personId, seasonId, week: 0, metric, value, note, recordedById: actor.userId },
+        update: { value, note, recordedById: actor.userId },
+      });
+    for (const personId of personIds) {
+      for (const c of LADDER_COLUMNS) {
+        writes.push(upsert(personId, c.key, num(fd.get(`ladder_${personId}_${c.key}`)), null));
+      }
+      const note = String(fd.get(`note_${personId}`) ?? "").trim() || null;
+      writes.push(upsert(personId, LADDER_NOTE, null, note));
+    }
+    await Promise.all(writes).catch((e) => console.error("ladder save failed", e));
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FORM_LADDER", summary: `Saved Ladder & Challenge tracker for ${personIds.length} player(s)` });
     return back("&ok=1");
   }
 
