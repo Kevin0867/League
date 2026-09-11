@@ -42,7 +42,7 @@ export default async function ClinicsPage() {
               <Link href="/clinics/request" className="inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
                 Request a lesson or clinic
               </Link>
-              <Link href="/register" className="inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+              <Link href="/open-spots" className="inline-flex items-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
                 Register for the season
               </Link>
             </div>

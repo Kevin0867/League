@@ -31,7 +31,10 @@ export async function POST(req: Request) {
     await prisma.team.update({ where: { id: teamId }, data: { acceptingSignups: accepting, capacity } }).catch(() => {});
     await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "OPEN_SPOTS", summary: accepting ? "Advertised open spots" : "Stopped advertising open spots" });
     const dest = rawReturn.startsWith("/console/") ? rawReturn : "/console/open-spots";
-    return NextResponse.redirect(new URL(`${dest}${dest.includes("?") ? "&" : "?"}ok=openspots`, origin), 303);
+    // Anchor back to the team's card so the page keeps the reader in place instead
+    // of jumping to the top. The hash must come AFTER the query string.
+    const anchor = dest.startsWith("/console/teams") ? `#team-${teamId}` : "";
+    return NextResponse.redirect(new URL(`${dest}${dest.includes("?") ? "&" : "?"}ok=openspots${anchor}`, origin), 303);
   }
 
   // Editable marketing copy.

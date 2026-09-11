@@ -47,7 +47,7 @@ export async function PublicNav() {
           ) : (
             <>
               <Link href="/login" className="btn-ghost whitespace-nowrap text-xs uppercase tracking-wide">Log in</Link>
-              <Link href="/register" className="btn-accent whitespace-nowrap text-xs uppercase tracking-wide">Register</Link>
+              <Link href="/open-spots" className="btn-accent whitespace-nowrap text-xs uppercase tracking-wide">Register</Link>
             </>
           )}
 
