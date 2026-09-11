@@ -1867,3 +1867,28 @@ model TrainingVideo {
   @@index([visibleToPlayers, createdAt])
   @@index([category])
 }
+
+/// Quantifiable coaching-form data point: one metric for one player, on one team,
+/// for one week — so trackers (Serve/Return %, Kitchen arrival, development
+/// ratings, …) are storable AND analyzable over time. teamId/personId are plain
+/// tags (no FK) like other lightweight references in the app.
+model PlayerProgressEntry {
+  id            String   @id @default(cuid())
+  teamId        String
+  personId      String
+  seasonId      String?
+  /// Week number within the season plan (1..N).
+  week          Int
+  /// Metric key, e.g. SERVE | RETURN | KITCHEN_ARRIVAL | DEV_3RD_SHOT …
+  metric        String
+  /// Numeric value (a percentage, a count, or a 1–5 rating) for charting.
+  value         Float?
+  note          String?
+  recordedById  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([teamId, personId, week, metric])
+  @@index([teamId, metric])
+  @@index([personId, metric])
+}
