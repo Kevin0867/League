@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "./db";
 import { sendSms, sendEmail, type EmailAttachment } from "./notify";
 import { resolveAudience, type AudienceType } from "./domain/audience";
+import { recordSmsRoute } from "./domain/smsRouting";
 
 // Central dispatcher (§13). Creates the Message, resolves the audience, writes a
 // per-person delivery record for each recipient, and attempts each requested
@@ -109,6 +110,11 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   });
 
   const subject = input.subject ?? "PURE Academy";
+  // Resolve the sender's Person id so replies to this broadcast's texts route
+  // back to them (a coach/admin), not to the shared team inbox.
+  const senderPersonId = input.senderId
+    ? (await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true } }))?.personId ?? null
+    : null;
   let failures = 0;
   let simulated = 0;
   const allFailureReasons: string[] = [];
@@ -193,6 +199,10 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
         smsStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
         if (!res.ok) failureReasons.push(`sms: ${res.error}`);
         if (res.ok && res.simulated) wasSimulated = true;
+        // Route this recipient's text-back to the sender (coach/admin).
+        if (senderPersonId && senderPersonId !== p.r.personId) {
+          await recordSmsRoute({ phone: p.smsNum, personId: p.r.personId, senderPersonId, messageId: message.id });
+        }
       } else if (p.smsSkipped) {
         smsStatus = "SKIPPED";
       }
