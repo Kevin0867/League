@@ -115,6 +115,9 @@ export default async function RegistrationDetail({
   // On the 3-payment plan, signed up and paying — distinct from an unpaid fee.
   const subscription = !paid ? payments.find((x) => feeStateOf(x) === "subscription") : undefined;
   const outstanding = !paid && !subscription ? payments.find((x) => ["REQUESTED", "PENDING"].includes(x.status)) : undefined;
+  // A season fee that was refunded (e.g. in Stripe) — the player no longer counts
+  // as paid, and we say so explicitly instead of showing a bare "not requested".
+  const refunded = !paid && !subscription && !outstanding ? payments.find((x) => x.status === "REFUNDED") : undefined;
 
   // Apparel this player ordered (tagged to them, or paid on their behalf) — so a
   // wrong size/garment can be corrected right here.
@@ -278,6 +281,8 @@ export default async function RegistrationDetail({
                 ? `✓ Subscription — paying in ${subscription.installmentsTotal ?? 3} (${subscription.installmentsPaid ?? 1} in).`
                 : outstanding
                 ? `${outstanding.status.toLowerCase()} — not yet paid.`
+                : refunded
+                ? `↩ Refunded${refunded.amountCents ? ` (${formatCents(refunded.amountCents)})` : ""} — this fee was refunded, so the player is no longer paid.`
                 : "Not requested yet."}
               {lastSent.fee ? ` Last sent ${formatDate(lastSent.fee)}.` : ""}
             </p>
@@ -292,6 +297,14 @@ export default async function RegistrationDetail({
                   fields={{ ticket, op: "resendPayment", personId: p.id, registrationId: reg.id }}
                   confirm={`Resend the season fee + apparel request to ${p.firstName}'s family?`}
                   label="Resend fee + apparel"
+                  className="btn-secondary w-full text-sm"
+                />
+              ) : refunded ? (
+                <ConfirmSubmit
+                  action="/api/console/registrations"
+                  fields={{ ticket, op: "requestFee", personId: p.id, registrationId: reg.id }}
+                  confirm={`This fee was refunded. Re-request the season fee + apparel from ${p.firstName}'s family?`}
+                  label="Re-request fee"
                   className="btn-secondary w-full text-sm"
                 />
               ) : (
