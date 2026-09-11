@@ -70,7 +70,7 @@ export default async function RegisterPage({
     ? {
         id: teamRow.id,
         label: teamDisplayName(teamRow),
-        category: teamCategoryLabel({ divisionCode: teamRow.divisionCode, gender: teamRow.gender, divisionName: teamRow.division?.name ?? null }),
+        category: teamRow.division?.name || teamCategoryLabel({ divisionCode: teamRow.divisionCode, gender: teamRow.gender, divisionName: teamRow.division?.name ?? null }),
         dayTime: [dayOfWeekPlural(teamRow.dayOfWeek), practiceTimeRange(teamRow.startTime)].filter(Boolean).join(", ") || null,
         location: [
           teamRow.market,

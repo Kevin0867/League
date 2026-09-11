@@ -72,9 +72,10 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
     const locationBits = f?.isPrivate
       ? [f.crossStreets || f.generalArea, t.market]
       : [f?.name, t.market];
-    // Friendly category so a family knows if they fit: "Men's 4.0",
-    // "Women's 3.5", "High School Boys", "Middle School Girls", "Elementary".
-    const category = teamCategoryLabel({ divisionCode: t.divisionCode, gender: t.gender, divisionName: t.division?.name ?? null });
+    // Category so a family knows if they fit — prefer the team's actual division
+    // label ("Men's Elite 4.5", "High School ELITE", "Elementary", "Middle"),
+    // falling back to a derived label if a team has no division linked.
+    const category = t.division?.name || teamCategoryLabel({ divisionCode: t.divisionCode, gender: t.gender, divisionName: t.division?.name ?? null });
     const dayTime = [dayOfWeekPlural(t.dayOfWeek), practiceTimeRange(t.startTime)].filter(Boolean).join(" · ");
     return {
       id: t.id,
