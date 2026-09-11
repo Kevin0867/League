@@ -82,7 +82,7 @@ export default async function EditCoachPage({
       <div className="card">
         <h2 className="mb-1 font-semibold text-slate-900">Profile photo</h2>
         <p className="mb-3 text-sm text-slate-500">Shown on the public /coaches page. JPG, PNG, or WebP up to 8 MB.</p>
-        <ImageUploadForm ticket={ticket} personId={person.id} returnTo={returnTo} currentUrl={person.imageUrl} name={`${person.firstName} ${person.lastName}`} />
+        <ImageUploadForm ticket={ticket} personId={person.id} returnTo={returnTo} currentUrl={person.imageUrl} name={`${person.firstName} ${person.lastName}`} cropAspect={4 / 3} />
       </div>
 
       {coach && (
