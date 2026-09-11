@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 // (head coach on Team.coachId, plus assistant seats on TeamCoach).
 
 // Team slots store only a start time, so treat each as a fixed-length block.
-export const DEFAULT_TEAM_SESSION_MIN = 90;
+export const DEFAULT_TEAM_SESSION_MIN = 120;
 
 export function timeToMinutes(hhmm: string | null | undefined): number | null {
   if (!hhmm) return null;

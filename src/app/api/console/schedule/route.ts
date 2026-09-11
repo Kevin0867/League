@@ -22,7 +22,8 @@ import { isSessionComplete } from "@/lib/domain/coachPay";
 export const dynamic = "force-dynamic";
 
 const PRACTICE_WEEKS = 6;
-const DEFAULT_DURATION_MIN = 90;
+// Practices are 2 hours.
+const DEFAULT_DURATION_MIN = 120;
 const DEFAULT_COURTS = 2;
 
 function addMinutes(hhmm: string, minutes: number): string {
