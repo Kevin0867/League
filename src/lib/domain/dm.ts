@@ -60,19 +60,23 @@ export async function appendMessage(
 export async function notifyOtherParticipants(conversationId: string, senderId: string, body: string, notify: NotifyChoice) {
   try {
     const [sender, parts] = await Promise.all([
-      prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true } }),
+      prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true, user: { select: { role: true } } } }),
       prisma.conversationParticipant.findMany({
         where: { conversationId, personId: { not: senderId } },
         select: { personId: true, person: { select: { email: true, email2: true, email3: true, phone: true, user: { select: { role: true } } } } },
       }),
     ]);
     const senderName = sender ? `${sender.firstName} ${sender.lastName}`.trim() : "PURE Academy";
+    // When a coach/admin sends, the recipient is ALWAYS emailed and texted — a
+    // coach's message must reach the family immediately regardless of the
+    // notify toggles. (Staff recipients are likewise always notified, below.)
+    const senderIsStaff = sender?.user?.role ? isStaff(sender.user.role as Role) : false;
     const preview = body.length > 160 ? `${body.slice(0, 160)}…` : body;
     for (const p of parts) {
       const per = p.person;
       const staff = per.user?.role ? isStaff(per.user.role as Role) : false;
-      const doEmail = staff || notify.email;
-      const doSms = staff || notify.sms;
+      const doEmail = staff || senderIsStaff || notify.email;
+      const doSms = staff || senderIsStaff || notify.sms;
       if (!doEmail && !doSms) continue;
       const link = `${appUrl()}${staff ? "/console/inbox" : "/portal/inbox"}/${conversationId}`;
       if (doEmail) {
