@@ -149,6 +149,13 @@ export async function POST(req: Request) {
     return back("&ok=1");
   }
 
+  if (op === "toggleProgressShare") {
+    const share = fd.get("share") === "on" || fd.get("share") === "1";
+    await prisma.team.update({ where: { id: teamId }, data: { progressShared: share } });
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FORM_PROGRESS_SHARE", summary: share ? "Shared progress report with players & parents" : "Unshared progress report" });
+    return NextResponse.redirect(new URL(`/console/forms/analytics?team=${encodeURIComponent(teamId)}&ok=1`, origin), 303);
+  }
+
   // ── Worksheet forms (CoachingFormDoc JSON) ──────────────────────────────
   const saveDoc = async (slug: string, data: Prisma.InputJsonValue, action: string, summary: string) => {
     const team = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });

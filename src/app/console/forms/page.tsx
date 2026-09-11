@@ -13,6 +13,13 @@ export default async function CoachingFormsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Coaching Forms" subtitle="The workbook's reusable forms, made digital. Trackers save each player's numbers so you can see progress over the season." />
+
+      <Link href="/console/forms/analytics" className="card block border-l-4 border-brand-500 transition hover:shadow">
+        <div className="font-semibold text-slate-900">📊 Progress Analytics</div>
+        <p className="mt-0.5 text-sm text-slate-600">Roll every tracker up into a per-player and team progress report — and share it with players &amp; parents.</p>
+        <div className="mt-2 text-xs font-semibold text-brand-700">Open analytics →</div>
+      </Link>
+
       <div className="grid gap-3 sm:grid-cols-2">
         {REUSABLE_FORMS.map((f) =>
           f.built ? (
