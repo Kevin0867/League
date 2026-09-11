@@ -8,9 +8,9 @@ export type ReusableForm = { slug: string; title: string; desc: string; built: b
 
 export const REUSABLE_FORMS: ReusableForm[] = [
   { slug: "serve-return", title: "Serve & Return Progress Tracker", desc: "Weekly serve % and return % for each player.", built: true },
+  { slug: "development", title: "Player Development Tracker", desc: "Skill ratings across serve/return, 3rd shot, transition, kitchen, strategy, competition, partnership.", built: true },
   { slug: "kitchen-arrival", title: "Kitchen Arrival Tracker", desc: "How often each player/pair gets to the kitchen line, by week.", built: false },
   { slug: "ladder", title: "Weekly Ladder & Challenge Match Tracker", desc: "Wins, losses, points, and rank from ladder & challenge matches.", built: false },
-  { slug: "development", title: "Player Development Tracker", desc: "Skill ratings across serve/return, 3rd shot, transition, kitchen, strategy, competition, partnership.", built: false },
   { slug: "lineup", title: "League Lineup Worksheet", desc: "Set lines 1–4 with pairings and matchup notes.", built: false },
   { slug: "match-plan", title: "Team Match Plan", desc: "Serving/return targets, opponent weakness, transition & kitchen strategy.", built: false },
   { slug: "scouting", title: "Match-Day Scouting Sheet", desc: "Opponent observations, game plan, and after-match notes.", built: false },
@@ -21,3 +21,21 @@ export const REUSABLE_FORMS: ReusableForm[] = [
 export const SR_SERVE = "SERVE";
 export const SR_RETURN = "RETURN";
 export const SR_NOTE = "SR_NOTE"; // per-player note (week 0)
+
+// Player Development Tracker — a current-snapshot rating per skill (week 0).
+export const DEV_CATEGORIES: { key: string; label: string }[] = [
+  { key: "DEV_SERVE_RETURN", label: "Serve / Return" },
+  { key: "DEV_3RD_SHOT", label: "3rd Shot" },
+  { key: "DEV_TRANSITION", label: "Transition" },
+  { key: "DEV_KITCHEN", label: "Kitchen" },
+  { key: "DEV_STRATEGY", label: "Strategy" },
+  { key: "DEV_COMPETITION", label: "Competition" },
+  { key: "DEV_PARTNERSHIP", label: "Partnership" },
+];
+export const DEV_RATINGS: { value: string; label: string }[] = [
+  { value: "", label: "—" },
+  { value: "1", label: "Needs work" },
+  { value: "2", label: "Improving" },
+  { value: "3", label: "Strength" },
+];
+export const DEV_NOTE = "DEV_NOTE";
