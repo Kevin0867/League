@@ -1898,6 +1898,28 @@ model PlayerProgressEntry {
   @@index([personId, metric])
 }
 
+/// Remembers who last texted a given phone number, so when that person replies
+/// by SMS we can route the reply back to the sender (a coach/admin) instead of
+/// losing it to the shared team inbox. Keyed by the recipient's phone (last 10
+/// digits, normalized). Updated on every outbound text that carries a sender.
+model SmsRoute {
+  id             String   @id @default(cuid())
+  /// Recipient phone, normalized to the last 10 digits for reliable matching.
+  phone          String   @unique
+  /// The recipient we texted (best-effort — the person the outbound went to).
+  personId       String?
+  /// Who sent the outbound text (the coach/admin/person to route replies to).
+  senderPersonId String?
+  /// If the outbound was a direct message, the thread to append the reply to.
+  conversationId String?
+  /// If the outbound was a broadcast, its Message id (for context/audit).
+  messageId      String?
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  @@index([senderPersonId])
+}
+
 /// A structured worksheet document for a team (lineup, match plan, scouting
 /// sheet, homework log). One document per team per form; the shape of `data`
 /// depends on the form and is defined in src/lib/domain/coachingForms.ts.
