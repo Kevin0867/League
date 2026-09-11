@@ -372,6 +372,11 @@ model Team {
   /// refreshes it; it stays set once launched.
   launchedAt    DateTime?
 
+  /// When true, players and their parents can see this team's progress report
+  /// (the analytics built from the coaching-form data) in their portal. Off by
+  /// default so coaches choose when the numbers are ready to share.
+  progressShared Boolean  @default(false)
+
   /// Origin — must NOT assume a team belongs to PURE Academy (§12)
   /// PURE_ACADEMY | ACP_CLUB
   origin        String    @default("PURE_ACADEMY")
