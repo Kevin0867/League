@@ -70,7 +70,7 @@ export default async function CoachesPage({
   // Coach relation shape shared by both sources (the profile source carries an
   // extra `person`, which is structurally assignable to this smaller type).
   type CoachRel = NonNullable<(typeof coachUsers)[number]["person"]>["coach"];
-  type CoachEntry = { person: { id: string; firstName: string; lastName: string; waiverSignedAt: Date | null }; coach: CoachRel; createdAt: Date; updatedAt: Date };
+  type CoachEntry = { person: { id: string; firstName: string; lastName: string; waiverSignedAt: Date | null; imageUrl: string | null }; coach: CoachRel; createdAt: Date; updatedAt: Date };
   const byPerson = new Map<string, CoachEntry>();
   for (const u of coachUsers) if (u.person) byPerson.set(u.person.id, { person: u.person, coach: u.person.coach, createdAt: u.person.createdAt, updatedAt: u.person.updatedAt });
   for (const c of coachProfiles) if (!byPerson.has(c.personId)) byPerson.set(c.personId, { person: c.person, coach: c, createdAt: c.person.createdAt, updatedAt: c.person.updatedAt });
@@ -103,6 +103,19 @@ export default async function CoachesPage({
   };
   const incompleteCount = coaches.filter((c) => c.coach && !availabilityOf(c.coach).complete).length;
 
+  // Public-site readiness. A coach can be "Published" yet still not appear on
+  // /coaches: the public grid hides any profile missing a photo, a location, or
+  // coaching levels (a name-only card reads worse than no card). Mirror that
+  // rule here so admins can see exactly why a published coach isn't showing.
+  const siteReadiness = (person: { imageUrl: string | null }, coach: CoachRel) => {
+    const missing: string[] = [];
+    if (!person.imageUrl) missing.push("headshot");
+    if (parseMarkets(coach?.marketsCovered ?? null).length === 0) missing.push("location");
+    if (!(coach?.coachingLevels && coach.coachingLevels.trim())) missing.push("levels");
+    return missing;
+  };
+  const publishedNotShown = coaches.filter((c) => c.coach?.publishedOnSite && siteReadiness(c.person, c.coach).length > 0);
+
   return (
     <div className="space-y-6">
       <PageHeader title="Coaches" subtitle="Screening gate, recruitment credit, and assignments." />
@@ -132,6 +145,26 @@ export default async function CoachesPage({
             once they&apos;ve set both their locations and day/time availability. Ask them to complete their
             profile, or click a coach&apos;s name to open and fill in their record.
           </p>
+        </div>
+      )}
+
+      {publishedNotShown.length > 0 && (
+        <div className="card border-l-4 border-amber-400">
+          <p className="text-sm font-medium text-amber-800">
+            {publishedNotShown.length} published coach{publishedNotShown.length === 1 ? " isn't" : "es aren't"} showing on the public site
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            The <Link href="/coaches" className="text-brand-700 hover:underline">/coaches</Link> grid hides any published profile that&apos;s
+            missing a headshot, a location, or coaching levels. Finish the profile and they&apos;ll appear automatically:
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+            {publishedNotShown.map((c) => (
+              <li key={c.person.id}>
+                <Link href={`/console/coaches/${c.person.id}`} className="font-medium text-brand-700 hover:underline">{c.person.firstName} {c.person.lastName}</Link>
+                {" "}— needs {siteReadiness(c.person, c.coach).join(", ")}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -205,6 +238,9 @@ export default async function CoachesPage({
                           <>
                             <span className="badge bg-emerald-100 text-emerald-800">Published</span>
                             <button className="text-xs text-slate-500 hover:text-rose-600 hover:underline">Hide</button>
+                            {siteReadiness(person, coach).length > 0 && (
+                              <span className="badge bg-amber-100 text-amber-800" title={`Missing: ${siteReadiness(person, coach).join(", ")}`}>not on site</span>
+                            )}
                           </>
                         ) : (
                           <>
