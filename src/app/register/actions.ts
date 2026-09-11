@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/time";
 import { CONSENT_VERSION, consentRecordText } from "@/lib/consent";
 import {
   sendRegistrationConfirmation,
+  sendOpenSpotSignupConfirmation,
   notifyTeamOfRegistration,
   type EnrolledPlayer,
 } from "@/lib/domain/registrationEmail";
@@ -466,7 +467,9 @@ export async function registerAction(
       waitlisted,
     };
     try {
-      await sendRegistrationConfirmation(summary);
+      // Open-spots signups get a tailored pay-now email in the block below, not
+      // the generic "enroll today, pay later" confirmation.
+      if (!targetTeamId) await sendRegistrationConfirmation(summary);
       await notifyTeamOfRegistration(summary);
     } catch {
       // swallow — registration already succeeded
@@ -497,6 +500,24 @@ export async function registerAction(
   // for admin review instead of overselling.
   if (targetTeamId && recruit) {
     const link = await placementPayLink(recruit.personId, seasonId).catch(() => null);
+    // Tailored confirmation with the correct next step + pay link (sent before we
+    // redirect, since redirect() throws). Best-effort.
+    if (email) {
+      try {
+        const team = await prisma.team.findUnique({ where: { id: targetTeamId }, select: { name: true, division: { select: { name: true } } } });
+        await sendOpenSpotSignupConfirmation({
+          toEmail: email,
+          recipientName: firstName,
+          teamName: team?.name ?? "your team",
+          playerName: enrolled[0]?.name ?? firstName,
+          category: team?.division?.name ?? null,
+          payUrl: link?.payUrl ?? null,
+          feeCents: link?.feeCents ?? null,
+        });
+      } catch {
+        // swallow — registration already succeeded
+      }
+    }
     if (link?.payUrl) redirect(link.payUrl);
     // Fee waived (e.g. a coach who plays) → nothing to pay, so place immediately.
     await prisma.teamMember

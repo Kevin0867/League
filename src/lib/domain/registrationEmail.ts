@@ -103,6 +103,54 @@ export async function sendRegistrationConfirmation(s: RegistrationSummary) {
   return sendEmail(s.toEmail, c.subject, c.text, c.html);
 }
 
+/** Confirmation for an OPEN-SPOTS signup — a pay-now flow (they chose the team
+ *  and go straight to apparel + payment), so this replaces the generic
+ *  "enroll today, pay later" email with the correct next step + a pay link. */
+export async function sendOpenSpotSignupConfirmation(o: {
+  toEmail: string;
+  recipientName: string;
+  teamName: string;
+  playerName: string;
+  category?: string | null;
+  payUrl: string | null;
+  feeCents?: number | null;
+}) {
+  const paid = !!o.payUrl;
+  const feeNote = o.feeCents ? ` ($${(o.feeCents / 100).toFixed(0)} season fee, plus your apparel)` : "";
+  const contentHtml =
+    `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">` +
+    `<table style="width:100%;border-collapse:collapse"><tr>` +
+    `<td style="padding:6px 0;color:#0f172a;font-weight:600">${esc(o.playerName)}</td>` +
+    `<td style="padding:6px 0;color:#64748b;text-align:right">${esc(o.teamName)}${o.category ? ` — ${esc(o.category)}` : ""}</td>` +
+    `</tr></table></div>` +
+    (paid
+      ? `<p style="margin:16px 0 12px;font-size:14px;color:#475569">You're almost in! Choose your apparel and pay your season fee${feeNote} to claim your spot — <strong>you'll be on the team as soon as your payment clears.</strong></p>` +
+        emailButton(o.payUrl!, "Choose apparel & pay now", { primary: true })
+      : `<p style="margin:16px 0 12px;font-size:14px;color:#475569">You're all set — no payment is needed. See your team, schedule, and messages in your portal.</p>` +
+        emailButton(`${appUrl()}/portal`, "Go to my portal", { primary: true }));
+
+  const text = [
+    `Thanks, ${o.recipientName}! You signed up ${o.playerName} for ${o.teamName}.`,
+    ``,
+    paid
+      ? `Choose your apparel and pay your season fee${feeNote} to claim your spot — you'll be on the team as soon as your payment clears:\n${o.payUrl}`
+      : `You're all set — no payment is needed. See your team in your portal: ${appUrl()}/portal`,
+    ``,
+    `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
+  ].join("\n");
+
+  return sendEmail(
+    o.toEmail,
+    paid ? `You signed up for ${o.teamName} — one more step to claim your spot` : `You're on ${o.teamName}!`,
+    text,
+    brandedEmailHtml({
+      heading: paid ? `You're almost in, ${o.recipientName}!` : `You're in, ${o.recipientName}!`,
+      intro: `Thanks for grabbing a spot on ${o.teamName}.`,
+      contentHtml,
+    })
+  );
+}
+
 /** Internal heads-up to the team inbox that a new registration came in. When the
  *  registrant landed on the waitlist (registration closed / waitlist mode on),
  *  the notice says so up top so staff triage it as a waitlist add, not a
