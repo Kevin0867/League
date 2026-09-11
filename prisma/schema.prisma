@@ -1892,3 +1892,22 @@ model PlayerProgressEntry {
   @@index([teamId, metric])
   @@index([personId, metric])
 }
+
+/// A structured worksheet document for a team (lineup, match plan, scouting
+/// sheet, homework log). One document per team per form; the shape of `data`
+/// depends on the form and is defined in src/lib/domain/coachingForms.ts.
+model CoachingFormDoc {
+  id            String   @id @default(cuid())
+  teamId        String
+  seasonId      String?
+  /// Form slug, e.g. lineup | match-plan | scouting | homework.
+  formSlug      String
+  /// JSON payload for the worksheet.
+  data          Json
+  recordedById  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([teamId, formSlug])
+  @@index([teamId])
+}

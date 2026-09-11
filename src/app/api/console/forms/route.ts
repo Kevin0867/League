@@ -4,7 +4,8 @@ import { actorFromForm } from "@/lib/auth";
 import { isStaff, isAdmin } from "@/lib/rbac";
 import type { Role } from "@/lib/enums";
 import { audit } from "@/lib/audit";
-import { PROGRESS_WEEKS, SR_SERVE, SR_RETURN, SR_NOTE, DEV_CATEGORIES, DEV_NOTE, KA_METRIC, KA_NOTE, LADDER_COLUMNS, LADDER_NOTE } from "@/lib/domain/coachingForms";
+import { PROGRESS_WEEKS, SR_SERVE, SR_RETURN, SR_NOTE, DEV_CATEGORIES, DEV_NOTE, KA_METRIC, KA_NOTE, LADDER_COLUMNS, LADDER_NOTE, LINEUP_LINES, MATCH_PLAN_SECTIONS, SCOUTING_SECTIONS } from "@/lib/domain/coachingForms";
+import type { Prisma } from "@prisma/client";
 
 // Save coaching-form data. Staff only; a coach may only write for a team they
 // coach (admins any). Entries upsert into PlayerProgressEntry so they're
@@ -146,6 +147,51 @@ export async function POST(req: Request) {
     await Promise.all(writes).catch((e) => console.error("ladder save failed", e));
     await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FORM_LADDER", summary: `Saved Ladder & Challenge tracker for ${personIds.length} player(s)` });
     return back("&ok=1");
+  }
+
+  // ── Worksheet forms (CoachingFormDoc JSON) ──────────────────────────────
+  const saveDoc = async (slug: string, data: Prisma.InputJsonValue, action: string, summary: string) => {
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
+    const seasonId = team?.seasonId ?? null;
+    await prisma.coachingFormDoc.upsert({
+      where: { teamId_formSlug: { teamId, formSlug: slug } },
+      create: { teamId, seasonId, formSlug: slug, data, recordedById: actor.userId },
+      update: { data, recordedById: actor.userId },
+    });
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action, summary });
+    return back("&ok=1");
+  };
+  const txt = (name: string) => String(fd.get(name) ?? "").trim();
+
+  if (op === "saveLineup") {
+    const lines = Array.from({ length: LINEUP_LINES }, (_, i) => ({
+      playerA: txt(`line_${i}_a`),
+      playerB: txt(`line_${i}_b`),
+      note: txt(`line_${i}_note`),
+    }));
+    return saveDoc("lineup", { opponent: txt("opponent"), matchDate: txt("matchDate"), lines, notes: txt("notes") }, "FORM_LINEUP", "Saved League Lineup Worksheet");
+  }
+
+  if (op === "saveMatchPlan") {
+    const data: Record<string, string> = {};
+    for (const s of MATCH_PLAN_SECTIONS) data[s.key] = txt(`mp_${s.key}`);
+    return saveDoc("match-plan", data, "FORM_MATCH_PLAN", "Saved Team Match Plan");
+  }
+
+  if (op === "saveScouting") {
+    const data: Record<string, string> = {};
+    for (const s of SCOUTING_SECTIONS) data[s.key] = txt(`sc_${s.key}`);
+    return saveDoc("scouting", data, "FORM_SCOUTING", "Saved Match-Day Scouting Sheet");
+  }
+
+  if (op === "saveHomework") {
+    const weeks = Array.from({ length: PROGRESS_WEEKS }, (_, i) => ({
+      assignment: txt(`hw_${i + 1}_assignment`),
+      completed: fd.get(`hw_${i + 1}_completed`) === "on",
+      result: txt(`hw_${i + 1}_result`),
+      takeaway: txt(`hw_${i + 1}_takeaway`),
+    }));
+    return saveDoc("homework", { weeks, reflection: txt("reflection") }, "FORM_HOMEWORK", "Saved Player Homework & Accountability Log");
   }
 
   return back("&err=op");

@@ -11,10 +11,10 @@ export const REUSABLE_FORMS: ReusableForm[] = [
   { slug: "development", title: "Player Development Tracker", desc: "Skill ratings across serve/return, 3rd shot, transition, kitchen, strategy, competition, partnership.", built: true },
   { slug: "kitchen-arrival", title: "Kitchen Arrival Tracker", desc: "How often each player/pair gets to the kitchen line, by week.", built: true },
   { slug: "ladder", title: "Weekly Ladder & Challenge Match Tracker", desc: "Wins, losses, points, and rank from ladder & challenge matches.", built: true },
-  { slug: "lineup", title: "League Lineup Worksheet", desc: "Set lines 1–4 with pairings and matchup notes.", built: false },
-  { slug: "match-plan", title: "Team Match Plan", desc: "Serving/return targets, opponent weakness, transition & kitchen strategy.", built: false },
-  { slug: "scouting", title: "Match-Day Scouting Sheet", desc: "Opponent observations, game plan, and after-match notes.", built: false },
-  { slug: "homework", title: "Player Homework & Accountability Log", desc: "Weekly assignments, completion, and player takeaways.", built: false },
+  { slug: "lineup", title: "League Lineup Worksheet", desc: "Set lines 1–4 with pairings and matchup notes.", built: true },
+  { slug: "match-plan", title: "Team Match Plan", desc: "Serving/return targets, opponent weakness, transition & kitchen strategy.", built: true },
+  { slug: "scouting", title: "Match-Day Scouting Sheet", desc: "Opponent observations, game plan, and after-match notes.", built: true },
+  { slug: "homework", title: "Player Homework & Accountability Log", desc: "Weekly assignments, completion, and player takeaways.", built: true },
 ];
 
 // Metric keys for the Serve & Return tracker (each week has both).
@@ -56,3 +56,46 @@ export const LADDER_COLUMNS: { key: string; label: string; int?: boolean }[] = [
   { key: "LADDER_RANK", label: "Rank", int: true },
 ];
 export const LADDER_NOTE = "LADDER_NOTE";
+
+// ── Worksheet forms ───────────────────────────────────────────────────────
+// These are structured documents (one per team) stored in CoachingFormDoc.data
+// rather than quantifiable per-player rows.
+
+// League Lineup Worksheet — set lines 1–4 with a pairing + matchup note.
+export const LINEUP_LINES = 4;
+export type LineupData = {
+  opponent?: string;
+  matchDate?: string;
+  lines: { playerA: string; playerB: string; note: string }[];
+  notes?: string;
+};
+
+// Team Match Plan — free-text strategy sections.
+export const MATCH_PLAN_SECTIONS: { key: string; label: string; hint?: string }[] = [
+  { key: "opponent", label: "Opponent / match", hint: "Who we're playing and when." },
+  { key: "serveTargets", label: "Serving targets", hint: "Where and how we serve." },
+  { key: "returnTargets", label: "Return targets", hint: "Return depth and placement goals." },
+  { key: "opponentWeakness", label: "Opponent weaknesses", hint: "What to attack." },
+  { key: "transition", label: "Transition strategy", hint: "Getting off the baseline to the kitchen." },
+  { key: "kitchen", label: "Kitchen strategy", hint: "Dinking, resets, speed-ups." },
+  { key: "notes", label: "Other notes", hint: "Anything else." },
+];
+export type MatchPlanData = Record<string, string>;
+
+// Match-Day Scouting Sheet — opponent observations + game plan.
+export const SCOUTING_SECTIONS: { key: string; label: string; hint?: string }[] = [
+  { key: "opponent", label: "Opponent team / players" },
+  { key: "strengths", label: "Their strengths" },
+  { key: "weaknesses", label: "Their weaknesses" },
+  { key: "tendencies", label: "Tendencies & patterns" },
+  { key: "gamePlan", label: "Our game plan" },
+  { key: "afterMatch", label: "After-match notes" },
+];
+export type ScoutingData = Record<string, string>;
+
+// Player Homework & Accountability Log — weekly assignment/result over 6 weeks.
+export type HomeworkWeek = { assignment: string; completed: boolean; result: string; takeaway: string };
+export type HomeworkData = {
+  weeks: HomeworkWeek[]; // length PROGRESS_WEEKS
+  reflection?: string;
+};
