@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/time";
 import { TRAINING_CATEGORIES, TRAINING_SKILL_LEVELS } from "@/lib/domain/training";
 import { TrainingVideoUpload } from "@/components/TrainingVideoUpload";
 import { CopyUrlButton } from "@/components/CopyUrlButton";
+import { allowedContacts } from "@/lib/domain/messaging-acl";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Training Videos" };
@@ -32,6 +33,9 @@ export default async function TrainingLibraryPage({
     : myCoach
       ? await prisma.team.findMany({ where: { season: { active: true }, OR: [{ coachId: myCoach.id }, { assistantCoaches: { some: { coachId: myCoach.id } } }] }, select: { id: true, name: true }, orderBy: { name: "asc" } })
       : [];
+  // People the viewer can message directly (their team's players/parents, staff)
+  // — for sharing a video with one person.
+  const contacts = session.personId ? await allowedContacts(session.personId, session.role).catch(() => []) : [];
   const category = sp.category ?? "";
   const skill = sp.skill ?? "";
 
@@ -124,27 +128,71 @@ export default async function TrainingLibraryPage({
                 </form>
               </div>
 
-              {teamOptions.length > 0 && (
-                <details className="border-t border-slate-100 pt-2">
-                  <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Share with a team →</summary>
-                  <form method="POST" action="/api/console/team-notes" className="mt-2 space-y-2">
+              <details className="border-t border-slate-100 pt-2">
+                <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Share (person, team, or admins) →</summary>
+                <div className="mt-2 space-y-3">
+                  {/* To one person on their team */}
+                  {contacts.length > 0 && (
+                    <form method="POST" action="/api/messages" className="space-y-1.5 rounded-lg bg-slate-50 p-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Send to a person</div>
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="start" />
+                      <input type="hidden" name="returnTo" value="/console/inbox" />
+                      <input type="hidden" name="attachmentUrl" value={v.videoUrl} />
+                      <input type="hidden" name="attachmentType" value={v.videoType ?? "VIDEO"} />
+                      <input type="hidden" name="notifyEmail" value="on" />
+                      <select name="recipientId" required className="input py-1 text-sm">
+                        <option value="">Choose a person…</option>
+                        {contacts.map((c) => <option key={c.personId} value={c.personId}>{c.name} · {c.role === "ADMIN" ? "Admin" : c.role === "COACH" ? "Coach" : "Parent"}</option>)}
+                      </select>
+                      <textarea name="body" rows={1} className="input text-sm" defaultValue={v.title} placeholder="Note…" />
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-1.5 text-[11px] text-slate-600"><input type="checkbox" name="notifySms" /> Also text</label>
+                        <button className="btn-secondary text-xs">Send</button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* To a whole team */}
+                  {teamOptions.length > 0 && (
+                    <form method="POST" action="/api/console/team-notes" className="space-y-1.5 rounded-lg bg-slate-50 p-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Send to a team</div>
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="broadcastTeam" />
+                      <input type="hidden" name="returnTo" value="/console/training" />
+                      <input type="hidden" name="attachmentUrl" value={v.videoUrl} />
+                      <input type="hidden" name="attachmentType" value={v.videoType ?? "VIDEO"} />
+                      <select name="teamId" required className="input py-1 text-sm">
+                        <option value="">Choose a team…</option>
+                        {teamOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                      <textarea name="body" rows={1} className="input text-sm" defaultValue={[v.title, v.description].filter(Boolean).join(" — ")} placeholder="Note to the team…" />
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-1.5 text-[11px] text-slate-600"><input type="checkbox" name="channel_SMS" /> Also text the team</label>
+                        <button className="btn-secondary text-xs">Send to team</button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* To all admins — so a coach can confirm an admin saw it */}
+                  <form method="POST" action="/api/console/messages" className="rounded-lg bg-slate-50 p-2">
                     <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="broadcastTeam" />
+                    <input type="hidden" name="op" value="send" />
+                    <input type="hidden" name="audienceType" value="ALL_ADMINS" />
                     <input type="hidden" name="returnTo" value="/console/training" />
+                    <input type="hidden" name="subject" value={`Training video: ${v.title}`} />
+                    <input type="hidden" name="body" value={`Shared a training video: ${v.title}${v.description ? ` — ${v.description}` : ""}`} />
                     <input type="hidden" name="attachmentUrl" value={v.videoUrl} />
                     <input type="hidden" name="attachmentType" value={v.videoType ?? "VIDEO"} />
-                    <select name="teamId" required className="input py-1 text-sm">
-                      <option value="">Choose a team…</option>
-                      {teamOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                    <textarea name="body" rows={2} className="input text-sm" defaultValue={[v.title, v.description].filter(Boolean).join(" — ")} placeholder="Note to the team…" />
+                    <input type="hidden" name="channel_IN_APP" value="on" />
+                    <input type="hidden" name="channel_EMAIL" value="on" />
                     <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" name="channel_SMS" /> Also text the team</label>
-                      <button className="btn-secondary text-xs">Send to team</button>
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Send to admins</span>
+                      <button className="btn-secondary text-xs">Notify admins</button>
                     </div>
                   </form>
-                </details>
-              )}
+                </div>
+              </details>
             </div>
           ))}
         </div>

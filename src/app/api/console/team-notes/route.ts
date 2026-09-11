@@ -63,8 +63,9 @@ export async function POST(req: Request) {
     attachmentUrl,
     attachmentType,
     // The email body is long-form; the SMS gets the coach's raw note prefixed
-    // with the team name so it reads cleanly as a text.
-    smsBody: `${team.name} update from ${coachName}:\n${body || (attachmentType === "VIDEO" ? "shared a video" : "shared a photo")}`,
+    // with the team name, plus a link to the photo/video so texted families can
+    // actually open it (email embeds it; a text needs the URL).
+    smsBody: `${team.name} update from ${coachName}:\n${body || (attachmentType === "VIDEO" ? "shared a video" : "shared a photo")}${attachmentUrl ? `\n${attachmentType === "VIDEO" ? "Watch" : "View"}: ${attachmentUrl}` : ""}`,
   });
 
   await audit({
