@@ -1846,3 +1846,24 @@ model SiteContent {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+/// A reusable training/drill video in the library. Uploaded by admins/coaches
+/// (Vercel Blob URL), organized by category + skill level, and optionally shared
+/// with players (visibleToPlayers) so it can be sent as homework or referenced in
+/// a lesson.
+model TrainingVideo {
+  id               String   @id @default(cuid())
+  title            String
+  description      String?
+  category         String?
+  skillLevel       String?
+  videoUrl         String
+  videoType        String?  @default("VIDEO")
+  visibleToPlayers Boolean  @default(false)
+  uploadedById     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([visibleToPlayers, createdAt])
+  @@index([category])
+}

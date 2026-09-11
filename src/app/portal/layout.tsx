@@ -27,6 +27,7 @@ export default async function PortalLayout({
           <Logo href="/portal" />
           <div className="flex items-center gap-3 text-sm">
             <Link href="/portal" className="font-medium text-brand-700 hover:underline">Home</Link>
+            <Link href="/portal/training" className="font-medium text-brand-700 hover:underline">Training</Link>
             <Link href="/portal/lessons" className="font-medium text-brand-700 hover:underline">Lessons</Link>
             {showMessages && (
               <Link href="/portal/inbox" className="relative font-medium text-brand-700 hover:underline">
