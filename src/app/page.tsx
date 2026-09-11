@@ -66,7 +66,7 @@ export default async function HomePage() {
             </div>
 
             <div>
-              <p className="eyebrow eyebrow-light mb-3">$495 per player · enroll today, pay later</p>
+              <p className="eyebrow eyebrow-light mb-3">$495 per player · pay now to claim your spot</p>
               <ul className="space-y-2 text-sm text-brand-100">
                 {[
                   "12-week season: September 14–December 13 (off Thanksgiving week)",

@@ -53,7 +53,6 @@ export function registrationConfirmationContent(s: RegistrationSummary): { subje
     : `<p style="margin:16px 0 12px;font-size:14px;color:#475569">Our team is matching ${
         s.players.length > 1 ? "each player" : "you"
       } to the right team, coach, and location, and we'll reach out to confirm. ` +
-      `Enroll today, pay later — no payment is due until placement is set. ` +
       `We'll email your team placement and, separately, a secure link to pay the season fee.</p>`;
 
   const contentHtml =
@@ -78,7 +77,7 @@ export function registrationConfirmationContent(s: RegistrationSummary): { subje
     ``,
     wl
       ? `We'll reach out if a spot opens up. No payment is due unless you're placed.`
-      : `Our team will match placement and reach out to confirm. No payment is due yet.\nWe'll email your team placement and a secure link to pay the season fee.`,
+      : `Our team will match placement and reach out to confirm.\nWe'll email your team placement and a secure link to pay the season fee.`,
     ``,
     `Explore PURE Academy programs: ${appUrl()}/programs`,
     `Any issues, contact us at ${SUPPORT_ADDRESS}.`,

@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: { absolute: "Enroll — PURE Academy Fall 2026" },
-  description: "Enroll today, pay later. $495 per player for a twelve-session season on a PURE Academy ELITE TEAM.",
+  description: "$495 per player for a twelve-session season on a PURE Academy ELITE TEAM.",
   alternates: { canonical: "/register" },
 };
 
@@ -152,7 +152,7 @@ export default async function RegisterPage({
           <p className="mt-2 text-slate-600">
             {targetTeam
               ? `Grab your spot on this team. Complete signup, then pay the $${(49500 / 100).toFixed(0)} season fee and pick your apparel — you'll be on the team as soon as your payment clears.`
-              : <>Tell us about the player. Our team matches you to the right team, coach, and location — then reaches out to confirm. Enroll today, pay later: we&apos;ll request the ${(49500 / 100).toFixed(0)} season fee only after you&apos;re assigned a team.</>}
+              : <>Tell us about the player. Our team matches you to the right team, coach, and location — then reaches out to confirm and to collect the ${(49500 / 100).toFixed(0)} season fee once you&apos;re placed.</>}
           </p>
           <p className="mt-2 text-sm text-slate-500">
             Registering a whole family? Choose <strong>&ldquo;Myself and my child(ren)&rdquo;</strong> —
