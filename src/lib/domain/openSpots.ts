@@ -1,10 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { TEAM_CAP } from "@/lib/enums";
-import { formatTime12 } from "@/lib/time";
 import { sendEmail } from "@/lib/notify";
 import { dispatchMessage } from "@/lib/messaging";
-import { describeTeamPractice } from "@/lib/domain/practiceInfo";
+import { describeTeamPractice, dayOfWeekPlural, practiceTimeRange } from "@/lib/domain/practiceInfo";
+import { teamCategoryLabel, teamDisplayName } from "@/lib/domain/teamName";
 import { appUrl } from "@/lib/stripe";
 
 // The public "Open Spots" marketing page and its plumbing. A team is advertised
@@ -55,8 +55,9 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
   const teams = await prisma.team.findMany({
     where: { seasonId, club: "PURE", isTest: false, acceptingSignups: true },
     select: {
-      id: true, name: true, divisionCode: true, levelBand: true, market: true,
+      id: true, name: true, club: true, color: true, divisionCode: true, levelBand: true, market: true, gender: true,
       dayOfWeek: true, startTime: true, coachPlays: true, capacity: true,
+      division: { select: { name: true } },
       facility: { select: { name: true, isPrivate: true, crossStreets: true, generalArea: true } },
       _count: { select: { members: true } },
     },
@@ -71,11 +72,18 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
     const locationBits = f?.isPrivate
       ? [f.crossStreets || f.generalArea, t.market]
       : [f?.name, t.market];
+    // Friendly category so a family knows if they fit: "Men's 4.0",
+    // "Women's 3.5", "High School Boys", "Middle School Girls", "Elementary".
+    const category = teamCategoryLabel({ divisionCode: t.divisionCode, gender: t.gender, divisionName: t.division?.name ?? null });
+    const dayTime = [dayOfWeekPlural(t.dayOfWeek), practiceTimeRange(t.startTime)].filter(Boolean).join(" · ");
     return {
       id: t.id,
-      name: t.name,
-      category: t.divisionCode || t.levelBand || null,
-      dayTime: t.dayOfWeek && t.startTime ? `${t.dayOfWeek} ${formatTime12(t.startTime)}` : null,
+      // Use the derived display name (market + division + color) so the team is
+      // labeled identically here and on the signup page — no "which team is this?"
+      // mismatch between the card and the register page.
+      name: teamDisplayName(t),
+      category: category || t.divisionCode || t.levelBand || null,
+      dayTime: dayTime || null,
       location: locationBits.filter(Boolean).join(" · ") || null,
       capacity,
       roster,
