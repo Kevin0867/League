@@ -83,7 +83,7 @@ export function MessageComposer({
 
       <div>
         <span className="label">Photo / video</span>
-        <MediaAttach label="Attach a photo / video" />
+        <MediaAttach label="Attach a photo / video" library />
       </div>
 
       <div>

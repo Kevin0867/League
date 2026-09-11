@@ -97,7 +97,7 @@ export default async function AnnouncementsPage({
                       <input type="hidden" name="broadcastMessageId" value={r.messageId} />
                       <input type="hidden" name="returnTo" value="/console/announcements" />
                       <textarea name="body" rows={2} className="input" placeholder={`Reply to ${senderName ?? "the sender"}…`} />
-                      <MediaAttach label="Add a photo / video" />
+                      <MediaAttach label="Add a photo / video" library />
                       <button className="btn-secondary text-sm">Send reply</button>
                     </form>
                   </details>

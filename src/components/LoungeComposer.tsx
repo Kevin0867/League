@@ -37,7 +37,7 @@ export function LoungeComposer({ ticket, admin }: { ticket: string; admin: boole
         placeholder="Say something to the coaches… (banter, a heads-up, or 'need a sub for Mesa MID this Thursday')"
         className="input w-full"
       />
-      <MediaAttach label="Add photo / video" />
+      <MediaAttach label="Add photo / video" library />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="text-sm text-slate-600">
           Notify staff:{" "}
