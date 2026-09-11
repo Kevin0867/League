@@ -4,7 +4,7 @@ import { TEAM_CAP } from "@/lib/enums";
 import { sendEmail } from "@/lib/notify";
 import { dispatchMessage } from "@/lib/messaging";
 import { describeTeamPractice, dayOfWeekPlural, practiceTimeRange } from "@/lib/domain/practiceInfo";
-import { teamCategoryLabel, teamDisplayName } from "@/lib/domain/teamName";
+import { teamCategoryLabel } from "@/lib/domain/teamName";
 import { appUrl } from "@/lib/stripe";
 
 // The public "Open Spots" marketing page and its plumbing. A team is advertised
@@ -79,10 +79,9 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
     const dayTime = [dayOfWeekPlural(t.dayOfWeek), practiceTimeRange(t.startTime)].filter(Boolean).join(" · ");
     return {
       id: t.id,
-      // Use the derived display name (market + division + color) so the team is
-      // labeled identically here and on the signup page — no "which team is this?"
-      // mismatch between the card and the register page.
-      name: teamDisplayName(t),
+      // The admin-entered team name, shown identically here and on the signup
+      // page so they always match.
+      name: t.name,
       category: category || t.divisionCode || t.levelBand || null,
       dayTime: dayTime || null,
       location: locationBits.filter(Boolean).join(" · ") || null,
