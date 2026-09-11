@@ -71,6 +71,7 @@ export const AGREEMENT_BODY: { title: string; paras: string[] }[] = [
   ] },
   { title: "13. Session-Ready & Equipment", paras: [
     "Arrive early and check in; confirm the court/space is safe; have the roster, attendance method, emergency contacts and medical alerts, first-aid kit and AED location, and appropriate equipment (paddles, balls, nets, caddy, teaching aids). Return equipment to secured storage and report anything missing, damaged, or unsafe.",
+    "Coaches may be given equipment to use during the season. Any equipment given to coaches to use must be returned to PURE at the end of the season. If there is missing / broken equipment, coaches will be responsible for replacing it. Normal wear and tear is acceptable. If any equipment breaks, please notify the Director as soon as possible.",
   ] },
   { title: "14. Administration, Policy Changes & Questions", paras: [
     "This agreement sets minimum standards and may be supplemented by program procedures, facility rules, contractor policies, and applicable law. When rules conflict, stop and ask the Program Director unless immediate action is needed for safety. PURE may revise the handbook; coaches review updates and sign a new acknowledgment when requested.",
