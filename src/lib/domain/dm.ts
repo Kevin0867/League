@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
 import { isStaff } from "@/lib/rbac";
-import type { Role } from "@/lib/enums";
+import { effectiveRoles } from "@/lib/enums";
 import { recordSmsRoute } from "@/lib/domain/smsRouting";
 
 // Direct-message primitives shared by the messaging route handler and the
@@ -60,40 +60,38 @@ export async function appendMessage(
 export async function notifyOtherParticipants(conversationId: string, senderId: string, body: string, notify: NotifyChoice) {
   try {
     const [sender, parts] = await Promise.all([
-      prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true, email: true, user: { select: { role: true } } } }),
+      prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true, email: true, user: { select: { role: true, extraRoles: true } } } }),
       prisma.conversationParticipant.findMany({
         where: { conversationId, personId: { not: senderId } },
-        select: { personId: true, person: { select: { email: true, email2: true, email3: true, phone: true, user: { select: { role: true } } } } },
+        select: { personId: true, person: { select: { email: true, email2: true, email3: true, phone: true, user: { select: { role: true, extraRoles: true } } } } },
       }),
     ]);
     const senderName = sender ? `${sender.firstName} ${sender.lastName}`.trim() : "PURE Academy";
-    // When a coach/admin sends, the recipient is ALWAYS emailed and texted — a
-    // coach's message must reach the family immediately regardless of the
-    // notify toggles. (Staff recipients are likewise always notified, below.)
-    const senderIsStaff = sender?.user?.role ? isStaff(sender.user.role as Role) : false;
+    // Every direct message reaches the recipient by BOTH text and email (and the
+    // in-app thread, always recorded) so messages are caught quickly — no
+    // dependence on a notify toggle or on who's staff. (`notify` is kept for
+    // signature compatibility; direct messages always notify on every channel.)
+    void notify;
     const preview = body.length > 160 ? `${body.slice(0, 160)}…` : body;
     for (const p of parts) {
       const per = p.person;
-      const staff = per.user?.role ? isStaff(per.user.role as Role) : false;
-      const doEmail = staff || senderIsStaff || notify.email;
-      const doSms = staff || senderIsStaff || notify.sms;
-      if (!doEmail && !doSms) continue;
+      const staff = per.user ? isStaff(effectiveRoles(per.user)) : false;
       const link = `${appUrl()}${staff ? "/console/inbox" : "/portal/inbox"}/${conversationId}`;
-      if (doEmail) {
-        const emails = [per.email, per.email2, per.email3].filter((e): e is string => !!e);
-        if (emails.length) {
-          await sendEmail(
-            emails,
-            `New message from ${senderName}`,
-            `${senderName} sent you a message on PURE Academy:\n\n“${preview}”\n\nRead & reply: ${link}\n\nBest is to reply from your inbox (link above) — it keeps the whole conversation in one place. If you reply to this email, it goes straight to ${senderName}.`,
-            undefined,
-            undefined,
-            // Route email replies to the sender (the coach), not the shared inbox.
-            { replyTo: sender?.email ?? null },
-          );
-        }
+      // Email — every message, to every address on file.
+      const emails = [per.email, per.email2, per.email3].filter((e): e is string => !!e);
+      if (emails.length) {
+        await sendEmail(
+          emails,
+          `New message from ${senderName}`,
+          `${senderName} sent you a message on PURE Academy:\n\n“${preview}”\n\nRead & reply: ${link}\n\nBest is to reply from your inbox (link above) — it keeps the whole conversation in one place. If you reply to this email, it goes straight to ${senderName}.`,
+          undefined,
+          undefined,
+          // Route email replies to the sender (the coach), not the shared inbox.
+          { replyTo: sender?.email ?? null },
+        );
       }
-      if (doSms && per.phone) {
+      // Text — every message, whenever we have a number on file.
+      if (per.phone) {
         await sendSms(per.phone, `New message from ${senderName}: “${preview}”. Read & reply: ${link}`);
         // Remember who texted this person so their text-back routes to the sender.
         await recordSmsRoute({ phone: per.phone, personId: p.personId, senderPersonId: senderId, conversationId });
