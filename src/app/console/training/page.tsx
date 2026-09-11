@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireStaff } from "@/lib/rbac";
+import { requireStaff, isAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
@@ -16,10 +16,22 @@ export default async function TrainingLibraryPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireStaff();
+  const session = await requireStaff();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const q = (sp.q ?? "").trim();
+
+  // Teams the viewer can share a video TO: admins → every active-season team;
+  // a coach → only the teams they coach.
+  const admin = isAdmin(session.roles ?? [session.role]);
+  const myCoach = !admin && session.personId
+    ? await prisma.coach.findUnique({ where: { personId: session.personId }, select: { id: true } })
+    : null;
+  const teamOptions = admin
+    ? await prisma.team.findMany({ where: { isTest: false, season: { active: true } }, select: { id: true, name: true }, orderBy: { name: "asc" } })
+    : myCoach
+      ? await prisma.team.findMany({ where: { season: { active: true }, OR: [{ coachId: myCoach.id }, { assistantCoaches: { some: { coachId: myCoach.id } } }] }, select: { id: true, name: true }, orderBy: { name: "asc" } })
+      : [];
   const category = sp.category ?? "";
   const skill = sp.skill ?? "";
 
@@ -37,7 +49,7 @@ export default async function TrainingLibraryPage({
     <div className="space-y-5">
       <PageHeader title="Training Videos" subtitle="A shared library of drills and technique. Share any video with players for homework, or copy its link into a team text or email." />
 
-      {sp.ok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{sp.ok === "added" ? "Video added." : sp.ok === "deleted" ? "Video deleted." : sp.ok === "shared" ? "Shared with players." : sp.ok === "unshared" ? "No longer shared with players." : "Saved."}</div>}
+      {sp.ok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{sp.ok === "added" ? "Video added." : sp.ok === "deleted" ? "Video deleted." : sp.ok === "shared" ? "Shared with players." : sp.ok === "unshared" ? "No longer shared with players." : sp.ok === "teamsent" ? `Sent to the team${sp.n ? ` — ${sp.n} recipient${sp.n === "1" ? "" : "s"}` : ""}.` : "Saved."}</div>}
       {sp.err && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Something went wrong — try again.</div>}
 
       <TrainingVideoUpload ticket={ticket} />
@@ -111,6 +123,28 @@ export default async function TrainingLibraryPage({
                   <button className="text-xs text-rose-600 hover:underline">Delete</button>
                 </form>
               </div>
+
+              {teamOptions.length > 0 && (
+                <details className="border-t border-slate-100 pt-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Share with a team →</summary>
+                  <form method="POST" action="/api/console/team-notes" className="mt-2 space-y-2">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="broadcastTeam" />
+                    <input type="hidden" name="returnTo" value="/console/training" />
+                    <input type="hidden" name="attachmentUrl" value={v.videoUrl} />
+                    <input type="hidden" name="attachmentType" value={v.videoType ?? "VIDEO"} />
+                    <select name="teamId" required className="input py-1 text-sm">
+                      <option value="">Choose a team…</option>
+                      {teamOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    <textarea name="body" rows={2} className="input text-sm" defaultValue={[v.title, v.description].filter(Boolean).join(" — ")} placeholder="Note to the team…" />
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" name="channel_SMS" /> Also text the team</label>
+                      <button className="btn-secondary text-xs">Send to team</button>
+                    </div>
+                  </form>
+                </details>
+              )}
             </div>
           ))}
         </div>
