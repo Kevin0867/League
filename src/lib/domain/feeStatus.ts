@@ -18,6 +18,10 @@ export type FeePaymentBits = {
   installmentPlan?: boolean | null;
   installmentsPaid?: number | null;
   installmentsTotal?: number | null;
+  /** Set once the Stripe subscription (3-payment plan) is confirmed at checkout —
+   *  proof they committed and the first charge was taken, even before the first
+   *  invoice.paid webhook records installmentsPaid. */
+  stripeSubscriptionId?: string | null;
 };
 
 /** Significance order, for reducing a person's several payments to one state. */
@@ -31,7 +35,7 @@ export function feeStateRank(s: FeeState): number {
 export function feeStateOf(p: FeePaymentBits): FeeState {
   if (p.status === "PAID") return "paid";
   if (p.status === "REFUNDED") return "refunded";
-  if (p.installmentPlan && p.status === "PENDING" && (p.installmentsPaid ?? 0) >= 1) return "subscription";
+  if (p.installmentPlan && p.status === "PENDING" && ((p.installmentsPaid ?? 0) >= 1 || !!p.stripeSubscriptionId)) return "subscription";
   if (p.status === "REQUESTED" || p.status === "PENDING") return "unpaid";
   return "none";
 }
