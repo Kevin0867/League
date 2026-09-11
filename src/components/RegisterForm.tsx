@@ -241,9 +241,21 @@ export function RegisterForm({
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className="btn-primary">
-          {pending ? "Submitting…" : waitlist ? "Join the waitlist" : "Submit registration"}
+          {pending
+            ? "Submitting…"
+            : targetTeamId
+            ? "Continue to apparel & payment"
+            : waitlist
+            ? "Join the waitlist"
+            : "Submit registration"}
         </button>
-        <span className="text-sm text-slate-500">No payment is required to register.</span>
+        <span className="text-sm text-slate-500">
+          {targetTeamId
+            ? "Next: choose your apparel and pay the season fee to claim your spot."
+            : waitlist
+            ? "No payment is due unless you're placed."
+            : "No payment is required to register."}
+        </span>
       </div>
     </form>
   );

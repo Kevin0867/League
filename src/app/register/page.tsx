@@ -7,7 +7,7 @@ import { SeasonOverview } from "@/components/SeasonOverview";
 import { prisma } from "@/lib/db";
 import { ACADEMY_MARKETS, TEAM_CAP } from "@/lib/enums";
 import { formatDate, closeDayLabel } from "@/lib/time";
-import { teamDisplayName, teamCategoryLabel } from "@/lib/domain/teamName";
+import { teamCategoryLabel } from "@/lib/domain/teamName";
 import { practiceTimeRange, dayOfWeekPlural } from "@/lib/domain/practiceInfo";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +54,7 @@ export default async function RegisterPage({
         .findFirst({
           where: { id: teamParam, seasonId: season.id, isTest: false, acceptingSignups: true },
           select: {
-            id: true, club: true, market: true, divisionCode: true, color: true, gender: true,
+            id: true, name: true, club: true, market: true, divisionCode: true, color: true, gender: true,
             dayOfWeek: true, startTime: true, coachPlays: true, capacity: true,
             division: { select: { name: true } },
             facility: { select: { name: true, isPrivate: true, generalArea: true, crossStreets: true } },
@@ -69,7 +69,7 @@ export default async function RegisterPage({
   const targetTeam = teamRow
     ? {
         id: teamRow.id,
-        label: teamDisplayName(teamRow),
+        label: teamRow.name,
         category: teamRow.division?.name || teamCategoryLabel({ divisionCode: teamRow.divisionCode, gender: teamRow.gender, divisionName: teamRow.division?.name ?? null }),
         dayTime: [dayOfWeekPlural(teamRow.dayOfWeek), practiceTimeRange(teamRow.startTime)].filter(Boolean).join(", ") || null,
         location: [
