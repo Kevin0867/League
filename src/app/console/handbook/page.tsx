@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/rbac";
+import { REUSABLE_FORMS } from "@/lib/domain/coachingForms";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Coaches Workbook" };
@@ -25,6 +26,24 @@ export default async function HandbookPage() {
           <a href={PDF} download className="btn-secondary text-sm">Download</a>
         </div>
       </header>
+
+      {/* Digital versions of the workbook's Reusable Forms. */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">Digital forms</h2>
+        <p className="mt-0.5 text-xs text-slate-500">Fill these out in the app instead of printing — trackers save each player&apos;s numbers over the season.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {REUSABLE_FORMS.map((f) =>
+            f.built ? (
+              <Link key={f.slug} href={`/console/forms/${f.slug}`} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-brand-700 hover:border-brand-300 hover:bg-brand-50">
+                {f.title} →
+              </Link>
+            ) : (
+              <span key={f.slug} className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-400">{f.title} · soon</span>
+            )
+          )}
+        </div>
+        <Link href="/console/forms" className="mt-3 inline-block text-xs font-semibold text-brand-700 hover:underline">All coaching forms →</Link>
+      </section>
 
       {/* Inline viewer — great on desktop/tablet. On phones, the "Open" button
           above launches the native PDF viewer, which is the most reliable path. */}
