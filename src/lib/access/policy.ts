@@ -26,6 +26,7 @@ export const COACH_CONSOLE_PREFIXES = [
   "/console/announcements", // announcements sent to them (read + mark read)
   "/console/lounge", // the Coaches' Lounge — staff space, coaches included
   "/console/handbook", // the Coaching Handbook & Agreement (read)
+  "/console/training", // training-video library (view + upload/share)
   "/console/incident-report", // submit a digital incident report
   "/console/agreement", // their own coaching agreement (review + sign)
 ];
