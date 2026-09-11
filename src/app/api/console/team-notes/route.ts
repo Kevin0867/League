@@ -15,8 +15,12 @@ export async function POST(req: Request) {
   const fd = await req.formData();
   const actor = await actorFromForm(fd);
   const teamId = String(fd.get("teamId") ?? "");
+  // By default we land on the team's progress page; a caller (e.g. the training
+  // library) can pass returnTo to come back to where they shared from.
+  const rawReturn = String(fd.get("returnTo") ?? "");
+  const dest = rawReturn.startsWith("/console/") ? rawReturn.split("?")[0].split("#")[0] : `/console/teams/${teamId}/progress`;
   const back = (qs: string) =>
-    NextResponse.redirect(new URL(`/console/teams/${teamId}/progress${qs}`, origin), 303);
+    NextResponse.redirect(new URL(`${dest}${qs}`, origin), 303);
 
   if (!actor) return back("?err=auth");
   if (String(fd.get("op")) !== "broadcastTeam") return back("?err=op");
