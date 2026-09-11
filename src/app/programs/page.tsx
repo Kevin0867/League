@@ -77,7 +77,7 @@ export default async function ProgramsPage() {
         </div>
 
         <div className="mt-10">
-          <Link href="/register" className="btn-primary">Register for the season</Link>
+          <Link href="/open-spots" className="btn-primary">Register for the season</Link>
         </div>
       </div>
       <SiteFooter />

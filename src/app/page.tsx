@@ -56,7 +56,7 @@ export default async function HomePage() {
           <div className="mt-10 grid gap-8 lg:grid-cols-2 lg:items-start">
             <div>
               <Link
-                href="/register"
+                href="/open-spots"
                 className="btn-accent inline-flex flex-col items-center rounded-2xl px-8 py-5 text-center"
               >
                 <span className="text-base font-extrabold uppercase tracking-wide">Fall 2026 Season — Now Enrolling</span>

@@ -654,7 +654,7 @@ export default async function TeamBuildBoard({
             const roster = rosterStatus(t._count.members, t.coachPlays);
             const publish = canPublishTeam(t, t.facility);
             return (
-              <div key={t.id} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""} ${t.members.map((m) => `${m.person.firstName} ${m.person.lastName}`).join(" ")}`} className="card transition-shadow hover:shadow-md">
+              <div key={t.id} id={`team-${t.id}`} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""} ${t.members.map((m) => `${m.person.firstName} ${m.person.lastName}`).join(" ")}`} className="card scroll-mt-24 transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div>
                     <Link href={`/console/teams/${t.id}`} className="inline-flex items-center gap-1.5 font-semibold text-slate-900 hover:text-brand-700">
