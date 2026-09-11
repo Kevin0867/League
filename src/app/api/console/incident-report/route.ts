@@ -81,20 +81,78 @@ export async function POST(req: Request) {
   const who = g("coachName") || "A coach";
   const subj = `Incident Report — ${g("incidentDate")}${g("participantName") ? ` · ${g("participantName")}` : ""} (${who})`;
 
-  // HTML mirror: the full report (monospace) plus the photos embedded inline and
-  // videos as watch links, so the office sees the media right in the email.
+  // HTML report: a clean, branded layout with per-section tables, incident-type
+  // chips, a boxed description, embedded photos, and a styled signature.
   const esc = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch] as string));
+  const FONT = "Arial,Helvetica,sans-serif";
+  const heading = (title: string) =>
+    `<div style="font:700 12px ${FONT};text-transform:uppercase;letter-spacing:.05em;color:#2c4670;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:22px 0 10px">${esc(title)}</div>`;
+  const rowsHtml = (fields: [string, string][]) =>
+    fields
+      .map(([k, label]) =>
+        g(k)
+          ? `<tr><td style="padding:3px 14px 3px 0;color:#64748b;font:13px ${FONT};white-space:nowrap;vertical-align:top">${esc(label.trim())}</td><td style="padding:3px 0;color:#0f172a;font:13px ${FONT};line-height:1.5">${esc(g(k))}</td></tr>`
+          : ""
+      )
+      .join("");
+  const tableSection = (title: string, fields: [string, string][]) => {
+    const r = rowsHtml(fields);
+    return r ? heading(title) + `<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">${r}</table>` : "";
+  };
+  const chips = (items: string[], bg: string, fg: string) =>
+    items.length
+      ? `<div>${items.map((t) => `<span style="display:inline-block;background:${bg};color:${fg};font:600 12px ${FONT};padding:4px 10px;border-radius:999px;margin:0 6px 6px 0">${esc(t)}</span>`).join("")}</div>`
+      : `<div style="color:#94a3b8;font:13px ${FONT}">(none noted)</div>`;
+
+  const typeHtml = heading("3. Type of incident") + chips(types, "#fee2e2", "#991b1b");
+  const descHtml =
+    heading("4. Description of what happened") +
+    `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;color:#0f172a;font:14px ${FONT};line-height:1.55;white-space:pre-wrap">${esc(g("description"))}</div>`;
+  const actionsHtml =
+    heading("8. Actions taken / immediate follow-up") +
+    chips(actions, "#dbeafe", "#1e40af") +
+    (g("additionalActions") ? `<div style="margin-top:6px;color:#0f172a;font:13px ${FONT}">Additional: ${esc(g("additionalActions"))}</div>` : "");
   const mediaHtml = attachments.length
-    ? `<h3 style="font-family:Arial,sans-serif;color:#0f172a;margin:20px 0 8px">Photos / video (${attachments.length})</h3>` +
+    ? heading(`9. Photos / video (${attachments.length})`) +
       attachments
         .map((a) =>
           a.type === "VIDEO"
-            ? `<p style="margin:6px 0"><a href="${esc(a.url)}" style="display:inline-block;background:#059669;color:#fff;font-weight:700;text-decoration:none;padding:10px 16px;border-radius:8px">▶ Watch video${a.name ? ` — ${esc(a.name)}` : ""}</a></p>`
-            : `<p style="margin:6px 0"><a href="${esc(a.url)}"><img src="${esc(a.url)}" alt="${esc(a.name || "photo")}" style="max-width:100%;border-radius:8px" /></a></p>`
+            ? `<p style="margin:6px 0"><a href="${esc(a.url)}" style="display:inline-block;background:#059669;color:#fff;font:700 14px ${FONT};text-decoration:none;padding:10px 16px;border-radius:8px">▶ Watch video${a.name ? ` — ${esc(a.name)}` : ""}</a></p>`
+            : `<p style="margin:8px 0"><a href="${esc(a.url)}"><img src="${esc(a.url)}" alt="${esc(a.name || "photo")}" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0" /></a></p>`
         )
         .join("")
     : "";
-  const html = `<pre style="font-family:Menlo,Consolas,monospace;white-space:pre-wrap;font-size:13px;color:#0f172a">${esc(body)}</pre>${mediaHtml}`;
+  const certHtml =
+    heading("10. Coach certification") +
+    `<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">` +
+    (g("coachPrintedName") ? `<tr><td style="padding:3px 14px 3px 0;color:#64748b;font:13px ${FONT};white-space:nowrap">Printed name</td><td style="padding:3px 0;color:#0f172a;font:13px ${FONT}">${esc(g("coachPrintedName"))}</td></tr>` : "") +
+    (g("coachSignature") ? `<tr><td style="padding:3px 14px 3px 0;color:#64748b;font:13px ${FONT};white-space:nowrap">Signature</td><td style="padding:3px 0"><span style="font:italic 22px Georgia,'Times New Roman',serif;color:#0f172a">${esc(g("coachSignature"))}</span></td></tr>` : "") +
+    (g("certDate") ? `<tr><td style="padding:3px 14px 3px 0;color:#64748b;font:13px ${FONT};white-space:nowrap">Date</td><td style="padding:3px 0;color:#0f172a;font:13px ${FONT}">${esc(g("certDate"))}</td></tr>` : "") +
+    `</table>`;
+
+  const submittedAt = new Date().toLocaleString("en-US", { timeZone: "America/Phoenix" });
+  const html =
+    `<div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">` +
+    `<div style="background:#2c4670;padding:18px 22px">` +
+    `<table cellpadding="0" cellspacing="0" style="width:100%"><tr>` +
+    `<td style="font:800 18px ${FONT};color:#ffffff">PURE Incident Report</td>` +
+    `<td align="right"><span style="background:#dc2626;color:#ffffff;font:700 11px ${FONT};letter-spacing:.06em;padding:4px 10px;border-radius:999px">CONFIDENTIAL</span></td>` +
+    `</tr></table>` +
+    `<div style="color:#c7d2e5;font:13px ${FONT};margin-top:6px">Submitted via the coach console · Program Director / owners only</div>` +
+    `</div>` +
+    `<div style="padding:8px 22px 22px">` +
+    tableSection("1. Basic incident information", SECTIONS[0].fields) +
+    tableSection("2. Person(s) involved", SECTIONS[1].fields) +
+    typeHtml +
+    descHtml +
+    tableSection("5. Injury / medical response", SECTIONS[2].fields) +
+    tableSection("6. Supervision / pickup details", SECTIONS[3].fields) +
+    tableSection("7. Witnesses", SECTIONS[4].fields) +
+    actionsHtml +
+    mediaHtml +
+    certHtml +
+    `<div style="margin-top:24px;border-top:1px solid #e2e8f0;padding-top:10px;color:#94a3b8;font:12px ${FONT}">Submitted ${esc(submittedAt)} (Phoenix) · Confidential — do not forward.</div>` +
+    `</div></div>`;
 
   try {
     // Confidential: ONLY the team inbox — never the parent/player/coach, and no
