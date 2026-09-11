@@ -60,7 +60,7 @@ export async function appendMessage(
 export async function notifyOtherParticipants(conversationId: string, senderId: string, body: string, notify: NotifyChoice) {
   try {
     const [sender, parts] = await Promise.all([
-      prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true, user: { select: { role: true } } } }),
+      prisma.person.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true, email: true, user: { select: { role: true } } } }),
       prisma.conversationParticipant.findMany({
         where: { conversationId, personId: { not: senderId } },
         select: { personId: true, person: { select: { email: true, email2: true, email3: true, phone: true, user: { select: { role: true } } } } },
@@ -85,7 +85,11 @@ export async function notifyOtherParticipants(conversationId: string, senderId: 
           await sendEmail(
             emails,
             `New message from ${senderName}`,
-            `${senderName} sent you a message on PURE Academy:\n\n“${preview}”\n\nRead & reply: ${link}\n\nYou can reply from your inbox — they’ll be notified.`,
+            `${senderName} sent you a message on PURE Academy:\n\n“${preview}”\n\nRead & reply: ${link}\n\nBest is to reply from your inbox (link above) — it keeps the whole conversation in one place. If you reply to this email, it goes straight to ${senderName}.`,
+            undefined,
+            undefined,
+            // Route email replies to the sender (the coach), not the shared inbox.
+            { replyTo: sender?.email ?? null },
           );
         }
       }
