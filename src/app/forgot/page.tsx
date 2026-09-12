@@ -21,20 +21,22 @@ export default async function ForgotPage({
           {sent ? (
             <>
               <p className="mt-2 text-sm text-slate-600">
-                If an account exists for that email, we&apos;ve sent a reset link. It
-                expires in 1 hour. Check your inbox (and spam).
+                If an account matches what you entered, we&apos;ve sent a reset link
+                by <strong>email and text</strong>. It expires in 1 hour. Check your
+                inbox (and spam) and your texts.
               </p>
               <Link href="/login" className="btn-primary mt-4">Back to sign in</Link>
             </>
           ) : (
             <>
               <p className="mt-1 text-sm text-slate-500">
-                Enter your email and we&apos;ll send you a reset link.
+                Enter your email <em>or</em> mobile number. We&apos;ll send a reset
+                link by both email and text.
               </p>
               <form method="POST" action="/api/auth/forgot" className="mt-5 space-y-4">
                 <div>
-                  <label className="label" htmlFor="email">Email</label>
-                  <input id="email" name="email" type="email" autoComplete="email" required className="input" />
+                  <label className="label" htmlFor="email">Email or mobile number</label>
+                  <input id="email" name="email" type="text" inputMode="email" autoComplete="email" required className="input" placeholder="you@email.com or 602-555-1234" />
                 </div>
                 <button type="submit" className="btn-primary w-full">Send reset link</button>
               </form>
