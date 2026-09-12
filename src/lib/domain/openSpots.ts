@@ -184,6 +184,67 @@ async function confirmPlacement(personId: string, teamId: string, seasonId: stri
 /** The last spot filled before this payment landed — keep the paid player off
  *  the roster and alert admins so they can add a spot, place them elsewhere, or
  *  refund. */
+/** Sweep: place any open-spots recruit who has PAID but was never placed on
+ *  their team — the safety net for a missed payment webhook (the live webhook
+ *  places on payment; if it's missed, the paid player is stuck at "submitted"
+ *  until this runs). Idempotent; safe to run every reconcile. Returns counts. */
+export async function placePaidUnplacedRecruits(seasonId?: string): Promise<{ placed: number; held: number }> {
+  let placed = 0;
+  let held = 0;
+  const regs = await prisma.registration.findMany({
+    where: { targetTeamId: { not: null }, status: { not: "ASSIGNED" }, ...(seasonId ? { seasonId } : {}) },
+    select: { personId: true, seasonId: true, targetTeamId: true },
+  });
+  if (!regs.length) return { placed, held };
+
+  // Group by season and resolve, per season, which people have paid (or started
+  // an installment/subscription) — read from the payments that cover them.
+  const bySeason = new Map<string, { personId: string; teamId: string }[]>();
+  for (const r of regs) {
+    if (!r.seasonId || !r.targetTeamId) continue;
+    if (!bySeason.has(r.seasonId)) bySeason.set(r.seasonId, []);
+    bySeason.get(r.seasonId)!.push({ personId: r.personId, teamId: r.targetTeamId });
+  }
+
+  for (const [sid, items] of bySeason) {
+    const payments = await prisma.payment.findMany({
+      where: { seasonId: sid, direction: "IN" },
+      select: { status: true, stripeSubscriptionId: true, installmentsPaid: true, partyId: true, coveredPersonIds: true },
+    });
+    const paidPersonIds = new Set<string>();
+    for (const p of payments) {
+      const isPaid = p.status === "PAID" || !!p.stripeSubscriptionId || (p.installmentsPaid ?? 0) >= 1;
+      if (!isPaid) continue;
+      if (p.partyId) paidPersonIds.add(p.partyId);
+      const covered = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]) : [];
+      for (const c of covered) paidPersonIds.add(String(c));
+    }
+
+    for (const it of items) {
+      if (!paidPersonIds.has(it.personId)) continue;
+      const already = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId: it.teamId, personId: it.personId } } });
+      if (already) {
+        await prisma.registration.updateMany({ where: { personId: it.personId, seasonId: sid, status: { not: "ASSIGNED" } }, data: { status: "ASSIGNED" } }).catch(() => {});
+        continue;
+      }
+      const team = await prisma.team.findUnique({ where: { id: it.teamId }, select: { id: true, name: true, coachPlays: true, capacity: true, _count: { select: { members: true } } } });
+      if (!team) continue;
+      const cap = teamCapacity(team.capacity);
+      const roster = team._count.members + (team.coachPlays ? 1 : 0);
+      if (roster >= cap) {
+        await holdForReview(it.personId, team.id, team.name, sid);
+        held++;
+        continue;
+      }
+      await prisma.teamMember.create({ data: { teamId: team.id, personId: it.personId, roleOnTeam: "PLAYER" } }).catch(() => {});
+      await prisma.registration.updateMany({ where: { personId: it.personId, seasonId: sid, status: { not: "ASSIGNED" } }, data: { status: "ASSIGNED" } });
+      await confirmPlacement(it.personId, team.id, sid);
+      placed++;
+    }
+  }
+  return { placed, held };
+}
+
 async function holdForReview(personId: string, teamId: string, teamName: string, seasonId: string): Promise<void> {
   const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true, email: true, phone: true } });
   const who = person ? `${person.firstName} ${person.lastName}`.trim() : "A player";
