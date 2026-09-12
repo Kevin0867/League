@@ -55,7 +55,7 @@ export default async function ProgramsPage() {
                 {s.divisions.map((d) => (
                   <Link
                     key={d.id}
-                    href={`/register?division=${encodeURIComponent(d.name)}`}
+                    href="/open-spots"
                     className="group flex flex-col rounded-lg border border-slate-200 p-3 transition-colors hover:border-brand-400 hover:bg-brand-50/40"
                   >
                     <div className="font-medium text-slate-800 group-hover:text-brand-800">{d.name}</div>

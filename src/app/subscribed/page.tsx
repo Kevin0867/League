@@ -24,7 +24,7 @@ export default function SubscribedPage() {
           PURE Pickleball &amp; Padel.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link href="/register" className="btn-primary">Enroll in the Academy</Link>
+          <Link href="/open-spots" className="btn-primary">Enroll in the Academy</Link>
           <Link href="/" className="btn-secondary">Back home</Link>
         </div>
       </div>
