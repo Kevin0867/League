@@ -334,12 +334,18 @@ export default async function PaymentsPage({
     ? await prisma.person.findMany({ where: { id: { in: respPartyIds } }, select: { id: true, email: true, phone: true } })
     : [];
   const respPartyById = new Map(respParties.map((p) => [p.id, p]));
-  const payerResponses = payerResponsesRaw.map((r) => {
+  const resolvedRows = payerResponsesRaw.length
+    ? await prisma.payerResponseResolution.findMany({ where: { auditLogId: { in: payerResponsesRaw.map((r) => r.id) } }, select: { auditLogId: true } })
+    : [];
+  const resolvedSet = new Set(resolvedRows.map((r) => r.auditLogId));
+  const payerResponsesAll = payerResponsesRaw.map((r) => {
     let note = ""; let partyId: string | null = null;
     try { const m = JSON.parse(r.metadata ?? "{}") as { note?: string; partyId?: string }; note = m.note ?? ""; partyId = m.partyId ?? null; } catch { /* ignore */ }
     const party = partyId ? respPartyById.get(partyId) : null;
-    return { id: r.id, summary: r.summary ?? "", createdAt: r.createdAt, note, paymentId: r.entityId, email: party?.email ?? null, phone: party?.phone ?? null };
+    return { id: r.id, summary: r.summary ?? "", createdAt: r.createdAt, note, paymentId: r.entityId, email: party?.email ?? null, phone: party?.phone ?? null, resolved: resolvedSet.has(r.id) };
   });
+  const payerResponses = payerResponsesAll.filter((r) => !r.resolved);
+  const payerResponsesResolved = payerResponsesAll.filter((r) => r.resolved);
 
   return (
     <div className="space-y-6">
@@ -368,27 +374,55 @@ export default async function PaymentsPage({
 
       {/* Why families haven't paid — replies captured from the pay page. Kept up
           top so these never get missed; each is someone to call back. */}
-      {payerResponses.length > 0 && (
+      {(payerResponses.length > 0 || payerResponsesResolved.length > 0) && (
         <div className="card border-l-4 border-amber-400">
           <h2 className="font-semibold text-slate-900">💬 Replies from the pay page</h2>
           <p className="text-sm text-slate-500">
-            {payerResponses.length} {payerResponses.length === 1 ? "family" : "families"} wrote in from the payment page — reach out and help them across the line.
+            {payerResponses.length === 0
+              ? "All caught up — no open replies to follow up on."
+              : `${payerResponses.length} ${payerResponses.length === 1 ? "family" : "families"} wrote in from the payment page — reach out and help them across the line.`}
           </p>
-          <ul className="mt-3 space-y-2">
-            {payerResponses.map((r) => (
-              <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="font-medium text-slate-800">{r.summary}</span>
-                  <span className="shrink-0 text-xs text-slate-400">{formatDate(r.createdAt)}</span>
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                  {r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">✉ {r.email}</a>}
-                  {r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">📞 {r.phone}</a>}
-                  {r.paymentId && <a href={`/pay/${r.paymentId}`} className="text-brand-700 hover:underline">Open their invoice →</a>}
-                </div>
-              </li>
-            ))}
-          </ul>
+          {payerResponses.length > 0 && (
+            <ul className="mt-3 space-y-2">
+              {payerResponses.map((r) => (
+                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-medium text-slate-800">{r.summary}</span>
+                    <span className="shrink-0 text-xs text-slate-400">{formatDate(r.createdAt)}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                    {r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">✉ {r.email}</a>}
+                    {r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">📞 {r.phone}</a>}
+                    {r.paymentId && <a href={`/pay/${r.paymentId}`} className="text-brand-700 hover:underline">Open their invoice →</a>}
+                    <form method="POST" action="/api/console/payer-response" className="ml-auto inline">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="resolve" />
+                      <input type="hidden" name="responseId" value={r.id} />
+                      <button className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 hover:bg-emerald-100">✓ Mark resolved</button>
+                    </form>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {payerResponsesResolved.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-semibold text-slate-500 hover:text-slate-700">{payerResponsesResolved.length} resolved</summary>
+              <ul className="mt-2 space-y-1">
+                {payerResponsesResolved.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-1.5 text-xs">
+                    <span className="text-slate-500 line-through">{r.summary}</span>
+                    <form method="POST" action="/api/console/payer-response" className="inline">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="reopen" />
+                      <input type="hidden" name="responseId" value={r.id} />
+                      <button className="shrink-0 font-semibold text-slate-400 hover:text-brand-700 hover:underline">reopen</button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       )}
 
