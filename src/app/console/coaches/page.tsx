@@ -70,7 +70,7 @@ export default async function CoachesPage({
   // Coach relation shape shared by both sources (the profile source carries an
   // extra `person`, which is structurally assignable to this smaller type).
   type CoachRel = NonNullable<(typeof coachUsers)[number]["person"]>["coach"];
-  type CoachEntry = { person: { id: string; firstName: string; lastName: string; waiverSignedAt: Date | null; imageUrl: string | null }; coach: CoachRel; createdAt: Date; updatedAt: Date };
+  type CoachEntry = { person: { id: string; firstName: string; lastName: string; waiverSignedAt: Date | null; imageUrl: string | null; email: string | null; phone: string | null }; coach: CoachRel; createdAt: Date; updatedAt: Date };
   const byPerson = new Map<string, CoachEntry>();
   for (const u of coachUsers) if (u.person) byPerson.set(u.person.id, { person: u.person, coach: u.person.coach, createdAt: u.person.createdAt, updatedAt: u.person.updatedAt });
   for (const c of coachProfiles) if (!byPerson.has(c.personId)) byPerson.set(c.personId, { person: c.person, coach: c, createdAt: c.person.createdAt, updatedAt: c.person.updatedAt });
@@ -115,6 +115,17 @@ export default async function CoachesPage({
     return missing;
   };
   const publishedNotShown = coaches.filter((c) => c.coach?.publishedOnSite && siteReadiness(c.person, c.coach).length > 0);
+
+  // Contact readiness. Message notifications go out by text and email — a coach
+  // with no phone silently misses every text; with no email, every email. Flag
+  // any coach profile missing either so those gaps can be filled.
+  const contactGaps = (person: { email: string | null; phone: string | null }) => {
+    const missing: string[] = [];
+    if (!(person.email && person.email.trim())) missing.push("email");
+    if (!(person.phone && person.phone.trim())) missing.push("phone (text)");
+    return missing;
+  };
+  const missingContact = coaches.filter((c) => c.coach && contactGaps(c.person).length > 0);
 
   return (
     <div className="space-y-6">
@@ -162,6 +173,26 @@ export default async function CoachesPage({
               <li key={c.person.id}>
                 <Link href={`/console/coaches/${c.person.id}`} className="font-medium text-brand-700 hover:underline">{c.person.firstName} {c.person.lastName}</Link>
                 {" "}— needs {siteReadiness(c.person, c.coach).join(", ")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {missingContact.length > 0 && (
+        <div className="card border-l-4 border-rose-400">
+          <p className="text-sm font-medium text-rose-800">
+            {missingContact.length} coach{missingContact.length === 1 ? "" : "es"} {missingContact.length === 1 ? "is" : "are"} missing contact info for notifications
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Message alerts go out by text and email. A coach with no phone won&apos;t get texts; with no email, no emails.
+            Add the missing details on their profile:
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-slate-700">
+            {missingContact.map((c) => (
+              <li key={c.person.id}>
+                <Link href={`/console/coaches/${c.person.id}`} className="font-medium text-brand-700 hover:underline">{c.person.firstName} {c.person.lastName}</Link>
+                {" "}— needs {contactGaps(c.person).join(", ")}
               </li>
             ))}
           </ul>
