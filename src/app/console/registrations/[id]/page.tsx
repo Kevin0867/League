@@ -240,6 +240,19 @@ export default async function RegistrationDetail({
         </div>
       )}
 
+      {/* Placement preferences — what the family told us so we can match them to
+          a team (especially one not shown on the open-spots page). */}
+      {(currentMarkets.length > 0 || (reg.schedule && reg.schedule.trim()) || (reg.practiceTimePref && reg.practiceTimePref.trim())) && (
+        <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">📍 Placement preferences</p>
+          <div className="mt-1.5 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+            <div><span className="text-slate-400">Location:</span> <span className="text-slate-700">{currentMarkets.length ? currentMarkets.join(", ") : "—"}</span></div>
+            <div><span className="text-slate-400">Days:</span> <span className="text-slate-700">{reg.schedule?.trim() || "—"}</span></div>
+            <div><span className="text-slate-400">Times:</span> <span className="text-slate-700">{reg.practiceTimePref?.trim() || "—"}</span></div>
+          </div>
+        </div>
+      )}
+
       {/* Send to family — the per-registration mirror of the team launch panel:
           one combined "Send all" plus a backup button for each piece. */}
       <div className="card">

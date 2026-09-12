@@ -10,6 +10,7 @@ const YOUTH_LEVELS = ["High School", "Middle", "Elementary"];
 const ADULT_TEAMS = ["Men's", "Women's"];
 const SKILLS = ["2.5", "3.0", "3.5", "4.0", "4.5", "5.0+"];
 const PRACTICE_TIMES = ["Mornings", "Evenings"];
+const PRACTICE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_KIDS = 4;
 
 type Mode = "adult" | "child" | "both";
@@ -165,6 +166,18 @@ export function RegisterForm({
               ))}
             </div>
           </div>
+        </div>
+        <div className="mt-4">
+          <label className="label">Preferred practice days <span className="text-slate-400">(choose all that work)</span></label>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-2">
+            {PRACTICE_DAYS.map((d) => (
+              <label key={d} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="practiceDay" value={d} />
+                {d}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-slate-400">If your team isn&apos;t on the open-spots list, tell us the days and location that work — we&apos;ll try to match you to a team.</p>
         </div>
       </Section>
 
