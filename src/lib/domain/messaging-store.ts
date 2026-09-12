@@ -52,6 +52,16 @@ export async function inboxItems(personId: string): Promise<InboxItem[]> {
 }
 
 /** Every conversation, for the admin moderation view. */
+// A conversation is "unread" for moderation when a recipient hasn't yet read
+// the latest message — i.e. someone is waiting on a reply.
+function moderationUnread(
+  participants: { personId: string; lastReadAt: Date | null }[],
+  last: { senderId: string; createdAt: Date } | undefined,
+): boolean {
+  if (!last) return false;
+  return participants.some((p) => p.personId !== last.senderId && (!p.lastReadAt || p.lastReadAt < last.createdAt));
+}
+
 export async function moderationItems(): Promise<InboxItem[]> {
   const convos = await prisma.conversation.findMany({
     orderBy: { lastMessageAt: "desc" },
@@ -60,8 +70,8 @@ export async function moderationItems(): Promise<InboxItem[]> {
       id: true,
       subject: true,
       lastMessageAt: true,
-      participants: { select: { person: { select: { firstName: true, lastName: true } } } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { body: true, deletedAt: true } },
+      participants: { select: { personId: true, lastReadAt: true, person: { select: { firstName: true, lastName: true } } } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { body: true, deletedAt: true, senderId: true, createdAt: true } },
     },
   });
   return convos.map((c) => {
@@ -72,9 +82,23 @@ export async function moderationItems(): Promise<InboxItem[]> {
       others: c.participants.map((pt) => fullName(pt.person)).join(" ↔ ") || "(no one)",
       preview: !last ? "No messages yet" : last.deletedAt ? "Message deleted (retained)" : last.body,
       lastMessageAt: c.lastMessageAt,
-      unread: false,
+      unread: moderationUnread(c.participants, last),
     };
   });
+}
+
+/** How many conversations platform-wide have a message a recipient hasn't read
+ *  yet — the "All conversations" badge for admins. */
+export async function moderationUnreadCount(): Promise<number> {
+  const convos = await prisma.conversation.findMany({
+    orderBy: { lastMessageAt: "desc" },
+    take: 500,
+    select: {
+      participants: { select: { personId: true, lastReadAt: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { senderId: true, createdAt: true } },
+    },
+  });
+  return convos.reduce((n, c) => n + (moderationUnread(c.participants, c.messages[0]) ? 1 : 0), 0);
 }
 
 /**

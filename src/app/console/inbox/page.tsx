@@ -3,7 +3,8 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireStaff } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { allowedContacts, isAdminRole } from "@/lib/domain/messaging-acl";
-import { searchInbox } from "@/lib/domain/messaging-store";
+import { searchInbox, moderationUnreadCount } from "@/lib/domain/messaging-store";
+import { unreadInboxCount } from "@/lib/domain/inbox";
 import { Composer, InboxList } from "@/components/messaging/Messaging";
 import { CoachBroadcastComposer, type BroadcastAudience } from "@/components/messaging/CoachBroadcastComposer";
 import { prisma } from "@/lib/db";
@@ -48,9 +49,11 @@ export default async function ConsoleInboxPage({
     : [];
 
   const q = (sp.q ?? "").trim();
-  const [items, contacts] = await Promise.all([
+  const [items, contacts, myUnread, allUnread] = await Promise.all([
     personId ? searchInbox(personId, q, moderating) : Promise.resolve([]),
     personId ? allowedContacts(personId, session.role) : Promise.resolve([]),
+    personId ? unreadInboxCount(personId).catch(() => 0) : Promise.resolve(0),
+    isAdmin ? moderationUnreadCount().catch(() => 0) : Promise.resolve(0),
   ]);
 
   return (
@@ -70,8 +73,14 @@ export default async function ConsoleInboxPage({
 
       {isAdmin && (
         <div className="flex gap-2 text-sm">
-          <Link href="/console/inbox" className={`rounded-lg px-3 py-1.5 font-medium ${!moderating ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>My messages</Link>
-          <Link href="/console/inbox?view=all" className={`rounded-lg px-3 py-1.5 font-medium ${moderating ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All conversations (moderation)</Link>
+          <Link href="/console/inbox" className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 font-medium ${!moderating ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+            My messages
+            {myUnread > 0 && <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${!moderating ? "bg-white text-brand-700" : "bg-rose-500 text-white"}`}>{myUnread}</span>}
+          </Link>
+          <Link href="/console/inbox?view=all" className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 font-medium ${moderating ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+            All conversations (moderation)
+            {allUnread > 0 && <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${moderating ? "bg-white text-brand-700" : "bg-rose-500 text-white"}`}>{allUnread}</span>}
+          </Link>
         </div>
       )}
 
