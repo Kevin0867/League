@@ -18,7 +18,9 @@ export default async function ConsoleThreadPage({ params }: { params: Promise<{ 
   if (!thread) redirect("/console/inbox");
 
   const isParticipant = thread.participantIds.includes(personId);
-  const canPost = isParticipant && canUseMessaging(session.role);
+  // Admins can reply to ANY conversation to step in and help — not just their
+  // own threads. Replying adds them to the conversation.
+  const canPost = (isParticipant || isAdmin) && canUseMessaging(session.role);
   if (isParticipant) await markRead(id, personId);
 
   return (

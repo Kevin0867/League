@@ -4,6 +4,7 @@ import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { canUseMessagingPerson, canReachPerson } from "@/lib/domain/messaging-acl";
 import { appendMessage, findOrCreateConversation } from "@/lib/domain/dm";
+import { isAdmin } from "@/lib/rbac";
 
 // Direct-messaging mutations (start / reply / delete a message / archive a
 // thread) as native-form POSTs with ticket auth, shared by the console (admin,
@@ -62,7 +63,17 @@ export async function POST(req: Request) {
       where: { conversationId, personId: myPersonId },
       select: { id: true },
     });
-    if (!part) return back(`${base}?err=perm`);
+    if (!part) {
+      // Admins can step into ANY conversation to help — join it, then reply, so
+      // both people see the admin's message and the admin stays in the loop.
+      if (isAdmin(actor.roles)) {
+        const convo = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true } });
+        if (!convo) return back(`${base}?err=perm`);
+        await prisma.conversationParticipant.create({ data: { conversationId, personId: myPersonId } }).catch(() => {});
+      } else {
+        return back(`${base}?err=perm`);
+      }
+    }
     await appendMessage(conversationId, myPersonId, body, notify, attach);
     return back(`${base}/${conversationId}`);
   }
