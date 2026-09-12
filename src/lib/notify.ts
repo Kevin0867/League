@@ -87,7 +87,7 @@ export async function sendEmail(
    *  mail (e.g. an incident report) that must reach ONLY its named recipient.
    *  `replyTo` overrides the default team Reply-To so a reply reaches a specific
    *  person (e.g. the coach who sent a message) instead of the shared inbox. */
-  opts?: { skipBcc?: boolean; replyTo?: string | null }
+  opts?: { skipBcc?: boolean; replyTo?: string | string[] | null }
 ): Promise<SendResult> {
   const recipients = (Array.isArray(to) ? to : [to])
     .map((t) => (t ?? "").trim())
@@ -108,8 +108,15 @@ export async function sendEmail(
         from: process.env.EMAIL_FROM ?? "PURE Academy <team@purepickleball.com>",
         to: recipients,
         // Replies go to the message sender when the caller names one (so a coach
-        // sees email replies), else the team inbox (override with EMAIL_REPLY_TO).
-        reply_to: (opts?.replyTo && opts.replyTo.trim()) || process.env.EMAIL_REPLY_TO || "team@purepickleball.com",
+        // sees email replies) — and can include the team inbox so admins see the
+        // reply too. Falls back to the team inbox (override with EMAIL_REPLY_TO).
+        reply_to: (() => {
+          const rt = opts?.replyTo;
+          const list = (Array.isArray(rt) ? rt : rt ? [rt] : []).map((e) => (e ?? "").trim()).filter(Boolean);
+          if (list.length > 1) return list;
+          if (list.length === 1) return list[0];
+          return process.env.EMAIL_REPLY_TO || "team@purepickleball.com";
+        })(),
         // Optionally copy every outbound email to a shared inbox for a record —
         // unless the caller opts out (confidential mail must go only to `to`).
         ...(process.env.EMAIL_BCC && !opts?.skipBcc ? { bcc: process.env.EMAIL_BCC } : {}),

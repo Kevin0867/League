@@ -110,11 +110,16 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   });
 
   const subject = input.subject ?? "PURE Academy";
-  // Resolve the sender's Person id so replies to this broadcast's texts route
-  // back to them (a coach/admin), not to the shared team inbox.
-  const senderPersonId = input.senderId
-    ? (await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true } }))?.personId ?? null
+  // Resolve the sender so replies route back to them (a coach/admin): SMS
+  // text-backs via the SMS route, and email replies via Reply-To. We include
+  // the team inbox in Reply-To too, so admins see the reply as well.
+  const senderUser = input.senderId
+    ? await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true, email: true, person: { select: { email: true } } } })
     : null;
+  const senderPersonId = senderUser?.personId ?? null;
+  const senderEmail = (senderUser?.person?.email || senderUser?.email || "").trim() || null;
+  const TEAM_INBOX = "team@purepickleball.com";
+  const emailReplyTo: string[] | undefined = senderEmail ? [senderEmail, TEAM_INBOX] : undefined;
   let failures = 0;
   let simulated = 0;
   const allFailureReasons: string[] = [];
@@ -185,7 +190,7 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
 
     if (channels.includes("EMAIL")) {
       if (p.freshEmails.length) {
-        const res = await sendEmail(p.freshEmails, subject, input.body, input.html, input.attachments);
+        const res = await sendEmail(p.freshEmails, subject, input.body, input.html, input.attachments, { replyTo: emailReplyTo });
         emailStatus = res.ok ? (res.simulated ? "SENT" : "DELIVERED") : "FAILED";
         if (!res.ok) failureReasons.push(`email: ${res.error}`);
         if (res.ok && res.simulated) wasSimulated = true;
