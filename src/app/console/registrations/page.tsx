@@ -13,6 +13,7 @@ import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain
 import { personSearchOR } from "@/lib/domain/personSearch";
 import { coveredIds } from "@/lib/payments/familyFee";
 import { feeStateOf, feeStateRank, type FeeState } from "@/lib/domain/feeStatus";
+import { RESET_STATUS } from "@/lib/domain/resetStatus";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -255,6 +256,7 @@ export default async function RegistrationsPage({
 
   return (
     <div className="space-y-6">
+      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Registrations</h1>

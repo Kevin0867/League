@@ -22,6 +22,8 @@ import { AddPlayerToTeam } from "./AddPlayerToTeam";
 import { PrintButton } from "@/components/PrintButton";
 import { TeamPhotoUploadForm } from "@/components/TeamPhotoUploadForm";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
+import { TextResetLinkButton } from "@/components/TextResetLinkButton";
+import { RESET_STATUS } from "@/lib/domain/resetStatus";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Team" };
@@ -99,7 +101,7 @@ export default async function TeamDetailPage({
   if (!(await canViewTeamNotes(id))) redirect("/console");
   const viewer = await getSession();
   const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
-  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail } = await searchParams;
+  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia } = await searchParams;
   const VIA_LABEL: Record<string, string> = { email: "email", text: "text", both: "email and text" };
   const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
@@ -334,6 +336,7 @@ export default async function TeamDetailPage({
       {imgok === "team" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Team photo uploaded.</div>
       )}
+      {(() => { const r = RESET_STATUS(reset, resetVia); return r ? <div className={`rounded-lg px-4 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{r.text}</div> : null; })()}
       {err && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{ERR_MSG[err] ?? "Something went wrong."}</div>
       )}
@@ -720,6 +723,9 @@ export default async function TeamDetailPage({
                       <Link href={`/console/teams/${team.id}/progress/${m.personId}`} className="text-xs font-semibold text-brand-600 hover:underline">
                         notes
                       </Link>
+                      {admin && (
+                        <TextResetLinkButton personId={m.personId} ticket={ticket} returnTo={`/console/teams/${team.id}`} />
+                      )}
                       {admin && (
                         <details className="text-xs">
                           <summary className="cursor-pointer font-semibold text-brand-600 hover:underline">request payment</summary>

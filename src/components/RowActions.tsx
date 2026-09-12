@@ -134,6 +134,17 @@ export function RowActions({
                 </form>
               )}
 
+              <div className="border-t border-slate-100 pt-2">
+                <form method="POST" action="/api/console/reset-link" onSubmit={confirmSend("Send a set/reset-password link to this person (a minor's goes to their guardian) by text and email?")}>
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="personId" value={personId} />
+                  <input type="hidden" name="returnTo" value="/console/registrations" />
+                  <button className="w-full rounded-md border border-brand-200 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50">
+                    Text reset link
+                  </button>
+                </form>
+              </div>
+
               {payStatus === "paid" && (
                 <div className="border-t border-slate-100 pt-2">
                   <form method="POST" action="/api/console/registrations" onSubmit={confirmSend("Start a refund for this family's paid fee?")}>
