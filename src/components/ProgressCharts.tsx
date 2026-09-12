@@ -1,4 +1,4 @@
-import type { WeekPoint, DevRating } from "@/lib/domain/formsAnalytics";
+import type { WeekPoint, DevRating, TrendStat } from "@/lib/domain/formsAnalytics";
 
 // Lightweight, dependency-free SVG charts for the coaching-form analytics.
 // Server components — no client JS. Every value also appears as text so the
@@ -83,6 +83,59 @@ export function StatTile({ label, value, unit, sub, tone = "brand" }: {
         {value === null || value === undefined || value === "" ? "—" : value}{value !== null && value !== "" && unit ? <span className="text-sm font-semibold text-slate-400">{unit}</span> : null}
       </div>
       {sub && <div className="text-xs text-slate-500">{sub}</div>}
+    </div>
+  );
+}
+
+/** A one-line growth summary: start → now, total gain, % gain, avg/week. */
+export function GrowthSummary({ stat, unit = "" }: { stat: TrendStat; unit?: string }) {
+  if (stat.count < 2 || stat.first === null || stat.latest === null) {
+    return <div className="text-xs text-slate-400">Needs 2+ weeks to show growth.</div>;
+  }
+  const up = (stat.delta ?? 0) > 0;
+  const down = (stat.delta ?? 0) < 0;
+  const tone = up ? "text-emerald-600" : down ? "text-rose-500" : "text-slate-500";
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+      <span className="text-slate-500">Wk {stat.firstWeek}: <span className="font-semibold text-slate-700">{stat.first}{unit}</span></span>
+      <span className="text-slate-300">→</span>
+      <span className="text-slate-500">Wk {stat.latestWeek}: <span className="font-semibold text-slate-700">{stat.latest}{unit}</span></span>
+      <span className={`font-semibold ${tone}`}>{up ? "▲" : down ? "▼" : "■"} {stat.delta! > 0 ? "+" : ""}{stat.delta}{unit}{stat.pctChange !== null ? ` (${stat.pctChange > 0 ? "+" : ""}${stat.pctChange}%)` : ""}</span>
+      {stat.avgPerWeek !== null && <span className="text-slate-400">avg {stat.avgPerWeek > 0 ? "+" : ""}{stat.avgPerWeek}{unit}/wk</span>}
+      <span className="text-slate-400">{stat.improvedWeeks}/{Math.max(0, stat.count - 1)} weeks up</span>
+    </div>
+  );
+}
+
+/** Week-over-week table: each recorded week with its change from the prior. */
+export function WowTable({ stat, unit = "" }: { stat: TrendStat; unit?: string }) {
+  if (stat.count === 0) return null;
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-xs">
+        <tbody>
+          <tr className="text-slate-400">
+            <td className="pr-2 font-medium">Week</td>
+            {stat.wow.map((w) => <td key={w.week} className="px-2 text-center">{w.week}</td>)}
+          </tr>
+          <tr className="text-slate-700">
+            <td className="pr-2 font-medium text-slate-500">Value</td>
+            {stat.wow.map((w) => <td key={w.week} className="px-2 text-center font-semibold">{w.value}{unit}</td>)}
+          </tr>
+          <tr>
+            <td className="pr-2 font-medium text-slate-500">Δ</td>
+            {stat.wow.map((w) => (
+              <td key={w.week} className="px-2 text-center">
+                {w.deltaPrev === null ? <span className="text-slate-300">—</span> : (
+                  <span className={w.deltaPrev > 0 ? "text-emerald-600" : w.deltaPrev < 0 ? "text-rose-500" : "text-slate-400"}>
+                    {w.deltaPrev > 0 ? "+" : ""}{w.deltaPrev}
+                  </span>
+                )}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

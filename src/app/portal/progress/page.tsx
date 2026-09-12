@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { buildTeamAnalytics } from "@/lib/domain/formsAnalytics";
-import { Sparkline, SkillBars, StatTile, DeltaBadge } from "@/components/ProgressCharts";
+import { Sparkline, SkillBars, StatTile, DeltaBadge, GrowthSummary, WowTable } from "@/components/ProgressCharts";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Progress" };
@@ -71,6 +71,19 @@ export default async function PortalProgressPage() {
                         <div className="text-lg font-bold text-slate-800">{s.latest ?? "—"}{s.latest !== null && unit ? <span className="text-xs text-slate-400">{unit}</span> : null}</div>
                         <Sparkline points={s.series} color={c} unit={unit} max={max} />
                         {s.delta !== null && s.delta > 0 && <div className="text-[11px] text-emerald-600">Up {s.delta}{unit} since week 1 💪</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {[{ k: "Serve depth", s: p.serve, unit: "" }, { k: "Return depth", s: p.ret, unit: "" }, { k: "Kitchen line", s: p.kitchen, unit: "%" }].filter(({ s }) => s.count >= 2).length > 0 && (
+                  <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Week over week</div>
+                    {[{ k: "Serve depth", s: p.serve, unit: "" }, { k: "Return depth", s: p.ret, unit: "" }, { k: "Kitchen line", s: p.kitchen, unit: "%" }].filter(({ s }) => s.count >= 2).map(({ k, s, unit }) => (
+                      <div key={k} className="space-y-1">
+                        <div className="text-xs font-semibold text-slate-700">{k}</div>
+                        <GrowthSummary stat={s} unit={unit} />
+                        <WowTable stat={s} unit={unit} />
                       </div>
                     ))}
                   </div>

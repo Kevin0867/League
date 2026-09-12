@@ -68,27 +68,31 @@ export async function POST(req: Request) {
 
   if (op === "saveDevelopment") {
     const personIds = String(fd.get("personIds") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    // Ratings are captured per week (1..N) so skills progress over the season.
+    const wkRaw = parseInt(String(fd.get("week") ?? "1"), 10);
+    const week = Number.isFinite(wkRaw) && wkRaw >= 1 && wkRaw <= PROGRESS_WEEKS ? wkRaw : 1;
     const team = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
     const seasonId = team?.seasonId ?? null;
     const writes: Promise<unknown>[] = [];
-    const upsert = (personId: string, metric: string, value: number | null, note: string | null) =>
+    const upsert = (personId: string, wk: number, metric: string, value: number | null, note: string | null) =>
       prisma.playerProgressEntry.upsert({
-        where: { teamId_personId_week_metric: { teamId, personId, week: 0, metric } },
-        create: { teamId, personId, seasonId, week: 0, metric, value, note, recordedById: actor.userId },
+        where: { teamId_personId_week_metric: { teamId, personId, week: wk, metric } },
+        create: { teamId, personId, seasonId, week: wk, metric, value, note, recordedById: actor.userId },
         update: { value, note, recordedById: actor.userId },
       });
     for (const personId of personIds) {
       for (const c of DEV_CATEGORIES) {
         const raw = String(fd.get(`dev_${personId}_${c.key}`) ?? "").trim();
         const value = raw === "" ? null : Number(raw);
-        writes.push(upsert(personId, c.key, Number.isFinite(value as number) ? (value as number) : null, null));
+        writes.push(upsert(personId, week, c.key, Number.isFinite(value as number) ? (value as number) : null, null));
       }
+      // Per-week note lives at that week; the roll-up note stays at week 0.
       const note = String(fd.get(`note_${personId}`) ?? "").trim() || null;
-      writes.push(upsert(personId, DEV_NOTE, null, note));
+      writes.push(upsert(personId, week, DEV_NOTE, null, note));
     }
     await Promise.all(writes).catch((e) => console.error("development save failed", e));
-    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FORM_DEVELOPMENT", summary: `Saved Player Development tracker for ${personIds.length} player(s)` });
-    return back("&ok=1");
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FORM_DEVELOPMENT", summary: `Saved Player Development tracker (week ${week}) for ${personIds.length} player(s)` });
+    return back(`&ok=1&week=${week}`);
   }
 
   if (op === "saveKitchenArrival") {
