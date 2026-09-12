@@ -5,6 +5,7 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { matchFeeByEmailAndAmount, matchFeeByPlayerName, playerNameFromText } from "@/lib/payments/match";
+import { placeTeamRecruitForPayment, placePaidUnplacedRecruits } from "@/lib/domain/openSpots";
 
 // Reconcile local Payment rows against Stripe — the safety net for payments that
 // were completed in Stripe but never marked PAID here (a missed / mis-signed
@@ -199,6 +200,9 @@ async function reconcileOne(
       action: "RECONCILED",
       summary: `Reconciled with Stripe — installments ${paidCount}/${total}${done ? " (paid in full)" : ""}`,
     });
+    // An open-spots recruit is placed on payment. The webhook does this live; if
+    // it was missed and reconcile is catching up, place them now (idempotent).
+    if (paidCount >= 1) await placeTeamRecruitForPayment(p.id).catch(() => {});
     return {
       updated: true,
       nowPaid: done && !wasPaid,
@@ -224,6 +228,8 @@ async function reconcileOne(
       data: { status: "PAID", paidAt: p.paidAt ?? paidAt ?? new Date(), stripePaymentIntentId: piId ?? undefined },
     });
     await audit({ entityType: "Payment", entityId: p.id, action: "RECONCILED", summary: "Reconciled with Stripe — checkout paid" });
+    // Place an open-spots recruit the missed webhook would have placed (idempotent).
+    await placeTeamRecruitForPayment(p.id).catch(() => {});
     return { updated: true, nowPaid: true, recoveredCents: p.amountCents, note: "checkout paid" };
   }
 
@@ -236,6 +242,8 @@ async function reconcileOne(
         data: { status: "PAID", paidAt: p.paidAt ?? paidAtFromUnix(pi.created) ?? new Date() },
       });
       await audit({ entityType: "Payment", entityId: p.id, action: "RECONCILED", summary: "Reconciled with Stripe — payment intent succeeded" });
+      // Place an open-spots recruit the missed webhook would have placed (idempotent).
+      await placeTeamRecruitForPayment(p.id).catch(() => {});
       return { updated: true, nowPaid: true, recoveredCents: p.amountCents, note: "payment intent succeeded" };
     }
   }
@@ -699,6 +707,15 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
       noteError(res, e);
       console.error(`refund reconcile failed for payment ${p.id}`, e);
     }
+  }
+
+  // Final sweep: place any open-spots recruit who paid but was never placed on
+  // their team (e.g. a missed payment webhook left them at "submitted").
+  try {
+    await placePaidUnplacedRecruits();
+  } catch (e) {
+    noteError(res, e);
+    console.error("place-paid-unplaced sweep failed", e);
   }
 
   return res;
