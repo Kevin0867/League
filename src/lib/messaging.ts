@@ -3,6 +3,7 @@ import { prisma } from "./db";
 import { sendSms, sendEmail, type EmailAttachment } from "./notify";
 import { resolveAudience, type AudienceType } from "./domain/audience";
 import { recordSmsRoute } from "./domain/smsRouting";
+import { appUrl } from "./stripe";
 
 // Central dispatcher (§13). Creates the Message, resolves the audience, writes a
 // per-person delivery record for each recipient, and attempts each requested
@@ -140,8 +141,19 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // phase 2 run in parallel without racing on the dedup sets or double-sending.
   const inAppStatus = channels.includes("IN_APP") ? "DELIVERED" : "QUEUED";
   // The STOP opt-out notice is appended centrally in sendSms (on every text),
-  // so we don't add one here.
-  const smsText = input.smsBody ?? `${subject}\n${input.body}`;
+  // so we don't add one here. For the SMS channel we never send a long body:
+  // texts have a hard length limit (Twilio rejects >1600 chars), and a wall of
+  // text reads badly on a phone anyway. When the caller didn't supply a short
+  // `smsBody`, build one — the subject + the first paragraph + a link to read
+  // the full message in the portal.
+  const smsText = (() => {
+    if (input.smsBody && input.smsBody.trim()) return input.smsBody.trim();
+    const firstPara = (input.body ?? "").split(/\n\s*\n/)[0]?.trim() || (input.body ?? "").trim();
+    const snippet = firstPara.length > 280 ? `${firstPara.slice(0, 280).trimEnd()}…` : firstPara;
+    const link = `${appUrl()}/portal`;
+    const head = subject && subject !== "PURE Academy" ? `${subject}\n\n` : "";
+    return `${head}${snippet}\n\nRead the full message in your portal: ${link}`.trim();
+  })();
   type Plan = { r: (typeof recipients)[number]; freshEmails: string[]; emailSkipped: boolean; smsNum: string | null; smsSkipped: boolean };
   const plans: Plan[] = recipients.map((r) => {
     let freshEmails: string[] = [];
