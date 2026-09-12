@@ -23,6 +23,8 @@ function teamDayTime(t: { dayOfWeek: string | null; startTime: string | null }):
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { RecipientChecklist } from "@/components/RecipientChecklist";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { TextResetLinkButton } from "@/components/TextResetLinkButton";
+import { RESET_STATUS } from "@/lib/domain/resetStatus";
 
 // Sensitive fields are encrypted at rest and only decrypted for staff here.
 // A key mismatch yields a marker — show blank so we never re-save the marker.
@@ -167,7 +169,10 @@ export default async function RegistrationDetail({
           <h1 className="text-2xl font-bold text-slate-900">{p.firstName} {p.lastName}</h1>
           <p className="text-sm text-slate-500">{reg.season?.name} · <StatusBadge status={reg.status} /></p>
         </div>
+        <TextResetLinkButton personId={p.id} ticket={ticket} returnTo={`/console/registrations/${reg.id}`} label="Text portal reset link" className="rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-100" />
       </div>
+
+      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
 
       {reg.status === "WAITLISTED" && (
         <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3">
