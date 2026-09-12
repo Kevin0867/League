@@ -123,6 +123,9 @@ export function ConversationView({
         {isModerator && !canPost && (
           <p className="text-xs text-amber-600">Moderation view — you are not a participant. Deleted messages are shown for review.</p>
         )}
+        {isModerator && canPost && (
+          <p className="text-xs text-amber-600">Admin view — you&apos;re not in this conversation. Replying will add you so both people see your message. Deleted messages are shown for review.</p>
+        )}
       </div>
 
       <div className="card space-y-3">
