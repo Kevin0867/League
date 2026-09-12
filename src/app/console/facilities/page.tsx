@@ -37,10 +37,16 @@ export default async function FacilitiesPage({
   const allFacilities = await prisma.facility.findMany({
     include: {
       _count: { select: { teams: true, sessions: true } },
-      courtBlocks: { orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] },
+      courtBlocks: { orderBy: [{ startTime: "asc" }] },
     },
     orderBy: [{ agreementStatus: "asc" }, { name: "asc" }],
   });
+  // dayOfWeek is stored as "MON".."SUN", so a DB sort orders them alphabetically
+  // (Fri, Mon, Sat…). Re-sort by real weekday order, then start time.
+  const DOW_ORDER: Record<string, number> = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 };
+  for (const f of allFacilities) {
+    f.courtBlocks.sort((a, b) => (DOW_ORDER[a.dayOfWeek] ?? 9) - (DOW_ORDER[b.dayOfWeek] ?? 9) || a.startTime.localeCompare(b.startTime));
+  }
   const facilities = allFacilities.filter((f) => !f.archived);
   const archivedFacilities = allFacilities.filter((f) => f.archived);
 

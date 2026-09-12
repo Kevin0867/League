@@ -1898,6 +1898,16 @@ model PlayerProgressEntry {
   @@index([personId, metric])
 }
 
+/// Marks a pay-page reply (a PAYER_RESPONSE audit entry) as handled, so the
+/// Payments page can show open ones as a live callback list and tuck resolved
+/// ones away. Keyed by the audit entry's id.
+model PayerResponseResolution {
+  id           String   @id @default(cuid())
+  auditLogId   String   @unique
+  resolvedById String?
+  resolvedAt   DateTime @default(now())
+}
+
 /// Remembers who last texted a given phone number, so when that person replies
 /// by SMS we can route the reply back to the sender (a coach/admin) instead of
 /// losing it to the shared team inbox. Keyed by the recipient's phone (last 10
