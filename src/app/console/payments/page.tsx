@@ -319,11 +319,26 @@ export default async function PaymentsPage({
 
   // Replies from families who told us why they can't pay by the deadline (from
   // the pay page). Most recent first — a call list for staff follow-up.
-  const payerResponses = await prisma.auditLog.findMany({
+  const payerResponsesRaw = await prisma.auditLog.findMany({
     where: { action: "PAYER_RESPONSE" },
     orderBy: { createdAt: "desc" },
     take: 30,
-    select: { id: true, summary: true, createdAt: true },
+    select: { id: true, summary: true, createdAt: true, entityId: true, metadata: true },
+  });
+  // Resolve each responder's contact info (from the metadata partyId) so an
+  // admin can call/text/email them straight from this list.
+  const respPartyIds = Array.from(new Set(
+    payerResponsesRaw.map((r) => { try { return (JSON.parse(r.metadata ?? "{}") as { partyId?: string }).partyId ?? null; } catch { return null; } }).filter((x): x is string => !!x),
+  ));
+  const respParties = respPartyIds.length
+    ? await prisma.person.findMany({ where: { id: { in: respPartyIds } }, select: { id: true, email: true, phone: true } })
+    : [];
+  const respPartyById = new Map(respParties.map((p) => [p.id, p]));
+  const payerResponses = payerResponsesRaw.map((r) => {
+    let note = ""; let partyId: string | null = null;
+    try { const m = JSON.parse(r.metadata ?? "{}") as { note?: string; partyId?: string }; note = m.note ?? ""; partyId = m.partyId ?? null; } catch { /* ignore */ }
+    const party = partyId ? respPartyById.get(partyId) : null;
+    return { id: r.id, summary: r.summary ?? "", createdAt: r.createdAt, note, paymentId: r.entityId, email: party?.email ?? null, phone: party?.phone ?? null };
   });
 
   return (
@@ -350,6 +365,32 @@ export default async function PaymentsPage({
           <PrintButton label="Print" />
         </div>
       </div>
+
+      {/* Why families haven't paid — replies captured from the pay page. Kept up
+          top so these never get missed; each is someone to call back. */}
+      {payerResponses.length > 0 && (
+        <div className="card border-l-4 border-amber-400">
+          <h2 className="font-semibold text-slate-900">💬 Replies from the pay page</h2>
+          <p className="text-sm text-slate-500">
+            {payerResponses.length} {payerResponses.length === 1 ? "family" : "families"} wrote in from the payment page — reach out and help them across the line.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {payerResponses.map((r) => (
+              <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="font-medium text-slate-800">{r.summary}</span>
+                  <span className="shrink-0 text-xs text-slate-400">{formatDate(r.createdAt)}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                  {r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">✉ {r.email}</a>}
+                  {r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">📞 {r.phone}</a>}
+                  {r.paymentId && <a href={`/pay/${r.paymentId}`} className="text-brand-700 hover:underline">Open their invoice →</a>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {sp.recok && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -823,24 +864,6 @@ export default async function PaymentsPage({
           />
         )}
       </div>
-
-      {/* Why families haven't paid — replies captured from the pay page. */}
-      {payerResponses.length > 0 && (
-        <div className="card">
-          <h2 className="font-semibold text-slate-900">Why families haven&apos;t paid</h2>
-          <p className="text-sm text-slate-500">
-            {payerResponses.length} {payerResponses.length === 1 ? "reply" : "replies"} from the pay page — call these families back.
-          </p>
-          <ul className="mt-3 divide-y divide-slate-100">
-            {payerResponses.map((r) => (
-              <li key={r.id} className="flex items-start justify-between gap-3 py-2 text-sm">
-                <span className="text-slate-700">{r.summary}</span>
-                <span className="shrink-0 text-xs text-slate-400">{formatDate(r.createdAt)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {/* Coach payout register (§9) */}
       <div className="card">
