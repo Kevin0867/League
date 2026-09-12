@@ -62,15 +62,15 @@ export default async function PortalProgressPage() {
 
                 {(p.serve.count > 0 || p.ret.count > 0 || p.kitchen.count > 0) && (
                   <div className="grid gap-3 sm:grid-cols-3">
-                    {[{ k: "Serve depth", s: p.serve, c: "#0e7490" }, { k: "Return depth", s: p.ret, c: "#10b981" }, { k: "Kitchen line", s: p.kitchen, c: "#f59e0b" }].map(({ k, s, c }) => (
+                    {[{ k: "Serve depth", s: p.serve, c: "#0e7490", unit: "", max: undefined as number | undefined }, { k: "Return depth", s: p.ret, c: "#10b981", unit: "", max: undefined as number | undefined }, { k: "Kitchen line", s: p.kitchen, c: "#f59e0b", unit: "%", max: 100 as number | undefined }].map(({ k, s, c, unit, max }) => (
                       <div key={k}>
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-semibold text-slate-600">{k}</span>
-                          <DeltaBadge delta={s.delta} />
+                          <DeltaBadge delta={s.delta} unit={unit} />
                         </div>
-                        <div className="text-lg font-bold text-slate-800">{s.latest ?? "—"}{s.latest !== null ? <span className="text-xs text-slate-400">%</span> : null}</div>
-                        <Sparkline points={s.series} color={c} />
-                        {s.delta !== null && s.delta > 0 && <div className="text-[11px] text-emerald-600">Up {s.delta}% since week 1 💪</div>}
+                        <div className="text-lg font-bold text-slate-800">{s.latest ?? "—"}{s.latest !== null && unit ? <span className="text-xs text-slate-400">{unit}</span> : null}</div>
+                        <Sparkline points={s.series} color={c} unit={unit} max={max} />
+                        {s.delta !== null && s.delta > 0 && <div className="text-[11px] text-emerald-600">Up {s.delta}{unit} since week 1 💪</div>}
                       </div>
                     ))}
                   </div>
