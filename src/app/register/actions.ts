@@ -89,6 +89,7 @@ async function enrollPlayer(opts: {
   waiverVersion: string;
   locations: string[];
   practiceTimes: string[];
+  practiceDays: string[];
   comments: string;
   // For an adult who is also the contact, reuse that Person instead of creating one.
   existingPersonId?: string;
@@ -173,7 +174,9 @@ async function enrollPlayer(opts: {
       skillLevel: player.skill || null,
       programInterest: programLabel(player.team, player.skill) || opts.preferredDivisionName || null,
       practiceTimePref: opts.practiceTimes.join(", ") || null,
-      schedule: opts.practiceTimes.join(", ") || null,
+      // "schedule" holds the days that work (Mon, Wed…); practiceTimePref holds
+      // the time of day. Together they drive matching to an unlisted team.
+      schedule: opts.practiceDays.join(", ") || opts.practiceTimes.join(", ") || null,
       partnerRequests: opts.comments || null,
       mediaOptOut: opts.mediaOptOut,
       status: opts.waitlisted ? "WAITLISTED" : "SUBMITTED",
@@ -260,6 +263,7 @@ export async function registerAction(
   // Shared preferences.
   const locations = getAll("location").filter(Boolean);
   const practiceTimes = getAll("practiceTime").filter(Boolean);
+  const practiceDays = getAll("practiceDay").filter(Boolean);
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
@@ -359,6 +363,7 @@ export async function registerAction(
       waiverVersion,
       locations,
       practiceTimes,
+      practiceDays,
       comments,
       existingPersonId: primaryId,
       email: email || undefined,
@@ -406,6 +411,7 @@ export async function registerAction(
         waiverVersion,
         locations,
         practiceTimes,
+        practiceDays,
         comments,
         guardianId: primaryId,
         // Bring the parent/guardian's contact onto the minor's own record: their
@@ -464,6 +470,7 @@ export async function registerAction(
       players: enrolled,
       locations,
       practiceTimes,
+      practiceDays,
       waitlisted,
     };
     try {
