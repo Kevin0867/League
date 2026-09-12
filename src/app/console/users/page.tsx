@@ -9,6 +9,8 @@ import { requireAdmin } from "@/lib/rbac";
 import { AccessRolesProvider, RoleCell } from "./AccessRoles";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { familyInviteCandidates } from "@/lib/domain/familyInvites";
+import { TextResetLinkButton } from "@/components/TextResetLinkButton";
+import { RESET_STATUS } from "@/lib/domain/resetStatus";
 
 // De-duplicated, human labels for a role set (legacy COO/CEO/DIRECTOR all show
 // as "Admin", so collapse duplicates).
@@ -85,6 +87,7 @@ export default async function UsersPage({
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OKS[sp.ok] ?? "Done."}</p>
       ) : null}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
+      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
 
       {/* A freshly generated set-password link, shown once for the admin to copy
           and hand off (text, in person) when email delivery isn't reliable. */}
@@ -206,6 +209,9 @@ export default async function UsersPage({
                               <input type="hidden" name="userId" value={u.id} />
                               <button className="text-xs font-semibold text-brand-700 hover:underline" title="Email a fresh set-password link">Resend invite</button>
                             </form>
+                          )}
+                          {!isSelf && (
+                            <TextResetLinkButton userId={u.id} ticket={ticket} returnTo="/console/users" />
                           )}
                           {/* Can't disable your own login out from under yourself. */}
                           {!isSelf && (
