@@ -57,7 +57,7 @@ export default async function ServeReturnTrackerPage({
   return (
     <div className="space-y-5">
       <Link href="/console/forms" className="btn-back">← All forms</Link>
-      <PageHeader title="Serve & Return Progress Tracker" subtitle="Use the same target area each week. Record a percentage (successful deep balls ÷ attempts) for Serve and Return. Saved per player so you can watch the trend across the season." />
+      <PageHeader title="Serve & Return Progress Tracker" subtitle="Use the same drill each week. Record a number for Serve and for Return (e.g. successful deep balls out of the set of attempts). Saved per player so you can watch the trend across the season." />
 
       {sp.ok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
       {sp.err && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{sp.err === "auth" ? "You can only edit your own teams." : "Something went wrong — try again."}</div>}
@@ -111,10 +111,10 @@ export default async function ServeReturnTrackerPage({
                     {WEEKS.map((wk) => (
                       <Fragment key={wk}>
                         <td className="border-l border-slate-200 px-1 py-1">
-                          <input type="number" min={0} max={100} name={`sr_${m.personId}_${wk}_SERVE`} defaultValue={cell(m.personId, wk, SR_SERVE)} className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-sm" placeholder="%" />
+                          <input type="number" min={0} step="any" name={`sr_${m.personId}_${wk}_SERVE`} defaultValue={cell(m.personId, wk, SR_SERVE)} className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-sm" placeholder="#" />
                         </td>
                         <td className="px-1 py-1">
-                          <input type="number" min={0} max={100} name={`sr_${m.personId}_${wk}_RETURN`} defaultValue={cell(m.personId, wk, SR_RETURN)} className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-sm" placeholder="%" />
+                          <input type="number" min={0} step="any" name={`sr_${m.personId}_${wk}_RETURN`} defaultValue={cell(m.personId, wk, SR_RETURN)} className="w-14 rounded border border-slate-200 px-1 py-0.5 text-center text-sm" placeholder="#" />
                         </td>
                       </Fragment>
                     ))}
@@ -128,7 +128,7 @@ export default async function ServeReturnTrackerPage({
           </div>
 
           <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-400">Enter a percentage 0–100 for each week. Blank weeks are left empty. S/R = Serve % / Return %.</p>
+            <p className="text-xs text-slate-400">Enter a number for each week (whatever count or score you track). Blank weeks are left empty.</p>
             <button className="btn-primary">Save tracker</button>
           </div>
         </form>

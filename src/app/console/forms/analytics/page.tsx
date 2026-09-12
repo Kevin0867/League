@@ -81,10 +81,10 @@ export default async function AnalyticsPage({
           <section className="space-y-3">
             <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">{team?.name} — team overview</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <StatTile label="Avg serve" value={analytics.team.serveAvg} unit="%" tone="brand" />
-              <StatTile label="Avg return" value={analytics.team.returnAvg} unit="%" tone="emerald" />
+              <StatTile label="Avg serve" value={analytics.team.serveAvg} tone="brand" />
+              <StatTile label="Avg return" value={analytics.team.returnAvg} tone="emerald" />
               <StatTile label="Avg kitchen" value={analytics.team.kitchenAvg} unit="%" tone="amber" />
-              <StatTile label="Most improved" value={analytics.team.mostImproved?.name ?? null} sub={analytics.team.mostImproved ? `+${analytics.team.mostImproved.delta}% avg` : undefined} tone="emerald" />
+              <StatTile label="Most improved" value={analytics.team.mostImproved?.name ?? null} sub={analytics.team.mostImproved ? `+${analytics.team.mostImproved.delta} avg gain` : undefined} tone="emerald" />
               <StatTile label="Homework done" value={analytics.team.homework?.rate ?? null} unit="%" sub={analytics.team.homework ? `${analytics.team.homework.completed}/${analytics.team.homework.assigned} weeks` : undefined} tone="slate" />
             </div>
             {analytics.team.devSkillAvg.some((s) => s.value !== null) && (
@@ -112,14 +112,14 @@ export default async function AnalyticsPage({
 
                   {(p.serve.count > 0 || p.ret.count > 0 || p.kitchen.count > 0) && (
                     <div className="grid gap-3 sm:grid-cols-3">
-                      {[{ k: "Serve", s: p.serve, c: "#0e7490" }, { k: "Return", s: p.ret, c: "#10b981" }, { k: "Kitchen", s: p.kitchen, c: "#f59e0b" }].map(({ k, s, c }) => (
+                      {[{ k: "Serve", s: p.serve, c: "#0e7490", unit: "", max: undefined as number | undefined }, { k: "Return", s: p.ret, c: "#10b981", unit: "", max: undefined as number | undefined }, { k: "Kitchen", s: p.kitchen, c: "#f59e0b", unit: "%", max: 100 as number | undefined }].map(({ k, s, c, unit, max }) => (
                         <div key={k}>
                           <div className="flex items-center justify-between text-xs">
                             <span className="font-semibold text-slate-600">{k}</span>
-                            <DeltaBadge delta={s.delta} />
+                            <DeltaBadge delta={s.delta} unit={unit} />
                           </div>
-                          <div className="text-lg font-bold text-slate-800">{s.latest ?? "—"}{s.latest !== null ? <span className="text-xs text-slate-400">%</span> : null}</div>
-                          <Sparkline points={s.series} color={c} />
+                          <div className="text-lg font-bold text-slate-800">{s.latest ?? "—"}{s.latest !== null && unit ? <span className="text-xs text-slate-400">{unit}</span> : null}</div>
+                          <Sparkline points={s.series} color={c} unit={unit} max={max} />
                         </div>
                       ))}
                     </div>

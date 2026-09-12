@@ -4,17 +4,23 @@ import type { WeekPoint, DevRating } from "@/lib/domain/formsAnalytics";
 // Server components — no client JS. Every value also appears as text so the
 // charts stay accessible and legible in a printed / screenshotted report.
 
-export function Sparkline({ points, color = "#0e7490", max = 100, unit = "%" }: {
+export function Sparkline({ points, color = "#0e7490", max, unit = "" }: {
   points: WeekPoint[];
   color?: string;
+  /** Fixed top of the scale (e.g. 100 for a percentage). Omit to auto-scale to
+   *  the data — right for plain-number metrics with no fixed range. */
   max?: number;
   unit?: string;
 }) {
   const w = 220, h = 56, pad = 6;
   const n = points.length;
-  const x = (i: number) => pad + (n <= 1 ? 0 : (i * (w - pad * 2)) / (n - 1));
-  const y = (v: number) => h - pad - (Math.max(0, Math.min(max, v)) / max) * (h - pad * 2);
   const recorded = points.map((p, i) => ({ i, v: p.value })).filter((p) => p.v !== null) as { i: number; v: number }[];
+  // Scale to the fixed max when given, else to the data's own peak (with a
+  // little headroom) so a plain-number series fills the chart nicely.
+  const dataMax = recorded.length ? Math.max(...recorded.map((p) => p.v)) : 1;
+  const scaleMax = max ?? Math.max(1, dataMax * 1.15);
+  const x = (i: number) => pad + (n <= 1 ? 0 : (i * (w - pad * 2)) / (n - 1));
+  const y = (v: number) => h - pad - (Math.max(0, Math.min(scaleMax, v)) / scaleMax) * (h - pad * 2);
   if (recorded.length === 0) {
     return <div className="flex h-14 items-center text-xs text-slate-400">No data yet</div>;
   }
