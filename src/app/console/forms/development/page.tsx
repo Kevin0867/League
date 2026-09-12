@@ -3,7 +3,7 @@ import { requireStaff, isAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
-import { DEV_CATEGORIES, DEV_RATINGS, DEV_NOTE } from "@/lib/domain/coachingForms";
+import { DEV_CATEGORIES, DEV_RATINGS, DEV_NOTE, PROGRESS_WEEKS } from "@/lib/domain/coachingForms";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Player Development Tracker" };
@@ -29,6 +29,8 @@ export default async function DevelopmentTrackerPage({
       ? await prisma.team.findMany({ where: { season: { active: true }, OR: [{ coachId: myCoach.id }, { assistantCoaches: { some: { coachId: myCoach.id } } }] }, select: { id: true, name: true }, orderBy: { name: "asc" } })
       : [];
   const selectedId = sp.team && teamOptions.some((t) => t.id === sp.team) ? sp.team : "";
+  const wkParsed = parseInt(sp.week ?? "1", 10);
+  const week = Number.isFinite(wkParsed) && wkParsed >= 1 && wkParsed <= PROGRESS_WEEKS ? wkParsed : 1;
 
   const members = selectedId
     ? await prisma.teamMember.findMany({
@@ -38,7 +40,7 @@ export default async function DevelopmentTrackerPage({
       })
     : [];
   const entries = selectedId
-    ? await prisma.playerProgressEntry.findMany({ where: { teamId: selectedId, week: 0, metric: { in: [...DEV_KEYS, DEV_NOTE] } } })
+    ? await prisma.playerProgressEntry.findMany({ where: { teamId: selectedId, week, metric: { in: [...DEV_KEYS, DEV_NOTE] } } })
     : [];
   const rating = new Map<string, string>(); // pid:metric -> value
   const notes = new Map<string, string>();
@@ -50,9 +52,9 @@ export default async function DevelopmentTrackerPage({
   return (
     <div className="space-y-5">
       <Link href="/console/forms" className="btn-back">← All forms</Link>
-      <PageHeader title="Player Development Tracker" subtitle="Rate each player across the core skills — Needs work, Improving, or Strength. Saved so you can see how the team is developing." />
+      <PageHeader title="Player Development Tracker" subtitle="Rate each player across the core skills — Needs work, Improving, or Strength — each week. Rating weekly lets you see each skill grow across the season." />
 
-      {sp.ok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
+      {sp.ok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved week {week}.</div>}
       {sp.err && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">{sp.err === "auth" ? "You can only edit your own teams." : "Something went wrong — try again."}</div>}
 
       <form method="GET" action="/console/forms/development" className="card flex flex-wrap items-end gap-3">
@@ -61,6 +63,12 @@ export default async function DevelopmentTrackerPage({
           <select name="team" defaultValue={selectedId} className="input">
             <option value="">Choose a team…</option>
             {teamOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Week</label>
+          <select name="week" defaultValue={String(week)} className="input">
+            {Array.from({ length: PROGRESS_WEEKS }, (_, i) => i + 1).map((w) => <option key={w} value={w}>Week {w}</option>)}
           </select>
         </div>
         <button className="btn-secondary text-sm">Open</button>
@@ -76,6 +84,7 @@ export default async function DevelopmentTrackerPage({
           <input type="hidden" name="op" value="saveDevelopment" />
           <input type="hidden" name="formSlug" value="development" />
           <input type="hidden" name="teamId" value={selectedId} />
+          <input type="hidden" name="week" value={week} />
           <input type="hidden" name="personIds" value={members.map((m) => m.personId).join(",")} />
 
           <div className="card overflow-x-auto p-0">

@@ -15,14 +15,24 @@ import {
 
 export type WeekPoint = { week: number; value: number | null };
 
+export type WowPoint = { week: number; value: number; deltaPrev: number | null };
+
 export type TrendStat = {
   series: WeekPoint[];
   first: number | null;   // earliest recorded week
   latest: number | null;  // most recent recorded week
-  delta: number | null;   // latest − first (improvement)
+  firstWeek: number | null;
+  latestWeek: number | null;
+  delta: number | null;   // latest − first (total growth)
+  pctChange: number | null; // % growth from first to latest
   best: number | null;    // best week
   avg: number | null;     // mean of recorded weeks
   count: number;          // recorded weeks
+  /** Week-over-week: each recorded week and its change from the prior one. */
+  wow: WowPoint[];
+  avgPerWeek: number | null; // mean week-over-week change
+  improvedWeeks: number;     // # of weeks that rose vs the prior
+  trendDir: "up" | "down" | "flat" | null;
 };
 
 export type DevRating = { key: string; label: string; value: number | null };
@@ -40,7 +50,15 @@ export type PlayerAnalytics = {
   serve: TrendStat;
   ret: TrendStat;
   kitchen: TrendStat;
-  development: { ratings: DevRating[]; avg: number | null; strengths: string[]; focus: string[] };
+  development: {
+    ratings: DevRating[];
+    avg: number | null;
+    strengths: string[];
+    focus: string[];
+    /** Per-skill week-over-week progression (weeks 1..N), for the shots view. */
+    skills: { key: string; label: string; trend: TrendStat; latest: number | null }[];
+    hasWeekly: boolean;
+  };
   ladder: LadderStat | null;
   hasData: boolean;
 };
@@ -53,6 +71,10 @@ export type TeamAnalytics = {
     kitchenAvg: number | null;
     devSkillAvg: { key: string; label: string; value: number | null }[];
     mostImproved: { personId: string; name: string; delta: number } | null;
+    /** Team average per week (index 0 = week 1), for a season trend line. */
+    weekly: { serve: (number | null)[]; ret: (number | null)[]; kitchen: (number | null)[] };
+    /** Top week-over-week gainers per metric, most growth first. */
+    movers: { personId: string; name: string; metric: string; delta: number; pctChange: number | null }[];
     homework: { assigned: number; completed: number; rate: number | null } | null;
     playerCount: number;
     withData: number;
@@ -65,16 +87,29 @@ const round = (n: number, d = 0) => {
 };
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
-function trend(byWeek: Map<number, number | null>): TrendStat {
+function trend(byWeek: Map<number, number | null>, weeks = PROGRESS_WEEKS): TrendStat {
   const series: WeekPoint[] = [];
-  for (let w = 1; w <= PROGRESS_WEEKS; w++) series.push({ week: w, value: byWeek.get(w) ?? null });
+  for (let w = 1; w <= weeks; w++) series.push({ week: w, value: byWeek.get(w) ?? null });
   const recorded = series.filter((p) => p.value !== null) as { week: number; value: number }[];
   const first = recorded.length ? recorded[0].value : null;
   const latest = recorded.length ? recorded[recorded.length - 1].value : null;
+  const firstWeek = recorded.length ? recorded[0].week : null;
+  const latestWeek = recorded.length ? recorded[recorded.length - 1].week : null;
   const best = recorded.length ? Math.max(...recorded.map((p) => p.value)) : null;
-  const avg = recorded.length ? round(mean(recorded.map((p) => p.value))!, 0) : null;
-  const delta = first !== null && latest !== null ? round(latest - first, 0) : null;
-  return { series, first, latest, delta, best, avg, count: recorded.length };
+  const avg = recorded.length ? round(mean(recorded.map((p) => p.value))!, 1) : null;
+  const delta = first !== null && latest !== null ? round(latest - first, 1) : null;
+  const pctChange = first !== null && latest !== null && first !== 0 ? round(((latest - first) / Math.abs(first)) * 100, 0) : null;
+  // Week-over-week: step between consecutive RECORDED weeks.
+  const wow: WowPoint[] = recorded.map((p, i) => ({
+    week: p.week,
+    value: p.value,
+    deltaPrev: i === 0 ? null : round(p.value - recorded[i - 1].value, 1),
+  }));
+  const steps = wow.slice(1).map((w) => w.deltaPrev!) as number[];
+  const avgPerWeek = steps.length ? round(mean(steps)!, 1) : null;
+  const improvedWeeks = steps.filter((s) => s > 0).length;
+  const trendDir: TrendStat["trendDir"] = delta === null ? null : delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+  return { series, first, latest, firstWeek, latestWeek, delta, pctChange, best, avg, count: recorded.length, wow, avgPerWeek, improvedWeeks, trendDir };
 }
 
 export async function buildTeamAnalytics(
@@ -103,13 +138,28 @@ export async function buildTeamAnalytics(
   }
   const weekMap = (personId: string, metric: string) => idx.get(personId)?.get(metric) ?? new Map<number, number | null>();
   const snap = (personId: string, metric: string): number | null => idx.get(personId)?.get(metric)?.get(0) ?? null;
+  // Latest recorded reading for a metric across weeks 0..N — so a development
+  // rating shows whether it's captured once (week 0 baseline) or weekly.
+  const snapLatest = (personId: string, metric: string): number | null => {
+    const wm = idx.get(personId)?.get(metric);
+    if (!wm) return null;
+    for (let w = PROGRESS_WEEKS; w >= 0; w--) { const v = wm.get(w); if (v !== null && v !== undefined) return v; }
+    return null;
+  };
 
   const players: PlayerAnalytics[] = members.map((m) => {
     const serve = trend(weekMap(m.personId, SR_SERVE));
     const ret = trend(weekMap(m.personId, SR_RETURN));
     const kitchen = trend(weekMap(m.personId, KA_METRIC));
 
-    const ratings: DevRating[] = DEV_CATEGORIES.map((c) => ({ key: c.key, label: c.label, value: snap(m.personId, c.key) }));
+    // Development skills — a weekly rating (1–3) per skill, so the "shots"
+    // progress week over week. Snapshot uses the latest recorded week.
+    const skills = DEV_CATEGORIES.map((c) => {
+      const t = trend(weekMap(m.personId, c.key));
+      return { key: c.key, label: c.label, trend: t, latest: snapLatest(m.personId, c.key) };
+    });
+    const hasWeekly = skills.some((s) => s.trend.count >= 2);
+    const ratings: DevRating[] = skills.map((s) => ({ key: s.key, label: s.label, value: s.latest }));
     const rated = ratings.filter((r) => r.value !== null) as { key: string; label: string; value: number }[];
     const devAvg = rated.length ? round(mean(rated.map((r) => r.value))!, 1) : null;
     const strengths = rated.filter((r) => r.value >= 3).map((r) => r.label);
@@ -133,7 +183,7 @@ export async function buildTeamAnalytics(
       personId: m.personId,
       name: `${m.person.firstName} ${m.person.lastName}`,
       serve, ret, kitchen,
-      development: { ratings, avg: devAvg, strengths, focus },
+      development: { ratings, avg: devAvg, strengths, focus, skills, hasWeekly },
       ladder, hasData,
     };
   });
@@ -158,6 +208,26 @@ export async function buildTeamAnalytics(
     if (d > 0 && (!mostImproved || d > mostImproved.delta)) mostImproved = { personId: p.personId, name: p.name, delta: d };
   }
 
+  // Team average per week (mean across players who recorded that week).
+  const weekAvg = (pick: (p: PlayerAnalytics) => TrendStat): (number | null)[] =>
+    Array.from({ length: PROGRESS_WEEKS }, (_, i) => {
+      const vals = players.map((p) => pick(p).series[i]?.value ?? null).filter((v): v is number => v !== null);
+      return vals.length ? round(mean(vals)!, 1) : null;
+    });
+  const weekly = { serve: weekAvg((p) => p.serve), ret: weekAvg((p) => p.ret), kitchen: weekAvg((p) => p.kitchen) };
+
+  // Biggest week-over-week gainers across the weekly metrics.
+  const movers = players
+    .flatMap((p) => [
+      { personId: p.personId, name: p.name, metric: "Serve", t: p.serve },
+      { personId: p.personId, name: p.name, metric: "Return", t: p.ret },
+      { personId: p.personId, name: p.name, metric: "Kitchen", t: p.kitchen },
+    ])
+    .filter((x) => x.t.delta !== null && x.t.delta > 0 && x.t.count >= 2)
+    .map((x) => ({ personId: x.personId, name: x.name, metric: x.metric, delta: x.t.delta!, pctChange: x.t.pctChange }))
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 5);
+
   let homework: TeamAnalytics["team"]["homework"] = null;
   if (doc?.data && typeof doc.data === "object" && "weeks" in doc.data) {
     const weeks = (doc.data as { weeks?: { assignment?: string; completed?: boolean }[] }).weeks ?? [];
@@ -169,7 +239,7 @@ export async function buildTeamAnalytics(
   return {
     players,
     team: {
-      serveAvg, returnAvg, kitchenAvg, devSkillAvg, mostImproved, homework,
+      serveAvg, returnAvg, kitchenAvg, devSkillAvg, mostImproved, weekly, movers, homework,
       playerCount: players.length,
       withData: players.filter((p) => p.hasData).length,
     },

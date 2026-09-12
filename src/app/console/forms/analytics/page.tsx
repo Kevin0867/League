@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { formTeamOptions } from "@/lib/domain/formsAccess";
 import { buildTeamAnalytics } from "@/lib/domain/formsAnalytics";
-import { Sparkline, SkillBars, StatTile, DeltaBadge } from "@/components/ProgressCharts";
+import { Sparkline, SkillBars, StatTile, DeltaBadge, GrowthSummary, WowTable } from "@/components/ProgressCharts";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Progress Analytics" };
@@ -102,6 +102,44 @@ export default async function AnalyticsPage({
             )}
           </section>
 
+          {/* Team week-over-week */}
+          {(analytics.team.weekly.serve.some((v) => v !== null) || analytics.team.weekly.ret.some((v) => v !== null) || analytics.team.weekly.kitchen.some((v) => v !== null) || analytics.team.movers.length > 0) && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">Team — week over week</h2>
+              <div className="card overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-wide text-slate-400">
+                      <th className="py-1 pr-3 text-left">Team average</th>
+                      {analytics.team.weekly.serve.map((_, i) => <th key={i} className="px-2 py-1 text-center">Wk {i + 1}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[{ k: "Serve", row: analytics.team.weekly.serve, u: "" }, { k: "Return", row: analytics.team.weekly.ret, u: "" }, { k: "Kitchen", row: analytics.team.weekly.kitchen, u: "%" }].filter(({ row }) => row.some((v) => v !== null)).map(({ k, row, u }) => (
+                      <tr key={k}>
+                        <td className="py-1 pr-3 font-medium text-slate-700">{k}</td>
+                        {row.map((v, i) => <td key={i} className="px-2 py-1 text-center text-slate-700">{v === null ? <span className="text-slate-300">—</span> : `${v}${u}`}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {analytics.team.movers.length > 0 && (
+                <div className="card">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Biggest movers</div>
+                  <ul className="space-y-1 text-sm">
+                    {analytics.team.movers.map((m, i) => (
+                      <li key={`${m.personId}-${m.metric}-${i}`} className="flex items-center justify-between">
+                        <span className="text-slate-700"><span className="font-medium">{m.name}</span> · {m.metric}</span>
+                        <span className="font-semibold text-emerald-600">+{m.delta}{m.metric === "Kitchen" ? "%" : ""}{m.pctChange !== null ? ` (+${m.pctChange}%)` : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Per-player */}
           <section className="space-y-3">
             <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">By player</h2>
@@ -125,10 +163,37 @@ export default async function AnalyticsPage({
                     </div>
                   )}
 
+                  {/* Week-over-week progression + growth stats for each shot. */}
+                  {[{ k: "Serve", s: p.serve, unit: "" }, { k: "Return", s: p.ret, unit: "" }, { k: "Kitchen", s: p.kitchen, unit: "%" }].filter(({ s }) => s.count >= 2).length > 0 && (
+                    <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Week over week</div>
+                      {[{ k: "Serve", s: p.serve, unit: "" }, { k: "Return", s: p.ret, unit: "" }, { k: "Kitchen", s: p.kitchen, unit: "%" }].filter(({ s }) => s.count >= 2).map(({ k, s, unit }) => (
+                        <div key={k} className="space-y-1">
+                          <div className="text-xs font-semibold text-slate-700">{k}</div>
+                          <GrowthSummary stat={s} unit={unit} />
+                          <WowTable stat={s} unit={unit} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {p.development.ratings.some((r) => r.value !== null) && (
                     <div>
-                      <div className="mb-1 text-xs font-semibold text-slate-500">Skill development</div>
+                      <div className="mb-1 text-xs font-semibold text-slate-500">Skill development{p.development.hasWeekly ? " — latest" : ""}</div>
                       <SkillBars ratings={p.development.ratings} />
+                    </div>
+                  )}
+
+                  {/* Per-skill week-over-week when development is rated weekly. */}
+                  {p.development.hasWeekly && (
+                    <div className="space-y-1 rounded-lg bg-slate-50 p-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Skill growth (1–3)</div>
+                      {p.development.skills.filter((s) => s.trend.count >= 2).map((s) => (
+                        <div key={s.key} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="w-28 shrink-0 text-slate-600">{s.label}</span>
+                          <span className="flex-1"><GrowthSummary stat={s.trend} /></span>
+                        </div>
+                      ))}
                     </div>
                   )}
 
