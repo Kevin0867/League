@@ -87,7 +87,7 @@ export async function notifyOtherParticipants(conversationId: string, senderId: 
           undefined,
           undefined,
           // Route email replies to the sender (the coach), not the shared inbox.
-          { replyTo: sender?.email ?? null },
+          { replyTo: sender?.email ? [sender.email, "team@purepickleball.com"] : null },
         );
       }
       // Text — every message, whenever we have a number on file.
