@@ -65,9 +65,19 @@ export default async function PortalHome({
       })
     : [];
 
+  // Match a fee to this household whether they PAID it (partyId) or are COVERED
+  // by it (coveredPersonIds) — a minor's fee is billed to a guardian, and after
+  // an account merge/cleanup the payer may be a different person than the one
+  // logging in. This mirrors how the console decides "paid", so the two agree.
   const payments = peopleIds.length
     ? await prisma.payment.findMany({
-        where: { partyId: { in: peopleIds }, direction: "IN" },
+        where: {
+          direction: "IN",
+          OR: [
+            { partyId: { in: peopleIds } },
+            ...peopleIds.map((id) => ({ coveredPersonIds: { array_contains: id } })),
+          ],
+        },
         orderBy: { createdAt: "desc" },
       })
     : [];
