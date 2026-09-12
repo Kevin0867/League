@@ -58,7 +58,7 @@ export default async function LoginPage({
         </div>
         <p className="mt-4 text-center text-sm text-slate-500">
           New to PURE?{" "}
-          <Link href="/register" className="font-semibold text-brand-700">
+          <Link href="/open-spots" className="font-semibold text-brand-700">
             Register for the season
           </Link>
         </p>

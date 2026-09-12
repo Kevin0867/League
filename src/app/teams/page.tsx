@@ -107,7 +107,7 @@ export default async function TeamsPage() {
               {openTeams.map((t) => (
                 <Link
                   key={t.id}
-                  href={`/register?team=${t.id}`}
+                  href="/open-spots"
                   className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm transition hover:border-brand-400 hover:text-brand-800"
                 >
                   <span className="font-semibold">{t.name}</span>

@@ -337,7 +337,7 @@ export default async function PortalHome({
           {registrations.length === 0 && (
             <div className="card text-sm text-slate-500">
               No registrations yet.{" "}
-              <Link href="/register" className="font-medium text-brand-700">Register for the season →</Link>
+              <Link href="/open-spots" className="font-medium text-brand-700">Register for the season →</Link>
             </div>
           )}
           {registrations.map((r) => (

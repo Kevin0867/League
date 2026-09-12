@@ -47,7 +47,7 @@ export default async function LocationsPage() {
                 {items.map((it) => (
                   <Link
                     key={it.id}
-                    href={`/register?facility=${encodeURIComponent(it.id)}`}
+                    href="/open-spots"
                     className="group card flex flex-col transition-colors hover:border-brand-300 hover:ring-brand-200"
                   >
                     <div className="flex items-center justify-between gap-2">
