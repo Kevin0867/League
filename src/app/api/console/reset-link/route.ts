@@ -21,6 +21,23 @@ export async function POST(req: Request) {
   const actor = await actorFromForm(fd);
   if (!actor || !isAdmin(actor.roles)) return back("reset=auth");
 
+  // Bulk: send portal access to every registered player who can't log in yet
+  // (in the active season). Only those with an email are sent (a login needs one).
+  if (String(fd.get("op") ?? "") === "sendAllNoAccess") {
+    const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, orderBy: { startDate: "desc" }, select: { id: true } })
+      ?? await prisma.season.findFirst({ where: { active: true }, orderBy: { startDate: "desc" }, select: { id: true } });
+    if (!season) return back("reset=notarget");
+    const { playersWithoutPortalAccess } = await import("@/lib/domain/portalAccess");
+    const players = (await playersWithoutPortalAccess(season.id)).filter((p) => p.hasEmail);
+    let sent = 0;
+    for (const p of players) {
+      const res = await sendResetLinkForPerson(p.personId);
+      if (res.ok) sent++;
+    }
+    await audit({ actorId: actor.userId, entityType: "Season", entityId: season.id, action: "portal.bulkAccess", summary: `Sent portal access to ${sent} player(s) without a login` });
+    return back(`reset=bulk&n=${sent}`);
+  }
+
   // Accept a personId directly, or a userId (resolve to its person).
   let personId = String(fd.get("personId") ?? "").trim();
   const userId = String(fd.get("userId") ?? "").trim();
