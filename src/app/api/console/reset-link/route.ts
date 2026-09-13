@@ -32,6 +32,6 @@ export async function POST(req: Request) {
 
   const res = await sendResetLinkForPerson(personId);
   if (!res.ok) return back(`reset=${res.reason}`);
-  await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "user.resetLinkSent", summary: `Sent password reset link to ${res.toName}${res.viaGuardian ? " (guardian)" : ""}` });
-  return back(`reset=sent&resetVia=${res.viaGuardian ? "guardian" : "self"}`);
+  await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: res.created ? "user.inviteSent" : "user.resetLinkSent", summary: `${res.created ? "Created login + sent set-password link" : "Sent password reset link"} to ${res.toName}${res.viaGuardian ? " (guardian)" : ""}` });
+  return back(`reset=sent&resetVia=${res.viaGuardian ? "guardian" : "self"}${res.created ? "&resetNew=1" : ""}`);
 }

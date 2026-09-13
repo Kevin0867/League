@@ -1,20 +1,35 @@
 import "server-only";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
+import { hashPassword } from "@/lib/auth";
 import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
 
 // Send a "set / reset your password" link to the right person for a given
-// player. For a minor with no contact info of their own, the link goes to the
-// parent/guardian — whose login actually manages the portal — by BOTH email and
-// text. Admin-initiated, so the link is valid for 7 days (like an invite).
+// player — and CREATE their portal login first if they don't have one yet, so
+// "Text reset link" always gives them a way in. For a minor with no contact of
+// their own, the login/link belongs to the parent/guardian. Admin-initiated, so
+// the link is valid for 7 days (like an invite). Sent by BOTH email and text.
 
 export type ResetSendResult =
-  | { ok: true; toName: string; viaGuardian: boolean; emailed: number; texted: boolean }
-  | { ok: false; reason: "not-found" | "no-account" | "inactive" | "no-contact" };
+  | { ok: true; toName: string; viaGuardian: boolean; created: boolean; emailed: number; texted: boolean }
+  | { ok: false; reason: "not-found" | "inactive" | "no-email" | "no-contact" };
 
 type Contact = { email: string | null; email2: string | null; email3: string | null; phone: string | null };
 const emailsOf = (c: Contact) => Array.from(new Set([c.email, c.email2, c.email3].map((e) => (e ?? "").trim()).filter(Boolean)));
+
+/** Reuse the login for this email, or create one (active) for the person. */
+async function ensureLogin(email: string, role: "PLAYER" | "PARENT", personId: string): Promise<string> {
+  const norm = email.toLowerCase().trim();
+  const existing = await prisma.user.findUnique({ where: { email: norm }, select: { id: true } });
+  if (existing) return existing.id;
+  const created = await prisma.user.create({
+    data: { email: norm, passwordHash: await hashPassword(crypto.randomBytes(24).toString("hex")), role, personId, active: true },
+    select: { id: true },
+  });
+  return created.id;
+}
 
 export async function sendResetLinkForPerson(personId: string): Promise<ResetSendResult> {
   const person = await prisma.person.findUnique({
@@ -22,6 +37,7 @@ export async function sendResetLinkForPerson(personId: string): Promise<ResetSen
     select: {
       id: true, firstName: true, lastName: true,
       email: true, email2: true, email3: true, phone: true,
+      _count: { select: { dependents: true } },
       user: { select: { id: true, active: true } },
       guardian: {
         select: {
@@ -33,38 +49,43 @@ export async function sendResetLinkForPerson(personId: string): Promise<ResetSen
   });
   if (!person) return { ok: false, reason: "not-found" };
 
-  const ownHasContact = emailsOf(person).length > 0 || !!person.phone;
+  const personEmails = emailsOf(person);
+  const guardian = person.guardian;
+  const guardianEmails = guardian ? emailsOf(guardian) : [];
 
-  // Resolve the account that logs in, and who receives the link.
   let accountUserId: string | null = null;
   let accountActive = true;
   let recipient: (Contact & { name: string }) | null = null;
   let viaGuardian = false;
+  let created = false;
 
-  if (person.user && ownHasContact) {
+  if (person.user) {
     accountUserId = person.user.id;
     accountActive = person.user.active;
     recipient = { ...person, name: `${person.firstName} ${person.lastName}`.trim() };
-  } else if (person.guardian?.user) {
-    // Minor / no own contact → the guardian holds the login and gets the link.
-    accountUserId = person.guardian.user.id;
-    accountActive = person.guardian.user.active;
-    recipient = {
-      email: person.guardian.email, email2: person.guardian.email2, email3: person.guardian.email3, phone: person.guardian.phone,
-      name: `${person.guardian.firstName} ${person.guardian.lastName}`.trim(),
-    };
+  } else if (guardian?.user) {
+    accountUserId = guardian.user.id;
+    accountActive = guardian.user.active;
+    recipient = { email: guardian.email, email2: guardian.email2, email3: guardian.email3, phone: guardian.phone, name: `${guardian.firstName} ${guardian.lastName}`.trim() };
     viaGuardian = true;
-  } else if (person.user) {
-    // Own login but no contact and no guardian — reset it, though we may have
-    // nowhere to send (caught below).
-    accountUserId = person.user.id;
-    accountActive = person.user.active;
+  } else if (personEmails.length) {
+    // No login yet, but they have an email → create their own portal login.
+    accountUserId = await ensureLogin(personEmails[0], person._count.dependents > 0 ? "PARENT" : "PLAYER", person.id);
     recipient = { ...person, name: `${person.firstName} ${person.lastName}`.trim() };
+    created = true;
+  } else if (guardian && guardianEmails.length) {
+    // Minor with no email of their own → create/point to the guardian's login.
+    accountUserId = await ensureLogin(guardianEmails[0], "PARENT", guardian.id);
+    recipient = { email: guardian.email, email2: guardian.email2, email3: guardian.email3, phone: guardian.phone, name: `${guardian.firstName} ${guardian.lastName}`.trim() };
+    viaGuardian = true;
+    created = true;
+  } else {
+    // No email anywhere to base a login on.
+    return { ok: false, reason: "no-email" };
   }
 
-  if (!accountUserId) return { ok: false, reason: "no-account" };
   if (!accountActive) return { ok: false, reason: "inactive" };
-  if (!recipient) return { ok: false, reason: "no-contact" };
+  if (!recipient) return { ok: false, reason: "no-email" };
 
   const emails = emailsOf(recipient);
   const phone = recipient.phone;
@@ -78,16 +99,16 @@ export async function sendResetLinkForPerson(personId: string): Promise<ResetSen
     await sendEmail(
       emails,
       "Set your PURE Academy password",
-      `Here's your link to set a new PURE Academy password${forWhom} (expires in 7 days):\n${link}\n\n` +
+      `Here's your link to set your PURE Academy portal password${forWhom} (expires in 7 days):\n${link}\n\n` +
         `After you set it you'll be signed straight into the portal.\n\n` +
-        `If you didn't request this, you can ignore this email.`,
+        `If you didn't expect this, you can ignore this email.`,
     ).catch(() => {});
   }
   if (phone) {
     await sendSms(
       phone,
-      `Set your PURE Academy password${forWhom} (expires in 7 days): ${link} — you'll be signed into the portal after.`,
+      `Set your PURE Academy portal password${forWhom} (expires in 7 days): ${link} — you'll be signed into the portal after.`,
     ).catch(() => {});
   }
-  return { ok: true, toName: recipient.name, viaGuardian, emailed: emails.length, texted: !!phone };
+  return { ok: true, toName: recipient.name, viaGuardian, created, emailed: emails.length, texted: !!phone };
 }

@@ -172,7 +172,7 @@ export default async function RegistrationDetail({
         <TextResetLinkButton personId={p.id} ticket={ticket} returnTo={`/console/registrations/${reg.id}`} label="Text portal reset link" className="rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-100" />
       </div>
 
-      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
+      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia, sp.resetNew); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
 
       {reg.status === "WAITLISTED" && (
         <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3">
@@ -273,7 +273,7 @@ export default async function RegistrationDetail({
         </div>
 
         <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">Or send individually (backup)</p>
-        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex flex-col rounded-lg border border-slate-200 p-3">
             <div className="text-sm font-medium text-slate-800">1 · Welcome</div>
             <p className="mb-2 mt-0.5 text-xs text-slate-500">
@@ -350,6 +350,15 @@ export default async function RegistrationDetail({
                 label={p.waiverSignedAt ? "Resend waiver" : "Send waiver"}
                 className="btn-secondary w-full text-sm"
               />
+            </div>
+          </div>
+          <div className="flex flex-col rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-medium text-slate-800">4 · Portal access</div>
+            <p className="mb-2 mt-0.5 text-xs text-slate-500">
+              Send a set/reset-password link so they can sign in. For a minor it goes to the parent/guardian.
+            </p>
+            <div className="mt-auto">
+              <TextResetLinkButton personId={p.id} ticket={ticket} returnTo={`/console/registrations/${reg.id}`} label="Text reset link" className="btn-secondary w-full text-sm" />
             </div>
           </div>
         </div>
