@@ -156,6 +156,10 @@ model Person {
   firstName          String
   lastName           String
   dob                DateTime?
+  /// Secret token for this household's personal calendar-subscription feed
+  /// (practices & matches for their player(s)). Minted lazily; treated like a
+  /// password (anyone with the link can read the schedule).
+  calendarToken      String?   @unique
   email              String?
   /// Additional notification addresses (up to three total). Used so both parents
   /// AND a minor who has their own email can all be reached. For a minor, the

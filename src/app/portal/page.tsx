@@ -16,6 +16,9 @@ import { PayButtons } from "./PayButtons";
 import { installmentChargeDates } from "@/lib/payments/receipt";
 import { decryptField } from "@/lib/crypto";
 import { PortalPersonForm, type PortalPerson } from "@/components/PortalPersonForm";
+import { CopyLink } from "@/components/CopyLink";
+import { appUrl } from "@/lib/stripe";
+import { ensureFamilyCalendarToken } from "@/lib/domain/familyCalendar";
 
 const PAY_ERRORS: Record<string, { title: string; detail: string }> = {
   notfound: { title: "We couldn't find that invoice", detail: "The payment link may be out of date. Refresh the page and try again, or contact us if it persists." },
@@ -93,6 +96,16 @@ export default async function PortalHome({
 
   // Upcoming league fixtures for the household's teams (§14 — 7-day notice + 48h).
   const teamIds = memberships.map((m) => m.teamId);
+
+  // Calendar subscription feed for this household (practices & matches) — so a
+  // family can add their player's schedule to Apple/Google Calendar.
+  let calFeedUrl: string | null = null;
+  let calWebcalUrl: string | null = null;
+  if (memberships.length > 0 && session.personId) {
+    const calToken = await ensureFamilyCalendarToken(session.personId);
+    calFeedUrl = `${appUrl()}/api/calendar/${calToken}`;
+    calWebcalUrl = calFeedUrl.replace(/^https?:\/\//, "webcal://");
+  }
 
   // The next practice date per team, for a glance on each team card.
   const nextPracticeByTeam = new Map<string, { date: Date; startTime: string }>();
@@ -364,6 +377,26 @@ export default async function PortalHome({
       {memberships.length > 0 && (
         <section>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">My teams</h2>
+
+          {/* Calendar subscription — practices & matches stay in sync on the
+              family's phone. */}
+          {calFeedUrl && (
+            <div className="card mb-3">
+              <h3 className="font-semibold text-slate-900">📅 Add the schedule to your calendar</h3>
+              <p className="mt-0.5 text-sm text-slate-500">Subscribe once and your player&apos;s practices &amp; matches stay in sync automatically.</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {calWebcalUrl && (
+                  <a href={calWebcalUrl} className="flex min-h-[48px] items-center justify-center rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700">Add to phone (Apple)</a>
+                )}
+                <a href={calFeedUrl} className="flex min-h-[48px] items-center justify-center rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 active:bg-slate-200">Download .ics</a>
+              </div>
+              <div className="mt-3">
+                <p className="mb-1 text-xs text-slate-500">Google Calendar → Settings → Add calendar → <span className="font-medium">From URL</span>, then paste:</p>
+                <CopyLink value={calFeedUrl} />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
             {memberships.map((m) => (
               <div key={m.id} className="card">
