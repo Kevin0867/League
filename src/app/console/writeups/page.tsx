@@ -68,8 +68,10 @@ export default async function WriteupsOverviewPage({
     <div className="space-y-5">
       <PageHeader title="Coach write-ups" subtitle="Every note across all coaches, newest first. Admin-only. Add one below, or open a coach to edit their notes." />
 
-      {sp.wuok === "added" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Write-up added.</div>}
-      {sp.wuerr === "notes" && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">Pick a coach and add a note before saving.</div>}
+      {sp.wuok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+        {sp.wuok === "added" ? "Write-up added." : sp.wuok === "saved" ? "Write-up updated." : sp.wuok === "deleted" ? "Write-up deleted." : sp.wuok === "shared" ? "Shared with the coach (text + email + in-app)." : sp.wuok === "sharedadmins" ? "Shared with admins." : "Done."}
+      </div>}
+      {sp.wuerr && <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">{sp.wuerr === "notes" ? "Pick a coach and add a note before saving." : "Something went wrong."}</div>}
 
       {/* Add a write-up — the single entry point that doesn't require hunting for a coach's profile. */}
       <details className="card border-l-4 border-brand-400" open={writeups.length === 0}>
@@ -141,6 +143,58 @@ export default async function WriteupsOverviewPage({
               </div>
               <p className="mt-1.5 whitespace-pre-line text-sm text-slate-700">{w.notes}</p>
               <div className="mt-1 text-[11px] text-slate-400">{w.authorName ? `by ${w.authorName}` : ""}</div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {/* Edit (collapsible) */}
+                <details>
+                  <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Edit</summary>
+                  <form method="POST" action="/api/console/coach-writeup" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-2">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="update" />
+                    <input type="hidden" name="from" value="overview" />
+                    <input type="hidden" name="personId" value={w.personId} />
+                    <input type="hidden" name="id" value={w.id} />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input type="datetime-local" name="occurredAt" defaultValue={toInput(w.occurredAt)} className="input py-1 text-sm" />
+                      <select name="category" defaultValue={w.category} className="input py-1 text-sm">
+                        {WRITEUP_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                    </div>
+                    <textarea name="notes" rows={3} defaultValue={w.notes} required className="input text-sm" />
+                    <div className="flex justify-end"><button className="btn-secondary text-xs">Save changes</button></div>
+                  </form>
+                </details>
+
+                {/* Share with the coach */}
+                <form method="POST" action="/api/console/coach-writeup" className="inline">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="shareCoach" />
+                  <input type="hidden" name="from" value="overview" />
+                  <input type="hidden" name="personId" value={w.personId} />
+                  <input type="hidden" name="id" value={w.id} />
+                  <button className="text-xs font-semibold text-brand-700 hover:underline">{w.sharedWithCoachAt ? "Re-share with coach" : "Share with coach"}</button>
+                </form>
+
+                {/* Share with admins */}
+                <form method="POST" action="/api/console/coach-writeup" className="inline">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="shareAdmins" />
+                  <input type="hidden" name="from" value="overview" />
+                  <input type="hidden" name="personId" value={w.personId} />
+                  <input type="hidden" name="id" value={w.id} />
+                  <button className="text-xs font-semibold text-slate-500 hover:text-brand-700 hover:underline">Share with admins</button>
+                </form>
+
+                {/* Delete */}
+                <form method="POST" action="/api/console/coach-writeup" className="ml-auto inline">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="delete" />
+                  <input type="hidden" name="from" value="overview" />
+                  <input type="hidden" name="personId" value={w.personId} />
+                  <input type="hidden" name="id" value={w.id} />
+                  <button className="text-xs text-rose-600 hover:underline">Delete</button>
+                </form>
+              </div>
             </li>
           ))}
         </ul>

@@ -18,7 +18,13 @@ export async function POST(req: Request) {
   const fd = await req.formData();
   const op = String(fd.get("op") ?? "");
   const personId = String(fd.get("personId") ?? "").trim();
-  const back = (qs: string) => NextResponse.redirect(new URL(`/console/coaches/${personId}${qs}`, origin), 303);
+  const from = String(fd.get("from") ?? "");
+  // Admin actions can be invoked either from a coach's profile or from the
+  // top-level Write-ups overview; send the admin back to wherever they came from.
+  const back = (qs: string) =>
+    from === "overview"
+      ? NextResponse.redirect(new URL(`/console/writeups${qs}`, origin), 303)
+      : NextResponse.redirect(new URL(`/console/coaches/${personId}${qs}`, origin), 303);
 
   const actor = await actorFromForm(fd);
   if (!actor) return NextResponse.redirect(new URL(`/login`, origin), 303);
@@ -54,21 +60,14 @@ export async function POST(req: Request) {
 
   if (op === "create") {
     const notes = String(fd.get("notes") ?? "").trim();
-    const from = String(fd.get("from") ?? "");
-    if (!notes) {
-      return from === "overview"
-        ? NextResponse.redirect(new URL(`/console/writeups?wuerr=notes`, origin), 303)
-        : back("?wuerr=notes");
-    }
+    if (!notes) return back("?wuerr=notes");
     const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { person: { select: { firstName: true, lastName: true } } } });
     const authorName = me?.person ? `${me.person.firstName} ${me.person.lastName}`.trim() : null;
     await prisma.coachWriteup.create({
       data: { personId, authorId: actor.userId, authorName, occurredAt: parseWhen(fd.get("occurredAt")), category, notes },
     });
     await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "coach.writeup.create", summary: `Added a ${category} write-up` });
-    return from === "overview"
-      ? NextResponse.redirect(new URL(`/console/writeups?wuok=added`, origin), 303)
-      : back("?wuok=added");
+    return back("?wuok=added");
   }
 
   if (op === "update") {
