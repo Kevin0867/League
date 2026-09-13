@@ -19,7 +19,7 @@ export default async function PersonDetail({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ok?: string; err?: string; reset?: string; resetVia?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string; reset?: string; resetVia?: string; resetNew?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -76,7 +76,7 @@ export default async function PersonDetail({
         </div>
       </div>
 
-      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia); return r ? <div className={`rounded-lg px-4 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{r.text}</div> : null; })()}
+      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia, sp.resetNew); return r ? <div className={`rounded-lg px-4 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{r.text}</div> : null; })()}
       {sp.ok === "personedit" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
       {sp.ok === "fee" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Season fee requested — a secure pay link was emailed/texted to the family.</div>}
       {sp.ok === "paidoffline" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Marked paid. It now shows paid across the roster, reports and reminders.</div>}

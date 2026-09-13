@@ -87,7 +87,7 @@ export default async function UsersPage({
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OKS[sp.ok] ?? "Done."}</p>
       ) : null}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
-      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
+      {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia, sp.resetNew); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
 
       {/* A freshly generated set-password link, shown once for the admin to copy
           and hand off (text, in person) when email delivery isn't reliable. */}
