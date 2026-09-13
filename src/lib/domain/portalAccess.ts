@@ -16,6 +16,32 @@ export type NoAccessPlayer = {
 
 const ACTIVE_REG = ["SUBMITTED", "ASSIGNED", "WAITLISTED"] as const;
 
+/** The unique portal ACCOUNTS behind all registered players in a season — one
+ *  per household. A player with their own login/email is their own account; a
+ *  minor with no email of their own folds into their guardian. Used to send a
+ *  set/reset link to everyone without spamming a parent once per child. */
+export async function playerAccountPersonIds(seasonId: string): Promise<string[]> {
+  const regs = await prisma.registration.findMany({
+    where: { seasonId, status: { in: [...ACTIVE_REG] } },
+    select: {
+      person: {
+        select: {
+          id: true, email: true, email2: true, email3: true,
+          guardianId: true,
+          user: { select: { id: true } },
+        },
+      },
+    },
+  });
+  const accounts = new Set<string>();
+  for (const r of regs) {
+    const p = r.person;
+    const hasOwnEmail = [p.email, p.email2, p.email3].some((e) => !!(e ?? "").trim());
+    accounts.add(p.user || hasOwnEmail ? p.id : p.guardianId ?? p.id);
+  }
+  return [...accounts];
+}
+
 export async function playersWithoutPortalAccess(seasonId: string): Promise<NoAccessPlayer[]> {
   const regs = await prisma.registration.findMany({
     where: { seasonId, status: { in: [...ACTIVE_REG] } },
