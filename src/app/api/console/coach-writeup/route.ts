@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { WRITEUP_CATEGORIES } from "@/lib/domain/coachWriteups";
+import { appUrl } from "@/lib/stripe";
 
 // Admin-only coach write-ups: create / edit / delete a note about a coach, and
 // share it with the coach (or admins) when the admin chooses.
@@ -20,7 +21,29 @@ export async function POST(req: Request) {
   const back = (qs: string) => NextResponse.redirect(new URL(`/console/coaches/${personId}${qs}`, origin), 303);
 
   const actor = await actorFromForm(fd);
-  if (!actor || !can(actor.role, "manageCoaches")) return back("?wuerr=auth");
+  if (!actor) return NextResponse.redirect(new URL(`/login`, origin), 303);
+
+  // A coach can acknowledge a write-up that was shared with them. This is the
+  // one op available to the coach themselves — everything else is admin-only.
+  if (op === "acknowledge") {
+    const id = String(fd.get("id") ?? "").trim();
+    const mine = new URL(`/console/writeups/mine`, origin);
+    const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
+    const wu = id ? await prisma.coachWriteup.findUnique({ where: { id } }) : null;
+    // Only the coach the write-up is about, and only once it's been shared.
+    if (!wu || !wu.sharedWithCoachAt || !me?.personId || wu.personId !== me.personId) {
+      mine.searchParams.set("wuerr", "auth");
+      return NextResponse.redirect(mine, 303);
+    }
+    if (!wu.acknowledgedAt) {
+      await prisma.coachWriteup.update({ where: { id: wu.id }, data: { acknowledgedAt: new Date() } });
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: wu.personId, action: "coach.writeup.acknowledge", summary: `Coach acknowledged a write-up` });
+    }
+    mine.searchParams.set("wuok", "acked");
+    return NextResponse.redirect(mine, 303);
+  }
+
+  if (!can(actor.role, "manageCoaches")) return back("?wuerr=auth");
   if (!personId) return back("?wuerr=fields");
 
   const parseWhen = (v: FormDataEntryValue | null): Date => {
@@ -70,8 +93,8 @@ export async function POST(req: Request) {
       channels: ["IN_APP", "EMAIL", "SMS"],
       triggerType: "COACH_WRITEUP",
       subject: `A note from PURE Academy — ${label}`,
-      body: `${label} · ${when}\n\n${wu.notes}\n\nPlease reach out to the Director with any questions.`,
-      smsBody: `PURE Academy — the Director shared a note with you (${label}). Check your email/portal for details.`,
+      body: `${label} · ${when}\n\n${wu.notes}\n\nView it and acknowledge here: ${appUrl()}/console/writeups/mine\n\nPlease reach out to the Director with any questions.`,
+      smsBody: `PURE Academy — the Director shared a note with you (${label}). View & acknowledge: ${appUrl()}/console/writeups/mine`,
     }).catch(() => {});
     await prisma.coachWriteup.update({ where: { id: wu.id }, data: { sharedWithCoachAt: new Date() } });
     await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "coach.writeup.share", summary: `Shared a write-up with the coach` });

@@ -45,9 +45,11 @@ const SECTIONS: NavSection[] = [
       { href: "/console/coaches", label: "Coaches", roles: ["COO", "DIRECTOR"], match: ["/console/coaches", "/console/coach-import"] },
       { href: "/console/coach-import", label: "Import coaches", roles: ["COO", "DIRECTOR"] },
       { href: "/console/matching", label: "Coach matching", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/writeups", label: "Write-ups", roles: ["COO", "DIRECTOR"], match: ["/console/writeups"] },
       { href: "/console/users", label: "Access", roles: ["COO", "DIRECTOR"] },
       { href: "/console/portal-access", label: "Portal access", roles: ["COO", "DIRECTOR"], match: ["/console/portal-access"] },
       { href: "/console/profile", label: "My Profile", roles: ["COACH"] },
+      { href: "/console/writeups/mine", label: "My write-ups", roles: ["COACH"] },
     ],
   },
   {
