@@ -8,6 +8,7 @@ import { TRAINING_CATEGORIES, TRAINING_SKILL_LEVELS } from "@/lib/domain/trainin
 import { TrainingVideoUpload } from "@/components/TrainingVideoUpload";
 import { CopyUrlButton } from "@/components/CopyUrlButton";
 import { allowedContacts } from "@/lib/domain/messaging-acl";
+import { appUrl } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Training Videos" };
@@ -107,7 +108,9 @@ export default async function TrainingLibraryPage({
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
-                <CopyUrlButton url={v.videoUrl} label="Copy video link" />
+                <Link href={`/watch/${v.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">▶ Open video page</Link>
+                <CopyUrlButton url={`${appUrl()}/watch/${v.id}`} label="Copy share link" />
+                <CopyUrlButton url={v.videoUrl} label="Copy file link" />
                 <form method="POST" action="/api/console/training" className="inline">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="toggleVisible" />
@@ -129,7 +132,7 @@ export default async function TrainingLibraryPage({
               </div>
 
               <details className="border-t border-slate-100 pt-2">
-                <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Share (person, team, or admins) →</summary>
+                <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Share (person, team, coaches, or admins) →</summary>
                 <div className="mt-2 space-y-3">
                   {/* To one person on their team */}
                   {contacts.length > 0 && (
@@ -174,6 +177,24 @@ export default async function TrainingLibraryPage({
                     </form>
                   )}
 
+                  {/* To all coaches */}
+                  <form method="POST" action="/api/console/messages" className="rounded-lg bg-slate-50 p-2">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="send" />
+                    <input type="hidden" name="audienceType" value="ALL_COACHES" />
+                    <input type="hidden" name="returnTo" value="/console/training" />
+                    <input type="hidden" name="subject" value={`Training video: ${v.title}`} />
+                    <input type="hidden" name="body" value={`Training video shared: ${v.title}${v.description ? ` — ${v.description}` : ""}\n\nWatch: ${appUrl()}/watch/${v.id}`} />
+                    <input type="hidden" name="attachmentUrl" value={v.videoUrl} />
+                    <input type="hidden" name="attachmentType" value={v.videoType ?? "VIDEO"} />
+                    <input type="hidden" name="channel_IN_APP" value="on" />
+                    <input type="hidden" name="channel_EMAIL" value="on" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Send to all coaches</span>
+                      <button className="btn-secondary text-xs">Notify coaches</button>
+                    </div>
+                  </form>
+
                   {/* To all admins — so a coach can confirm an admin saw it */}
                   <form method="POST" action="/api/console/messages" className="rounded-lg bg-slate-50 p-2">
                     <input type="hidden" name="ticket" value={ticket} />
@@ -181,7 +202,7 @@ export default async function TrainingLibraryPage({
                     <input type="hidden" name="audienceType" value="ALL_ADMINS" />
                     <input type="hidden" name="returnTo" value="/console/training" />
                     <input type="hidden" name="subject" value={`Training video: ${v.title}`} />
-                    <input type="hidden" name="body" value={`Shared a training video: ${v.title}${v.description ? ` — ${v.description}` : ""}`} />
+                    <input type="hidden" name="body" value={`Shared a training video: ${v.title}${v.description ? ` — ${v.description}` : ""}\n\nWatch: ${appUrl()}/watch/${v.id}`} />
                     <input type="hidden" name="attachmentUrl" value={v.videoUrl} />
                     <input type="hidden" name="attachmentType" value={v.videoType ?? "VIDEO"} />
                     <input type="hidden" name="channel_IN_APP" value="on" />
