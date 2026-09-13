@@ -75,7 +75,7 @@ export default async function WriteupsOverviewPage({
 
       {/* Add a write-up — the single entry point that doesn't require hunting for a coach's profile. */}
       <details className="card border-l-4 border-brand-400" open={writeups.length === 0}>
-        <summary className="cursor-pointer font-semibold text-slate-900">➕ Add a write-up</summary>
+        <summary className="btn-primary list-none cursor-pointer [&::-webkit-details-marker]:hidden">➕ Add a write-up</summary>
         {coachOptions.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No coaches found yet. Add a coach first under Coaches.</p>
         ) : (
@@ -144,55 +144,55 @@ export default async function WriteupsOverviewPage({
               <p className="mt-1.5 whitespace-pre-line text-sm text-slate-700">{w.notes}</p>
               <div className="mt-1 text-[11px] text-slate-400">{w.authorName ? `by ${w.authorName}` : ""}</div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                {/* Edit (collapsible) */}
-                <details>
-                  <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Edit</summary>
-                  <form method="POST" action="/api/console/coach-writeup" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-2">
-                    <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="update" />
-                    <input type="hidden" name="from" value="overview" />
-                    <input type="hidden" name="personId" value={w.personId} />
-                    <input type="hidden" name="id" value={w.id} />
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <input type="datetime-local" name="occurredAt" defaultValue={toInput(w.occurredAt)} className="input py-1 text-sm" />
-                      <select name="category" defaultValue={w.category} className="input py-1 text-sm">
-                        {WRITEUP_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                      </select>
-                    </div>
-                    <textarea name="notes" rows={3} defaultValue={w.notes} required className="input text-sm" />
-                    <div className="flex justify-end"><button className="btn-secondary text-xs">Save changes</button></div>
-                  </form>
-                </details>
+              {/* Edit — always available, opens an inline editor. */}
+              <details className="mt-3">
+                <summary className="btn-link list-none cursor-pointer [&::-webkit-details-marker]:hidden">✏️ Edit write-up</summary>
+                <form method="POST" action="/api/console/coach-writeup" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="update" />
+                  <input type="hidden" name="from" value="overview" />
+                  <input type="hidden" name="personId" value={w.personId} />
+                  <input type="hidden" name="id" value={w.id} />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input type="datetime-local" name="occurredAt" defaultValue={toInput(w.occurredAt)} className="input py-1 text-sm" />
+                    <select name="category" defaultValue={w.category} className="input py-1 text-sm">
+                      {WRITEUP_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                  </div>
+                  <textarea name="notes" rows={3} defaultValue={w.notes} required className="input text-sm" />
+                  <div className="flex justify-end"><button className="btn-primary text-sm">Save changes</button></div>
+                </form>
+              </details>
 
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 {/* Share with the coach */}
-                <form method="POST" action="/api/console/coach-writeup" className="inline">
+                <form method="POST" action="/api/console/coach-writeup">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="shareCoach" />
                   <input type="hidden" name="from" value="overview" />
                   <input type="hidden" name="personId" value={w.personId} />
                   <input type="hidden" name="id" value={w.id} />
-                  <button className="text-xs font-semibold text-brand-700 hover:underline">{w.sharedWithCoachAt ? "Re-share with coach" : "Share with coach"}</button>
+                  <button className="btn-link">👤 {w.sharedWithCoachAt ? "Re-share with coach" : "Share with coach"}</button>
                 </form>
 
                 {/* Share with admins */}
-                <form method="POST" action="/api/console/coach-writeup" className="inline">
+                <form method="POST" action="/api/console/coach-writeup">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="shareAdmins" />
                   <input type="hidden" name="from" value="overview" />
                   <input type="hidden" name="personId" value={w.personId} />
                   <input type="hidden" name="id" value={w.id} />
-                  <button className="text-xs font-semibold text-slate-500 hover:text-brand-700 hover:underline">Share with admins</button>
+                  <button className="btn-back">🛡️ Share with admins</button>
                 </form>
 
                 {/* Delete */}
-                <form method="POST" action="/api/console/coach-writeup" className="ml-auto inline">
+                <form method="POST" action="/api/console/coach-writeup" className="ml-auto">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="delete" />
                   <input type="hidden" name="from" value="overview" />
                   <input type="hidden" name="personId" value={w.personId} />
                   <input type="hidden" name="id" value={w.id} />
-                  <button className="text-xs text-rose-600 hover:underline">Delete</button>
+                  <button className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 transition-colors hover:border-rose-300 hover:bg-rose-100">🗑️ Delete</button>
                 </form>
               </div>
             </li>
