@@ -79,10 +79,14 @@ export function deriveDivisionCode(source: string | null | undefined, extra?: st
   if (/middle/.test(s)) return "MID";
   if (/high school|\bhs\b/.test(s)) return "HS"; // "High School ELITE" → HS
 
-  // Adult DUPR band. Gender from Men's/Women's; band from the first rating token.
+  // Adult DUPR band. Gender from Men's/Women's. A band is labeled by the UPPER
+  // bound of its range — the app's convention (e.g. a "2.5–3.0" band is the
+  // "3.0" band, a "3.0–3.5" band is "3.5"). So when the source names a range
+  // like "Women's 3.0–3.5", take the LAST rating token, not the first — matching
+  // the first would wrongly file a 3.5 team under 3.0.
   const gender = /women|girls|\bw\b/.test(s) ? "W" : /men|boys|\bm\b/.test(s) ? "M" : null;
-  const bandMatch = s.match(/(\d\.\d)\s*\+?/);
-  let band = bandMatch ? bandMatch[1] : null;
+  const bandTokens = [...s.matchAll(/(\d\.\d)/g)].map((m) => m[1]);
+  let band = bandTokens.length ? bandTokens[bandTokens.length - 1] : null;
   if (band && /5\.0\s*\+|\+/.test(s) && band === "5.0") band = "5.0+";
   if (gender && band) return `${gender}${band}`;
   if (band) return band; // fall back to a bare band if gender is unknown
