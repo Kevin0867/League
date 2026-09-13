@@ -95,13 +95,22 @@ export async function POST(req: Request) {
 
     await audit({ actorId: actor.userId, entityType: "CoachingAgreement", entityId: rec.id, action: "COACH_SIGNED", summary: `${coachName} signed their coaching agreement` });
 
-    // Email the team inbox so an admin can countersign.
+    // Notify the team inbox + every admin so a signed agreement awaiting
+    // countersignature is never missed: ONE detailed email to all of them, and
+    // a text to each admin. (Kept to a single email to avoid duplicate copies.)
     try {
       const link = `${appUrl()}/console/agreements/${rec.id}`;
       const teamLines = assignment.teams.map((t) => `  • ${t.team} (${t.role}) — ${t.dayTime} — ${t.location}`);
       const credLines = CREDENTIAL_FIELDS.filter((f) => credentials[f.key]).map((f) => `  • ${f.label}: ${credentials[f.key]}`);
+      const admins = await prisma.user.findMany({
+        where: { active: true, role: { in: ADMIN_ROLES as unknown as string[] } },
+        select: { person: { select: { email: true, phone: true } } },
+      });
+      // One email to the team inbox AND all admins (deduped). skipBcc so the
+      // org-wide BCC copy doesn't add a second copy to addresses already listed.
+      const emailList = Array.from(new Set([TEAM_INBOX, ...admins.map((a) => a.person?.email).filter((e): e is string => !!e)]));
       await sendEmail(
-        TEAM_INBOX,
+        emailList,
         `Coaching agreement signed — ${coachName} (needs countersignature)`,
         [
           `${coachName} has signed their PURE coaching agreement.`,
@@ -115,32 +124,21 @@ export async function POST(req: Request) {
           "",
           `Verify and countersign here: ${link}`,
         ].filter(Boolean).join("\n"),
-      );
-    } catch (e) {
-      console.error("agreement team email failed", e);
-    }
-    // Notify every admin directly — by email AND text — so a signed agreement
-    // awaiting countersignature is never missed.
-    try {
-      const link = `${appUrl()}/console/agreements/${rec.id}`;
-      const admins = await prisma.user.findMany({
-        where: { active: true, role: { in: ADMIN_ROLES as unknown as string[] } },
-        select: { person: { select: { email: true, phone: true } } },
-      });
-      const seen = new Set<string>();
+        undefined,
+        undefined,
+        { skipBcc: true },
+      ).catch((e) => console.error("agreement email failed", e));
+      // Text each admin (dedup by phone).
+      const seenPhone = new Set<string>();
       for (const a of admins) {
-        const p = a.person;
-        if (p?.email && !seen.has(`e:${p.email}`)) {
-          seen.add(`e:${p.email}`);
-          await sendEmail(p.email, `Coaching agreement signed — ${coachName} (needs countersignature)`, `${coachName} signed their PURE coaching agreement. Verify their credentials and countersign here: ${link}`).catch(() => {});
-        }
-        if (p?.phone && !seen.has(`s:${p.phone}`)) {
-          seen.add(`s:${p.phone}`);
-          await sendSms(p.phone, `PURE Academy — ${coachName} signed their coaching agreement and it needs your countersignature: ${link}`).catch(() => {});
+        const phone = a.person?.phone;
+        if (phone && !seenPhone.has(phone)) {
+          seenPhone.add(phone);
+          await sendSms(phone, `PURE Academy — ${coachName} signed their coaching agreement and it needs your countersignature: ${link}`).catch(() => {});
         }
       }
     } catch (e) {
-      console.error("agreement admin notify failed", e);
+      console.error("agreement notify failed", e);
     }
     return back(`${rt}?ok=signed`);
   }
