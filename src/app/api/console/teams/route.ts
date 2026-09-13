@@ -265,14 +265,36 @@ export async function POST(req: Request) {
         }
       }
 
+      // Recompute the grouping code so it can't drift from the team's edited
+      // level. The edit form never wrote `divisionCode`, so renaming or
+      // re-leveling a team (e.g. bumping it to 3.5) used to leave the old code
+      // behind and mis-file the team under the wrong band. Derive it from the
+      // explicit level signals (level band, the linked division's name, and the
+      // typed name), with gender from the gender field or those same words.
+      const genderVal = (() => { const v = g("gender"); return v && ["MALE", "FEMALE", "COED"].includes(v) ? v : v === null ? null : undefined; })();
+      const nameVal = g("name");
+      const levelBandVal = g("levelBand");
+      const divisionIdVal = g("divisionId");
+      const divisionNameVal = divisionIdVal
+        ? (await prisma.division.findUnique({ where: { id: divisionIdVal }, select: { name: true } }))?.name ?? null
+        : null;
+      const genderHint = genderVal === "FEMALE" ? "women" : genderVal === "MALE" ? "men" : "";
+      // Order matters: deriveDivisionCode uses the LAST rating token, so put the
+      // most authoritative band signal last (explicit level band, then the typed
+      // name), ahead of the drift-prone division link.
+      const codeSource = [divisionNameVal, nameVal, levelBandVal].filter(Boolean).join(" ");
+      const recomputedCode = deriveDivisionCode(codeSource, genderHint);
+
       await prisma.team.update({
         where: { id: teamId },
         data: {
-          name: g("name") ?? undefined,
-          divisionId: g("divisionId"),
-          levelBand: g("levelBand"),
+          name: nameVal ?? undefined,
+          divisionId: divisionIdVal,
+          levelBand: levelBandVal,
           market: g("market"),
-          gender: (() => { const v = g("gender"); return v && ["MALE", "FEMALE", "COED"].includes(v) ? v : v === null ? null : undefined; })(),
+          gender: genderVal,
+          // Only overwrite when we could derive a code; never blank an existing one.
+          divisionCode: recomputedCode ?? undefined,
           color,
           coachId,
           teamContactId: g("teamContactId"),
