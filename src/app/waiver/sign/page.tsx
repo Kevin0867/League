@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { verifyWaiverToken } from "@/lib/domain/waiverRenewal";
-import { WaiverText, WAIVER_VERSION } from "@/components/WaiverText";
+import { WAIVER_VERSION } from "@/components/WaiverText";
 import { Logo } from "@/components/Brand";
+import { WaiverSignForm } from "./WaiverSignForm";
 
 export const dynamic = "force-dynamic";
 
@@ -106,90 +107,17 @@ export default async function WaiverSignPage({
         </p>
       )}
 
-      <form method="POST" action="/api/waiver/sign" className="card space-y-4">
-        <input type="hidden" name="token" value={sp.token} />
-        <input type="hidden" name="waiverVersion" value={WAIVER_VERSION} />
-        {sp.next ? <input type="hidden" name="next" value={sp.next} /> : null}
-        <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <WaiverText />
-        </div>
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" name="agree" className="mt-0.5" required />
-          <span>
-            {isMinor ? (
-              <>As {person.firstName}&apos;s parent or guardian, I have read, understand, and agree to the{" "}
-              <strong>Acknowledgment of Risk, Waiver, and Release of Liability</strong> above, and I sign it on their behalf freely and voluntarily.</>
-            ) : (
-              <>I have read, understand, and agree to the{" "}
-              <strong>Acknowledgment of Risk, Waiver, and Release of Liability</strong> above, and I sign it freely and voluntarily.</>
-            )}
-          </span>
-        </label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="signatureName">
-              {isMinor ? "Parent/guardian signature (type full legal name)" : "Signature (type full legal name)"}
-            </label>
-            <input id="signatureName" name="signatureName" className="input" required />
-          </div>
-          <div>
-            <label className="label" htmlFor="date">Date</label>
-            <input id="date" type="date" className="input" defaultValue={today} readOnly />
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-800">
-            {participants.length > 1 ? "Everyone on this waiver" : "Participant"}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Please confirm each person&apos;s gender — it&apos;s used to place players in the correct
-            division{participants.length > 1 ? ", including the parent/guardian and each child" : ""}.
-          </p>
-          <div className="mt-3 space-y-3">
-            {participants.map((m) => {
-              const g = m.gender === "MALE" || m.gender === "FEMALE" ? m.gender : "";
-              return (
-                <div key={m.id} className="grid grid-cols-[1fr,auto] items-center gap-3">
-                  <div className="text-sm">
-                    <span className="font-medium text-slate-800">{m.name}</span>
-                    <span className="ml-1.5 text-xs text-slate-400">({m.role})</span>
-                  </div>
-                  <select name={`gender_${m.id}`} className="input w-40" defaultValue={g} required>
-                    <option value="" disabled>Select…</option>
-                    <option value="MALE">Male</option>
-                    <option value="FEMALE">Female</option>
-                  </select>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {isMinor && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-800">Parent/guardian contact</p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              We&apos;ll use this to reach you about {person.firstName}&apos;s team, schedule, payments, and weekly
-              progress. Required.
-            </p>
-            <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="label" htmlFor="guardianEmail">Parent/guardian email *</label>
-                <input id="guardianEmail" name="guardianEmail" type="email" className="input" required
-                  defaultValue={person.email ?? ""} placeholder="parent@email.com" />
-              </div>
-              <div>
-                <label className="label" htmlFor="guardianPhone">Parent/guardian phone (optional)</label>
-                <input id="guardianPhone" name="guardianPhone" type="tel" className="input"
-                  defaultValue={person.phone ?? ""} placeholder="(480) 555-0100" />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <button type="submit" className="btn-primary">Sign waiver</button>
-      </form>
+      <WaiverSignForm
+        token={sp.token ?? ""}
+        waiverVersion={WAIVER_VERSION}
+        next={sp.next}
+        today={today}
+        isMinor={isMinor}
+        personFirstName={person.firstName}
+        personEmail={person.email ?? ""}
+        personPhone={person.phone ?? ""}
+        participants={participants.map((m) => ({ id: m.id, name: m.name, gender: m.gender ?? null, role: m.role }))}
+      />
     </Shell>
   );
 }
