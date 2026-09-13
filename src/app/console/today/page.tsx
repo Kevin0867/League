@@ -4,6 +4,9 @@ import { requireStaff } from "@/lib/rbac";
 import { TeamColorDot } from "@/components/TeamColorDot";
 import { formatTime12, formatSessionDay, phoenixDateInput } from "@/lib/time";
 import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
+import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
+import { appUrl } from "@/lib/stripe";
+import { CopyLink } from "@/components/CopyLink";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Today" };
@@ -67,6 +70,15 @@ export default async function TodayPage() {
     return { team: t, pick, kind, sortKey, checked: pick?._count.attendance ?? 0 };
   });
   cards.sort((a, b) => a.sortKey - b.sortKey);
+
+  // Calendar subscription — practices, matches & lessons on the coach's phone.
+  let calFeedUrl: string | null = null;
+  let calWebcalUrl: string | null = null;
+  if (coach) {
+    const calToken = await ensureCoachCalendarToken(coach.id);
+    calFeedUrl = `${appUrl()}/api/calendar/${calToken}`;
+    calWebcalUrl = calFeedUrl.replace(/^https?:\/\//, "webcal://");
+  }
 
   const todayCount = cards.filter((c) => c.kind === "today").length;
   const niceToday = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Phoenix" });
@@ -157,6 +169,24 @@ export default async function TodayPage() {
             );
           })}
         </section>
+      )}
+
+      {/* Calendar subscription — keeps the coach's phone in sync automatically. */}
+      {calFeedUrl && (
+        <div className="card">
+          <h2 className="font-semibold text-slate-900">📅 Your calendar on your phone</h2>
+          <p className="mt-0.5 text-sm text-slate-500">Subscribe once and your practices, matches &amp; lessons stay in sync automatically.</p>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {calWebcalUrl && (
+              <a href={calWebcalUrl} className="flex min-h-[48px] items-center justify-center rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700">Add to phone (Apple)</a>
+            )}
+            <a href={calFeedUrl} className="flex min-h-[48px] items-center justify-center rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 active:bg-slate-200">Download .ics</a>
+          </div>
+          <div className="mt-3">
+            <p className="mb-1 text-xs text-slate-500">Google Calendar → Settings → Add calendar → <span className="font-medium">From URL</span>, then paste:</p>
+            <CopyLink value={calFeedUrl} />
+          </div>
+        </div>
       )}
     </div>
   );
