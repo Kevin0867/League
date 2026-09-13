@@ -8,6 +8,7 @@ import { coachAssignmentGate } from "@/lib/domain/teams";
 import { formatTime12 } from "@/lib/time";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { CoachWriteups } from "./CoachWriteups";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 
@@ -33,7 +34,7 @@ export default async function EditCoachPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err, team: clashTeam, imgok, imgerr, invitetoken, invitesent, inviteerr } = await searchParams;
+  const { ok, err, team: clashTeam, imgok, imgerr, invitetoken, invitesent, inviteerr, wuok, wuerr } = await searchParams;
   const session = await getSession();
   if (!session || !can(session.role, "manageCoaches")) redirect("/console");
   const ticket = await mintConsoleTicket();
@@ -65,6 +66,12 @@ export default async function EditCoachPage({
       ])
     : [[], []];
   const returnTo = `/console/coaches/${person.id}`;
+
+  const writeups = await prisma.coachWriteup.findMany({
+    where: { personId: person.id },
+    orderBy: { occurredAt: "desc" },
+    take: 200,
+  });
 
   return (
     <div className="space-y-6">
@@ -275,6 +282,15 @@ export default async function EditCoachPage({
           clinicPct: coach?.clinicPayPct != null ? String(coach.clinicPayPct) : "",
           notes: coach?.payNotes ?? "",
         }}
+      />
+
+      <CoachWriteups
+        personId={person.id}
+        coachName={person.firstName}
+        writeups={writeups}
+        ticket={ticket}
+        ok={wuok}
+        err={wuerr}
       />
     </div>
   );

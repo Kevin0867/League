@@ -1912,6 +1912,28 @@ model PayerResponseResolution {
   resolvedAt   DateTime @default(now())
 }
 
+/// An admin-only write-up / note about a coach (tardiness, conduct, a
+/// commendation, a plain note…). Editable after saving; the admin chooses if
+/// and when to share it with the coach. Keyed by the coach's personId so it
+/// works even before a full Coach profile exists.
+model CoachWriteup {
+  id                String    @id @default(cuid())
+  personId          String    // the coach (person) this is about
+  authorId          String?   // admin User who wrote it
+  authorName        String?   // snapshot of the author's name
+  /// When the thing being written up happened (date + time).
+  occurredAt        DateTime
+  /// NOTE | TARDINESS | ATTENDANCE | PERFORMANCE | CONDUCT | COMMENDATION | OTHER
+  category          String    @default("NOTE")
+  notes             String
+  /// Set when the admin shares this write-up with the coach.
+  sharedWithCoachAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([personId])
+}
+
 /// Remembers who last texted a given phone number, so when that person replies
 /// by SMS we can route the reply back to the sender (a coach/admin) instead of
 /// losing it to the shared team inbox. Keyed by the recipient's phone (last 10
