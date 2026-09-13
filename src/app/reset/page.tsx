@@ -30,7 +30,7 @@ export default async function ResetPage({
           {invalid ? (
             <>
               <p className="mt-2 text-sm text-rose-700">
-                This {isInvite ? "invite" : "reset"} link is invalid or has expired. Request a new one.
+                This {isInvite ? "invite" : "reset"} link is invalid or has already been used. Request a new one.
               </p>
               <Link href="/forgot" className="btn-primary mt-4">Request a new link</Link>
             </>

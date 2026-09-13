@@ -3,8 +3,11 @@ import crypto from "crypto";
 import { prisma } from "./db";
 
 // Password reset tokens. Only a SHA-256 hash is stored; the raw token lives
-// solely in the emailed link. Tokens are single-use and expire in one hour.
-const TTL_MS = 60 * 60 * 1000;
+// solely in the emailed/texted link. Tokens are single-use — once someone sets
+// a password with one it's consumed and dead — and they do NOT expire on a
+// clock, so a set/reset link a family holds onto still works whenever they get
+// to it. (Set an explicit far-future date rather than removing the column.)
+const TTL_MS = 100 * 365 * 24 * 60 * 60 * 1000; // ~100 years = effectively no expiry
 
 function hashToken(raw: string): string {
   return crypto.createHash("sha256").update(raw).digest("hex");
@@ -18,8 +21,8 @@ export async function createResetToken(userId: string, ttlMs: number = TTL_MS): 
   return raw;
 }
 
-/** Invite tokens live longer (7 days) so a new user has time to set up access. */
-export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Kept for callers that pass an explicit TTL; same non-expiring value now. */
+export const INVITE_TTL_MS = TTL_MS;
 
 /** Validate + consume a raw token, returning the userId, or null if invalid. */
 export async function consumeResetToken(raw: string): Promise<string | null> {

@@ -94,7 +94,7 @@ export default async function UsersPage({
       {sp.link && (
         <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 text-sm">
           <p className="font-semibold text-brand-900">Set-password link — copy it now, it won&apos;t show again.</p>
-          <p className="mt-0.5 text-xs text-brand-700">Send this to the person however you like. It sets their password and signs them in. Expires in 7 days.</p>
+          <p className="mt-0.5 text-xs text-brand-700">Send this to the person however you like. It sets their password and signs them in. The link stays valid until it&apos;s used.</p>
           <input readOnly value={sp.link} className="input mt-2 w-full bg-white font-mono text-xs" />
         </div>
       )}
