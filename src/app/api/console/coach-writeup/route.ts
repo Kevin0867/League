@@ -54,14 +54,21 @@ export async function POST(req: Request) {
 
   if (op === "create") {
     const notes = String(fd.get("notes") ?? "").trim();
-    if (!notes) return back("?wuerr=notes");
+    const from = String(fd.get("from") ?? "");
+    if (!notes) {
+      return from === "overview"
+        ? NextResponse.redirect(new URL(`/console/writeups?wuerr=notes`, origin), 303)
+        : back("?wuerr=notes");
+    }
     const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { person: { select: { firstName: true, lastName: true } } } });
     const authorName = me?.person ? `${me.person.firstName} ${me.person.lastName}`.trim() : null;
     await prisma.coachWriteup.create({
       data: { personId, authorId: actor.userId, authorName, occurredAt: parseWhen(fd.get("occurredAt")), category, notes },
     });
     await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "coach.writeup.create", summary: `Added a ${category} write-up` });
-    return back("?wuok=added");
+    return from === "overview"
+      ? NextResponse.redirect(new URL(`/console/writeups?wuok=added`, origin), 303)
+      : back("?wuok=added");
   }
 
   if (op === "update") {
