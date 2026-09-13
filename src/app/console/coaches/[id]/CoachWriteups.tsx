@@ -7,6 +7,7 @@ type Writeup = {
   notes: string;
   authorName: string | null;
   sharedWithCoachAt: Date | null;
+  acknowledgedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -97,7 +98,11 @@ export function CoachWriteups({
                 <div className="flex items-center gap-2">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TONE[w.category] ?? TONE.NOTE}`}>{LABEL.get(w.category) ?? w.category}</span>
                   <span className="text-sm font-medium text-slate-700">{fmt(w.occurredAt)}</span>
-                  {w.sharedWithCoachAt && <span className="text-[11px] font-semibold text-emerald-600">shared with coach</span>}
+                  {w.acknowledgedAt ? (
+                    <span className="text-[11px] font-semibold text-emerald-600">✓ acknowledged {fmt(w.acknowledgedAt)}</span>
+                  ) : w.sharedWithCoachAt ? (
+                    <span className="text-[11px] font-semibold text-amber-600">shared · awaiting acknowledgment</span>
+                  ) : null}
                 </div>
                 <span className="text-[11px] text-slate-400">{w.authorName ? `by ${w.authorName} · ` : ""}{w.createdAt.getTime() !== w.updatedAt.getTime() ? "edited " : "added "}{fmt(w.updatedAt)}</span>
               </div>

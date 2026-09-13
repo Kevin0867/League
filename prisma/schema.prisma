@@ -1928,6 +1928,8 @@ model CoachWriteup {
   notes             String
   /// Set when the admin shares this write-up with the coach.
   sharedWithCoachAt DateTime?
+  /// Set when the coach acknowledges having read a shared write-up.
+  acknowledgedAt    DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
