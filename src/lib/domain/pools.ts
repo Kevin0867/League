@@ -21,6 +21,7 @@ export type PoolRegistration = {
   divisionId: string | null;
   divisionName: string | null;
   timePref: string | null; // weeknight | weekday | weekend | null
+  days: string | null; // preferred practice days, e.g. "Mon, Wed"
   locationPrefs: { facilityId: string; facilityName: string; rank: number }[];
 };
 
@@ -32,6 +33,8 @@ export type PoolMember = {
   waiverSigned: boolean;
   locationRank: number; // this player's ranking of THIS pool's location (1 = top)
   overlapCount: number; // how many pools this player currently sits in
+  days: string | null; // preferred practice days
+  timePref: string | null; // preferred time of day
 };
 
 export type Pool = {
@@ -106,6 +109,8 @@ export function buildPools(registrations: PoolRegistration[]): Pool[] {
         waiverSigned: r.waiverSigned,
         locationRank: loc.rank,
         overlapCount: overlap.get(r.registrationId) ?? 1,
+        days: r.days,
+        timePref: r.timePref,
       });
     }
   }

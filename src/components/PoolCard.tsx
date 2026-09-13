@@ -98,6 +98,11 @@ export function PoolCard({
                   {m.duprRating ? `DUPR ${m.duprRating}` : "no rating"}
                   {m.locationRank > 1 ? ` · #${m.locationRank} choice` : ""}
                 </span>
+                {(m.days || m.timePref) && (
+                  <span className="block text-[10px] leading-tight text-brand-600">
+                    🗓 {[m.days, m.timePref].filter(Boolean).join(" · ")}
+                  </span>
+                )}
               </span>
             </div>
           );
