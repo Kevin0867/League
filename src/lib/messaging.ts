@@ -115,10 +115,11 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // text-backs via the SMS route, and email replies via Reply-To. We include
   // the team inbox in Reply-To too, so admins see the reply as well.
   const senderUser = input.senderId
-    ? await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true, email: true, person: { select: { email: true } } } })
+    ? await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true, email: true, person: { select: { email: true, firstName: true, lastName: true } } } })
     : null;
   const senderPersonId = senderUser?.personId ?? null;
   const senderEmail = (senderUser?.person?.email || senderUser?.email || "").trim() || null;
+  const senderName = senderUser?.person ? `${senderUser.person.firstName} ${senderUser.person.lastName}`.trim() : null;
   const TEAM_INBOX = "team@purepickleball.com";
   const emailReplyTo: string[] | undefined = senderEmail ? [senderEmail, TEAM_INBOX] : undefined;
   let failures = 0;
@@ -148,11 +149,17 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // the full message in the portal.
   const smsText = (() => {
     if (input.smsBody && input.smsBody.trim()) return input.smsBody.trim();
-    const firstPara = (input.body ?? "").split(/\n\s*\n/)[0]?.trim() || (input.body ?? "").trim();
-    const snippet = firstPara.length > 280 ? `${firstPara.slice(0, 280).trimEnd()}…` : firstPara;
-    const link = `${appUrl()}/portal`;
-    const head = subject && subject !== "PURE Academy" ? `${subject}\n\n` : "";
-    return `${head}${snippet}\n\nRead the full message in your portal: ${link}`.trim();
+    // A meaningful snippet: skip a short greeting-only opening line (e.g. "Hi
+    // Team!") so the text carries actual content, then take the next ~300 chars.
+    const paras = (input.body ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    const meaty = paras.length > 1 && paras[0].length <= 30 ? paras.slice(1) : paras;
+    const bodyText = meaty.join(" ").replace(/\s+/g, " ").trim();
+    const snippet = bodyText.length > 300 ? `${bodyText.slice(0, 300).trimEnd()}…` : bodyText;
+    // Deep-link straight to this message in the portal (not just the home page).
+    const link = message.id ? `${appUrl()}/portal/m/${message.id}` : `${appUrl()}/portal`;
+    const head = subject && subject !== "PURE Academy" ? `${subject}\n` : "";
+    const from = senderName ? `From ${senderName}.\n` : "";
+    return `${head}${from}${snippet ? `\n${snippet}\n` : ""}\nRead & reply: ${link}`.trim();
   })();
   type Plan = { r: (typeof recipients)[number]; freshEmails: string[]; emailSkipped: boolean; smsNum: string | null; smsSkipped: boolean };
   const plans: Plan[] = recipients.map((r) => {
