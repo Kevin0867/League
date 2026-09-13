@@ -32,6 +32,9 @@ const toCard = (r: {
   person: { firstName: string; lastName: string; waiverSignedAt: Date | null; duprRating: number | null };
   division: { name: string } | null;
   partnerRequests?: string | null;
+  practiceTimePref?: string | null;
+  schedule?: string | null;
+  locationPrefs?: { marketName: string | null; facility: { market: string | null } | null }[];
 }) => ({
   registrationId: r.id,
   personId: r.personId,
@@ -40,6 +43,9 @@ const toCard = (r: {
   rating: r.person.duprRating ?? null,
   divisionName: r.division?.name ?? null,
   comment: r.partnerRequests ?? null,
+  days: r.schedule ?? null,
+  timePref: r.practiceTimePref ?? null,
+  playerLocation: (r.locationPrefs ?? []).map((lp) => lp.marketName ?? lp.facility?.market).filter(Boolean)[0] ?? null,
 });
 
 export default async function BoardPage() {

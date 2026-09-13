@@ -74,6 +74,7 @@ export default async function PoolsPage({
     divisionId: r.divisionId,
     divisionName: r.division?.name ?? null,
     timePref: r.practiceTimePref,
+    days: r.schedule,
     locationPrefs: r.locationPrefs
       .filter((lp) => lp.facility)
       .map((lp) => ({ facilityId: lp.facilityId!, facilityName: lp.facility!.name, rank: lp.rank })),
