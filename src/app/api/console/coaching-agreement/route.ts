@@ -6,7 +6,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
-import { coachAssignmentForAgreement, CREDENTIAL_FIELDS, type AgreementCredentials } from "@/lib/domain/coachingAgreement";
+import { coachAssignmentForAgreement, CREDENTIAL_FIELDS, type AgreementCredentials, unsignedCoaches } from "@/lib/domain/coachingAgreement";
 import { ADMIN_ROLES } from "@/lib/enums";
 
 // Digital coaching-agreement signing. A coach signs (op=coachSign) → the record
@@ -26,6 +26,29 @@ export async function POST(req: Request) {
 
   const actor = await actorFromForm(fd);
   if (!actor) return back("/login");
+
+  // Remind coaches who haven't signed — one, or all unsigned — by text + email.
+  if (op === "remindAgreement" || op === "remindAgreementAll") {
+    if (!can(actor.role, "manageCoaches")) return back("/console/agreements?err=auth");
+    const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, orderBy: { startDate: "desc" }, select: { id: true } })
+      ?? await prisma.season.findFirst({ where: { active: true }, orderBy: { startDate: "desc" }, select: { id: true } });
+    const link = `${appUrl()}/console/agreement`;
+    const all = await unsignedCoaches(season?.id ?? null);
+    const targets = op === "remindAgreementAll"
+      ? all
+      : all.filter((c) => c.personId === String(fd.get("personId") ?? ""));
+    let sent = 0;
+    let noContact = 0;
+    for (const c of targets) {
+      const first = c.name.split(" ")[0] || "Coach";
+      let any = false;
+      if (c.email) { await sendEmail(c.email, "Please sign your PURE coaching agreement", `Hi ${first},\n\nPlease sign your PURE Academy coaching agreement so we can get you set for the season. Sign in and complete it here:\n${link}\n\nThank you!`).catch(() => {}); any = true; }
+      if (c.phone) { await sendSms(c.phone, `PURE Academy — hi ${first}, please sign your coaching agreement so you're set for the season: ${link}`).catch(() => {}); any = true; }
+      if (any) sent++; else noContact++;
+    }
+    await audit({ actorId: actor.userId, entityType: "CoachingAgreement", entityId: "reminder", action: "AGREEMENT_REMINDER", summary: `Sent agreement reminder to ${sent} coach(es)${noContact ? `, ${noContact} had no contact` : ""}` });
+    return back(`/console/agreements?ok=reminded&n=${sent}${noContact ? `&nc=${noContact}` : ""}`);
+  }
 
   if (op === "coachSign") {
     const rt = rawReturn.startsWith("/console/") ? rawReturn : "/console/agreement";

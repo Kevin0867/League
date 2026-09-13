@@ -181,3 +181,21 @@ export async function coachAgreementNeedsAttention(personId: string | null | und
 export async function agreementsPendingCountersign(): Promise<number> {
   return prisma.coachingAgreement.count({ where: { status: "COACH_SIGNED" } });
 }
+
+export type UnsignedCoach = { coachId: string; personId: string; name: string; email: string | null; phone: string | null };
+
+/** Coaches who have not yet signed their coaching agreement — no agreement with
+ *  a coach signature (for the given season, or a season-less one). Used to
+ *  remind them by text/email to sign. */
+export async function unsignedCoaches(seasonId: string | null): Promise<UnsignedCoach[]> {
+  const coaches = await prisma.coach.findMany({
+    include: {
+      person: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      coachingAgreements: { select: { coachSignedAt: true, seasonId: true } },
+    },
+    orderBy: { person: { firstName: "asc" } },
+  });
+  return coaches
+    .filter((c) => !c.coachingAgreements.some((a) => a.coachSignedAt && (seasonId ? a.seasonId === seasonId || a.seasonId === null : true)))
+    .map((c) => ({ coachId: c.id, personId: c.person.id, name: `${c.person.firstName} ${c.person.lastName}`.trim(), email: c.person.email, phone: c.person.phone }));
+}
