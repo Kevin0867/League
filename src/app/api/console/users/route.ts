@@ -6,6 +6,7 @@ import { ASSIGNABLE_ROLES, ADMIN_ROLES, splitRoles, type Role } from "@/lib/enum
 import { audit } from "@/lib/audit";
 import { createResetToken, INVITE_TTL_MS } from "@/lib/passwordReset";
 import { sendConsoleInvite, sendPortalInvite } from "@/lib/domain/inviteEmail";
+import { sendSms } from "@/lib/notify";
 import { familyInviteCandidates } from "@/lib/domain/familyInvites";
 import { appUrl } from "@/lib/stripe";
 import crypto from "crypto";
@@ -54,6 +55,8 @@ export async function POST(req: Request) {
     const token = await createResetToken(user.id, INVITE_TTL_MS);
     const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
     const sent = await sendConsoleInvite({ toEmail: email, name: firstName, role, link });
+    // Text the set-password link too, when we have a number on file.
+    if (person.phone) await sendSms(person.phone, `PURE Academy — set your password and sign in: ${link}`).catch(() => {});
     await audit({
       actorId: actor.userId,
       entityType: "User",
@@ -93,6 +96,9 @@ export async function POST(req: Request) {
       if (!sent.ok) failed++;
       else if (sent.simulated) simulated++;
       else emailed++;
+      // Text the set-password link too, when we have a number on file.
+      const ph = (await prisma.person.findUnique({ where: { id: c.personId }, select: { phone: true } }))?.phone;
+      if (ph) await sendSms(ph, `PURE Academy — set your portal password and sign in: ${link}`).catch(() => {});
     }
     await audit({ actorId: actor.userId, entityType: "User", entityId: "bulk", action: "user.inviteFamilies", summary: `Provisioned ${created} portal logins (${emailed} emailed, ${simulated} simulated, ${failed} failed)` });
     const qs = new URLSearchParams({ ok: "families", created: String(created), emailed: String(emailed), sim: String(simulated), failed: String(failed) });
@@ -218,6 +224,7 @@ export async function POST(req: Request) {
       const token = await createResetToken(u.id, INVITE_TTL_MS);
       const link = `${appUrl()}/reset?token=${encodeURIComponent(token)}&invite=1`;
       const sent = await sendConsoleInvite({ toEmail: u.email, name: u.person?.firstName ?? "there", role: u.role, link });
+      if (u.person?.phone) await sendSms(u.person.phone, `PURE Academy — set your password and sign in: ${link}`).catch(() => {});
       await audit({
         actorId: actor.userId,
         entityType: "User",
