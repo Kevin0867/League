@@ -38,6 +38,24 @@ export async function POST(req: Request) {
     return back(`reset=bulk&n=${sent}`);
   }
 
+  // Bulk: send a set/reset link (text + email) to EVERY registered player's
+  // household in the active season — one per account, so a parent isn't texted
+  // once per child.
+  if (String(fd.get("op") ?? "") === "sendAllPlayers") {
+    const season = await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, orderBy: { startDate: "desc" }, select: { id: true } })
+      ?? await prisma.season.findFirst({ where: { active: true }, orderBy: { startDate: "desc" }, select: { id: true } });
+    if (!season) return back("reset=notarget");
+    const { playerAccountPersonIds } = await import("@/lib/domain/portalAccess");
+    const ids = await playerAccountPersonIds(season.id);
+    let sent = 0;
+    for (const id of ids) {
+      const res = await sendResetLinkForPerson(id);
+      if (res.ok) sent++;
+    }
+    await audit({ actorId: actor.userId, entityType: "Season", entityId: season.id, action: "portal.bulkResetAll", summary: `Sent portal set/reset link to ${sent} household(s)` });
+    return back(`reset=bulkall&n=${sent}`);
+  }
+
   // Accept a personId directly, or a userId (resolve to its person).
   let personId = String(fd.get("personId") ?? "").trim();
   const userId = String(fd.get("userId") ?? "").trim();

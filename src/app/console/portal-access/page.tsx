@@ -4,8 +4,9 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { TextResetLinkButton } from "@/components/TextResetLinkButton";
-import { playersWithoutPortalAccess } from "@/lib/domain/portalAccess";
+import { playersWithoutPortalAccess, playerAccountPersonIds } from "@/lib/domain/portalAccess";
 import { RESET_STATUS } from "@/lib/domain/resetStatus";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Portal access" };
@@ -24,6 +25,7 @@ export default async function PortalAccessPage({
   const players = season ? await playersWithoutPortalAccess(season.id) : [];
   const sendable = players.filter((p) => p.hasEmail);
   const needEmail = players.filter((p) => !p.hasEmail);
+  const allHouseholds = season ? (await playerAccountPersonIds(season.id)).length : 0;
 
   return (
     <div className="space-y-5">
@@ -31,6 +33,26 @@ export default async function PortalAccessPage({
 
       {sp.reset === "bulk" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Sent portal access to {sp.n ?? 0} player{sp.n === "1" ? "" : "s"} by text and email.</div>
+      )}
+      {sp.reset === "bulkall" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Sent a portal set/reset link to {sp.n ?? 0} household{sp.n === "1" ? "" : "s"} by text and email.</div>
+      )}
+
+      {/* Send to everyone — not just those without access. */}
+      {allHouseholds > 0 && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Send a portal link to every player</div>
+            <p className="text-xs text-slate-500">Texts + emails a set/reset-password link to all {allHouseholds} household{allHouseholds === 1 ? "" : "s"} in {season?.name ?? "the season"} (one per family). It doesn&apos;t change anyone&apos;s current password — it just gives everyone a fresh way in.</p>
+          </div>
+          <ConfirmSubmit
+            action="/api/console/reset-link"
+            fields={{ ticket, op: "sendAllPlayers", returnTo: "/console/portal-access" }}
+            confirm={`Send a portal set/reset link (text + email) to ALL ${allHouseholds} households now?`}
+            label="Send to every player"
+            className="btn-secondary text-sm"
+          />
+        </div>
       )}
       {(() => { const r = RESET_STATUS(sp.reset === "bulk" ? undefined : sp.reset, sp.resetVia, sp.resetNew); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
 
