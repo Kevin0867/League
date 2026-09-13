@@ -26,7 +26,7 @@ export async function sendConsoleInvite(opts: {
     `<p style="margin:0 0 14px;font-size:14px;color:#475569">You've been invited to the PURE Academy Console as <strong>${roleWord}</strong>. ` +
     `Set your password to activate your account.</p>` +
     emailButton(opts.link, "Set up my access", { primary: true }) +
-    `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8">This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`;
+    `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8">This link stays valid until you use it. If you weren’t expecting this, you can ignore this email.</p>`;
 
   const text = [
     `Hi ${opts.name},`,
@@ -35,7 +35,7 @@ export async function sendConsoleInvite(opts: {
     `Set your password to activate your account:`,
     opts.link,
     ``,
-    `This link expires in 7 days.`,
+    `This link stays valid until you use it.`,
     `Questions? Contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
@@ -65,7 +65,7 @@ export async function sendPortalInvite(opts: {
     `<p style="margin:0 0 14px;font-size:14px;color:#475569">Set your password to activate your PURE Academy account. ` +
     `Inside you can see ${forParent ? "your player's" : "your"} practice times &amp; locations, pay season fees, and read messages from ${forParent ? "coaches and admins" : "your coach"}.</p>` +
     emailButton(opts.link, "Set my password", { primary: true }) +
-    `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8">This link expires in 7 days. If you weren't expecting this, you can ignore this email.</p>`;
+    `<p style="margin:12px 0 0;font-size:12px;color:#94a3b8">This link stays valid until you use it. If you weren’t expecting this, you can ignore this email.</p>`;
 
   const text = [
     `Hi ${opts.name},`,
@@ -74,7 +74,7 @@ export async function sendPortalInvite(opts: {
     `Set your password:`,
     opts.link,
     ``,
-    `This link expires in 7 days.`,
+    `This link stays valid until you use it.`,
     `Questions? Contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 

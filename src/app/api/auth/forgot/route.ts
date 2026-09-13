@@ -72,7 +72,7 @@ export async function POST(req: Request) {
           emails,
           "Reset your PURE Academy password",
           `A password reset was requested for your PURE Academy account.\n\n` +
-            `Reset your password (this link expires in 1 hour):\n${link}\n\n` +
+            `Reset your password with this link:\n${link}\n\n` +
             `After you set a new password you'll be signed straight into your portal.\n\n` +
             `If you didn't request this, you can safely ignore this email.`,
         ).catch(() => {});
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       if (u.person?.phone) {
         await sendSms(
           u.person.phone,
-          `Reset your PURE Academy password here (expires in 1 hour): ${link} — you'll be signed into your portal after. Didn't request it? Ignore this.`,
+          `Reset your PURE Academy password here: ${link} — you'll be signed into your portal after. Didn't request it? Ignore this.`,
         ).catch(() => {});
       }
     }

@@ -22,8 +22,8 @@ export default async function ForgotPage({
             <>
               <p className="mt-2 text-sm text-slate-600">
                 If an account matches what you entered, we&apos;ve sent a reset link
-                by <strong>email and text</strong>. It expires in 1 hour. Check your
-                inbox (and spam) and your texts.
+                by <strong>email and text</strong>. Check your inbox (and spam)
+                and your texts — the link stays valid until you use it.
               </p>
               <Link href="/login" className="btn-primary mt-4">Back to sign in</Link>
             </>

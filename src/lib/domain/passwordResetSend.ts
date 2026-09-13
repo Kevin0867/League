@@ -99,7 +99,7 @@ export async function sendResetLinkForPerson(personId: string): Promise<ResetSen
     await sendEmail(
       emails,
       "Set your PURE Academy password",
-      `Here's your link to set your PURE Academy portal password${forWhom} (expires in 7 days):\n${link}\n\n` +
+      `Here's your link to set your PURE Academy portal password${forWhom}:\n${link}\n\n` +
         `After you set it you'll be signed straight into the portal.\n\n` +
         `If you didn't expect this, you can ignore this email.`,
     ).catch(() => {});
@@ -107,7 +107,7 @@ export async function sendResetLinkForPerson(personId: string): Promise<ResetSen
   if (phone) {
     await sendSms(
       phone,
-      `Set your PURE Academy portal password${forWhom} (expires in 7 days): ${link} — you'll be signed into the portal after.`,
+      `Set your PURE Academy portal password${forWhom}: ${link} — you'll be signed into the portal after.`,
     ).catch(() => {});
   }
   return { ok: true, toName: recipient.name, viaGuardian, created, emailed: emails.length, texted: !!phone };
