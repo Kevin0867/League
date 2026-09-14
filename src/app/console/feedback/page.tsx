@@ -4,6 +4,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { requireAdmin } from "@/lib/rbac";
 import { getSeasonStats } from "@/lib/domain/seasonStats";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { Attachment } from "@/components/Attachment";
 import { formatStamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -93,9 +94,13 @@ export default async function FeedbackConsole({ searchParams }: { searchParams: 
                   {f.coachId && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">{coachName.get(f.coachId) ?? "coach"}</span>}
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{PHASE_LABEL[f.phase ?? "GENERAL"] ?? f.phase}</span>
                   {f.published && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Published</span>}
+                  {f.visibility === "ADMINS_COACHES"
+                    ? <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">Admins + coach</span>
+                    : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Admins only</span>}
                   <span className="ml-auto text-xs text-slate-400">{formatStamp(f.createdAt)}</span>
                 </div>
                 {f.body && <p className="mt-1.5 text-sm text-slate-700">“{f.body}”</p>}
+                {f.attachmentUrl && <div className="mt-2"><Attachment url={f.attachmentUrl} type={f.attachmentType} /></div>}
                 <div className="mt-1 text-xs text-slate-400">
                   — {f.respondentName || "a family"}{f.consentPublish ? " · consented to publish" : " · did not consent to publish"}
                 </div>

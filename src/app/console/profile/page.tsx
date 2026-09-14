@@ -4,6 +4,8 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
 import { PasswordField } from "@/components/PasswordField";
+import { Attachment } from "@/components/Attachment";
+import { formatStamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +41,44 @@ export default async function CoachProfilePage({
 
   const coach = person?.coach ?? null;
 
+  // Feedback families chose to share with their coach (not admin-only, not
+  // hidden by the office). Shout-outs and notes land here for the coach to see.
+  const myFeedback = coach
+    ? await prisma.feedback.findMany({
+        where: { coachId: coach.id, visibility: "ADMINS_COACHES", status: { not: "HIDDEN" } },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      })
+    : [];
+
   return (
     <div className="space-y-6">
       <PageHeader title="My Profile" subtitle="Your sign-in, password, and profile details." />
+
+      {coach && (
+        <div className="card">
+          <h2 className="font-semibold text-slate-900">💬 Feedback about you</h2>
+          <p className="mt-0.5 text-sm text-slate-500">Notes families chose to share with you.</p>
+          {myFeedback.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No feedback shared with you yet.</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {myFeedback.map((f) => (
+                <li key={f.id} className="rounded-xl border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    {f.rating ? <span className="font-semibold text-amber-500">{"★".repeat(f.rating)}<span className="text-slate-300">{"★".repeat(5 - f.rating)}</span></span> : null}
+                    {f.published && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Published</span>}
+                    <span className="ml-auto text-xs text-slate-400">{formatStamp(f.createdAt)}</span>
+                  </div>
+                  {f.body && <p className="mt-1.5 text-sm text-slate-700">“{f.body}”</p>}
+                  {f.attachmentUrl && <div className="mt-2"><Attachment url={f.attachmentUrl} type={f.attachmentType} /></div>}
+                  <div className="mt-1 text-xs text-slate-400">— {f.respondentName || "a family"}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Profile saved.</p>}
       {sp.imgok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Profile photo updated.</p>}
       {sp.imgerr && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{sp.imgerr}</p>}

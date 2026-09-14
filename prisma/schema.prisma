@@ -806,6 +806,11 @@ model Feedback {
   consentPublish Boolean  @default(false)
   /// An admin approved it for public display (requires consentPublish).
   published      Boolean  @default(false)
+  /// Who the submitter chose to share it with: ADMINS | ADMINS_COACHES.
+  visibility     String   @default("ADMINS")
+  /// Optional single photo/video attachment (IMAGE | VIDEO).
+  attachmentUrl  String?
+  attachmentType String?
   /// NEW | REVIEWED | HIDDEN
   status         String   @default("NEW")
   /// MIDSEASON | ENDSEASON | GENERAL
@@ -814,6 +819,7 @@ model Feedback {
 
   @@index([coachId, published])
   @@index([status, createdAt])
+  @@index([coachId, visibility])
 }
 
 /// A coach's request for a substitute on one class. Created by the class's coach
