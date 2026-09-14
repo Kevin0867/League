@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { MessageComposer } from "@/components/MessageComposer";
 import { formatDateTime12 } from "@/lib/time";
+import { personSearchOR } from "@/lib/domain/personSearch";
 import { requireAdmin } from "@/lib/rbac";
 import { can } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
@@ -70,7 +71,16 @@ export default async function MessagesPage({
     prisma.person.findMany({ select: { id: true, firstName: true, lastName: true }, orderBy: { lastName: "asc" }, take: 500 }),
     prisma.message.findMany({
       where: msgQuery
-        ? { OR: [{ subject: { contains: msgQuery, mode: "insensitive" } }, { body: { contains: msgQuery, mode: "insensitive" } }] }
+        ? {
+            OR: [
+              { subject: { contains: msgQuery, mode: "insensitive" } },
+              { body: { contains: msgQuery, mode: "insensitive" } },
+              // Surface messages by who they went to or who sent them — so a
+              // name, email, or phone finds the message, not just its text.
+              { recipients: { some: { person: { OR: personSearchOR(msgQuery) } } } },
+              { sender: { person: { OR: personSearchOR(msgQuery) } } },
+            ],
+          }
         : {},
       orderBy: { sentAt: "desc" },
       take: msgQuery ? 100 : 25,

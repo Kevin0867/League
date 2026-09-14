@@ -174,6 +174,10 @@ model Person {
   email2Label        String?
   email3Label        String?
   phone              String?
+  /// Last-10-digits of `phone`, kept current by a DB trigger — so search matches
+  /// a number regardless of how it's formatted ("(480) 747-7057", "480-747-7057",
+  /// "+14807477057" all normalize to "4807477057"). Do not set from app code.
+  phoneDigits        String?
 
   /// Public profile image (used on /coaches). Stored in object storage; this is
   /// the served URL. Coaches upload their own; admins can upload on their behalf.
@@ -252,6 +256,7 @@ model Person {
   @@index([lastName, firstName])
   @@index([email])
   @@index([phone])
+  @@index([phoneDigits])
 }
 
 /// A person's request to join — capturing a SINGLE division (§3). Distinct from
