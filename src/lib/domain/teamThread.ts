@@ -13,14 +13,19 @@ async function teamThreadMemberIds(teamId: string): Promise<string[]> {
     select: {
       coach: { select: { personId: true } },
       assistantCoaches: { select: { coach: { select: { personId: true } } } },
-      members: { select: { personId: true } },
+      // A player plus their guardian — so a parent of a younger player is in the
+      // team channel and receives team messages / can reply on their behalf.
+      members: { select: { personId: true, person: { select: { guardianId: true } } } },
     },
   });
   if (!team) return [];
   const ids = new Set<string>();
   if (team.coach?.personId) ids.add(team.coach.personId);
   for (const ac of team.assistantCoaches) if (ac.coach?.personId) ids.add(ac.coach.personId);
-  for (const m of team.members) ids.add(m.personId);
+  for (const m of team.members) {
+    ids.add(m.personId);
+    if (m.person?.guardianId) ids.add(m.person.guardianId);
+  }
   return [...ids];
 }
 

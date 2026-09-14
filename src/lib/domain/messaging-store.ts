@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 
 // Read helpers for the direct-messaging inbox and thread views. Retention rule:
 // a message with deletedAt or a thread a user has hidden is still returned to a
@@ -244,4 +245,78 @@ export async function markRead(conversationId: string, personId: string): Promis
     where: { conversationId, personId },
     data: { lastReadAt: new Date() },
   });
+}
+
+// ── Coach moderation: messages within the teams a coach coaches ──────────────
+// The set of person ids on a coach's teams (players, their guardians, and the
+// coaching staff). Used to scope what a coach may moderate.
+export async function coachTeamPersonIds(userId: string): Promise<Set<string>> {
+  const teamIds = await coachedTeamIdsForUser(userId);
+  if (!teamIds.length) return new Set();
+  const teams = await prisma.team.findMany({
+    where: { id: { in: teamIds } },
+    select: {
+      coach: { select: { personId: true } },
+      assistantCoaches: { select: { coach: { select: { personId: true } } } },
+      members: { select: { personId: true, person: { select: { guardianId: true } } } },
+    },
+  });
+  const ids = new Set<string>();
+  for (const t of teams) {
+    if (t.coach?.personId) ids.add(t.coach.personId);
+    for (const ac of t.assistantCoaches) if (ac.coach?.personId) ids.add(ac.coach.personId);
+    for (const m of t.members) { ids.add(m.personId); if (m.person?.guardianId) ids.add(m.person.guardianId); }
+  }
+  return ids;
+}
+
+/** Whether this coach may moderate a specific conversation: every participant
+ *  must be within their teams (a teammate DM, an intra-team thread). Team
+ *  threads they're already in also pass. */
+export async function canCoachModerate(userId: string, conversationId: string): Promise<boolean> {
+  const [ids, convo] = await Promise.all([
+    coachTeamPersonIds(userId),
+    prisma.conversation.findUnique({ where: { id: conversationId }, select: { participants: { select: { personId: true } } } }),
+  ]);
+  if (!convo || ids.size === 0) return false;
+  return convo.participants.length > 0 && convo.participants.every((p) => ids.has(p.personId));
+}
+
+/** Conversations within a coach's teams that they are NOT already a participant
+ *  of — i.e. player↔player (and player↔parent) DMs to supervise. Team threads
+ *  the coach is in already appear in their normal inbox. */
+export async function coachModerationItems(userId: string): Promise<InboxItem[]> {
+  const ids = await coachTeamPersonIds(userId);
+  if (ids.size === 0) return [];
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { personId: true } });
+  const myPersonId = me?.personId ?? "";
+  const convos = await prisma.conversation.findMany({
+    where: { participants: { some: { personId: { in: [...ids] } } } },
+    orderBy: { lastMessageAt: "desc" },
+    take: 300,
+    select: {
+      id: true, subject: true, kind: true, lastMessageAt: true,
+      participants: { select: { personId: true, lastReadAt: true, person: { select: { firstName: true, lastName: true } } } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { body: true, deletedAt: true, senderId: true, createdAt: true } },
+    },
+  });
+  return convos
+    .filter((c) => c.participants.every((p) => ids.has(p.personId)) && !c.participants.some((p) => p.personId === myPersonId))
+    .map((c) => {
+      const names = c.participants.map((p) => fullName(p.person)).join(" ↔ ");
+      const others = c.kind !== "DIRECT" && c.subject ? c.subject : names || "(no one)";
+      const last = c.messages[0];
+      return {
+        id: c.id,
+        subject: c.subject,
+        others,
+        preview: !last ? "No messages yet" : last.deletedAt ? "Message deleted" : last.body,
+        lastMessageAt: c.lastMessageAt,
+        unread: moderationUnread(c.participants, last),
+      };
+    });
+}
+
+export async function coachModerationUnreadCount(userId: string): Promise<number> {
+  return (await coachModerationItems(userId)).filter((i) => i.unread).length;
 }

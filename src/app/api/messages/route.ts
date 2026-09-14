@@ -5,6 +5,7 @@ import { audit } from "@/lib/audit";
 import { canUseMessagingPerson, canReachPerson } from "@/lib/domain/messaging-acl";
 import { appendMessage, findOrCreateConversation } from "@/lib/domain/dm";
 import { ensureTeamConversation, ensureAdminConversation } from "@/lib/domain/teamThread";
+import { canCoachModerate } from "@/lib/domain/messaging-store";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { isAdmin } from "@/lib/rbac";
 
@@ -96,9 +97,11 @@ export async function POST(req: Request) {
       select: { id: true },
     });
     if (!part) {
-      // Admins can step into ANY conversation to help — join it, then reply, so
-      // both people see the admin's message and the admin stays in the loop.
-      if (isAdmin(actor.roles)) {
+      // Admins can step into ANY conversation to help — and a coach into any
+      // conversation within their own teams. Joining, then replying, keeps them
+      // in the loop and everyone sees the message.
+      const mayStepIn = isAdmin(actor.roles) || (await canCoachModerate(actor.userId, conversationId));
+      if (mayStepIn) {
         const convo = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true } });
         if (!convo) return back(`${base}?err=perm`);
         await prisma.conversationParticipant.create({ data: { conversationId, personId: myPersonId } }).catch(() => {});

@@ -32,7 +32,7 @@ export function TeamUpdateComposer({
           e.preventDefault();
           return;
         }
-        if (!window.confirm(`Send this update to everyone on ${teamName} — players and parents?`)) {
+        if (!window.confirm(`Post this to the ${teamName} team thread? Everyone on the team (players + parents) is notified and can reply.`)) {
           e.preventDefault();
           return;
         }
@@ -50,9 +50,7 @@ export function TeamUpdateComposer({
       />
       <div className="mt-2"><MediaAttach label="Attach a photo / practice video" library /></div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" name="channel_SMS" value="on" defaultChecked /> Also text this to the team
-        </label>
+        <span className="text-xs text-slate-500">Posts to the team thread — the team is texted &amp; emailed, and can reply.</span>
         <button type="submit" disabled={pending} className="btn-primary w-full sm:w-auto disabled:opacity-60">
           {pending ? "Sending…" : submitLabel}
         </button>
