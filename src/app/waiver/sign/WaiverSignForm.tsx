@@ -33,8 +33,15 @@ export function WaiverSignForm({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [problems, setProblems] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
+  // Only the legal essentials block signing: agreement, a typed signature, and
+  // (for a minor) a parent/guardian email. Gender is optional — never block a
+  // signature on a demographic dropdown. We always preventDefault and submit the
+  // form programmatically when valid, so a click can never silently no-op.
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (submitting) return;
     const form = e.currentTarget;
     const missing: string[] = [];
     const badFields: HTMLElement[] = [];
@@ -48,13 +55,6 @@ export function WaiverSignForm({
     const sig = form.elements.namedItem("signatureName") as HTMLInputElement | null;
     if (!sig?.value.trim()) { missing.push("Type the full legal name to sign."); flag(sig); }
 
-    // Gender for every participant
-    for (const m of participants) {
-      const sel = form.elements.namedItem(`gender_${m.id}`) as HTMLSelectElement | null;
-      const v = sel?.value ?? "";
-      if (v !== "MALE" && v !== "FEMALE") { missing.push(`Select a gender for ${m.name}.`); flag(sel); }
-    }
-
     // Guardian email (minors only)
     if (isMinor) {
       const ge = form.elements.namedItem("guardianEmail") as HTMLInputElement | null;
@@ -63,7 +63,6 @@ export function WaiverSignForm({
     }
 
     if (missing.length > 0) {
-      e.preventDefault();
       setProblems(missing);
       const firstBad = badFields[0];
       if (firstBad) {
@@ -73,7 +72,10 @@ export function WaiverSignForm({
       return;
     }
     setProblems([]);
-    // valid → allow the native POST to proceed
+    setSubmitting(true);
+    // Programmatic submit — bypasses the submit event (no re-entry) and any
+    // native constraint UI, so it always navigates.
+    form.submit();
   };
 
   return (
@@ -117,8 +119,8 @@ export function WaiverSignForm({
           {participants.length > 1 ? "Everyone on this waiver" : "Participant"}
         </p>
         <p className="mt-0.5 text-xs text-slate-500">
-          Please confirm each person&apos;s gender — it&apos;s used to place players in the correct
-          division{participants.length > 1 ? ", including the parent/guardian and each child" : ""}.
+          Optional — this helps us place players in the correct
+          division{participants.length > 1 ? ", including the parent/guardian and each child" : ""}. You can sign without it.
         </p>
         <div className="mt-3 space-y-3">
           {participants.map((m) => {
@@ -171,7 +173,7 @@ export function WaiverSignForm({
         </div>
       )}
 
-      <button type="submit" className="btn-primary">Sign waiver</button>
+      <button type="submit" className="btn-primary" disabled={submitting}>{submitting ? "Signing…" : "Sign waiver"}</button>
     </form>
   );
 }
