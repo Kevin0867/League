@@ -60,9 +60,11 @@ const OK_MSG: Record<string, string> = {
   deleted: "Practice deleted.",
   edited: "Practice updated.",
   cancel: "Session cancelled.",
+  teamfeedback: "Feedback request sent to this team's families (text + email).",
 };
 
 const ERR_MSG: Record<string, string> = {
+  noplayers: "This team has no players on the roster yet.",
   auth: "Not authorized to manage teams.",
   team: "Missing team.",
   coach: "Cannot assign this coach — not cleared (background check required).",
@@ -367,6 +369,19 @@ export default async function TeamDetailPage({
             <div className="text-sm font-semibold text-slate-800">Messages (Inbox) →</div>
             <div className="mt-0.5 text-xs text-slate-500">A private, back-and-forth conversation with one parent, player, or another coach.</div>
           </Link>
+          <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3">
+            <div className="text-sm font-semibold text-brand-800">💬 Request feedback from the team</div>
+            <div className="mt-0.5 text-xs text-slate-500">Text + email every family a quick feedback link — about the coach and how it&apos;s going. Send anytime.</div>
+            <div className="mt-2">
+              <ConfirmSubmit
+                action="/api/console/feedback"
+                fields={{ ticket, op: "sendTeamFeedback", teamId: team.id, returnTo: `/console/teams/${team.id}` }}
+                confirm={`Text + email all ${team.members.length} famil${team.members.length === 1 ? "y" : "ies"} on ${team.name} a feedback request now?`}
+                label="Send feedback request"
+                className="btn-primary text-xs"
+              />
+            </div>
+          </div>
         </div>
       </div>
 

@@ -3,10 +3,8 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import { dispatchMessage } from "@/lib/messaging";
 import { getSeasonStats } from "@/lib/domain/seasonStats";
-import { signFeedbackToken } from "@/lib/domain/feedback";
-import { appUrl } from "@/lib/stripe";
+import { sendFeedbackCampaign } from "@/lib/domain/feedbackCampaign";
 
 // Season feedback: send the thank-you + feedback request to every family
 // (mid-season / end-of-season), and moderate/publish the responses. Admin only.
@@ -23,7 +21,6 @@ export async function POST(req: Request) {
   // Text + email every season family a thank-you and a tokenized feedback link.
   if (op === "sendCampaign") {
     const phase = String(fd.get("phase") ?? "GENERAL");
-    const phaseWord = phase === "MIDSEASON" ? "how the season is going" : phase === "ENDSEASON" ? "the Fall season" : "your experience";
     const stats = await getSeasonStats();
     const seasonId = stats.season?.id ?? null;
     if (!seasonId) return back("?err=noseason");
@@ -35,25 +32,30 @@ export async function POST(req: Request) {
     });
     const personIds = [...new Set(regs.map((r) => r.personId))];
 
-    let sent = 0;
-    for (const personId of personIds) {
-      // No-login tokenized feedback link — the token identifies the family (and
-      // their coaches) so they can leave a note, photo/video, who-can-see, and
-      // publish consent without signing in. Recipients are known contacts.
-      const token = await signFeedbackToken(personId, seasonId, phase);
-      const link = `${appUrl()}/feedback/${token}`;
-      const res = await dispatchMessage({
-        senderId: actor.userId, seasonId,
-        audienceType: "SINGLE_PERSON", audienceRef: personId,
-        channels: ["EMAIL", "SMS"], triggerType: "SEASON_FEEDBACK",
-        subject: "Thank you for a great season — a quick favor?",
-        body: `Thank you for being part of the PURE Academy Fall Season! We'd love your quick feedback on ${phaseWord} — and if a coach made a difference, a testimonial we might feature on their profile. It takes a minute: ${link}`,
-        smsBody: `PURE Academy — thank you for a great season! A quick note on ${phaseWord} (and your coach) would mean a lot: ${link}`,
-      });
-      if (!res.failures) sent++;
-    }
+    const sent = await sendFeedbackCampaign({ senderId: actor.userId, seasonId, phase, personIds });
+    // A manual mid-season send also stamps the season, so the automated end-of-
+    // week-6 send doesn't fire a duplicate.
+    if (phase === "MIDSEASON") await prisma.season.update({ where: { id: seasonId }, data: { midseasonFeedbackSentAt: new Date() } }).catch(() => {});
     await audit({ actorId: actor.userId, entityType: "Feedback", entityId: "campaign", action: "FEEDBACK_CAMPAIGN", summary: `Sent ${phase} feedback request to ${sent} famil${sent === 1 ? "y" : "ies"}` });
     return back(`?ok=sent&n=${sent}&phase=${encodeURIComponent(phase)}`);
+  }
+
+  // Request feedback from ONE team's families — anytime, from the team page.
+  if (op === "sendTeamFeedback") {
+    const teamId = String(fd.get("teamId") ?? "");
+    const rawReturn = String(fd.get("returnTo") ?? "");
+    const returnTo = rawReturn.startsWith("/console/teams/") ? rawReturn : `/console/teams/${teamId}`;
+    const backTeam = (qs: string) => NextResponse.redirect(new URL(`${returnTo}${qs}`, origin), 303);
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { seasonId: true, coachId: true, members: { select: { personId: true } } },
+    });
+    if (!team) return backTeam("?err=notfound");
+    const personIds = [...new Set(team.members.map((m) => m.personId))];
+    if (personIds.length === 0) return backTeam("?err=noplayers");
+    const sent = await sendFeedbackCampaign({ senderId: actor.userId, seasonId: team.seasonId, phase: "GENERAL", personIds, coachId: team.coachId });
+    await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "FEEDBACK_CAMPAIGN_TEAM", summary: `Requested feedback from ${sent} team famil${sent === 1 ? "y" : "ies"}` });
+    return backTeam(`?ok=teamfeedback&n=${sent}`);
   }
 
   // Moderate one response.
