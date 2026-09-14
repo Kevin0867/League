@@ -65,12 +65,6 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Notes & Forms",
-    items: [
-      { href: "/console/forms", label: "Coaching Forms", roles: ["COACH"], match: ["/console/forms"] },
-    ],
-  },
-  {
     title: "Operations",
     items: [
       { href: "/console/facilities", label: "Facilities", roles: ["COO", "CEO", "DIRECTOR"] },

@@ -3,8 +3,8 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import { dispatchMessage } from "@/lib/messaging";
-import { teamUpdateEmail } from "@/lib/domain/teamUpdateEmail";
+import { ensureTeamConversation } from "@/lib/domain/teamThread";
+import { appendMessage } from "@/lib/domain/dm";
 
 // Coach/admin team broadcast: a note sent to the whole team (players + parents).
 // Authorized for admins, or the team's own head/assistant coach.
@@ -46,38 +46,26 @@ export async function POST(req: Request) {
   const attachmentUrl = String(fd.get("attachmentUrl") ?? "").trim() || null;
   const attachmentType = String(fd.get("attachmentType") ?? "").trim() || null;
   if (!body && !attachmentUrl) return back("?err=empty");
-  const alsoText = fd.get("channel_SMS") === "on";
 
-  const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "Your PURE coach";
-  const email = teamUpdateEmail({ teamName: team.name, coachName, body, attachmentUrl, attachmentType });
-  const res = await dispatchMessage({
-    senderId: actor.userId,
-    seasonId: team.seasonId,
-    audienceType: "TEAM",
-    audienceRef: teamId,
-    channels: alsoText ? ["IN_APP", "EMAIL", "SMS"] : ["IN_APP", "EMAIL"],
-    triggerType: "TEAM_UPDATE",
-    subject: email.subject,
-    body: email.text,
-    html: email.html,
-    attachmentUrl,
-    attachmentType,
-    // The email body is long-form; the SMS gets the coach's raw note prefixed
-    // with the team name, plus a link to the photo/video so texted families can
-    // actually open it (email embeds it; a text needs the URL).
-    smsBody: `${team.name} update from ${coachName}:\n${body || (attachmentType === "VIDEO" ? "shared a video" : "shared a photo")}${attachmentUrl ? `\n${attachmentType === "VIDEO" ? "Watch" : "View"}: ${attachmentUrl}` : ""}`,
-  });
+  // Post the coach's update into the team's group thread — so it reaches the
+  // whole team (players + parents) AND everyone can reply in one place. Replaces
+  // the old one-way team broadcast; appendMessage notifies every participant by
+  // email + text.
+  const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
+  if (!me?.personId) return back("?err=auth");
+  const conversationId = await ensureTeamConversation(teamId);
+  if (!conversationId) return back("?err=empty");
+  const attach = attachmentUrl ? { url: attachmentUrl, type: attachmentType } : null;
+  await appendMessage(conversationId, me.personId, body, { email: true, sms: true }, attach);
 
   await audit({
     actorId: actor.userId,
     entityType: "Team",
     entityId: teamId,
     action: "team.update",
-    summary: `Team update sent to ${res.recipients} recipient(s)${res.failures ? `, ${res.failures} failed` : ""}`,
+    summary: `Posted a team update to the ${team.name} team thread`,
   });
 
-  const qs = new URLSearchParams({ ok: "teamsent", n: String(res.recipients) });
-  if (res.failures) qs.set("failed", String(res.failures));
-  if (res.failureReasons[0]) qs.set("reason", res.failureReasons[0].slice(0, 160));
-  return back(`?${qs.toString()}`);
+  // Land the coach in the thread so they see it posted and any replies.
+  return NextResponse.redirect(new URL(`/console/inbox/${conversationId}`, origin), 303);
 }
