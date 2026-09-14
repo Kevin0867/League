@@ -10,8 +10,17 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 // console (admin, coach) and the family portal (parent). All actions are native
 // form POSTs to /api/messages carrying a console ticket.
 
-export function Composer({ contacts, ticket, returnTo, library = false }: { contacts: Contact[]; ticket: string; returnTo: string; library?: boolean }) {
-  if (contacts.length === 0) {
+type MsgTarget = { value: string; name: string; hint?: string };
+
+export function Composer({ contacts, targets, ticket, returnTo, library = false }: { contacts?: Contact[]; targets?: MsgTarget[]; ticket: string; returnTo: string; library?: boolean }) {
+  // Audience-picker mode (players/coaches: coach, whole team, Admins, teammate)
+  // when `targets` is supplied; otherwise the classic person picker.
+  const useTargets = targets !== undefined;
+  const options = useTargets
+    ? (targets ?? []).map((t) => ({ id: t.value, name: t.name, hint: t.hint }))
+    : (contacts ?? []).map((c) => ({ id: c.personId, name: c.name, hint: c.role === "ADMIN" ? "Admin" : c.role === "COACH" ? "Coach" : c.role === "PLAYER" ? "Player" : "Parent" }));
+
+  if (options.length === 0) {
     return (
       <div className="card text-sm text-slate-500">
         You don&apos;t have anyone to message yet. Contacts appear here once you share a team.
@@ -21,20 +30,16 @@ export function Composer({ contacts, ticket, returnTo, library = false }: { cont
   return (
     <form method="POST" action="/api/messages" className="card space-y-3">
       <input type="hidden" name="ticket" value={ticket} />
-      <input type="hidden" name="op" value="start" />
+      <input type="hidden" name="op" value={useTargets ? "startTarget" : "start"} />
       <input type="hidden" name="returnTo" value={returnTo} />
       <h2 className="font-semibold text-slate-900">New message</h2>
       <div>
-        <label className="label">To</label>
+        <label className="label">{useTargets ? "Who should see this?" : "To"}</label>
         <SearchableSelect
-          name="recipientId"
+          name={useTargets ? "target" : "recipientId"}
           required
-          placeholder="Search for a person by name…"
-          options={contacts.map((c) => ({
-            id: c.personId,
-            name: c.name,
-            hint: c.role === "ADMIN" ? "Admin" : c.role === "COACH" ? "Coach" : c.role === "PLAYER" ? "Player" : "Parent",
-          }))}
+          placeholder={useTargets ? "Choose your coach, your team, Admins, or a teammate…" : "Search for a person by name…"}
+          options={options}
         />
       </div>
       <div>

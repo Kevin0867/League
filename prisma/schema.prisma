@@ -1597,11 +1597,17 @@ model Conversation {
   createdAt     DateTime @default(now())
   /// Bumped on every new message so inboxes sort by recent activity.
   lastMessageAt DateTime @default(now())
+  /// DIRECT (1:1) | TEAM (a team's group thread) | ADMINS (a member ↔ the
+  /// admin team). Group threads have many participants; DIRECT has two.
+  kind          String   @default("DIRECT")
+  /// For a TEAM thread, the team it belongs to (one thread per team).
+  teamId        String?
 
   participants  ConversationParticipant[]
   messages      ChatMessage[]
 
   @@index([lastMessageAt])
+  @@index([teamId])
 }
 
 model ConversationParticipant {

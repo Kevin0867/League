@@ -28,6 +28,7 @@ export async function inboxItems(personId: string): Promise<InboxItem[]> {
         select: {
           id: true,
           subject: true,
+          kind: true,
           lastMessageAt: true,
           participants: { select: { personId: true, person: { select: { firstName: true, lastName: true } } } },
           messages: {
@@ -43,11 +44,14 @@ export async function inboxItems(personId: string): Promise<InboxItem[]> {
 
   return parts.map((p) => {
     const c = p.conversation;
-    const others = c.participants.filter((pt) => pt.personId !== personId).map((pt) => fullName(pt.person)).join(", ");
+    const names = c.participants.filter((pt) => pt.personId !== personId).map((pt) => fullName(pt.person)).join(", ");
+    // A group thread is shown by its name (e.g. "Mesa M4.0 — team chat"), not a
+    // long list of everyone in it.
+    const others = c.kind !== "DIRECT" && c.subject ? c.subject : names || "(no one)";
     const last = c.messages[0];
     const preview = !last ? "No messages yet" : last.deletedAt ? "Message deleted" : last.body;
     const unread = !!last && last.senderId !== personId && (!p.lastReadAt || last.createdAt > p.lastReadAt);
-    return { id: c.id, subject: c.subject, others: others || "(no one)", preview, lastMessageAt: c.lastMessageAt, unread };
+    return { id: c.id, subject: c.subject, others, preview, lastMessageAt: c.lastMessageAt, unread };
   });
 }
 
@@ -131,6 +135,7 @@ export async function searchInbox(personId: string, q: string, asModerator: bool
     select: {
       id: true,
       subject: true,
+      kind: true,
       lastMessageAt: true,
       participants: { select: { personId: true, person: { select: { firstName: true, lastName: true } } } },
       // The most recent message that matches the term (for the snippet); empty
@@ -139,12 +144,13 @@ export async function searchInbox(personId: string, q: string, asModerator: bool
     },
   });
   return convos.map((c) => {
-    const others = c.participants.filter((pt) => pt.personId !== personId).map((pt) => fullName(pt.person)).join(asModerator ? " ↔ " : ", ");
+    const names = c.participants.filter((pt) => pt.personId !== personId).map((pt) => fullName(pt.person)).join(asModerator ? " ↔ " : ", ");
+    const others = c.kind !== "DIRECT" && c.subject ? c.subject : names || "(no one)";
     const hit = c.messages[0];
     return {
       id: c.id,
       subject: c.subject,
-      others: others || (asModerator ? "(no one)" : "(no one)"),
+      others,
       preview: hit ? hit.body : "Matched subject or participant",
       lastMessageAt: c.lastMessageAt,
       unread: false,
@@ -166,6 +172,7 @@ export type ThreadMessage = {
 export type Thread = {
   id: string;
   subject: string | null;
+  kind: string;
   participantIds: string[];
   others: string;
   messages: ThreadMessage[];
@@ -186,6 +193,7 @@ export async function getThread(
     select: {
       id: true,
       subject: true,
+      kind: true,
       participants: { select: { personId: true, person: { select: { firstName: true, lastName: true } } } },
       messages: {
         orderBy: { createdAt: "asc" },
@@ -218,11 +226,14 @@ export async function getThread(
     attachmentType: m.deletedAt ? null : m.attachmentType,
   }));
 
+  const names = c.participants.filter((p) => p.personId !== viewerPersonId).map((p) => fullName(p.person)).join(", ");
   return {
     id: c.id,
     subject: c.subject,
+    kind: c.kind,
     participantIds: c.participants.map((p) => p.personId),
-    others: c.participants.filter((p) => p.personId !== viewerPersonId).map((p) => fullName(p.person)).join(", "),
+    // Group threads are titled by their name; DMs by the other person.
+    others: c.kind !== "DIRECT" && c.subject ? c.subject : names,
     messages,
   };
 }
