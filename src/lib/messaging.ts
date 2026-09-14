@@ -86,13 +86,25 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   const channels = input.channels.length ? input.channels : ["IN_APP"];
   const pickedEmails = (input.toEmails ?? []).map((e) => e.trim()).filter(Boolean);
   const hasPicked = pickedEmails.length > 0;
-  const recipients = await resolveAudience(
+  const resolvedRecipients = await resolveAudience(
     input.audienceType,
     input.audienceRef ?? null,
     input.seasonId ?? null,
     // Hand-picked recipients: don't expand to the guardian (avoids duplicate sends).
     hasPicked ? false : undefined
   );
+
+  // Resolve the sender's person up front — used both to exclude them from their
+  // own broadcast and to route replies back to them.
+  const senderUser = input.senderId
+    ? await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true, email: true, person: { select: { email: true, firstName: true, lastName: true } } } })
+    : null;
+  const senderPersonId = senderUser?.personId ?? null;
+
+  // Never make the sender a recipient of their own message: they shouldn't get
+  // an unread badge — or a self-email/text — for something they just sent. A
+  // SINGLE_PERSON message addressed to someone else is unaffected.
+  const recipients = senderPersonId ? resolvedRecipients.filter((r) => r.personId !== senderPersonId) : resolvedRecipients;
 
   const message = await prisma.message.create({
     data: {
@@ -114,10 +126,6 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // Resolve the sender so replies route back to them (a coach/admin): SMS
   // text-backs via the SMS route, and email replies via Reply-To. We include
   // the team inbox in Reply-To too, so admins see the reply as well.
-  const senderUser = input.senderId
-    ? await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true, email: true, person: { select: { email: true, firstName: true, lastName: true } } } })
-    : null;
-  const senderPersonId = senderUser?.personId ?? null;
   const senderEmail = (senderUser?.person?.email || senderUser?.email || "").trim() || null;
   const senderName = senderUser?.person ? `${senderUser.person.firstName} ${senderUser.person.lastName}`.trim() : null;
   const TEAM_INBOX = "team@purepickleball.com";
