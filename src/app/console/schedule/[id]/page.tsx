@@ -53,7 +53,7 @@ export default async function SessionDetail({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err, srok, srerr } = await searchParams;
+  const { ok, err, srok, srerr, rem, c, p } = await searchParams;
   const ticket = await mintConsoleTicket();
   const returnTo = `/console/schedule/${id}`;
   const s = await prisma.session.findUnique({
@@ -237,6 +237,29 @@ export default async function SessionDetail({
       )}
       {srok && <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{SR_OK[srok] ?? "Done."}</div>}
       {srerr && <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">{SR_ERR[srerr] ?? "Something went wrong."}</div>}
+      {rem === "sent" && <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Reminder sent — {c ?? 0} coach text{c === "1" ? "" : "s"} and {p ?? 0} player/parent text{p === "1" ? "" : "s"}, with the correct link.</div>}
+      {rem === "auth" && <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">You&apos;re not able to send reminders for this class.</div>}
+      {rem === "none" && <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800">Couldn&apos;t send the reminder — the class wasn&apos;t found.</div>}
+
+      {/* Send the practice reminder (coach + players) right now, with the correct
+          link — for testing, or after a reminder went out with a bad link. */}
+      {s.type === "PRACTICE" && (
+        <div className="card border-l-4 border-brand-400">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">📣 Send reminder now</h2>
+              <p className="mt-0.5 text-sm text-slate-500">Text the coach and every SMS-opted-in player/parent this class&apos;s time, place, and a working check-in link — immediately.</p>
+            </div>
+            <ConfirmSubmit
+              action="/api/console/schedule"
+              fields={{ ticket, op: "sendReminderNow", sessionId: s.id, returnTo }}
+              confirm="Text the coach and all opted-in players/parents for this class now?"
+              label="Send reminder now"
+              className="btn-primary text-sm"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Need a sub? — the coach who can't make this class asks for cover here;
           other coaches claim it from the Coaches' Lounge. */}

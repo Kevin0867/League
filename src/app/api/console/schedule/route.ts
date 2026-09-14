@@ -14,6 +14,7 @@ import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { assignSessionSub } from "@/lib/domain/coachSub";
 import { addTeamAssistantToSessions } from "@/lib/domain/teamCoachSessions";
 import { isSessionComplete } from "@/lib/domain/coachPay";
+import { resendSessionReminder } from "@/lib/domain/sessionReminders";
 
 // Schedule mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -80,6 +81,21 @@ export async function POST(req: Request) {
 
   const actor = await actorFromForm(formData);
   const op = String(formData.get("op") ?? "");
+
+  // Fire the practice check-in reminder (coach + players) for one session right
+  // now, with the correct production-domain link — for testing or after a
+  // reminder went out with a bad link. Admin, or the session's own coach.
+  if (op === "sendReminderNow") {
+    if (!actor) return back("?rem=auth");
+    const sessionId = String(formData.get("sessionId") ?? "");
+    if (!sessionId) return back("?rem=none");
+    const mode = await schedEditMode(actor, sessionId);
+    if (!mode) return back("?rem=auth");
+    const { ok, coachTexts, playerTexts } = await resendSessionReminder(sessionId);
+    if (!ok) return back("?rem=none");
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "REMINDER_RESEND", summary: `Re-sent practice reminder — ${coachTexts} coach + ${playerTexts} player text${coachTexts + playerTexts === 1 ? "" : "s"}` });
+    return back(`?rem=sent&c=${coachTexts}&p=${playerTexts}`);
+  }
 
   // Reschedule a single session — date, time, and/or facility (§7). Notifies the
   // team(s) by default so families see the change (opt out with the checkbox).
