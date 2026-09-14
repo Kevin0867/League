@@ -16,6 +16,7 @@ const ERRORS: Record<string, string> = {
   name: "Please type the full legal name to sign.",
   guardianemail: "Please enter the parent/guardian email so we can reach you about your player.",
   gender: "Please select a gender for everyone on the waiver.",
+  server: "Something went wrong saving your waiver. Please try again, or contact us if it keeps happening.",
 };
 
 export default async function WaiverSignPage({

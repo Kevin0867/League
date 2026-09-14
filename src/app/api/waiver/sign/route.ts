@@ -82,46 +82,54 @@ export async function POST(req: Request) {
     return v === "MALE" || v === "FEMALE" ? v : null;
   };
 
-  for (const member of family) {
-    await prisma.waiver.create({
-      data: {
-        personId: member.id,
-        signedAt: now,
-        signatureName,
-        mediaConsent: !mediaOptOut,
-        // The adult signs on a dependent's behalf → parental consent; and for the
-        // adult themselves only if they are (unusually) a minor.
-        parentalConsent: member.id !== rootId || member.minor,
-        documentVersion: version,
-      },
-    });
-    const g = genderFor(member.id);
-    await prisma.person.update({
-      where: { id: member.id },
-      data: { waiverSignedAt: now, waiverRenewalRequiredAt: null, mediaOptOut, ...(g ? { gender: g } : {}) },
-    });
-  }
-  // Retain the parent/guardian contact for a minor: store it on the signer
-  // (guardian) record, and add it as a notification address on every minor in
-  // the household so updates about the child always reach the parent — even if
-  // the child also has their own email on file.
-  if (person?.isMinor && guardianEmail) {
-    await ensureEmailOnPerson(rootId, guardianEmail);
+  // Persist everything inside a guard so an unexpected DB error becomes a
+  // visible message on the form instead of a blank 500 that looks like the
+  // button "did nothing".
+  try {
     for (const member of family) {
-      if (member.minor) await ensureEmailOnPerson(member.id, guardianEmail);
+      await prisma.waiver.create({
+        data: {
+          personId: member.id,
+          signedAt: now,
+          signatureName,
+          mediaConsent: !mediaOptOut,
+          // The adult signs on a dependent's behalf → parental consent; and for the
+          // adult themselves only if they are (unusually) a minor.
+          parentalConsent: member.id !== rootId || member.minor,
+          documentVersion: version,
+        },
+      });
+      const g = genderFor(member.id);
+      await prisma.person.update({
+        where: { id: member.id },
+        data: { waiverSignedAt: now, waiverRenewalRequiredAt: null, mediaOptOut, ...(g ? { gender: g } : {}) },
+      });
     }
-    if (guardianPhone) {
-      const rootP = await prisma.person.findUnique({ where: { id: rootId }, select: { phone: true } });
-      if (rootP && !rootP.phone) await prisma.person.update({ where: { id: rootId }, data: { phone: guardianPhone } });
+    // Retain the parent/guardian contact for a minor: store it on the signer
+    // (guardian) record, and add it as a notification address on every minor in
+    // the household so updates about the child always reach the parent — even if
+    // the child also has their own email on file.
+    if (person?.isMinor && guardianEmail) {
+      await ensureEmailOnPerson(rootId, guardianEmail);
+      for (const member of family) {
+        if (member.minor) await ensureEmailOnPerson(member.id, guardianEmail);
+      }
+      if (guardianPhone) {
+        const rootP = await prisma.person.findUnique({ where: { id: rootId }, select: { phone: true } });
+        if (rootP && !rootP.phone) await prisma.person.update({ where: { id: rootId }, data: { phone: guardianPhone } });
+      }
     }
-  }
 
-  await audit({
-    entityType: "Person",
-    entityId: rootId,
-    action: "WAIVER_SIGNED",
-    summary: `Waiver signed by ${signatureName} for ${family.length} household member${family.length === 1 ? "" : "s"}`,
-  });
+    await audit({
+      entityType: "Person",
+      entityId: rootId,
+      action: "WAIVER_SIGNED",
+      summary: `Waiver signed by ${signatureName} for ${family.length} household member${family.length === 1 ? "" : "s"}`,
+    });
+  } catch (e) {
+    console.error("waiver sign failed", e);
+    return back("err=server");
+  }
 
   // Coaches gated into the waiver return straight to where they were headed;
   // everyone else sees the confirmation screen.
