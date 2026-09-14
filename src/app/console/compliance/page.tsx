@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/rbac";
+import { mintConsoleTicket } from "@/lib/auth";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 
 export const dynamic = "force-dynamic";
 
-export default async function CompliancePage() {
+export default async function CompliancePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   await requireAdmin();
+  const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const [peopleNoWaiver, coaches, mediaOptOuts, unverifiedDupr] = await Promise.all([
     prisma.person.findMany({
       where: { waiverSignedAt: null, registrations: { some: {} } },
@@ -38,6 +46,13 @@ export default async function CompliancePage() {
         <p className="text-slate-500">Waivers, background checks, certifications, media opt-outs.</p>
       </div>
 
+      {sp.ok === "waivers" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Sent a waiver request (text + email) to {sp.n ?? 0} outstanding player{sp.n === "1" ? "" : "s"}.</div>
+      )}
+      {sp.err && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">{sp.err === "auth" ? "You don't have permission." : "Something went wrong."}</div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Waivers outstanding" value={peopleNoWaiver.length} warn={peopleNoWaiver.length > 0} />
         <Metric label="Background checks expired / expiring (30d)" value={bgExpiring.length} warn={bgExpiring.length > 0} />
@@ -46,6 +61,17 @@ export default async function CompliancePage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title="Waivers outstanding" subtitle="No court-ready roster without a signed waiver (§3).">
+          {peopleNoWaiver.length > 0 && (
+            <div className="mb-3">
+              <ConfirmSubmit
+                action="/api/console/compliance"
+                fields={{ ticket, op: "sendAllWaivers" }}
+                confirm={`Send the participation waiver (text + email) to all ${peopleNoWaiver.length} player${peopleNoWaiver.length === 1 ? "" : "s"} who haven't signed yet?`}
+                label={`Send waiver to all ${peopleNoWaiver.length} outstanding`}
+                className="btn-primary text-sm"
+              />
+            </div>
+          )}
           {peopleNoWaiver.length === 0 ? (
             <Ok text="All registered players have a waiver on file." />
           ) : (
