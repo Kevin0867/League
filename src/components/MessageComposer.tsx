@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MediaAttach } from "@/components/MediaAttach";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 type Opt = { id: string; name: string };
 
@@ -13,6 +14,8 @@ export function MessageComposer({
   people,
   markets,
   ticket,
+  initialAudienceType,
+  initialRefId,
 }: {
   canBroadcast: boolean;
   teams: Opt[];
@@ -21,8 +24,10 @@ export function MessageComposer({
   people: Opt[];
   markets: string[];
   ticket: string;
+  initialAudienceType?: string;
+  initialRefId?: string;
 }) {
-  const [audienceType, setAudienceType] = useState(canBroadcast ? "ALL_PLAYERS" : "TEAM");
+  const [audienceType, setAudienceType] = useState(initialAudienceType ?? (canBroadcast ? "ALL_PLAYERS" : "TEAM"));
 
   const needsRef = ["TEAM", "DIVISION", "MARKET", "SINGLE_COACH", "SINGLE_PERSON"].includes(audienceType);
   const refOptions: Opt[] =
@@ -61,12 +66,21 @@ export function MessageComposer({
             <label className="label" htmlFor="audienceRef">
               {audienceType === "MARKET" ? "Market" : audienceType === "DIVISION" ? "Division" : audienceType === "TEAM" ? "Team" : audienceType === "SINGLE_COACH" ? "Coach" : "Person"}
             </label>
-            <select id="audienceRef" name="audienceRef" className="input" required>
-              <option value="">— select —</option>
-              {refOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              key={audienceType}
+              id="audienceRef"
+              name="audienceRef"
+              required
+              placeholder={
+                audienceType === "SINGLE_PERSON" ? "Search for a person by name…"
+                : audienceType === "SINGLE_COACH" ? "Search for a coach by name…"
+                : audienceType === "TEAM" ? "Search for a team…"
+                : audienceType === "DIVISION" ? "Search for a division…"
+                : "Search…"
+              }
+              options={refOptions.map((o) => ({ id: o.id, name: o.name }))}
+              defaultId={audienceType === initialAudienceType ? initialRefId ?? "" : ""}
+            />
           </div>
         )}
       </div>

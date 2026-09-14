@@ -169,7 +169,10 @@ export default async function RegistrationDetail({
           <h1 className="text-2xl font-bold text-slate-900">{p.firstName} {p.lastName}</h1>
           <p className="text-sm text-slate-500">{reg.season?.name} · <StatusBadge status={reg.status} /></p>
         </div>
-        <TextResetLinkButton personId={p.id} ticket={ticket} returnTo={`/console/registrations/${reg.id}`} label="Text portal reset link" className="rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-100" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/console/messages?to=${p.id}#compose`} className="rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-100">✉️ Message {p.firstName}</Link>
+          <TextResetLinkButton personId={p.id} ticket={ticket} returnTo={`/console/registrations/${reg.id}`} label="Text portal reset link" className="rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-100" />
+        </div>
       </div>
 
       {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia, sp.resetNew); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
