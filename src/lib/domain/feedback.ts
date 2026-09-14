@@ -10,7 +10,7 @@ const SCOPE = "feedback";
 
 export type FeedbackTokenData = { personId: string; seasonId: string | null; phase: string; coachId: string | null };
 
-export async function signFeedbackToken(personId: string, seasonId: string | null, phase: string, coachId: string | null = null, ttlDays = 60): Promise<string> {
+export async function signFeedbackToken(personId: string, seasonId: string | null, phase: string, coachId: string | null = null, ttlDays = 365): Promise<string> {
   return new SignJWT({ personId, seasonId: seasonId ?? "", phase, coachId: coachId ?? "", scope: SCOPE, kind: "feedback" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()

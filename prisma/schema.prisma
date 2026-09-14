@@ -1080,6 +1080,9 @@ model Season {
   /// bracket matches aren't separately scheduled).
   championshipStartsAt DateTime?
   active     Boolean  @default(true)
+  /// Stamped when the automated mid-season feedback request goes out (end of
+  /// week 6), so it fires once. Also set when an admin sends it manually.
+  midseasonFeedbackSentAt DateTime?
   /// Non-production / test season. Excluded from public pages (standings,
   /// league, championship) and from being picked as the live season, but still
   /// visible and usable in the console so staff can rehearse a setup safely.

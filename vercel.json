@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/ala-feedback",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/midseason-feedback",
+      "schedule": "0 16 * * *"
     }
   ]
 }
