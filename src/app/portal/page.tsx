@@ -208,6 +208,20 @@ export default async function PortalHome({
         </div>
       </Link>
 
+      {/* Leave feedback — a note for the office and/or the coach, with optional media. */}
+      <Link
+        href="/portal/feedback"
+        className="block rounded-xl border border-brand-200 bg-white px-5 py-4 shadow-sm transition hover:bg-brand-50"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-base font-bold text-slate-900">💬 Leave feedback</div>
+            <div className="mt-0.5 text-sm text-slate-500">Share how it&apos;s going or a shout-out for your coach — add a photo or video too.</div>
+          </div>
+          <span className="shrink-0 text-brand-600">→</span>
+        </div>
+      </Link>
+
       {sp.ok === "info" && <Notice kind="success" title="Saved">Your details are updated.</Notice>}
       {sp.msgreply === "1" && <Notice kind="success" title="Reply sent">The sender got your reply in their inbox and by text.</Notice>}
       {sp.msgreply && sp.msgreply !== "1" && (
