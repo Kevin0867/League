@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getSession } from "@/lib/auth";
 import { blobToken } from "@/lib/upload";
+import { verifyFeedbackToken } from "@/lib/domain/feedback";
 
 // Client-direct upload token endpoint for photo/video attachments. The browser
 // uploads the file straight to Vercel Blob (so a large practice video never hits
@@ -22,10 +23,20 @@ export async function POST(req: Request): Promise<NextResponse> {
       body,
       request: req,
       token: blobToken(),
-      onBeforeGenerateToken: async () => {
-        // Only a signed-in user (staff or a family member) may upload.
+      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+        // A signed-in user (staff or a family member) may upload. So may a
+        // no-login flow that presents a valid capability token — currently the
+        // tokenized feedback form, so families can attach a photo/video without
+        // an account.
         const session = await getSession();
-        if (!session) throw new Error("Sign in to upload.");
+        if (!session) {
+          let ok = false;
+          try {
+            const payload = clientPayload ? (JSON.parse(clientPayload) as { feedbackToken?: string }) : null;
+            ok = !!payload?.feedbackToken && !!(await verifyFeedbackToken(payload.feedbackToken));
+          } catch { ok = false; }
+          if (!ok) throw new Error("Sign in to upload.");
+        }
         return { allowedContentTypes: ALLOWED, maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true };
       },
       // Blob calls this server-to-server when the upload finishes; nothing to do —
