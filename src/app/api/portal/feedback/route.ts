@@ -25,6 +25,8 @@ export async function POST(req: Request) {
   const body = String(fd.get("body") ?? "").trim();
   if (!body) return back("?err=empty");
 
+  const rawPhase = String(fd.get("phase") ?? "GENERAL");
+  const phase = ["MIDSEASON", "ENDSEASON", "GENERAL"].includes(rawPhase) ? rawPhase : "GENERAL";
   const visibility = String(fd.get("visibility") ?? "ADMINS") === "ADMINS_COACHES" ? "ADMINS_COACHES" : "ADMINS";
   const consentPublish = fd.get("consentPublish") === "1";
   const attachmentUrl = String(fd.get("attachmentUrl") ?? "").trim() || null;
@@ -60,7 +62,7 @@ export async function POST(req: Request) {
         consentPublish,
         attachmentUrl,
         attachmentType,
-        phase: "GENERAL",
+        phase,
         status: "NEW",
       },
     });
