@@ -38,6 +38,12 @@ export default async function FacilitiesPage({
     include: {
       _count: { select: { teams: true, sessions: true } },
       courtBlocks: { orderBy: [{ startTime: "asc" }] },
+      // Teams booked here (their recurring weekly practice slot) — the confirmed
+      // day/time bookings at this location. Current (active-season) teams only.
+      teams: {
+        where: { season: { active: true } },
+        select: { id: true, name: true, dayOfWeek: true, startTime: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } }, season: { select: { name: true } } },
+      },
     },
     orderBy: [{ agreementStatus: "asc" }, { name: "asc" }],
   });
@@ -46,6 +52,8 @@ export default async function FacilitiesPage({
   const DOW_ORDER: Record<string, number> = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 };
   for (const f of allFacilities) {
     f.courtBlocks.sort((a, b) => (DOW_ORDER[a.dayOfWeek] ?? 9) - (DOW_ORDER[b.dayOfWeek] ?? 9) || a.startTime.localeCompare(b.startTime));
+    // Booked practices Monday-first, then by start time; unscheduled teams last.
+    f.teams.sort((a, b) => (DOW_ORDER[a.dayOfWeek ?? ""] ?? 9) - (DOW_ORDER[b.dayOfWeek ?? ""] ?? 9) || (a.startTime ?? "").localeCompare(b.startTime ?? "") || a.name.localeCompare(b.name));
   }
   const facilities = allFacilities.filter((f) => !f.archived);
   const archivedFacilities = allFacilities.filter((f) => f.archived);
@@ -193,6 +201,33 @@ export default async function FacilitiesPage({
                         </a>
                       ))}
                     </div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-100 pt-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Booked practices</div>
+                  {f.teams.length === 0 ? (
+                    <p className="mt-1.5 text-xs text-slate-400">No teams booked here this season yet.</p>
+                  ) : (
+                    <ul className="mt-1.5 space-y-1">
+                      {f.teams.map((t) => {
+                        const coach = t.coach?.person ? `${t.coach.person.firstName} ${t.coach.person.lastName}`.trim() : null;
+                        const slot = t.dayOfWeek && t.startTime
+                          ? `${DAY_LABEL[t.dayOfWeek] ?? t.dayOfWeek} ${formatTime12(t.startTime)}`
+                          : null;
+                        return (
+                          <li key={t.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                            {slot ? (
+                              <span className="min-w-[6.5rem] font-semibold text-slate-800">{slot}</span>
+                            ) : (
+                              <span className="min-w-[6.5rem] text-xs font-semibold text-amber-600">Not scheduled</span>
+                            )}
+                            <span className="text-slate-700">{t.name}</span>
+                            {coach && <span className="text-xs text-slate-400">· {coach}</span>}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </div>
 
