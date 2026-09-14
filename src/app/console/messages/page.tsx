@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { MessageComposer } from "@/components/MessageComposer";
+import { formatDateTime12 } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
 import { can } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
@@ -180,14 +181,20 @@ export default async function MessagesPage({
               <ul className="divide-y divide-slate-100 text-sm">
                 {messages.map((m) => {
                   const failures = m.recipients.filter((r) => r.failedReason).length;
+                  const senderName = m.sender?.person
+                    ? `${m.sender.person.firstName} ${m.sender.person.lastName}`.trim()
+                    : m.sender?.email ?? "System";
                   return (
                     <li key={m.id}>
                       <Link href={`/console/messages/${m.id}`} className="-mx-2 block rounded-lg px-2 py-2 hover:bg-slate-50">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between gap-2">
                           <span className="font-medium text-slate-800">{m.subject ?? m.triggerType ?? "Message"}</span>
-                          <span className="text-xs text-slate-400">{m.recipients.length} recipients</span>
+                          <span className="shrink-0 text-xs text-slate-400">{m.recipients.length} recipient{m.recipients.length === 1 ? "" : "s"}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          From <span className="font-medium text-slate-600">{senderName}</span> · {formatDateTime12(m.sentAt)}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                           <span>{m.audienceType.replace(/_/g, " ")}</span>
                           <span>· {m.channels}</span>
                           {failures > 0 && <span className="badge bg-rose-100 text-rose-800">{failures} failed</span>}
