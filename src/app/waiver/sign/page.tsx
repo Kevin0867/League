@@ -119,6 +119,14 @@ export default async function WaiverSignPage({
         personPhone={person.phone ?? ""}
         participants={participants.map((m) => ({ id: m.id, name: m.name, gender: m.gender ?? null, role: m.role }))}
       />
+
+      <p className="mt-4 text-center text-sm text-slate-500">
+        Having trouble signing here?{" "}
+        <a href={`/waiver/print${sp.token ? `?token=${encodeURIComponent(sp.token)}` : ""}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-700 underline">
+          Print or save the waiver to sign by hand
+        </a>{" "}
+        and give it to your coach.
+      </p>
     </Shell>
   );
 }
