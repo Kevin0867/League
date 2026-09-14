@@ -4,6 +4,7 @@ import type { InboxItem, Thread } from "@/lib/domain/messaging-store";
 import type { Contact } from "@/lib/domain/messaging-acl";
 import { MediaAttach } from "@/components/MediaAttach";
 import { Attachment } from "@/components/Attachment";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 // Shared server components for the direct-messaging UI, rendered in both the
 // console (admin, coach) and the family portal (parent). All actions are native
@@ -25,14 +26,16 @@ export function Composer({ contacts, ticket, returnTo, library = false }: { cont
       <h2 className="font-semibold text-slate-900">New message</h2>
       <div>
         <label className="label">To</label>
-        <select name="recipientId" className="input" defaultValue="" required>
-          <option value="" disabled>Choose a person…</option>
-          {contacts.map((c) => (
-            <option key={c.personId} value={c.personId}>
-              {c.name} · {c.role === "ADMIN" ? "Admin" : c.role === "COACH" ? "Coach" : "Parent"}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="recipientId"
+          required
+          placeholder="Search for a person by name…"
+          options={contacts.map((c) => ({
+            id: c.personId,
+            name: c.name,
+            hint: c.role === "ADMIN" ? "Admin" : c.role === "COACH" ? "Coach" : c.role === "PLAYER" ? "Player" : "Parent",
+          }))}
+        />
       </div>
       <div>
         <label className="label">Message</label>

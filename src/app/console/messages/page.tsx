@@ -79,6 +79,17 @@ export default async function MessagesPage({
 
   const markets = [...new Set((await prisma.team.findMany({ select: { market: true } })).map((t) => t.market).filter(Boolean))] as string[];
 
+  // Deep-link support: /console/messages?to=<personId> preselects that person in
+  // the composer (used by the "Message" button on a registration/person). Ensure
+  // they're present in the option list even if they fell outside the first 500.
+  const preselectId = (sp.to ?? "").trim() || null;
+  const peopleOpts = people.map((p) => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }));
+  if (preselectId && !peopleOpts.some((p) => p.id === preselectId)) {
+    const extra = await prisma.person.findUnique({ where: { id: preselectId }, select: { id: true, firstName: true, lastName: true } });
+    if (extra) peopleOpts.unshift({ id: extra.id, name: `${extra.firstName} ${extra.lastName}` });
+  }
+  const preselectOk = canBroadcast && !!preselectId && peopleOpts.some((p) => p.id === preselectId);
+
   // Live recipient counts for the platform-announcement composer. Union sizes
   // overlap (a coach can also be a parent), so we precompute the deduped count
   // for every combination of the four groups. Minor players expand to guardians,
@@ -137,15 +148,19 @@ export default async function MessagesPage({
       <AnnouncementComposer ticket={ticket} counts={announceCounts} />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <MessageComposer
-          canBroadcast={canBroadcast}
-          teams={teams}
-          divisions={divisions}
-          coaches={coaches.map((c) => ({ id: c.id, name: `${c.person.firstName} ${c.person.lastName}` }))}
-          people={people.map((p) => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }))}
-          markets={markets}
-          ticket={ticket}
-        />
+        <div id="compose">
+          <MessageComposer
+            canBroadcast={canBroadcast}
+            teams={teams}
+            divisions={divisions}
+            coaches={coaches.map((c) => ({ id: c.id, name: `${c.person.firstName} ${c.person.lastName}` }))}
+            people={peopleOpts}
+            markets={markets}
+            ticket={ticket}
+            initialAudienceType={preselectOk ? "SINGLE_PERSON" : undefined}
+            initialRefId={preselectOk ? preselectId ?? undefined : undefined}
+          />
+        </div>
 
         <div className="space-y-6">
           <div className="card">
