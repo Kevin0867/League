@@ -4,7 +4,6 @@ import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
-import { signFeedbackToken } from "@/lib/domain/feedback";
 import { getSeasonStats } from "@/lib/domain/seasonStats";
 import { appUrl } from "@/lib/stripe";
 
@@ -37,8 +36,10 @@ export async function POST(req: Request) {
 
     let sent = 0;
     for (const personId of personIds) {
-      const token = await signFeedbackToken(personId, seasonId, phase);
-      const link = `${appUrl()}/feedback/${token}`;
+      // Send them to the portal feedback form (note + photo/video + who-can-see
+      // + publish consent). It requires sign-in, so it bounces through login and
+      // back; the phase rides along so mid/end-season stays attributed.
+      const link = `${appUrl()}/portal/feedback?phase=${encodeURIComponent(phase)}`;
       const res = await dispatchMessage({
         senderId: actor.userId, seasonId,
         audienceType: "SINGLE_PERSON", audienceRef: personId,

@@ -1,19 +1,29 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/rbac";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { mintConsoleTicket } from "@/lib/auth";
+import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { MediaAttach } from "@/components/MediaAttach";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Leave feedback" };
+
+const PHASES = new Set(["MIDSEASON", "ENDSEASON", "GENERAL"]);
 
 export default async function PortalFeedbackPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const session = await requireUser();
   const sp = await searchParams;
+  const phase = PHASES.has(sp.phase ?? "") ? (sp.phase as string) : "GENERAL";
+
+  // Requires sign-in (a feedback request text links here); bounce logged-out
+  // families through login and back to this exact form, phase preserved.
+  const session = await getSession();
+  if (!session) {
+    const dest = `/portal/feedback${phase !== "GENERAL" ? `?phase=${encodeURIComponent(phase)}` : ""}`;
+    redirect(`/login?next=${encodeURIComponent(dest)}`);
+  }
   const ticket = await mintConsoleTicket();
 
   // The household: the signed-in person plus their dependents — so a parent can
@@ -59,6 +69,7 @@ export default async function PortalFeedbackPage({
       {sp.ok !== "1" && (
         <form method="POST" action="/api/portal/feedback" className="card space-y-4">
           <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="phase" value={phase} />
 
           <div>
             <label className="label" htmlFor="body">Your feedback</label>
