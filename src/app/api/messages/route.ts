@@ -4,6 +4,8 @@ import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { canUseMessagingPerson, canReachPerson } from "@/lib/domain/messaging-acl";
 import { appendMessage, findOrCreateConversation } from "@/lib/domain/dm";
+import { ensureTeamConversation, ensureAdminConversation } from "@/lib/domain/teamThread";
+import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { isAdmin } from "@/lib/rbac";
 
 // Direct-messaging mutations (start / reply / delete a message / archive a
@@ -52,6 +54,36 @@ export async function POST(req: Request) {
     const conversationId = await findOrCreateConversation(myPersonId, recipientId);
     await appendMessage(conversationId, myPersonId, body, notify, attach);
     await audit({ actorId: actor.userId, entityType: "Conversation", entityId: conversationId, action: "message.start", summary: `Messaged ${recipientId}` });
+    return back(`${base}/${conversationId}`);
+  }
+
+  // Audience-picker send: target is "p:<personId>" (1:1), "t:<teamId>" (team
+  // group thread), or "a" (the admin team). Players/coaches choose from
+  // messageTargets(); this verifies the actor is entitled to that target.
+  if (op === "startTarget") {
+    const target = String(fd.get("target") ?? "").trim();
+    const body = String(fd.get("body") ?? "").trim();
+    if (!target || (!body && !attach)) return back(`${base}?err=fields`);
+
+    let conversationId: string | null = null;
+    if (target === "a") {
+      conversationId = await ensureAdminConversation(myPersonId);
+    } else if (target.startsWith("t:")) {
+      const teamId = target.slice(2);
+      // The actor must be on this team — a rostered player, or a coach of it.
+      const onTeam = await prisma.teamMember.findFirst({ where: { teamId, personId: myPersonId }, select: { id: true } });
+      const coaches = isAdmin(actor.roles) ? [teamId] : await coachedTeamIdsForUser(actor.userId);
+      if (!onTeam && !coaches.includes(teamId)) return back(`${base}?err=perm`);
+      conversationId = await ensureTeamConversation(teamId);
+    } else if (target.startsWith("p:")) {
+      const personId = target.slice(2);
+      if (!(await canReachPerson(myPersonId, actor.role, personId))) return back(`${base}?err=perm`);
+      conversationId = await findOrCreateConversation(myPersonId, personId);
+    }
+    if (!conversationId) return back(`${base}?err=perm`);
+
+    await appendMessage(conversationId, myPersonId, body, notify, attach);
+    await audit({ actorId: actor.userId, entityType: "Conversation", entityId: conversationId, action: "message.startTarget", summary: `Messaged ${target}` });
     return back(`${base}/${conversationId}`);
   }
 

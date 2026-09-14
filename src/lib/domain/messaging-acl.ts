@@ -167,9 +167,11 @@ async function allowedIds(
     for (const p of parents) if (universe.has(p)) ids.add(p);
     for (const c of coaches) if (universe.has(c)) ids.add(c);
   } else if (role === "PLAYER") {
-    // A player (12+) reaches admins and the coaches of their own teams.
-    const { coaches } = await teamContacts(await playerTeamIds(actorPersonId));
+    // A player (12+) reaches admins, the coaches of their own teams, and their
+    // teammates (12+ players on those teams).
+    const { coaches, players } = await teamContacts(await playerTeamIds(actorPersonId));
     for (const c of coaches) if (universe.has(c)) ids.add(c);
+    for (const p of players) if (universe.has(p)) ids.add(p);
   }
   ids.delete(actorPersonId);
   return ids;
@@ -187,6 +189,47 @@ export async function allowedContacts(actorPersonId: string, role: string): Prom
     .map((id) => universe.get(id))
     .filter((c): c is Contact => !!c)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export type MsgTarget = { value: string; name: string; hint?: string };
+
+/** The audience choices for the composer: 1:1 people ("p:<id>"), a team group
+ *  thread ("t:<id>"), or the admin team ("a"). Role-aware — a player gets their
+ *  coach, their team, Admins, and teammates; a coach gets their team threads
+ *  plus their usual contacts; everyone else gets their contacts as DMs. */
+export async function messageTargets(actorPersonId: string, role: string): Promise<MsgTarget[]> {
+  const r = normalizeMsgRole(role);
+  if (r === "NONE") return [];
+  if (r === "PLAYER" && !(await canUseMessagingPerson(actorPersonId, role))) return [];
+  const universe = await eligibleUniverse();
+  const targets: MsgTarget[] = [];
+  const push = (t: MsgTarget) => targets.push(t);
+
+  if (r !== "ADMIN") push({ value: "a", name: "Admins", hint: "PURE Academy office" });
+
+  if (r === "PLAYER") {
+    const teamIds = await playerTeamIds(actorPersonId);
+    const teams = await prisma.team.findMany({
+      where: { id: { in: teamIds } },
+      select: { id: true, name: true, coach: { select: { personId: true, person: { select: { firstName: true, lastName: true } } } } },
+    });
+    for (const t of teams) {
+      if (t.coach?.personId) push({ value: `p:${t.coach.personId}`, name: `Coach ${t.coach.person!.firstName} ${t.coach.person!.lastName}`, hint: t.name });
+      push({ value: `t:${t.id}`, name: `${t.name} — whole team`, hint: "coach + players" });
+    }
+    const { players } = await teamContacts(teamIds);
+    for (const pid of players) if (pid !== actorPersonId && universe.has(pid)) push({ value: `p:${pid}`, name: universe.get(pid)!.name, hint: "teammate" });
+  } else if (r === "COACH") {
+    const teamIds = await coachTeamIds(actorPersonId);
+    const teams = await prisma.team.findMany({ where: { id: { in: teamIds } }, select: { id: true, name: true } });
+    for (const t of teams) push({ value: `t:${t.id}`, name: `${t.name} — whole team`, hint: "coach + players" });
+    for (const c of await allowedContacts(actorPersonId, role)) push({ value: `p:${c.personId}`, name: c.name, hint: c.role === "ADMIN" ? "Admin" : c.role === "COACH" ? "Coach" : c.role === "PLAYER" ? "Player" : "Parent" });
+  } else {
+    for (const c of await allowedContacts(actorPersonId, role)) push({ value: `p:${c.personId}`, name: c.name, hint: c.role === "ADMIN" ? "Admin" : c.role === "COACH" ? "Coach" : "Parent" });
+  }
+
+  const seen = new Set<string>();
+  return targets.filter((t) => (seen.has(t.value) ? false : (seen.add(t.value), true)));
 }
 
 /** Whether the actor is permitted to open a conversation with a specific person. */

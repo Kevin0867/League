@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/RoadmapNote";
 import { requireStaff } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
-import { allowedContacts, isAdminRole } from "@/lib/domain/messaging-acl";
+import { messageTargets, isAdminRole } from "@/lib/domain/messaging-acl";
 import { searchInbox, moderationUnreadCount } from "@/lib/domain/messaging-store";
 import { unreadInboxCount } from "@/lib/domain/inbox";
 import { Composer, InboxList } from "@/components/messaging/Messaging";
@@ -49,9 +49,9 @@ export default async function ConsoleInboxPage({
     : [];
 
   const q = (sp.q ?? "").trim();
-  const [items, contacts, myUnread, allUnread] = await Promise.all([
+  const [items, targets, myUnread, allUnread] = await Promise.all([
     personId ? searchInbox(personId, q, moderating) : Promise.resolve([]),
-    personId ? allowedContacts(personId, session.role) : Promise.resolve([]),
+    personId ? messageTargets(personId, session.role) : Promise.resolve([]),
     personId ? unreadInboxCount(personId).catch(() => 0) : Promise.resolve(0),
     isAdmin ? moderationUnreadCount().catch(() => 0) : Promise.resolve(0),
   ]);
@@ -112,7 +112,7 @@ export default async function ConsoleInboxPage({
           ) : null}
           <InboxList items={items} basePath="/console/inbox" />
         </div>
-        {!moderating && <Composer contacts={contacts} ticket={ticket} returnTo="/console/inbox" library />}
+        {!moderating && <Composer targets={targets} ticket={ticket} returnTo="/console/inbox" library />}
       </div>
 
       {/* Broadcast composer — coaches message a whole group at once. Defaults to

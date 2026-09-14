@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
-import { allowedContacts, canUseMessagingPerson } from "@/lib/domain/messaging-acl";
+import { messageTargets, canUseMessagingPerson } from "@/lib/domain/messaging-acl";
 import { searchInbox } from "@/lib/domain/messaging-store";
 import { Composer, InboxList } from "@/components/messaging/Messaging";
 
@@ -26,21 +26,21 @@ export default async function PortalInboxPage({
   const ticket = await mintConsoleTicket();
 
   const q = (sp.q ?? "").trim();
-  const [items, contacts] = await Promise.all([
+  const [items, targets] = await Promise.all([
     personId ? searchInbox(personId, q, false) : Promise.resolve([]),
-    personId ? allowedContacts(personId, session.role) : Promise.resolve([]),
+    personId ? messageTargets(personId, session.role) : Promise.resolve([]),
   ]);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Messages</h1>
-        <p className="text-sm text-slate-500">Message your academy admins, your player&apos;s coaches, and other team parents.</p>
+        <p className="text-sm text-slate-500">Message your coach, your whole team, the academy admins, or a teammate.</p>
       </div>
       {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{OKS[sp.ok] ?? "Done."}</p>}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
-      <Composer contacts={contacts} ticket={ticket} returnTo="/portal/inbox" />
+      <Composer targets={targets} ticket={ticket} returnTo="/portal/inbox" />
 
       {/* Search across every message — subject, who's in it, or anything said. */}
       <form method="GET" action="/portal/inbox" className="flex gap-2">
