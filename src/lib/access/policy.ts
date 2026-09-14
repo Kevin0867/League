@@ -29,6 +29,8 @@ export const COACH_CONSOLE_PREFIXES = [
   "/console/training", // training-video library (view + upload/share)
   "/console/forms", // digital reusable coaching forms (fill out)
   "/console/incident-report", // submit a digital incident report
+  "/console/sign-waiver", // look up a player & have them sign a waiver in person
+  "/console/writeups/mine", // write-ups an admin has shared with this coach
   "/console/agreement", // their own coaching agreement (review + sign)
 ];
 
