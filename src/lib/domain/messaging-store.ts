@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
+import { personSearchOR } from "@/lib/domain/personSearch";
 
 // Read helpers for the direct-messaging inbox and thread views. Retention rule:
 // a message with deletedAt or a thread a user has hidden is still returned to a
@@ -125,7 +126,8 @@ export async function searchInbox(personId: string, q: string, asModerator: bool
         {
           OR: [
             { subject: ci },
-            { participants: { some: { person: { OR: [{ firstName: ci }, { lastName: ci }] } } } },
+            // A participant by name, email, or phone (any format).
+            { participants: { some: { person: { OR: personSearchOR(term) } } } },
             { messages: { some: bodyWhere } },
           ],
         },

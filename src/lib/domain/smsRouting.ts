@@ -72,13 +72,15 @@ export async function lookupInboundRoute(fromPhone: string): Promise<InboundRout
 export async function findPersonByPhone(fromPhone: string): Promise<{ id: string; firstName: string; lastName: string } | null> {
   const phone = normPhone(fromPhone);
   if (!phone) return null;
-  // Match the last-10-digit tail; a contains on the bare 10 digits catches the
-  // common stored formats (+1XXXXXXXXXX and XXXXXXXXXX).
-  const candidates = await prisma.person.findMany({
-    where: { phone: { contains: phone } },
-    select: { id: true, firstName: true, lastName: true, phone: true },
-    take: 5,
-  });
-  const exact = candidates.find((c) => normPhone(c.phone) === phone);
-  return exact ?? candidates[0] ?? null;
+  // Normalize the STORED phone too — strip formatting and match the last-10-digit
+  // tail. A plain `contains` on the digits misses formatted numbers like
+  // "(480) 747-7057", which is why known numbers weren't matching.
+  const rows = await prisma.$queryRaw<{ id: string; firstName: string; lastName: string }[]>`
+    SELECT "id", "firstName", "lastName"
+    FROM "Person"
+    WHERE regexp_replace(coalesce("phone", ''), '[^0-9]', '', 'g') LIKE ${"%" + phone}
+    ORDER BY "updatedAt" DESC
+    LIMIT 5
+  `;
+  return rows[0] ?? null;
 }

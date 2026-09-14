@@ -17,6 +17,13 @@ export function personSearchOR(query: string): Prisma.PersonWhereInput[] {
     { email3: ci(s) },
     { phone: ci(s) },
   ];
+  // Phone: match on normalized digits so any format finds the record. When the
+  // query has 3+ digits, search the digit-only column (last 10 for a full
+  // number, or the partial the user typed).
+  const digits = s.replace(/\D/g, "");
+  if (digits.length >= 3) {
+    or.push({ phoneDigits: { contains: digits.length > 10 ? digits.slice(-10) : digits } });
+  }
   const tokens = s.split(/\s+/).filter(Boolean);
   if (tokens.length >= 2) {
     const first = tokens[0];
