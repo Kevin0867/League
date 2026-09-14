@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { getSeasonStats } from "@/lib/domain/seasonStats";
+import { signFeedbackToken } from "@/lib/domain/feedback";
 import { appUrl } from "@/lib/stripe";
 
 // Season feedback: send the thank-you + feedback request to every family
@@ -36,10 +37,11 @@ export async function POST(req: Request) {
 
     let sent = 0;
     for (const personId of personIds) {
-      // Send them to the portal feedback form (note + photo/video + who-can-see
-      // + publish consent). It requires sign-in, so it bounces through login and
-      // back; the phase rides along so mid/end-season stays attributed.
-      const link = `${appUrl()}/portal/feedback?phase=${encodeURIComponent(phase)}`;
+      // No-login tokenized feedback link — the token identifies the family (and
+      // their coaches) so they can leave a note, photo/video, who-can-see, and
+      // publish consent without signing in. Recipients are known contacts.
+      const token = await signFeedbackToken(personId, seasonId, phase);
+      const link = `${appUrl()}/feedback/${token}`;
       const res = await dispatchMessage({
         senderId: actor.userId, seasonId,
         audienceType: "SINGLE_PERSON", audienceRef: personId,

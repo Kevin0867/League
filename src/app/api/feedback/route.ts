@@ -20,8 +20,11 @@ export async function POST(req: Request) {
   const coachId = String(fd.get("coachId") ?? "").trim() || null;
   const respondentName = String(fd.get("respondentName") ?? "").trim().slice(0, 120) || null;
   const consentPublish = String(fd.get("consentPublish") ?? "") === "1";
+  const visibility = String(fd.get("visibility") ?? "ADMINS") === "ADMINS_COACHES" ? "ADMINS_COACHES" : "ADMINS";
+  const attachmentUrl = String(fd.get("attachmentUrl") ?? "").trim() || null;
+  const attachmentType = String(fd.get("attachmentType") ?? "").trim() || null;
 
-  if (!body && !rating) return back("?err=empty");
+  if (!body && !rating && !attachmentUrl) return back("?err=empty");
 
   // Only accept a coachId that the submitter could legitimately reference.
   let coach: string | null = null;
@@ -39,6 +42,9 @@ export async function POST(req: Request) {
       rating,
       body,
       consentPublish,
+      visibility,
+      attachmentUrl,
+      attachmentType,
       phase: data.phase,
       status: "NEW",
     },

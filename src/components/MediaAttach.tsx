@@ -10,7 +10,7 @@ type LibVideo = { id: string; title: string; category: string | null; skillLevel
 //   • when `library` is set (staff composers), pick one from the Training Video
 //     library — no re-upload.
 // Either way it writes the chosen URL + kind into hidden inputs the form submits.
-export function MediaAttach({ label = "Add photo / video", library = false }: { label?: string; library?: boolean }) {
+export function MediaAttach({ label = "Add photo / video", library = false, authToken }: { label?: string; library?: boolean; authToken?: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [type, setType] = useState<"IMAGE" | "VIDEO" | null>(null);
   const [pending, setPending] = useState(false);
@@ -41,6 +41,9 @@ export function MediaAttach({ label = "Add photo / video", library = false }: { 
         access: "public",
         handleUploadUrl: "/api/blob/upload",
         contentType: file.type,
+        // A no-login flow (e.g. tokenized feedback) authorizes the upload with a
+        // capability token instead of a session.
+        ...(authToken ? { clientPayload: JSON.stringify({ feedbackToken: authToken }) } : {}),
       });
       setUrl(blob.url);
       setType(isVideo ? "VIDEO" : "IMAGE");
