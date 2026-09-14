@@ -112,6 +112,16 @@ export default async function TodayPage() {
           </div>
           <span className="shrink-0 text-amber-700">→</span>
         </Link>
+        <Link
+          href="/console/sign-waiver"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-white px-4 py-4 shadow-sm transition hover:bg-brand-50 sm:col-span-2"
+        >
+          <div>
+            <div className="text-base font-bold text-slate-900">✍️ Sign a Waiver</div>
+            <div className="mt-0.5 text-xs text-slate-500">Look up a player and have them sign on your phone</div>
+          </div>
+          <span className="shrink-0 text-brand-600">→</span>
+        </Link>
       </div>
 
       <div>
