@@ -285,6 +285,11 @@ export async function POST(req: Request) {
       const codeSource = [divisionNameVal, nameVal, levelBandVal].filter(Boolean).join(" ");
       const recomputedCode = deriveDivisionCode(codeSource, genderHint);
 
+      // Capture the team's current home facility so we can propagate a change to
+      // upcoming practices (each practice stores its own facility snapshot).
+      const prevTeam = await prisma.team.findUnique({ where: { id: teamId }, select: { facilityId: true } });
+      const newFacilityId = g("facilityId");
+
       await prisma.team.update({
         where: { id: teamId },
         data: {
@@ -298,12 +303,37 @@ export async function POST(req: Request) {
           color,
           coachId,
           teamContactId: g("teamContactId"),
-          facilityId: g("facilityId"),
+          facilityId: newFacilityId,
           dayOfWeek: g("dayOfWeek"),
           startTime: g("startTime"),
           coachPlays: formData.get("coachPlays") === "on",
         },
       });
+
+      // Propagate a home-facility change to this team's UPCOMING practices so the
+      // calendar matches the team page. Only future PRACTICE sessions still
+      // pointing at the OLD facility are moved — this preserves any per-session
+      // facility edits and leaves past practices as historical record. A one-off
+      // relocation (relocatedFacilityId) still wins in the calendar regardless.
+      if ((prevTeam?.facilityId ?? null) !== (newFacilityId ?? null)) {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const stale = await prisma.session.findMany({
+          where: {
+            type: "PRACTICE",
+            teams: { some: { teamId } },
+            date: { gte: startOfToday },
+            facilityId: prevTeam?.facilityId ?? null,
+          },
+          select: { id: true },
+        });
+        if (stale.length) {
+          await prisma.session.updateMany({
+            where: { id: { in: stale.map((s) => s.id) } },
+            data: { facilityId: newFacilityId },
+          });
+        }
+      }
 
       await audit({
         actorId: actor.userId,
