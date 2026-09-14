@@ -4,6 +4,7 @@ import { sendSms } from "@/lib/notify";
 import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 import { signCheckinToken } from "@/lib/domain/sessionCheckin";
 import { formatTime12 } from "@/lib/time";
+import { appUrl } from "@/lib/stripe";
 
 // Runs every few minutes (Vercel Cron, see vercel.json). ~15 minutes before a
 // session starts it texts two audiences:
@@ -27,7 +28,11 @@ export async function GET(req: Request) {
   }
 
   const now = new Date();
-  const origin = new URL(req.url).origin;
+  // Links go into SMS to real users, so they MUST use the stable production
+  // domain — NOT `new URL(req.url).origin`. Vercel invokes crons on the
+  // deployment-specific *.vercel.app host, which is access-protected and shows a
+  // "Request Access" screen to anyone who taps it.
+  const origin = appUrl();
 
   // Bound the scan to a couple of days around now; the exact window is computed
   // per session from its Phoenix wall-clock start time.
