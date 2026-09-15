@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
-import { listAllTeamPhotos } from "@/lib/domain/teamPhotos";
+import { listAllTeamPhotos, markPhotosReviewed } from "@/lib/domain/teamPhotos";
 import { PublishToggle } from "@/components/TeamPhotos";
+import { RefreshOnRead } from "@/components/RefreshOnRead";
 import { formatStamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +17,13 @@ export default async function ConsolePhotosPage({
 }: {
   searchParams: Promise<{ tp?: string; filter?: string }>;
 }) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const all = await listAllTeamPhotos();
+  // Opening this page clears the "new uploads" nav badge; refresh the layout
+  // once if there was anything new so the badge disappears immediately.
+  const hadNew = await markPhotosReviewed(session.userId).catch(() => false);
 
   const filter = sp.filter === "website" ? "website" : sp.filter === "unpublished" ? "unpublished" : "all";
   const items = all.filter((p) =>
@@ -38,6 +42,7 @@ export default async function ConsolePhotosPage({
 
   return (
     <div className="space-y-6">
+      <RefreshOnRead active={hadNew} />
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Team photos</h1>
         <p className="mt-0.5 text-sm text-slate-500">
