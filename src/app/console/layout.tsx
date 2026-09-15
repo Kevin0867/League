@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { unreadInboxCount, unreadBroadcastCount, firstUnreadInboxId } from "@/lib/domain/inbox";
 import { coachAgreementNeedsAttention, agreementsPendingCountersign } from "@/lib/domain/coachingAgreement";
+import { UnreadPoller } from "@/components/UnreadPoller";
 
 // Never serve a cached/prerendered authed shell — always resolve the session.
 export const dynamic = "force-dynamic";
@@ -57,6 +58,7 @@ export default async function ConsoleLayout({
   const unreadHref = firstUnreadId ? `/console/inbox/${firstUnreadId}` : "/console/inbox";
   return (
     <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask} unread={unread} announcements={announcements} agreementAction={agreementAction} agreementsPending={agreementsPending} unreadHref={unreadHref}>
+      <UnreadPoller count={unread} broadcast={announcements} trackBroadcast />
       {children}
     </ConsoleShell>
   );

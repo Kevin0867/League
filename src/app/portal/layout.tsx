@@ -3,6 +3,7 @@ import { Logo, PadelLogo } from "@/components/Brand";
 import { requireUser } from "@/lib/rbac";
 import { canUseMessagingPerson } from "@/lib/domain/messaging-acl";
 import { unreadInboxCount, firstUnreadInboxId } from "@/lib/domain/inbox";
+import { UnreadPoller } from "@/components/UnreadPoller";
 
 export default async function PortalLayout({
   children,
@@ -45,6 +46,7 @@ export default async function PortalLayout({
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-6">
+        {showMessages && <UnreadPoller count={unread} />}
         {unread > 0 && (
           <Link
             href={unreadHref}
