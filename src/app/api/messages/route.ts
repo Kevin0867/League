@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     if (!(await canReachPerson(myPersonId, actor.role, recipientId))) return back(`${base}?err=perm`);
 
     const conversationId = await findOrCreateConversation(myPersonId, recipientId);
-    await appendMessage(conversationId, myPersonId, body, notify, attach);
+    await appendMessage(conversationId, myPersonId, body, notify, attach, null, 30000);
     await audit({ actorId: actor.userId, entityType: "Conversation", entityId: conversationId, action: "message.start", summary: `Messaged ${recipientId}` });
     return back(`${base}/${conversationId}`);
   }
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     }
     if (!conversationId) return back(`${base}?err=perm`);
 
-    await appendMessage(conversationId, myPersonId, body, notify, attach);
+    await appendMessage(conversationId, myPersonId, body, notify, attach, null, 30000);
     await audit({ actorId: actor.userId, entityType: "Conversation", entityId: conversationId, action: "message.startTarget", summary: `Messaged ${target}` });
     return back(`${base}/${conversationId}`);
   }
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
         return back(`${base}?err=perm`);
       }
     }
-    await appendMessage(conversationId, myPersonId, body, notify, attach);
+    await appendMessage(conversationId, myPersonId, body, notify, attach, null, 30000);
     return back(`${base}/${conversationId}`);
   }
 
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
     if (!senderPersonId) return backRT("?msgreply=nosender");
     if (senderPersonId === myPersonId) return backRT("?msgreply=self");
     const convId = await findOrCreateConversation(myPersonId, senderPersonId);
-    await appendMessage(convId, myPersonId, body, { email: true, sms: true }, attach);
+    await appendMessage(convId, myPersonId, body, { email: true, sms: true }, attach, null, 30000);
     await audit({ actorId: actor.userId, entityType: "Conversation", entityId: convId, action: "message.reply", summary: `Replied to message ${broadcastId} (sent to sender)` });
     return backRT("?msgreply=1");
   }

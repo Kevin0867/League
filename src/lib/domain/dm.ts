@@ -41,7 +41,25 @@ export async function appendMessage(
   notify: NotifyChoice = { email: true, sms: false },
   attach: Attach = null,
   externalId: string | null = null,
+  dedupeMs = 0,
 ) {
+  // Collapse an accidental repeat submit: the same sender posting the identical
+  // message to the same thread within a short window (e.g. tapping Send several
+  // times while the page navigates). Returns without creating a second row or
+  // firing a second notification.
+  if (dedupeMs > 0) {
+    const recent = await prisma.chatMessage.findFirst({
+      where: {
+        conversationId,
+        senderId,
+        body,
+        attachmentUrl: attach?.url ?? null,
+        createdAt: { gte: new Date(Date.now() - dedupeMs) },
+      },
+      select: { id: true },
+    });
+    if (recent) return;
+  }
   await prisma.chatMessage.create({
     data: { conversationId, senderId, body, attachmentUrl: attach?.url ?? null, attachmentType: attach?.type ?? null, externalId },
   });
