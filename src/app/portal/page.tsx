@@ -18,6 +18,7 @@ import { decryptField } from "@/lib/crypto";
 import { PortalPersonForm, type PortalPerson } from "@/components/PortalPersonForm";
 import { CopyLink } from "@/components/CopyLink";
 import { appUrl } from "@/lib/stripe";
+import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { ensureFamilyCalendarToken } from "@/lib/domain/familyCalendar";
 
 const PAY_ERRORS: Record<string, { title: string; detail: string }> = {
@@ -174,7 +175,16 @@ export default async function PortalHome({
     : [];
   const unread = inbox.filter((r) => !r.readAt).length;
 
-  const waiverOutstanding = me && !me.waiverSignedAt;
+  // One waiver covers the whole household — a parent signing once signs for
+  // themselves and every player they manage. Show the prompt whenever anyone in
+  // the household is unsigned, and give a signing link keyed to the account
+  // holder (the root) so a single signature clears everyone.
+  const household = me ? [me, ...me.dependents] : [];
+  const waiverUnsigned = household.filter((p) => !p.waiverSignedAt);
+  const waiverOutstanding = waiverUnsigned.length > 0;
+  const waiverSignHref = me
+    ? `/waiver/sign?token=${encodeURIComponent(await signWaiverToken(me.id))}&next=${encodeURIComponent("/portal?waiver=signed")}`
+    : "#";
 
   return (
     <div className="space-y-6">
@@ -228,6 +238,7 @@ export default async function PortalHome({
       </Link>
 
       {sp.ok === "info" && <Notice kind="success" title="Saved">Your details are updated.</Notice>}
+      {sp.waiver === "signed" && <Notice kind="success" title="Waiver signed">Thank you — the waiver is on file for your whole household.</Notice>}
       {sp.msgreply === "1" && <Notice kind="success" title="Reply sent">The sender got your reply in their inbox and by text.</Notice>}
       {sp.msgreply && sp.msgreply !== "1" && (
         <Notice kind="error" title="Couldn't send reply">{sp.msgreply === "nosender" ? "That message was automated — there's no one to reply to." : "Please try again."}</Notice>
@@ -261,7 +272,13 @@ export default async function PortalHome({
           <p className="text-sm font-medium text-amber-800">Waiver outstanding</p>
           <p className="mt-1 text-sm text-slate-600">
             A signed waiver is required before appearing on a court-ready roster.
+            {me && me.dependents.length > 0
+              ? ` One waiver covers your whole household — signing once signs for you and ${me.dependents.length === 1 ? "your player" : "all your players"}: ${waiverUnsigned.map((p) => p.firstName).join(", ")}.`
+              : ""}
           </p>
+          <Link href={waiverSignHref} className="btn-primary mt-3 inline-flex text-sm">
+            {me && me.dependents.length > 0 ? "Sign the household waiver" : "Sign the waiver"}
+          </Link>
         </div>
       )}
 
