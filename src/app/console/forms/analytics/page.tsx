@@ -27,7 +27,7 @@ export default async function AnalyticsPage({
   return (
     <div className="space-y-5">
       <Link href="/console/forms" className="btn-back">← All forms</Link>
-      <PageHeader title="Progress Analytics" subtitle="Everything the coaching forms capture, rolled up into a shareable progress report. Fill out the trackers and this updates automatically." />
+      <PageHeader title="Progress Analytics" subtitle="Everything the player tracking documents capture, rolled up into a shareable progress report. Fill out the trackers and this updates automatically." />
 
       {sp.ok && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
 

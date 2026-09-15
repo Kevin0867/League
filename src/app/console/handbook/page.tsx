@@ -29,7 +29,7 @@ export default async function HandbookPage() {
 
       {/* Digital versions of the workbook's Reusable Forms. */}
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">Digital forms</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">Player tracking documents</h2>
         <p className="mt-0.5 text-xs text-slate-500">Fill these out in the app instead of printing — trackers save each player&apos;s numbers over the season.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {REUSABLE_FORMS.map((f) =>
@@ -42,7 +42,7 @@ export default async function HandbookPage() {
             )
           )}
         </div>
-        <Link href="/console/forms" className="mt-3 inline-block text-xs font-semibold text-brand-700 hover:underline">All coaching forms →</Link>
+        <Link href="/console/forms" className="mt-3 inline-block text-xs font-semibold text-brand-700 hover:underline">All player tracking documents →</Link>
       </section>
 
       {/* Inline viewer — great on desktop/tablet. On phones, the "Open" button
