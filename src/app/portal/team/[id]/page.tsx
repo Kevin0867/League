@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
+import { mintConsoleTicket } from "@/lib/auth";
 import { formatTime12, formatDate, formatSessionDay, phoenixDateInput } from "@/lib/time";
+import { TeamPhotos } from "@/components/TeamPhotos";
+import { listTeamPhotos } from "@/lib/domain/teamPhotos";
 
 function AttBadge({ status }: { status: string }) {
   const tone =
@@ -13,8 +16,15 @@ function AttBadge({ status }: { status: string }) {
 
 export const dynamic = "force-dynamic";
 
-export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TeamPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tp?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const session = await requireUser();
 
   const me = session.personId
@@ -83,6 +93,8 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         orderBy: [{ week: "asc" }],
       })
     : [];
+
+  const [ticket, teamPhotos] = await Promise.all([mintConsoleTicket(), listTeamPhotos(team.id)]);
 
   const coach = team.coach?.person;
   const mapsQuery = team.facility?.exactAddress ?? [team.facility?.name, team.facility?.generalArea].filter(Boolean).join(" ");
@@ -267,6 +279,18 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           })}
         </section>
       )}
+
+      {/* Team photos — a shared gallery the whole team can add to. */}
+      <TeamPhotos
+        teamId={team.id}
+        ticket={ticket}
+        returnTo={`/portal/team/${team.id}`}
+        photos={teamPhotos}
+        canPost={true}
+        canModerate={isAdmin(session.roles ?? [session.role])}
+        personId={session.personId ?? null}
+        notice={sp.tp === "added" ? "added" : sp.tp === "deleted" ? "deleted" : undefined}
+      />
 
       {/* Teammates */}
       <section className="card">

@@ -447,6 +447,7 @@ model Team {
   leagueEntries LeagueTeam[]
   coachingNotes CoachingNote[]
   apparelPayments Payment[] @relation("ApparelTeam")
+  photos        TeamPhoto[]
 
   @@index([seasonId, divisionId])
   @@index([coachId])
@@ -1885,6 +1886,26 @@ model SiteContent {
 /// (Vercel Blob URL), organized by category + skill level, and optionally shared
 /// with players (visibleToPlayers) so it can be sent as homework or referenced in
 /// a lesson.
+/// A team's shared photo/video gallery — memories and action shots that coaches,
+/// players, and admins add. Distinct from the Training Video library, coaching-
+/// form homework, and facility photos. Uploader is a lightweight tag (id + name,
+/// no FK) like other team-scoped records; the team is a real FK so a deleted
+/// team takes its gallery with it.
+model TeamPhoto {
+  id           String   @id @default(cuid())
+  teamId       String
+  team         Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  uploaderId   String?
+  uploaderName String?
+  url          String
+  /// IMAGE | VIDEO
+  type         String   @default("IMAGE")
+  caption      String?
+  createdAt    DateTime @default(now())
+
+  @@index([teamId, createdAt])
+}
+
 model TrainingVideo {
   id               String   @id @default(cuid())
   title            String
