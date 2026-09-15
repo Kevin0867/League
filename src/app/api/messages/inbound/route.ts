@@ -69,6 +69,17 @@ export async function POST(req: Request) {
   const body = (params.Body ?? "").trim();
   if (!from || !body) return twiml();
 
+  // Idempotency: Twilio re-delivers a webhook when our response is slow, and a
+  // second delivery would otherwise append the same text again (the duplicate
+  // messages people were seeing in-app, and the duplicate email/SMS each copy
+  // then fires). The MessageSid is stable across re-deliveries, so if we've
+  // already recorded this one, acknowledge and stop.
+  const messageSid = (params.MessageSid ?? params.SmsSid ?? "").trim() || null;
+  if (messageSid) {
+    const already = await prisma.chatMessage.findUnique({ where: { externalId: messageSid }, select: { id: true } });
+    if (already) return twiml();
+  }
+
   // Opt-out / help keywords are handled by Twilio's Advanced Opt-Out for A2P;
   // don't route them as conversation messages.
   const kw = body.toUpperCase().replace(/[^A-Z]/g, "");
@@ -89,7 +100,14 @@ export async function POST(req: Request) {
       // Route the reply into the 1:1 thread with the sender and notify them
       // (staff are always emailed + texted by appendMessage).
       const convId = route.conversationId ?? (await findOrCreateConversation(route.senderPersonId, recipientPersonId));
-      await appendMessage(convId, recipientPersonId, body, { email: true, sms: true });
+      try {
+        await appendMessage(convId, recipientPersonId, body, { email: true, sms: true }, null, messageSid);
+      } catch (e) {
+        // Unique-constraint race: a parallel re-delivery beat us to it. The
+        // message is already recorded and notified once — swallow and ack.
+        if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2002") return twiml();
+        throw e;
+      }
       return twiml();
     }
 

@@ -1643,6 +1643,11 @@ model ChatMessage {
   /// Soft-delete: hidden from participants, retained for Admin moderation.
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
+  /// Idempotency key for messages that originate from an external provider —
+  /// the Twilio inbound-SMS MessageSid. Unique so a re-delivered webhook (Twilio
+  /// retries when our response is slow) can never create a duplicate message.
+  /// Null for messages composed in the app.
+  externalId     String?      @unique
 
   @@index([conversationId, createdAt])
 }

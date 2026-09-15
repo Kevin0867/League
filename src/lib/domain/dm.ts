@@ -40,9 +40,10 @@ export async function appendMessage(
   body: string,
   notify: NotifyChoice = { email: true, sms: false },
   attach: Attach = null,
+  externalId: string | null = null,
 ) {
   await prisma.chatMessage.create({
-    data: { conversationId, senderId, body, attachmentUrl: attach?.url ?? null, attachmentType: attach?.type ?? null },
+    data: { conversationId, senderId, body, attachmentUrl: attach?.url ?? null, attachmentType: attach?.type ?? null, externalId },
   });
   const now = new Date();
   await prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } });
