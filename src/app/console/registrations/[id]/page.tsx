@@ -790,25 +790,51 @@ export default async function RegistrationDetail({
         </details>
       )}
 
-      {/* Danger zone — remove the registration and pull the player off any team
-          in this season. Account, waiver, and payment history are preserved. */}
-      <div className="card border border-rose-200">
-        <h2 className="font-semibold text-rose-700">Remove registration</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Deletes this {reg.season?.name ?? "season"} registration and removes {p.firstName} from
-          {membership?.team ? ` “${membership.team.name}.”` : " any team in this season."} Their account,
-          waiver, and any payment history are kept. This can&apos;t be undone.
-        </p>
-        <div className="mt-3">
-          <ConfirmSubmit
-            action="/api/console/registrations"
-            fields={{ ticket, op: "deleteRegistration", registrationId: reg.id, personId: p.id }}
-            confirm={`Remove ${p.firstName} ${p.lastName}'s registration${membership?.team ? ` and take them off “${membership.team.name}”` : ""}? This can't be undone.`}
-            label="Remove registration"
-            className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-          />
-        </div>
-      </div>
+      {/* Danger zone — remove THIS registration. When the player holds another
+          registration in the same season (a duplicate signup, e.g. the same
+          person registered in two divisions), the delete keeps their team
+          placement, payments, and waiver — those live on the person, not the
+          registration — so it cleanly clears the extra without disturbing the
+          real one. Only when this is their sole registration in the season does
+          the delete also pull them off their team. */}
+      {(() => {
+        const otherSameSeason = sharedRegs.filter((r) => r.seasonId === reg.seasonId);
+        const isDuplicate = otherSameSeason.length > 0;
+        const divLabel = reg.division?.name ? `${reg.division.name} ` : "";
+        return (
+          <div className="card border border-rose-200">
+            <h2 className="font-semibold text-rose-700">Remove {isDuplicate ? "this duplicate registration" : "registration"}</h2>
+            {isDuplicate ? (
+              <p className="mt-1 text-sm text-slate-600">
+                Deletes {p.firstName}&apos;s {divLabel}registration for {reg.season?.name ?? "this season"}. Because they also
+                have {otherSameSeason.length === 1 ? "another registration" : `${otherSameSeason.length} other registrations`} this
+                season ({otherSameSeason.map((r) => r.division?.name ?? "—").join(", ")}), this <strong>keeps</strong> their
+                account, waiver, payments, and their team placement{membership?.team ? ` on “${membership.team.name}”` : ""} — it
+                only removes the extra signup. This can&apos;t be undone.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-slate-600">
+                Deletes this {reg.season?.name ?? "season"} registration and removes {p.firstName} from
+                {membership?.team ? ` “${membership.team.name}.”` : " any team in this season."} Their account,
+                waiver, and any payment history are kept. This can&apos;t be undone.
+              </p>
+            )}
+            <div className="mt-3">
+              <ConfirmSubmit
+                action="/api/console/registrations"
+                fields={{ ticket, op: "deleteRegistration", registrationId: reg.id, personId: p.id }}
+                confirm={
+                  isDuplicate
+                    ? `Remove ${p.firstName} ${p.lastName}'s duplicate ${divLabel}registration? Their team spot, payments, and waiver stay. This can't be undone.`
+                    : `Remove ${p.firstName} ${p.lastName}'s registration${membership?.team ? ` and take them off “${membership.team.name}”` : ""}? This can't be undone.`
+                }
+                label={isDuplicate ? "Remove duplicate registration" : "Remove registration"}
+                className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+              />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
