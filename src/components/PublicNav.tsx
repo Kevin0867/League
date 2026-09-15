@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/open-spots", label: "Open Spots" },
   { href: "/coaches", label: "Coaches" },
   { href: "/teams", label: "Teams" },
+  { href: "/gallery", label: "Gallery" },
   { href: "/clinics", label: "Clinics and lessons" },
   { href: "/locations", label: "Locations" },
   { href: "/standings", label: "Standings" },

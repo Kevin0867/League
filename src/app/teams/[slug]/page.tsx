@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatTime12 } from "@/lib/time";
 import { getTeamPageData, type TeamFixtureView } from "@/lib/domain/teamPage";
+import { listTeamPagePhotos } from "@/lib/domain/teamPhotos";
 import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,7 @@ export default async function TeamPage({
   const data = await getTeamPageData(slug);
   if (!data) notFound();
 
+  const teamPagePhotos = await listTeamPagePhotos(data.id);
   const rec = data.record;
 
   return (
@@ -161,6 +163,25 @@ export default async function TeamPage({
             )}
           </div>
         </div>
+
+        {teamPagePhotos.length > 0 && (
+          <div className="mt-8">
+            <h2 className="display text-2xl text-brand-900">Team photos</h2>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {teamPagePhotos.map((p) => (
+                <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl ring-1 ring-slate-200">
+                  {p.type === "VIDEO" ? (
+                    <video src={p.url} controls className="h-44 w-full bg-black object-cover" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.url} alt={p.caption || `${data.displayName} photo`} className="h-44 w-full object-cover" />
+                  )}
+                  {p.caption && <span className="block px-2 py-1.5 text-xs text-slate-600">{p.caption}</span>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         <p className="mt-8 text-sm text-slate-500">
           See the full <Link href="/standings" className="text-brand-700 hover:underline">standings</Link> and{" "}

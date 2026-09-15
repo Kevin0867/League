@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/rbac";
 import type { Role } from "@/lib/enums";
+import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 
 // Team photo/video gallery access. Anyone connected to a team — a rostered
@@ -59,6 +60,8 @@ export type TeamPhotoItem = {
   caption: string | null;
   uploaderId: string | null;
   uploaderName: string | null;
+  onWebsite: boolean;
+  onTeamPage: boolean;
   createdAt: Date;
 };
 
@@ -66,6 +69,39 @@ export async function listTeamPhotos(teamId: string): Promise<TeamPhotoItem[]> {
   return prisma.teamPhoto.findMany({
     where: { teamId },
     orderBy: { createdAt: "desc" },
-    select: { id: true, url: true, type: true, caption: true, uploaderId: true, uploaderName: true, createdAt: true },
+    select: { id: true, url: true, type: true, caption: true, uploaderId: true, uploaderName: true, onWebsite: true, onTeamPage: true, createdAt: true },
   });
+}
+
+/** Items a team has published to its public page. */
+export async function listTeamPagePhotos(teamId: string): Promise<TeamPhotoItem[]> {
+  return prisma.teamPhoto.findMany({
+    where: { teamId, onTeamPage: true },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, url: true, type: true, caption: true, uploaderId: true, uploaderName: true, onWebsite: true, onTeamPage: true, createdAt: true },
+  });
+}
+
+export type GalleryItem = TeamPhotoItem & { teamName: string; teamSlug: string | null };
+
+/** All items published to the public site gallery, newest first. The team link
+ *  is only set for a published PURE team (whose public /teams/[slug] page
+ *  exists); its slug is derived from identity parts, not stored. */
+export async function listWebsiteGallery(limit = 200): Promise<GalleryItem[]> {
+  const rows = await prisma.teamPhoto.findMany({
+    where: { onWebsite: true },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true, url: true, type: true, caption: true, uploaderId: true, uploaderName: true,
+      onWebsite: true, onTeamPage: true, createdAt: true,
+      team: { select: { name: true, club: true, market: true, divisionCode: true, color: true, published: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id, url: r.url, type: r.type, caption: r.caption, uploaderId: r.uploaderId, uploaderName: r.uploaderName,
+    onWebsite: r.onWebsite, onTeamPage: r.onTeamPage, createdAt: r.createdAt,
+    teamName: r.team ? teamDisplayName(r.team) : "PURE Academy",
+    teamSlug: r.team && r.team.published && (r.team.club ?? "PURE") === "PURE" ? teamSlug(r.team) : null,
+  }));
 }

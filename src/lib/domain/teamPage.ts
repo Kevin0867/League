@@ -4,6 +4,7 @@
 // identity parts, so we match against teamSlug() rather than store a slug.
 import { prisma } from "@/lib/db";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
+import { publicVenueLabel } from "@/lib/domain/venue";
 import { leagueStandingsFlat, type LeagueStandingRow } from "@/lib/domain/leagueStandings";
 import { publicPlayerName, publicPlayerSlug } from "@/lib/domain/publicPlayer";
 
@@ -78,7 +79,7 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
     prisma.team.findUnique({
       where: { id: match.id },
       include: {
-        facility: { select: { name: true } },
+        facility: { select: { name: true, isPrivate: true, generalArea: true, market: true } },
         coach: { include: { person: { select: { id: true, firstName: true, lastName: true } } } },
         teamContact: { select: { firstName: true, lastName: true } },
         members: {
@@ -90,7 +91,7 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
     prisma.fixture.findMany({
       where: { OR: [{ homeTeamId: match.id }, { awayTeamId: match.id }] },
       include: {
-        facility: { select: { name: true } },
+        facility: { select: { name: true, isPrivate: true, generalArea: true, market: true } },
         homeTeam: { select: { club: true, market: true, divisionCode: true, color: true, name: true, published: true } },
         awayTeam: { select: { club: true, market: true, divisionCode: true, color: true, name: true, published: true } },
         lines: { select: { lineNumber: true, isCounting: true, lineWinner: true, games: { select: { gameNumber: true, homeScore: true, awayScore: true } } } },
@@ -156,7 +157,7 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
       isHome,
       opponentName: opp ? teamDisplayName(opp) || opp.name : "TBD",
       opponentSlug: opp && opp.club === "PURE" && opp.published ? teamSlug(opp) : null,
-      facilityName: f.facility?.name ?? null,
+      facilityName: publicVenueLabel(f.facility, (isHome ? f.homeTeam : f.awayTeam)?.market),
       lines: buildLines(f, isHome),
     };
   };
@@ -210,7 +211,9 @@ export async function getTeamPageData(slug: string): Promise<TeamPageData | null
     practice: {
       day: team.dayOfWeek ? DAY_LABEL[team.dayOfWeek] ?? team.dayOfWeek : null,
       startTime: team.startTime,
-      facility: team.facility?.name ?? null,
+      // Public-safe only: a private court shows its area/market, never the
+      // owner-named venue or address.
+      facility: publicVenueLabel(team.facility, team.market),
     },
     coachName,
     coachPersonId: team.coach?.person.id ?? null,

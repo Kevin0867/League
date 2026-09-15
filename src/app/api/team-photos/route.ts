@@ -63,6 +63,20 @@ export async function POST(req: Request) {
     return back("?tp=added#team-photos");
   }
 
+  // Toggle a publish flag (show on the public site gallery / the team's public
+  // page). Staff-only: coaches of the team and admins curate what goes public.
+  if (op === "setPublish") {
+    if (!(access.isCoach || access.admin)) return back("?err=perm");
+    const photoId = String(fd.get("photoId") ?? "").trim();
+    const field = String(fd.get("field") ?? "").trim();
+    if (!photoId || (field !== "onWebsite" && field !== "onTeamPage")) return back("?err=fields");
+    const photo = await prisma.teamPhoto.findUnique({ where: { id: photoId }, select: { id: true, teamId: true } });
+    if (!photo || photo.teamId !== teamId) return back("?err=notfound");
+    const value = fd.get("value") === "1";
+    await prisma.teamPhoto.update({ where: { id: photo.id }, data: { [field]: value } });
+    return back("#team-photos");
+  }
+
   if (op === "delete") {
     const photoId = String(fd.get("photoId") ?? "").trim();
     if (!photoId) return back("?err=fields");

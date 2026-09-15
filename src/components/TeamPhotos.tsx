@@ -89,6 +89,14 @@ export function TeamPhotos({
                     </span>
                   </figcaption>
                 )}
+                {/* Publish controls — staff only. Choose where this item shows on
+                    the public website. */}
+                {canModerate && (
+                  <div className="border-t border-slate-100 px-2 py-1.5">
+                    <PublishToggle teamId={teamId} ticket={ticket} returnTo={returnTo} photoId={p.id} field="onWebsite" on={p.onWebsite} label="Add to website" />
+                    <PublishToggle teamId={teamId} ticket={ticket} returnTo={returnTo} photoId={p.id} field="onTeamPage" on={p.onTeamPage} label="Add to team’s page" />
+                  </div>
+                )}
                 {canRemove && (
                   <form method="POST" action="/api/team-photos" className="absolute right-1 top-1">
                     <input type="hidden" name="ticket" value={ticket} />
@@ -111,5 +119,53 @@ export function TeamPhotos({
         </div>
       )}
     </section>
+  );
+}
+
+// A single publish checkbox (native-form toggle) below a gallery item. Clicking
+// flips the flag — showing/hiding the item on the public site gallery or the
+// team's public page.
+function PublishToggle({
+  teamId,
+  ticket,
+  returnTo,
+  photoId,
+  field,
+  on,
+  label,
+}: {
+  teamId: string;
+  ticket: string;
+  returnTo: string;
+  photoId: string;
+  field: "onWebsite" | "onTeamPage";
+  on: boolean;
+  label: string;
+}) {
+  return (
+    <form method="POST" action="/api/team-photos" className="block">
+      <input type="hidden" name="ticket" value={ticket} />
+      <input type="hidden" name="op" value="setPublish" />
+      <input type="hidden" name="teamId" value={teamId} />
+      <input type="hidden" name="photoId" value={photoId} />
+      <input type="hidden" name="field" value={field} />
+      <input type="hidden" name="value" value={on ? "0" : "1"} />
+      <input type="hidden" name="returnTo" value={returnTo} />
+      <button
+        type="submit"
+        aria-pressed={on}
+        className="flex w-full items-center gap-1.5 py-0.5 text-left text-xs text-slate-600 hover:text-brand-700"
+      >
+        <span
+          aria-hidden
+          className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded border text-[9px] font-bold ${
+            on ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white text-transparent"
+          }`}
+        >
+          ✓
+        </span>
+        {label}
+      </button>
+    </form>
   );
 }
