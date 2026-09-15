@@ -195,6 +195,7 @@ export default async function RegistrationDetail({
 
       {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia, sp.resetNew); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
       {sp.ok === "guardianset" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Parent/guardian link updated — {p.firstName} now shows in that parent&apos;s portal.</p>}
+      {sp.ok === "guardiancreated" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Parent created and {p.firstName} linked to them{sp.movedlogin ? " — their login was moved to the parent, so signing in there now shows all their children" : ""}. Link each additional child from that child&apos;s page too.</p>}
 
       {/* Parent / guardian link — a player only appears in a parent's portal
           household when their guardian is set to that parent. Fixes "I can't see
@@ -233,6 +234,35 @@ export default async function RegistrationDetail({
             </form>
           )}
         </div>
+
+        {/* Parent has no record of their own yet (common when the child was
+            registered with the parent's email). Create them and link in one step. */}
+        {(() => {
+          const emName = dec(p.emergencyName);
+          const parts = emName.split(/\s+/).filter(Boolean);
+          const gFirst = parts[0] ?? "";
+          const gLast = parts.slice(1).join(" ") || (p.lastName ?? "");
+          const gPhone = dec(p.emergencyPhone) || p.phone || "";
+          return (
+            <details className="mt-3 border-t border-slate-100 pt-3">
+              <summary className="cursor-pointer text-sm font-semibold text-brand-700">Can&apos;t find the parent? Add them →</summary>
+              <p className="mt-2 text-xs text-slate-500">
+                Creates a parent record (from the emergency contact / email on file) and links {p.firstName} to them. If the parent&apos;s email already has a login on a child, it moves to the parent so they sign in as themselves and see all their kids.
+              </p>
+              <form method="POST" action="/api/console/people" className="mt-2 grid gap-2 sm:grid-cols-2">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="createGuardian" />
+                <input type="hidden" name="personId" value={p.id} />
+                <input type="hidden" name="returnTo" value={`/console/registrations/${reg.id}`} />
+                <div><label className="label">Parent first name</label><input name="gFirst" defaultValue={gFirst} required className="input" /></div>
+                <div><label className="label">Parent last name</label><input name="gLast" defaultValue={gLast} required className="input" /></div>
+                <div><label className="label">Parent email</label><input name="gEmail" type="email" defaultValue={p.email ?? ""} className="input" /></div>
+                <div><label className="label">Parent phone</label><input name="gPhone" type="tel" defaultValue={gPhone} className="input" /></div>
+                <div className="sm:col-span-2 flex justify-end"><button className="btn-primary text-sm">Create parent &amp; link</button></div>
+              </form>
+            </details>
+          );
+        })()}
       </div>
 
       {reg.status === "WAITLISTED" && (

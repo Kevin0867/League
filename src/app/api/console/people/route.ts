@@ -81,6 +81,41 @@ export async function POST(req: Request) {
     return back("?ok=guardianset");
   }
 
+  // Create a NEW parent/guardian record and link this child to them — for the
+  // common case where the parent has no person of their own yet (the child was
+  // registered with the parent's email/phone, and the parent only appears as an
+  // emergency contact). If a login already exists for that email and it's on a
+  // minor (the shared family email), it's moved to the new parent so the parent
+  // signs in as themselves and sees all their children.
+  if (op === "createGuardian") {
+    const childId = String(formData.get("personId") ?? "").trim();
+    const firstName = String(formData.get("gFirst") ?? "").trim();
+    const lastName = String(formData.get("gLast") ?? "").trim();
+    const email = (String(formData.get("gEmail") ?? "").trim().toLowerCase()) || null;
+    const phone = String(formData.get("gPhone") ?? "").trim() || null;
+    if (!childId || !firstName || !lastName) return back("?err=fields");
+
+    // Reuse an existing ADULT with this email (never a child sharing it), else create.
+    let guardian = email
+      ? await prisma.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } })
+      : null;
+    if (!guardian) {
+      guardian = await prisma.person.create({ data: { firstName, lastName, email, phone, isMinor: false }, select: { id: true } });
+    }
+    await prisma.person.update({ where: { id: childId }, data: { guardianId: guardian.id } });
+
+    let movedLogin = false;
+    if (email) {
+      const u = await prisma.user.findUnique({ where: { email }, select: { id: true, person: { select: { isMinor: true } } } });
+      if (u && (u.person?.isMinor ?? false)) {
+        await prisma.user.update({ where: { id: u.id }, data: { personId: guardian.id, role: "PARENT" } });
+        movedLogin = true;
+      }
+    }
+    await audit({ actorId: actor.userId, entityType: "Person", entityId: childId, action: "person.createGuardian", summary: `Created/linked guardian ${firstName} ${lastName}${movedLogin ? " and moved their login" : ""}` });
+    return back(`?ok=guardiancreated${movedLogin ? "&movedlogin=1" : ""}`);
+  }
+
   if (op !== "mergePeople") return back("?err=op");
 
   const survivorId = String(formData.get("survivorId") ?? "");
