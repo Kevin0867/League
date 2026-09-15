@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { StagingBanner } from "@/components/StagingBanner";
 import { ScrollAnchor } from "@/components/ScrollAnchor";
+import { SubmitGuard } from "@/components/SubmitGuard";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://academy.purepickleball.com"),
@@ -36,6 +37,7 @@ export default function RootLayout({
       <body className="min-h-screen antialiased">
         <StagingBanner />
         <ScrollAnchor />
+        <SubmitGuard />
         {children}
       </body>
     </html>
