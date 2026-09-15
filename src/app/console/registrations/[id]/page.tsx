@@ -92,13 +92,15 @@ export default async function RegistrationDetail({
 
   const p = reg.person;
   const guardian = p.isMinor ? p.guardian : null;
-  // Adults who could be this player's parent/guardian — for the guardian-link
-  // picker (so a player shows up in the right parent's portal household).
+  // Potential parents/guardians for the linker — everyone except this player and
+  // except known minors. (Don't require isMinor === false: many adult records
+  // never had the flag set, so a strict "false" hides real parents like the one
+  // the user couldn't find.)
   const guardianCandidates = await prisma.person.findMany({
-    where: { id: { not: p.id }, isMinor: false },
+    where: { id: { not: p.id }, NOT: { isMinor: true } },
     select: { id: true, firstName: true, lastName: true },
-    orderBy: { lastName: "asc" },
-    take: 2000,
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    take: 5000,
   });
   const [teams, membership, payments, sharedRegs] = await Promise.all([
     prisma.team.findMany({ where: { seasonId: reg.seasonId }, orderBy: { name: "asc" }, select: { id: true, name: true, dayOfWeek: true, startTime: true } }),
