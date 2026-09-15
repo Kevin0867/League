@@ -15,6 +15,23 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "no-store, must-revalidate" },
         ],
       },
+      {
+        // The authenticated app surfaces (family portal + staff console) are
+        // server-rendered per request, but mobile browsers' back/forward cache
+        // (bfcache) can still show a stale copy — e.g. a "waiver outstanding"
+        // notice from before the sign link existed, or an action that already
+        // completed. Force a fresh fetch so people always see current state.
+        source: "/portal/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
+      {
+        source: "/portal",
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
+      {
+        source: "/console/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
     ];
   },
 };
