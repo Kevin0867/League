@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate } from "@/lib/time";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
 import { leagueWeekLabel } from "@/lib/domain/seasonCalendar";
+import { publicVenueLabel } from "@/lib/domain/venue";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function PublicSchedulePage() {
                         <TeamRef team={f.homeTeam} /> <span className="text-slate-400">vs</span> <TeamRef team={f.awayTeam} />
                       </div>
                       <div className="text-xs text-slate-400">
-                        {formatDate(f.scheduledAt)} · {f.facility?.name ?? "hub TBD"}
+                        {formatDate(f.scheduledAt)} · {publicVenueLabel(f.facility, f.homeTeam?.market) ?? "hub TBD"}
                         {f.homeTeam?.division ? ` · ${f.homeTeam.division.name}` : ""}
                       </div>
                     </div>

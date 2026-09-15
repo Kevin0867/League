@@ -1901,9 +1901,14 @@ model TeamPhoto {
   /// IMAGE | VIDEO
   type         String   @default("IMAGE")
   caption      String?
+  /// Publish flags, set by staff — show this item in the public site gallery
+  /// (/gallery) and/or on this team's public page (/teams/[slug]).
+  onWebsite    Boolean  @default(false)
+  onTeamPage   Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   @@index([teamId, createdAt])
+  @@index([onWebsite])
 }
 
 model TrainingVideo {
