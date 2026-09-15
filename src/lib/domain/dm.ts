@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
-import { isStaff } from "@/lib/rbac";
+import { isStaff, isAdmin } from "@/lib/rbac";
 import { effectiveRoles } from "@/lib/enums";
 import { recordSmsRoute } from "@/lib/domain/smsRouting";
 
@@ -67,6 +67,19 @@ export async function notifyOtherParticipants(conversationId: string, senderId: 
       }),
     ]);
     const senderName = sender ? `${sender.firstName} ${sender.lastName}`.trim() : "PURE Academy";
+    // Identify the sender by role (Coach / Admin) and, for a team thread, which
+    // team — so every notification says exactly who and what it's about.
+    const senderRoles = sender?.user ? effectiveRoles(sender.user) : [];
+    const roleWord = isAdmin(senderRoles) ? "Admin" : senderRoles.includes("COACH") ? "Coach" : null;
+    const senderLabel = roleWord ? `${roleWord} ${senderName}` : senderName;
+    const convo = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { kind: true, teamId: true } });
+    let teamName: string | null = null;
+    if (convo?.kind === "TEAM" && convo.teamId) {
+      teamName = (await prisma.team.findUnique({ where: { id: convo.teamId }, select: { name: true } }))?.name ?? null;
+    }
+    // "from" attribution used in every channel.
+    const fromLine = teamName ? `${teamName} · ${senderLabel}` : senderLabel;
+
     // Every direct message reaches the recipient by BOTH text and email (and the
     // in-app thread, always recorded) so messages are caught quickly — no
     // dependence on a notify toggle or on who's staff. (`notify` is kept for
@@ -82,8 +95,8 @@ export async function notifyOtherParticipants(conversationId: string, senderId: 
       if (emails.length) {
         await sendEmail(
           emails,
-          `New message from ${senderName}`,
-          `${senderName} sent you a message on PURE Academy:\n\n“${preview}”\n\nRead & reply: ${link}\n\nBest is to reply from your inbox (link above) — it keeps the whole conversation in one place. If you reply to this email, it goes straight to ${senderName}.`,
+          teamName ? `${teamName} — new message from ${senderLabel}` : `New message from ${senderLabel}`,
+          `${fromLine} sent a message on PURE Academy:\n\n“${preview}”\n\nRead & reply: ${link}\n\nBest is to reply from your inbox (link above) — it keeps the whole conversation in one place. If you reply to this email, it goes straight to ${senderName}.`,
           undefined,
           undefined,
           // Route email replies to the sender (the coach), not the shared inbox.
@@ -92,7 +105,7 @@ export async function notifyOtherParticipants(conversationId: string, senderId: 
       }
       // Text — every message, whenever we have a number on file.
       if (per.phone) {
-        await sendSms(per.phone, `New message from ${senderName}: “${preview}”. Read & reply: ${link}`);
+        await sendSms(per.phone, `${fromLine}: “${preview}”. Read & reply: ${link}`);
         // Remember who texted this person so their text-back routes to the sender.
         await recordSmsRoute({ phone: per.phone, personId: p.personId, senderPersonId: senderId, conversationId });
       }

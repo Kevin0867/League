@@ -4,6 +4,8 @@ import { sendSms, sendEmail, type EmailAttachment } from "./notify";
 import { resolveAudience, type AudienceType } from "./domain/audience";
 import { recordSmsRoute } from "./domain/smsRouting";
 import { appUrl } from "./stripe";
+import { effectiveRoles } from "./enums";
+import { isAdmin } from "./rbac";
 
 // Central dispatcher (§13). Creates the Message, resolves the audience, writes a
 // per-person delivery record for each recipient, and attempts each requested
@@ -97,7 +99,7 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // Resolve the sender's person up front — used both to exclude them from their
   // own broadcast and to route replies back to them.
   const senderUser = input.senderId
-    ? await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true, email: true, person: { select: { email: true, firstName: true, lastName: true } } } })
+    ? await prisma.user.findUnique({ where: { id: input.senderId }, select: { personId: true, email: true, role: true, extraRoles: true, person: { select: { email: true, firstName: true, lastName: true } } } })
     : null;
   const senderPersonId = senderUser?.personId ?? null;
 
@@ -127,7 +129,11 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // text-backs via the SMS route, and email replies via Reply-To. We include
   // the team inbox in Reply-To too, so admins see the reply as well.
   const senderEmail = (senderUser?.person?.email || senderUser?.email || "").trim() || null;
-  const senderName = senderUser?.person ? `${senderUser.person.firstName} ${senderUser.person.lastName}`.trim() : null;
+  const senderRawName = senderUser?.person ? `${senderUser.person.firstName} ${senderUser.person.lastName}`.trim() : null;
+  // Label the sender by role so recipients know if it's a coach or the office.
+  const senderRoles = senderUser ? effectiveRoles(senderUser) : [];
+  const senderRoleWord = isAdmin(senderRoles) ? "Admin" : senderRoles.includes("COACH") ? "Coach" : null;
+  const senderName = senderRawName ? (senderRoleWord ? `${senderRoleWord} ${senderRawName}` : senderRawName) : null;
   const TEAM_INBOX = "team@purepickleball.com";
   const emailReplyTo: string[] | undefined = senderEmail ? [senderEmail, TEAM_INBOX] : undefined;
   let failures = 0;
