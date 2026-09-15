@@ -25,6 +25,7 @@ import { RecipientChecklist } from "@/components/RecipientChecklist";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { TextResetLinkButton } from "@/components/TextResetLinkButton";
 import { RESET_STATUS } from "@/lib/domain/resetStatus";
+import { SearchableSelect } from "@/components/SearchableSelect";
 
 // Sensitive fields are encrypted at rest and only decrypted for staff here.
 // A key mismatch yields a marker — show blank so we never re-save the marker.
@@ -91,6 +92,14 @@ export default async function RegistrationDetail({
 
   const p = reg.person;
   const guardian = p.isMinor ? p.guardian : null;
+  // Adults who could be this player's parent/guardian — for the guardian-link
+  // picker (so a player shows up in the right parent's portal household).
+  const guardianCandidates = await prisma.person.findMany({
+    where: { id: { not: p.id }, isMinor: false },
+    select: { id: true, firstName: true, lastName: true },
+    orderBy: { lastName: "asc" },
+    take: 2000,
+  });
   const [teams, membership, payments, sharedRegs] = await Promise.all([
     prisma.team.findMany({ where: { seasonId: reg.seasonId }, orderBy: { name: "asc" }, select: { id: true, name: true, dayOfWeek: true, startTime: true } }),
     prisma.teamMember.findFirst({ where: { personId: p.id, team: { seasonId: reg.seasonId } }, include: { team: true } }),
@@ -176,6 +185,46 @@ export default async function RegistrationDetail({
       </div>
 
       {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia, sp.resetNew); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
+      {sp.ok === "guardianset" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Parent/guardian link updated — {p.firstName} now shows in that parent&apos;s portal.</p>}
+
+      {/* Parent / guardian link — a player only appears in a parent's portal
+          household when their guardian is set to that parent. Fixes "I can't see
+          my other child in my portal". */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Parent / guardian</h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          {guardian
+            ? <>Linked to <span className="font-medium text-slate-700">{guardian.firstName} {guardian.lastName}</span> — {p.firstName} shows in their portal household. Change it below if needed.</>
+            : <>No parent/guardian is linked, so {p.firstName} won&apos;t appear in any parent&apos;s portal. Link the parent so they can see this player.</>}
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <form method="POST" action="/api/console/people" className="flex flex-1 flex-wrap items-end gap-2">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="setGuardian" />
+            <input type="hidden" name="personId" value={p.id} />
+            <input type="hidden" name="returnTo" value={`/console/registrations/${reg.id}`} />
+            <div className="min-w-[16rem] flex-1">
+              <SearchableSelect
+                name="guardianId"
+                placeholder="Search for the parent/guardian by name…"
+                defaultId={p.guardianId ?? ""}
+                options={guardianCandidates.map((c) => ({ id: c.id, name: `${c.firstName} ${c.lastName}` }))}
+              />
+            </div>
+            <button className="btn-primary text-sm">Save link</button>
+          </form>
+          {p.guardianId && (
+            <form method="POST" action="/api/console/people">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="setGuardian" />
+              <input type="hidden" name="personId" value={p.id} />
+              <input type="hidden" name="guardianId" value="" />
+              <input type="hidden" name="returnTo" value={`/console/registrations/${reg.id}`} />
+              <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-50">Unlink</button>
+            </form>
+          )}
+        </div>
+      </div>
 
       {reg.status === "WAITLISTED" && (
         <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50 px-4 py-3">

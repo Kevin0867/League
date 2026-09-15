@@ -63,6 +63,24 @@ export async function POST(req: Request) {
     return back("?ok=personedit");
   }
 
+  // Link a child to a parent/guardian (or clear it). Fixes a player who doesn't
+  // show up in a parent's portal because their guardian isn't set. Setting the
+  // guardian makes the child a dependent — visible in that parent's household.
+  if (op === "setGuardian") {
+    const personId = String(formData.get("personId") ?? "").trim();
+    const guardianId = String(formData.get("guardianId") ?? "").trim() || null;
+    if (!personId) return back("?err=fields");
+    if (guardianId === personId) return back("?err=guardianself");
+    if (guardianId) {
+      const g = await prisma.person.findUnique({ where: { id: guardianId }, select: { id: true, guardianId: true } });
+      if (!g) return back("?err=notfound");
+      if (g.guardianId === personId) return back("?err=guardiancycle"); // would be mutual
+    }
+    await prisma.person.update({ where: { id: personId }, data: { guardianId } });
+    await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "person.setGuardian", summary: guardianId ? `Linked to guardian ${guardianId}` : "Cleared guardian" });
+    return back("?ok=guardianset");
+  }
+
   if (op !== "mergePeople") return back("?err=op");
 
   const survivorId = String(formData.get("survivorId") ?? "");
