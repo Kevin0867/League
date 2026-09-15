@@ -125,7 +125,7 @@ export function TeamPhotos({
 // A single publish checkbox (native-form toggle) below a gallery item. Clicking
 // flips the flag — showing/hiding the item on the public site gallery or the
 // team's public page.
-function PublishToggle({
+export function PublishToggle({
   teamId,
   ticket,
   returnTo,

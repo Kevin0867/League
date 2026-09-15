@@ -113,6 +113,16 @@ export default async function TodayPage() {
           <span className="shrink-0 text-amber-700">→</span>
         </Link>
         <Link
+          href="/console/forms"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-white px-4 py-4 shadow-sm transition hover:bg-brand-50"
+        >
+          <div>
+            <div className="text-base font-bold text-slate-900">📋 Player tracking documents</div>
+            <div className="mt-0.5 text-xs text-slate-500">Serve/return, development, homework &amp; more</div>
+          </div>
+          <span className="shrink-0 text-brand-600">→</span>
+        </Link>
+        <Link
           href="/console/sign-waiver"
           className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-white px-4 py-4 shadow-sm transition hover:bg-brand-50 sm:col-span-2"
         >
