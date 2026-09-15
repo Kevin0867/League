@@ -11,6 +11,7 @@ import { RegistrationsBulkBar } from "@/components/RegistrationsBulkBar";
 import { requireAdmin } from "@/lib/rbac";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
+import { backSuffix } from "@/lib/nav";
 import { coveredIds } from "@/lib/payments/familyFee";
 import { feeStateOf, feeStateRank, type FeeState } from "@/lib/domain/feeStatus";
 import { RESET_STATUS } from "@/lib/domain/resetStatus";
@@ -108,6 +109,10 @@ export default async function RegistrationsPage({
   if (sp.pay === "unpaid") filters.push({ person: { paymentsMade: { none: { category: "PLAYER_FEE", status: "PAID" } } } });
   if (sp.pay === "paid") filters.push({ person: { paymentsMade: { some: { category: "PLAYER_FEE", status: "PAID" } } } });
   const where = filters.length ? { AND: filters } : {};
+
+  // Stamp every record link with the current search so its Back link returns
+  // to these results, not a blank list.
+  const back = backSuffix("/console/registrations", sp, ["q", "div", "loc", "waiver", "assign", "pay", "sort"]);
 
   const sort = sp.sort ?? "added_desc";
   const REG_SORTS: Record<string, Prisma.RegistrationOrderByWithRelationInput> = {
@@ -340,7 +345,7 @@ export default async function RegistrationsPage({
           <ul className="mt-3 divide-y divide-slate-100 text-sm">
             {otherMatches.map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-2 py-2">
-                <Link href={p.coach ? `/console/coaches/${p.id}` : `/console/people/${p.id}`} className="font-medium text-brand-700 hover:underline">
+                <Link href={`${p.coach ? `/console/coaches/${p.id}` : `/console/people/${p.id}`}${back}`} className="font-medium text-brand-700 hover:underline">
                   {p.firstName} {p.lastName}
                 </Link>
                 <span className="flex items-center gap-2 text-xs text-slate-400">
@@ -447,7 +452,7 @@ export default async function RegistrationsPage({
                   <input type="checkbox" name="ids" value={r.id} data-regbox form="regbulk" className="mt-1 h-4 w-4" aria-label={`Select ${r.person.firstName} ${r.person.lastName}`} />
                 </td>
                 <td className="py-2">
-                  <Link href={`/console/registrations/${r.id}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">
+                  <Link href={`/console/registrations/${r.id}${back}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">
                     {r.person.firstName} {r.person.lastName}
                   </Link>
                   <div className="text-xs text-slate-400">{r.person.email ?? r.person.phone ?? "—"}</div>
