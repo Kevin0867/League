@@ -14,6 +14,8 @@ import { TeamColorDot } from "@/components/TeamColorDot";
 import { TeamScheduleFields } from "./TeamScheduleFields";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
+import { TeamPhotos } from "@/components/TeamPhotos";
+import { listTeamPhotos } from "@/lib/domain/teamPhotos";
 import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
 import { TeamSponsors } from "./TeamSponsors";
 import { DeleteTeamButton } from "@/components/DeleteTeamButton";
@@ -103,7 +105,7 @@ export default async function TeamDetailPage({
   if (!(await canViewTeamNotes(id))) redirect("/console");
   const viewer = await getSession();
   const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
-  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia } = await searchParams;
+  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia, tp } = await searchParams;
   const VIA_LABEL: Record<string, string> = { email: "email", text: "text", both: "email and text" };
   const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
@@ -118,6 +120,8 @@ export default async function TeamDetailPage({
     },
   });
   if (!team) notFound();
+
+  const teamPhotos = await listTeamPhotos(team.id);
 
   const [coaches, facilities, candidateRegs] = await Promise.all([
     prisma.coach.findMany({ include: { person: true }, orderBy: { person: { lastName: "asc" } } }),
@@ -384,6 +388,19 @@ export default async function TeamDetailPage({
           </div>
         </div>
       </div>
+
+      {/* Team photos — a shared gallery the whole team can add to. Coaches and
+          admins here can also remove any item. */}
+      <TeamPhotos
+        teamId={team.id}
+        ticket={ticket}
+        returnTo={`/console/teams/${team.id}`}
+        photos={teamPhotos}
+        canPost={true}
+        canModerate={true}
+        personId={viewer?.personId ?? null}
+        notice={tp === "added" ? "added" : tp === "deleted" ? "deleted" : undefined}
+      />
 
       {/* LAUNCH — the deliberate go-live. Assigning players messages no one;
           families hear from us only when an admin sends from here. Admin only. */}
