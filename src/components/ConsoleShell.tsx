@@ -37,6 +37,7 @@ const SECTIONS: NavSection[] = [
       { href: "/console/teams", label: "Teams", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/pools", "/console/board", "/console/teams"] },
       { href: "/console/team-import", label: "Team import", roles: ["COO", "DIRECTOR"] },
       { href: "/console/requests", label: "Placement requests", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/photos", label: "Team Photos", roles: ["COO", "DIRECTOR"], match: ["/console/photos"] },
     ],
   },
   {
@@ -56,7 +57,7 @@ const SECTIONS: NavSection[] = [
     title: "Coaching",
     items: [
       { href: "/console/handbook", label: "Coaching Handbook", roles: ["COO", "DIRECTOR", "COACH"] },
-      { href: "/console/forms", label: "Coaching Forms", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/forms"] },
+      { href: "/console/forms", label: "Player tracking documents", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/forms"] },
       { href: "/console/training", label: "Training Videos", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/incident-report", label: "Incident Report", roles: ["COO", "DIRECTOR", "COACH"] },
       { href: "/console/sign-waiver", label: "Sign a Waiver", roles: ["COO", "DIRECTOR", "COACH"] },

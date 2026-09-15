@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { REUSABLE_FORMS } from "@/lib/domain/coachingForms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Coaching Forms" };
+export const metadata = { title: "Player tracking documents" };
 
 // The digital "Reusable Forms" from the Coaches Workbook. Built ones open; the
 // rest are coming soon.
@@ -12,7 +12,7 @@ export default async function CoachingFormsPage() {
   await requireStaff();
   return (
     <div className="space-y-5">
-      <PageHeader title="Coaching Forms" subtitle="The workbook's reusable forms, made digital. Trackers save each player's numbers so you can see progress over the season." />
+      <PageHeader title="Player tracking documents" subtitle="The workbook's reusable forms, made digital. Trackers save each player's numbers so you can see progress over the season." />
 
       <Link href="/console/forms/analytics" className="card block border-l-4 border-brand-500 transition hover:shadow">
         <div className="font-semibold text-slate-900">📊 Progress Analytics</div>

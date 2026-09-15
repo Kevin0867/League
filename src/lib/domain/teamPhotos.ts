@@ -73,6 +73,28 @@ export async function listTeamPhotos(teamId: string): Promise<TeamPhotoItem[]> {
   });
 }
 
+export type AdminGalleryItem = TeamPhotoItem & { teamId: string; teamName: string };
+
+/** Every team gallery item across all teams, newest first — the admin review
+ *  queue for what players and coaches have added, where they get published to
+ *  the public site. */
+export async function listAllTeamPhotos(limit = 400): Promise<AdminGalleryItem[]> {
+  const rows = await prisma.teamPhoto.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true, url: true, type: true, caption: true, uploaderId: true, uploaderName: true,
+      onWebsite: true, onTeamPage: true, createdAt: true, teamId: true,
+      team: { select: { name: true, club: true, market: true, divisionCode: true, color: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id, url: r.url, type: r.type, caption: r.caption, uploaderId: r.uploaderId, uploaderName: r.uploaderName,
+    onWebsite: r.onWebsite, onTeamPage: r.onTeamPage, createdAt: r.createdAt,
+    teamId: r.teamId, teamName: r.team ? teamDisplayName(r.team) : "Team",
+  }));
+}
+
 /** Items a team has published to its public page. */
 export async function listTeamPagePhotos(teamId: string): Promise<TeamPhotoItem[]> {
   return prisma.teamPhoto.findMany({
