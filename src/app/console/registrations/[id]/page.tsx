@@ -92,12 +92,19 @@ export default async function RegistrationDetail({
 
   const p = reg.person;
   const guardian = p.isMinor ? p.guardian : null;
-  // Potential parents/guardians for the linker — everyone except this player and
-  // except known minors. (Don't require isMinor === false: many adult records
-  // never had the flag set, so a strict "false" hides real parents like the one
-  // the user couldn't find.)
+  // Potential parents/guardians for the linker. Be generous so no real parent is
+  // hidden: everyone except this player who is NOT a known minor, OR already has
+  // dependents (an existing guardian), OR has a portal login. Filtering by
+  // isMinor alone wrongly hid a parent whose record was flagged minor.
   const guardianCandidates = await prisma.person.findMany({
-    where: { id: { not: p.id }, NOT: { isMinor: true } },
+    where: {
+      id: { not: p.id },
+      OR: [
+        { NOT: { isMinor: true } },
+        { dependents: { some: {} } },
+        { NOT: { user: null } },
+      ],
+    },
     select: { id: true, firstName: true, lastName: true },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     take: 5000,
