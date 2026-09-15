@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
+import { backHref } from "@/lib/nav";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
 import { decryptField } from "@/lib/crypto";
@@ -183,7 +184,7 @@ export default async function RegistrationDetail({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/console/registrations" className="btn-back">← Registrations</Link>
+          <Link href={backHref(sp.back, "/console/registrations")} className="btn-back">← {sp.back ? "Back to results" : "Registrations"}</Link>
           <h1 className="text-2xl font-bold text-slate-900">{p.firstName} {p.lastName}</h1>
           <p className="text-sm text-slate-500">{reg.season?.name} · <StatusBadge status={reg.status} /></p>
         </div>

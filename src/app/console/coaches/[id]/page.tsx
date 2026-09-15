@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { can } from "@/lib/rbac";
+import { backHref } from "@/lib/nav";
 import { coachAssignmentGate } from "@/lib/domain/teams";
 import { formatTime12 } from "@/lib/time";
 import { CoachProfileForm } from "@/components/CoachProfileForm";
@@ -34,7 +35,7 @@ export default async function EditCoachPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
-  const { ok, err, team: clashTeam, imgok, imgerr, invitetoken, invitesent, inviteerr, wuok, wuerr } = await searchParams;
+  const { ok, err, team: clashTeam, imgok, imgerr, invitetoken, invitesent, inviteerr, wuok, wuerr, back } = await searchParams;
   const session = await getSession();
   if (!session || !can(session.role, "manageCoaches")) redirect("/console");
   const ticket = await mintConsoleTicket();
@@ -75,8 +76,8 @@ export default async function EditCoachPage({
 
   return (
     <div className="space-y-6">
-      <Link href="/console/coaches" className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800">
-        ← Back to Coaches
+      <Link href={backHref(back, "/console/coaches")} className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800">
+        ← {back ? "Back to results" : "Back to Coaches"}
       </Link>
       <PageHeader
         title={`Edit coach — ${person.firstName} ${person.lastName}`}
@@ -132,7 +133,7 @@ export default async function EditCoachPage({
           </form>
         </div>
       )}
-      <Link href="/console/coaches" className="btn-back">← Back to coaches</Link>
+      <Link href={backHref(back, "/console/coaches")} className="btn-back">← {back ? "Back to results" : "Back to coaches"}</Link>
 
       {/* Invite / set-password link. Shown after create or a "Send invite" — and
           because email delivery may not be configured, we always surface the

@@ -8,6 +8,7 @@ import { decryptField } from "@/lib/crypto";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TextResetLinkButton } from "@/components/TextResetLinkButton";
 import { RESET_STATUS } from "@/lib/domain/resetStatus";
+import { backHref } from "@/lib/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function PersonDetail({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ok?: string; err?: string; reset?: string; resetVia?: string; resetNew?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string; reset?: string; resetVia?: string; resetNew?: string; back?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -65,7 +66,7 @@ export default async function PersonDetail({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/console/registrations" className="btn-back">← Registrations</Link>
+        <Link href={backHref(sp.back, "/console/registrations")} className="btn-back">← {sp.back ? "Back to results" : "Registrations"}</Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-slate-900">{person.firstName} {person.lastName}</h1>
           {person.isMinor && <span className="badge bg-amber-100 text-amber-800">minor</span>}
