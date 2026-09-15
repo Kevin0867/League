@@ -73,6 +73,23 @@ export async function listTeamPhotos(teamId: string): Promise<TeamPhotoItem[]> {
   });
 }
 
+/** How many team gallery items were added since the admin last reviewed them —
+ *  drives the "new uploads to review" nav badge. Null `since` (never reviewed)
+ *  counts everything. */
+export async function newTeamPhotoCount(since: Date | null | undefined): Promise<number> {
+  return prisma.teamPhoto.count({ where: since ? { createdAt: { gt: since } } : {} });
+}
+
+/** Stamp the admin's last-reviewed time to now (called when they open the Team
+ *  Photos page) so the nav badge clears. Returns whether there was anything new
+ *  (so the caller can refresh the layout badge). */
+export async function markPhotosReviewed(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { photosReviewedAt: true } });
+  const had = (await newTeamPhotoCount(user?.photosReviewedAt ?? null)) > 0;
+  await prisma.user.update({ where: { id: userId }, data: { photosReviewedAt: new Date() } });
+  return had;
+}
+
 export type AdminGalleryItem = TeamPhotoItem & { teamId: string; teamName: string };
 
 /** Every team gallery item across all teams, newest first — the admin review

@@ -7,6 +7,7 @@ import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { unreadInboxCount, unreadBroadcastCount, firstUnreadInboxId } from "@/lib/domain/inbox";
 import { coachAgreementNeedsAttention, agreementsPendingCountersign } from "@/lib/domain/coachingAgreement";
 import { UnreadPoller } from "@/components/UnreadPoller";
+import { newTeamPhotoCount } from "@/lib/domain/teamPhotos";
 
 // Never serve a cached/prerendered authed shell — always resolve the session.
 export const dynamic = "force-dynamic";
@@ -48,16 +49,22 @@ export default async function ConsoleLayout({
     : null;
   // Unread direct messages — surfaced at the top of the console so a new message
   // is never missed.
-  const [unread, announcements, agreementAction, agreementsPending, firstUnreadId] = await Promise.all([
+  const [unread, announcements, agreementAction, agreementsPending, firstUnreadId, photoReview] = await Promise.all([
     unreadInboxCount(session.personId).catch(() => 0),
     unreadBroadcastCount(session.personId).catch(() => 0),
     coachAgreementNeedsAttention(session.personId).catch(() => false),
     admin ? agreementsPendingCountersign().catch(() => 0) : Promise.resolve(0),
     firstUnreadInboxId(session.personId).catch(() => null),
+    admin
+      ? prisma.user
+          .findUnique({ where: { id: session.userId }, select: { photosReviewedAt: true } })
+          .then((u) => newTeamPhotoCount(u?.photosReviewedAt ?? null))
+          .catch(() => 0)
+      : Promise.resolve(0),
   ]);
   const unreadHref = firstUnreadId ? `/console/inbox/${firstUnreadId}` : "/console/inbox";
   return (
-    <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask} unread={unread} announcements={announcements} agreementAction={agreementAction} agreementsPending={agreementsPending} unreadHref={unreadHref}>
+    <ConsoleShell role={session.role} roles={session.roles ?? [session.role]} name={session.name} ask={ask} unread={unread} announcements={announcements} agreementAction={agreementAction} agreementsPending={agreementsPending} photoReview={photoReview} unreadHref={unreadHref}>
       <UnreadPoller count={unread} broadcast={announcements} trackBroadcast />
       {children}
     </ConsoleShell>

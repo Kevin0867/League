@@ -119,6 +119,9 @@ model User {
   person       Person?  @relation(fields: [personId], references: [id])
   active       Boolean  @default(true)
   lastLoginAt  DateTime?
+  /// When this admin last opened the Team Photos review page — drives the "new
+  /// uploads to review" nav badge (team gallery items added since this time).
+  photosReviewedAt DateTime?
   // Brute-force protection: lock the account for a cool-down after repeated fails.
   failedLoginCount Int   @default(0)
   lockedUntil  DateTime?

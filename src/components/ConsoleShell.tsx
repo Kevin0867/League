@@ -109,6 +109,7 @@ export function ConsoleShell({
   announcements = 0,
   agreementAction = false,
   agreementsPending = 0,
+  photoReview = 0,
   unreadHref = "/console/inbox",
 }: {
   /** Primary role — used only for the sidebar badge label. */
@@ -130,6 +131,9 @@ export function ConsoleShell({
   /** Agreements signed by a coach and awaiting an admin countersignature —
    *  drives the Agreements nav badge + banner (admins only). */
   agreementsPending?: number;
+  /** New team gallery uploads since the admin last opened the Team Photos page —
+   *  drives the Team Photos nav badge (admins only). */
+  photoReview?: number;
   /** Where the unread-DM banner links — the unread thread itself when there is
    *  one, so tapping it opens and marks it read (falls back to the inbox list). */
   unreadHref?: string;
@@ -232,6 +236,9 @@ export function ConsoleShell({
                       )}
                       {item.href === "/console/agreements" && agreementsPending > 0 && (
                         <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">{agreementsPending}</span>
+                      )}
+                      {item.href === "/console/photos" && photoReview > 0 && (
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">{photoReview}</span>
                       )}
                     </Link>
                   ))}
