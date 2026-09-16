@@ -52,6 +52,7 @@ export async function POST(req: Request) {
         ...(age !== null ? { isMinor: age < 18 } : {}),
         emergencyName: encryptField(g("emergencyName") || null),
         emergencyPhone: encryptField(g("emergencyPhone") || null),
+        emergencyEmail: encryptField(g("emergencyEmail") || null),
         emergencyRelation: encryptField(g("emergencyRelation") || null),
         emergencyName2: encryptField(g("emergencyName2") || null),
         emergencyPhone2: encryptField(g("emergencyPhone2") || null),
