@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { WaiverText } from "@/components/WaiverText";
 
-type Participant = { id: string; name: string; gender: string | null; role: string };
+type Participant = { id: string; name: string; gender: string | null; dob: string; role: string };
 
 // Client-side waiver form. We deliberately turn OFF native browser validation
 // (`noValidate`) and validate ourselves, because Safari silently blocks a form
@@ -55,12 +55,27 @@ export function WaiverSignForm({
     const sig = form.elements.namedItem("signatureName") as HTMLInputElement | null;
     if (!sig?.value.trim()) { missing.push("Type the full legal name to sign."); flag(sig); }
 
-    // Guardian email (minors only)
-    if (isMinor) {
-      const ge = form.elements.namedItem("guardianEmail") as HTMLInputElement | null;
-      const v = ge?.value.trim() ?? "";
-      if (!v || !/.+@.+\..+/.test(v)) { missing.push("Enter a valid parent/guardian email."); flag(ge); }
+    // Contact email + mobile (required for everyone).
+    const emailEl = form.elements.namedItem("contactEmail") as HTMLInputElement | null;
+    const emailV = emailEl?.value.trim() ?? "";
+    if (!emailV || !/.+@.+\..+/.test(emailV)) { missing.push(`Enter a valid ${isMinor ? "parent/guardian " : ""}email.`); flag(emailEl); }
+    const mobileEl = form.elements.namedItem("contactMobile") as HTMLInputElement | null;
+    if ((mobileEl?.value.replace(/\D/g, "").length ?? 0) < 10) { missing.push("Enter a valid mobile number."); flag(mobileEl); }
+
+    // Date of birth for every participant.
+    for (const m of participants) {
+      const el = form.elements.namedItem(`dob_${m.id}`) as HTMLInputElement | null;
+      if (!el?.value) { missing.push(`Enter ${m.name}'s date of birth.`); flag(el); }
     }
+
+    // Emergency contact (required).
+    const enEl = form.elements.namedItem("emergencyName") as HTMLInputElement | null;
+    if (!enEl?.value.trim()) { missing.push("Enter an emergency contact name."); flag(enEl); }
+    const epEl = form.elements.namedItem("emergencyPhone") as HTMLInputElement | null;
+    if ((epEl?.value.replace(/\D/g, "").length ?? 0) < 10) { missing.push("Enter a valid emergency contact phone."); flag(epEl); }
+    const eeEl = form.elements.namedItem("emergencyEmail") as HTMLInputElement | null;
+    const eeV = eeEl?.value.trim() ?? "";
+    if (!eeV || !/.+@.+\..+/.test(eeV)) { missing.push("Enter a valid emergency contact email."); flag(eeEl); }
 
     if (missing.length > 0) {
       setProblems(missing);
@@ -119,20 +134,23 @@ export function WaiverSignForm({
           {participants.length > 1 ? "Everyone on this waiver" : "Participant"}
         </p>
         <p className="mt-0.5 text-xs text-slate-500">
-          Optional — this helps us place players in the correct
-          division{participants.length > 1 ? ", including the parent/guardian and each child" : ""}. You can sign without it.
+          Date of birth is required{participants.length > 1 ? " for the parent/guardian and each child" : ""}. Gender is optional and helps us place players in the correct division.
         </p>
         <div className="mt-3 space-y-3">
           {participants.map((m) => {
             const g = m.gender === "MALE" || m.gender === "FEMALE" ? m.gender : "";
             return (
-              <div key={m.id} className="grid grid-cols-[1fr,auto] items-center gap-3">
+              <div key={m.id} className="grid gap-2 rounded-lg bg-white p-2 ring-1 ring-slate-100 sm:grid-cols-[1fr,auto,auto] sm:items-center">
                 <div className="text-sm">
                   <span className="font-medium text-slate-800">{m.name}</span>
                   <span className="ml-1.5 text-xs text-slate-400">({m.role})</span>
                 </div>
-                <select name={`gender_${m.id}`} className="input w-40" defaultValue={g}>
-                  <option value="">Select…</option>
+                <div>
+                  <label className="sr-only" htmlFor={`dob_${m.id}`}>{m.name} date of birth</label>
+                  <input id={`dob_${m.id}`} name={`dob_${m.id}`} type="date" max={today} className="input sm:w-44" defaultValue={m.dob} aria-label={`${m.name} date of birth`} />
+                </div>
+                <select name={`gender_${m.id}`} className="input sm:w-32" defaultValue={g} aria-label={`${m.name} gender (optional)`}>
+                  <option value="">Gender…</option>
                   <option value="MALE">Male</option>
                   <option value="FEMALE">Female</option>
                 </select>
@@ -142,27 +160,41 @@ export function WaiverSignForm({
         </div>
       </div>
 
-      {isMinor && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-800">Parent/guardian contact</p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            We&apos;ll use this to reach you about {personFirstName}&apos;s team, schedule, payments, and weekly
-            progress. Required.
-          </p>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label" htmlFor="guardianEmail">Parent/guardian email *</label>
-              <input id="guardianEmail" name="guardianEmail" type="email" className="input"
-                defaultValue={personEmail} placeholder="parent@email.com" />
-            </div>
-            <div>
-              <label className="label" htmlFor="guardianPhone">Parent/guardian phone (optional)</label>
-              <input id="guardianPhone" name="guardianPhone" type="tel" className="input"
-                defaultValue={personPhone} placeholder="(480) 555-0100" />
-            </div>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <p className="text-sm font-semibold text-slate-800">{isMinor ? "Parent/guardian contact" : "Your contact"}</p>
+        <p className="mt-0.5 text-xs text-slate-500">
+          We&apos;ll use this to reach {isMinor ? "you" : "you"} about {isMinor ? `${personFirstName}'s ` : "your "}team, schedule, payments, and weekly progress. Both required.
+        </p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="contactEmail">{isMinor ? "Parent/guardian email" : "Email"} *</label>
+            <input id="contactEmail" name="contactEmail" type="email" className="input" defaultValue={personEmail} placeholder="you@email.com" />
+          </div>
+          <div>
+            <label className="label" htmlFor="contactMobile">Mobile number *</label>
+            <input id="contactMobile" name="contactMobile" type="tel" className="input" defaultValue={personPhone} placeholder="(480) 555-0100" />
           </div>
         </div>
-      )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <p className="text-sm font-semibold text-slate-800">Emergency contact</p>
+        <p className="mt-0.5 text-xs text-slate-500">Someone we can reach in an emergency at a session. All three are required.</p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label className="label" htmlFor="emergencyName">Name *</label>
+            <input id="emergencyName" name="emergencyName" className="input" placeholder="Full name" />
+          </div>
+          <div>
+            <label className="label" htmlFor="emergencyPhone">Phone *</label>
+            <input id="emergencyPhone" name="emergencyPhone" type="tel" className="input" placeholder="(480) 555-0100" />
+          </div>
+          <div>
+            <label className="label" htmlFor="emergencyEmail">Email *</label>
+            <input id="emergencyEmail" name="emergencyEmail" type="email" className="input" placeholder="name@email.com" />
+          </div>
+        </div>
+      </div>
 
       {problems.length > 0 && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

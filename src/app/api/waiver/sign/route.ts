@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyWaiverToken } from "@/lib/domain/waiverRenewal";
 import { audit } from "@/lib/audit";
+import { encryptField } from "@/lib/crypto";
+import { ageFromDob } from "@/lib/domain/messaging-acl";
+
+const digits = (s: string) => s.replace(/\D/g, "");
 
 // Add an email to a person's notification addresses (email → email2 → email3),
 // skipping if it's already on file (case-insensitive) or all slots are full.
@@ -51,11 +55,28 @@ export async function POST(req: Request) {
     select: { id: true, isMinor: true, guardianId: true },
   });
 
-  // For a minor, the parent/guardian email is required — it's how we reach the
-  // family about teams, payments, and progress — and we always retain it.
-  const guardianEmail = String(formData.get("guardianEmail") ?? "").trim();
-  const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
-  if (person?.isMinor && (!guardianEmail || !/.+@.+\..+/.test(guardianEmail))) return back("err=guardianemail");
+  // Contact email + mobile are required for everyone — it's how we reach the
+  // family about teams, payments, and progress — and we always retain them.
+  const contactEmail = String(formData.get("contactEmail") ?? "").trim().toLowerCase();
+  const contactMobile = String(formData.get("contactMobile") ?? "").trim();
+  if (!contactEmail || !/.+@.+\..+/.test(contactEmail)) return back("err=email");
+  if (digits(contactMobile).length < 10) return back("err=mobile");
+
+  // Emergency contact is required on the waiver (name, phone, email).
+  const emergencyName = String(formData.get("emergencyName") ?? "").trim();
+  const emergencyPhone = String(formData.get("emergencyPhone") ?? "").trim();
+  const emergencyEmail = String(formData.get("emergencyEmail") ?? "").trim();
+  if (!emergencyName || digits(emergencyPhone).length < 10 || !/.+@.+\..+/.test(emergencyEmail)) return back("err=emergency");
+  const emergency = {
+    emergencyName: encryptField(emergencyName),
+    emergencyPhone: encryptField(emergencyPhone),
+    emergencyEmail: encryptField(emergencyEmail),
+  };
+  const dobFor = (id: string): Date | null => {
+    const v = String(formData.get(`dob_${id}`) ?? "").trim();
+    const d = v ? new Date(v) : null;
+    return d && !isNaN(d.getTime()) ? d : null;
+  };
   const now = new Date();
   const version = String(formData.get("waiverVersion") ?? "2026-08");
 
@@ -100,24 +121,34 @@ export async function POST(req: Request) {
         },
       });
       const g = genderFor(member.id);
+      const dob = dobFor(member.id);
+      // DOB captured on the waiver — keep the minor flag in step with it.
+      const dobData: { dob?: Date; isMinor?: boolean } = {};
+      if (dob) {
+        dobData.dob = dob;
+        const age = ageFromDob(dob);
+        if (age !== null) dobData.isMinor = age < 18;
+      }
       await prisma.person.update({
         where: { id: member.id },
-        data: { waiverSignedAt: now, waiverRenewalRequiredAt: null, mediaOptOut, ...(g ? { gender: g } : {}) },
+        data: {
+          waiverSignedAt: now,
+          waiverRenewalRequiredAt: null,
+          mediaOptOut,
+          ...(g ? { gender: g } : {}),
+          ...dobData,
+          // Emergency contact captured on the waiver, stored on every member.
+          ...emergency,
+        },
       });
     }
-    // Retain the parent/guardian contact for a minor: store it on the signer
-    // (guardian) record, and add it as a notification address on every minor in
-    // the household so updates about the child always reach the parent — even if
-    // the child also has their own email on file.
-    if (person?.isMinor && guardianEmail) {
-      await ensureEmailOnPerson(rootId, guardianEmail);
-      for (const member of family) {
-        if (member.minor) await ensureEmailOnPerson(member.id, guardianEmail);
-      }
-      if (guardianPhone) {
-        const rootP = await prisma.person.findUnique({ where: { id: rootId }, select: { phone: true } });
-        if (rootP && !rootP.phone) await prisma.person.update({ where: { id: rootId }, data: { phone: guardianPhone } });
-      }
+    // Store the signer's contact and reach every minor in the household by the
+    // same email so updates about a child always reach the parent.
+    await ensureEmailOnPerson(rootId, contactEmail);
+    const rootP = await prisma.person.findUnique({ where: { id: rootId }, select: { phone: true } });
+    if (rootP && !rootP.phone) await prisma.person.update({ where: { id: rootId }, data: { phone: contactMobile } });
+    for (const member of family) {
+      if (member.minor) await ensureEmailOnPerson(member.id, contactEmail);
     }
 
     await audit({
