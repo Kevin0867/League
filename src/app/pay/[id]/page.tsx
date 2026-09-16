@@ -4,6 +4,7 @@ import { can } from "@/lib/rbac";
 import { formatCents } from "@/lib/money";
 import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 import { SeasonFeePayForm } from "./SeasonFeePayForm";
+import { refreshSeasonFeeDescription } from "@/lib/payments/familyFee";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,14 @@ export default async function PublicPayPage({
     where: { id },
     include: { party: true },
   });
+
+  // Keep the invoice's team name in step with where the player actually is now —
+  // a move (e.g. Blue → Black) after the fee was created shouldn't leave the pay
+  // link showing the old team.
+  if (payment) {
+    const fresh = await refreshSeasonFeeDescription(payment.id).catch(() => null);
+    if (fresh) payment.description = fresh;
+  }
 
   // Apparel prices for the season-fee picker.
   const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
