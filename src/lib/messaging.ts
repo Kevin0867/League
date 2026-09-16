@@ -15,6 +15,11 @@ import { isAdmin } from "./rbac";
 
 export type Channel = "IN_APP" | "EMAIL" | "SMS";
 
+// How much of a message body we put in a text before trimming. Set high so
+// ordinary announcements (a rain-out, a schedule change) go out in full; only a
+// very long body is trimmed, and the SMS provider caps the total as a final net.
+export const SMS_FULL_CAP = 1200;
+
 // Message trigger types that are internal to STAFF (coaches/admins) and must
 // never surface in a family's portal — sub coordination, coach scheduling, the
 // lounge board, availability escalation. A coach who is also a parent still
@@ -163,12 +168,10 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // the full message in the portal.
   const smsText = (() => {
     if (input.smsBody && input.smsBody.trim()) return input.smsBody.trim();
-    // A meaningful snippet: skip a short greeting-only opening line (e.g. "Hi
-    // Team!") so the text carries actual content, then take the next ~300 chars.
-    const paras = (input.body ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-    const meaty = paras.length > 1 && paras[0].length <= 30 ? paras.slice(1) : paras;
-    const bodyText = meaty.join(" ").replace(/\s+/g, " ").trim();
-    const snippet = bodyText.length > 300 ? `${bodyText.slice(0, 300).trimEnd()}…` : bodyText;
+    // Send the FULL message so nothing is cut off — only a very long body is
+    // trimmed (the SMS provider caps the total length as a final safety net).
+    const bodyText = (input.body ?? "").trim();
+    const snippet = bodyText.length > SMS_FULL_CAP ? `${bodyText.slice(0, SMS_FULL_CAP).trimEnd()}…` : bodyText;
     // Deep-link straight to this message in the portal (not just the home page).
     const link = message.id ? `${appUrl()}/portal/m/${message.id}` : `${appUrl()}/portal`;
     const head = subject && subject !== "PURE Academy" ? `${subject}\n` : "";

@@ -37,10 +37,12 @@ function withOptOut(body: string): string {
 }
 
 // Twilio rejects a concatenated SMS body over 1600 characters (error 21617).
-// Keep well under it so the brand prefix + opt-out notice always fit, and so a
-// text never fails just for being long. Callers that have a lot to say should
-// send a short snippet + a link (see dispatchMessage); this is the safety net.
-const SMS_BODY_CAP = 1200;
+// This caps the caller's body BEFORE we add the brand prefix (~15 chars) and the
+// opt-out notice (~95 chars), so the final message always lands under 1600 and a
+// text never fails just for being long. Set as high as that budget allows so
+// full announcements go out intact — this is the final safety net, not the
+// primary trim (callers trim to SMS_FULL_CAP first).
+const SMS_BODY_CAP = 1450;
 
 /** Send an SMS via Twilio's REST API (no SDK needed). */
 export async function sendSms(to: string | null | undefined, rawBody: string): Promise<SendResult> {
