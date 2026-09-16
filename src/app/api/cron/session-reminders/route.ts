@@ -10,7 +10,7 @@ import { appUrl } from "@/lib/stripe";
 // session starts it texts two audiences:
 //   • the assigned coach(es) — a direct link to that class so they can check
 //     players in, add notes, and message the team;
-//   • each player (and their guardian) who has opted into SMS — the time and
+//   • each player (and their guardian) with a phone on file — the time and
 //     location plus a one-tap self-check-in link for when they arrive.
 // Idempotent via Session.checkinReminderSentAt. Protected by CRON_SECRET.
 export const dynamic = "force-dynamic";
@@ -104,7 +104,7 @@ export async function GET(req: Request) {
       if (res.ok) texted++;
     }
 
-    // Players + guardians who opted into SMS: time, place, and a self-check-in
+    // Players + guardians with a phone: time, place, and a self-check-in
     // link scoped to that player. Dedupe by phone so a parent coaching their own
     // kid, or two players sharing a number, aren't double-texted.
     const roster = s.teams.flatMap((st) => st.team.members.map((m) => m.person));
@@ -112,11 +112,12 @@ export async function GET(req: Request) {
     for (const p of roster) {
       const token = await signCheckinToken(s.id, p.id);
       const link = `${origin}/checkin/${token}`;
-      // Recipients: the player themselves (if they carry consent) and their
-      // guardian (if the guardian carries consent). Same check-in link.
+      // Recipients: the player and their guardian, wherever we have a number.
+      // SMS consent is collected as part of enrollment, so reminders reach every
+      // number on file (a global opt-out is still honored by Twilio on STOP).
       const recips: { phone: string; name: string }[] = [];
-      if (p.phone && p.smsConsentAt) recips.push({ phone: p.phone, name: p.firstName });
-      if (p.guardian?.phone && p.guardian.smsConsentAt) recips.push({ phone: p.guardian.phone, name: p.firstName });
+      if (p.phone) recips.push({ phone: p.phone, name: p.firstName });
+      if (p.guardian?.phone) recips.push({ phone: p.guardian.phone, name: p.firstName });
       for (const r of recips) {
         if (sentTo.has(r.phone)) continue;
         sentTo.add(r.phone);
@@ -188,8 +189,8 @@ export async function GET(req: Request) {
     const sentTo = new Set<string>();
     for (const p of roster) {
       const recips: { phone: string; name: string }[] = [];
-      if (p.phone && p.smsConsentAt) recips.push({ phone: p.phone, name: p.firstName });
-      if (p.guardian?.phone && p.guardian.smsConsentAt) recips.push({ phone: p.guardian.phone, name: p.firstName });
+      if (p.phone) recips.push({ phone: p.phone, name: p.firstName });
+      if (p.guardian?.phone) recips.push({ phone: p.guardian.phone, name: p.firstName });
       for (const r of recips) {
         if (sentTo.has(r.phone)) continue;
         sentTo.add(r.phone);
