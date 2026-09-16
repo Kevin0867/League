@@ -5,6 +5,7 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
 import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT } from "@/lib/payments/receipt";
 import { SeasonFeePayForm } from "@/app/pay/[id]/SeasonFeePayForm";
+import { refreshSeasonFeeDescription } from "@/lib/payments/familyFee";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,12 @@ export default async function PayPage({
     where: { id },
     include: { party: true, season: true },
   });
+
+  // Show the player's current team, not the one captured when the fee was made.
+  if (payment) {
+    const fresh = await refreshSeasonFeeDescription(payment.id).catch(() => null);
+    if (fresh) payment.description = fresh;
+  }
 
   const notAllowed =
     !payment ||

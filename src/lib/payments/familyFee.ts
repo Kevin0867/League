@@ -30,6 +30,39 @@ export function seasonFeeDescription(seasonName: string, playerName?: string | n
   return `${seasonName} season fee${who}${where}`;
 }
 
+/**
+ * Refresh a single-player season-fee invoice's description to that player's
+ * CURRENT team, so a pay link never shows a stale team after the player was
+ * moved (e.g. Blue → Black). The description is normally refreshed only when the
+ * fee is re-accrued; call this on the pay page so the family always sees where
+ * the player actually is now. Family (multi-player) invoices are left untouched.
+ * Returns the up-to-date description.
+ */
+export async function refreshSeasonFeeDescription(paymentId: string): Promise<string | null> {
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    select: { id: true, category: true, seasonId: true, coveredPersonIds: true, partyId: true, description: true },
+  });
+  if (!payment || payment.category !== "PLAYER_FEE") return payment?.description ?? null;
+  const covered = coveredIds(payment);
+  if (covered.length !== 1) return payment.description; // family invoice — leave as is
+  const playerId = covered[0];
+  const [player, membership, season] = await Promise.all([
+    prisma.person.findUnique({ where: { id: playerId }, select: { firstName: true, lastName: true } }),
+    prisma.teamMember.findFirst({ where: { personId: playerId, team: { seasonId: payment.seasonId ?? undefined } }, select: { team: { select: { name: true } } } }),
+    payment.seasonId ? prisma.season.findUnique({ where: { id: payment.seasonId }, select: { name: true } }) : Promise.resolve(null),
+  ]);
+  const desc = seasonFeeDescription(
+    season?.name ?? "PURE Academy",
+    player ? `${player.firstName} ${player.lastName}`.trim() : null,
+    membership?.team?.name ?? null,
+  );
+  if (desc !== payment.description) {
+    await prisma.payment.update({ where: { id: payment.id }, data: { description: desc } }).catch(() => {});
+  }
+  return desc;
+}
+
 export type AccrualResult = {
   paymentId: string;
   payerId: string;
