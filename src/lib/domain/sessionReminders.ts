@@ -70,8 +70,10 @@ export async function resendSessionReminder(
     const token = await signCheckinToken(s.id, p.id);
     const link = `${origin}/checkin/${token}`;
     const recips: { phone: string; name: string }[] = [];
-    if (p.phone && p.smsConsentAt) recips.push({ phone: p.phone, name: p.firstName });
-    if (p.guardian?.phone && p.guardian.smsConsentAt) recips.push({ phone: p.guardian.phone, name: p.firstName });
+    // Text every number on file — SMS consent is collected at enrollment, so
+    // reminders aren't gated on a per-record opt-in flag (STOP still opts out).
+    if (p.phone) recips.push({ phone: p.phone, name: p.firstName });
+    if (p.guardian?.phone) recips.push({ phone: p.guardian.phone, name: p.firstName });
     for (const r of recips) {
       if (sentTo.has(r.phone)) continue;
       sentTo.add(r.phone);

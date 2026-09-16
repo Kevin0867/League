@@ -402,6 +402,47 @@ export default async function TeamDetailPage({
         notice={tp === "added" ? "added" : tp === "deleted" ? "deleted" : undefined}
       />
 
+      {/* Text-reminder reachability — automated reminders text every player (or
+          their guardian) who has a phone on file. This surfaces anyone with NO
+          number, so a silent gap is visible instead of a mystery. */}
+      {(() => {
+        const rows = team.members
+          .filter((m) => m.roleOnTeam !== "COACH")
+          .map((m) => {
+            const p = m.person;
+            const g = p.guardian;
+            const phone = p.phone || g?.phone || null;
+            return { id: m.personId, name: `${p.firstName} ${p.lastName}`, hasPhone: !!phone, where: p.phone ? "own number" : g?.phone ? "guardian's number" : null };
+          });
+        if (rows.length === 0) return null;
+        const reachableCount = rows.filter((r) => r.hasPhone).length;
+        const missing = rows.filter((r) => !r.hasPhone);
+        return (
+          <div className="card">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold text-slate-900">Text-reminder reachability</h2>
+              <span className={`text-sm font-medium ${reachableCount === rows.length ? "text-emerald-700" : "text-amber-700"}`}>
+                {reachableCount} of {rows.length} have a phone for texts
+              </span>
+            </div>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Automated practice reminders text every player (or a guardian) with a phone number on file.
+              {missing.length === 0 ? " Everyone on this roster has one." : " Anyone below is missing a number — add one on their profile so they get texts."}
+            </p>
+            {missing.length > 0 && (
+              <ul className="mt-3 divide-y divide-slate-100 text-sm">
+                {missing.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 py-2">
+                    <span className="font-medium text-slate-800">{r.name}</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-amber-700"><span aria-hidden>⚠</span> No phone number on file</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })()}
+
       {/* LAUNCH — the deliberate go-live. Assigning players messages no one;
           families hear from us only when an admin sends from here. Admin only. */}
       {admin && (<>
