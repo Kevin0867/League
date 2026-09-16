@@ -185,7 +185,9 @@ export default async function RegistrationDetail({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href={backHref(sp.back, "/console/registrations")} className="btn-back">← {sp.back ? "Back to results" : "Registrations"}</Link>
-          <h1 className="text-2xl font-bold text-slate-900">{p.firstName} {p.lastName}</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{p.firstName} {p.lastName}
+            {reg.trial && <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Trial</span>}
+          </h1>
           <p className="text-sm text-slate-500">{reg.season?.name} · <StatusBadge status={reg.status} /></p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -195,6 +197,20 @@ export default async function RegistrationDetail({
       </div>
 
       {(() => { const r = RESET_STATUS(sp.reset, sp.resetVia, sp.resetNew); return r ? <p className={`rounded-lg px-3 py-2 text-sm ${r.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>{r.text}</p> : null; })()}
+      {sp.ok === "trialconverted" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Converted to a paying registration — a season-fee invoice (prorated to the weeks remaining) is now on file. Use “Send all” or the waiver/fee cards below to send apparel &amp; the pay link.</p>}
+      {reg.trial && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">Trial player — not yet charged</p>
+          <p className="mt-1 text-sm text-amber-800">{p.firstName} is trying a class with an account and waiver, but no season fee has been requested. If they&apos;re continuing, convert them — this files their season fee (auto-prorated to the weeks remaining); then send apparel &amp; the pay link.</p>
+          <form method="POST" action="/api/console/registrations" className="mt-2">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="convertTrial" />
+            <input type="hidden" name="personId" value={p.id} />
+            <input type="hidden" name="registrationId" value={reg.id} />
+            <button className="btn-primary text-sm">They&apos;re continuing — convert to paying</button>
+          </form>
+        </div>
+      )}
       {sp.ok === "guardianset" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Parent/guardian link updated — {p.firstName} now shows in that parent&apos;s portal.</p>}
       {sp.ok === "guardiancreated" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Parent created and {p.firstName} linked to them{sp.movedlogin ? " — their login was moved to the parent, so signing in there now shows all their children" : ""}. Link each additional child from that child&apos;s page too.</p>}
 
