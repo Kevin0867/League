@@ -15,6 +15,9 @@ const ERRORS: Record<string, string> = {
   agree: "Please check the box to agree before signing.",
   name: "Please type the full legal name to sign.",
   guardianemail: "Please enter the parent/guardian email so we can reach you about your player.",
+  email: "Please enter a valid email so we can reach you.",
+  mobile: "Please enter a valid mobile number.",
+  emergency: "Please enter an emergency contact name, phone, and email.",
   gender: "Please select a gender for everyone on the waiver.",
   server: "Something went wrong saving your waiver. Please try again, or contact us if it keeps happening.",
 };
@@ -77,17 +80,18 @@ export default async function WaiverSignPage({
   const root = await prisma.person.findUnique({
     where: { id: rootId },
     select: {
-      id: true, firstName: true, lastName: true, gender: true, isMinor: true,
-      dependents: { select: { id: true, firstName: true, lastName: true, gender: true }, orderBy: { firstName: "asc" } },
+      id: true, firstName: true, lastName: true, gender: true, isMinor: true, dob: true,
+      dependents: { select: { id: true, firstName: true, lastName: true, gender: true, dob: true }, orderBy: { firstName: "asc" } },
     },
   });
+  const dobStr = (d: Date | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : "");
   const hasChildren = (root?.dependents.length ?? 0) > 0;
   const participants = root
     ? [
-        { id: root.id, name: `${root.firstName} ${root.lastName}`, gender: root.gender, role: hasChildren ? "parent/guardian" : root.isMinor ? "player" : "player" },
-        ...root.dependents.map((d) => ({ id: d.id, name: `${d.firstName} ${d.lastName}`, gender: d.gender, role: "child" })),
+        { id: root.id, name: `${root.firstName} ${root.lastName}`, gender: root.gender, dob: dobStr(root.dob), role: hasChildren ? "parent/guardian" : root.isMinor ? "player" : "player" },
+        ...root.dependents.map((d) => ({ id: d.id, name: `${d.firstName} ${d.lastName}`, gender: d.gender, dob: dobStr(d.dob), role: "child" })),
       ]
-    : [{ id: person.id, name: `${person.firstName} ${person.lastName}`, gender: person.gender, role: isMinor ? "child" : "player" }];
+    : [{ id: person.id, name: `${person.firstName} ${person.lastName}`, gender: person.gender, dob: dobStr(person.dob), role: isMinor ? "child" : "player" }];
 
   return (
     <Shell>
@@ -117,7 +121,7 @@ export default async function WaiverSignPage({
         personFirstName={person.firstName}
         personEmail={person.email ?? ""}
         personPhone={person.phone ?? ""}
-        participants={participants.map((m) => ({ id: m.id, name: m.name, gender: m.gender ?? null, role: m.role }))}
+        participants={participants.map((m) => ({ id: m.id, name: m.name, gender: m.gender ?? null, dob: m.dob, role: m.role }))}
       />
 
       <p className="mt-4 text-center text-sm text-slate-500">

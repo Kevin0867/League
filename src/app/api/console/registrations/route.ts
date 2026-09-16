@@ -21,7 +21,7 @@ import { feeStateOf } from "@/lib/domain/feeStatus";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { describeTeamPractice } from "@/lib/domain/practiceInfo";
-import { decryptField, encryptField } from "@/lib/crypto";
+import { decryptField } from "@/lib/crypto";
 import { sendResetLinkForPerson } from "@/lib/domain/passwordResetSend";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { ageFromDob } from "@/lib/domain/messaging-acl";
@@ -762,33 +762,25 @@ export async function POST(req: Request) {
       const email = String(fd.get("email") ?? "").trim().toLowerCase() || null;
       const phone = String(fd.get("phone") ?? "").trim() || null;
       const dobStr = String(fd.get("dob") ?? "").trim();
-      const emName = String(fd.get("emergencyName") ?? "").trim();
-      const emPhone = String(fd.get("emergencyPhone") ?? "").trim();
-      const emEmail = String(fd.get("emergencyEmail") ?? "").trim();
       const backTo = String(fd.get("returnTo") ?? "").trim();
       const bounce = (qs: string) => NextResponse.redirect(new URL(`${backTo.startsWith("/") ? backTo : `/console/teams/${teamId}`}${qs}`, origin), 303);
       if (!first || !last) return bounce("?err=trialname");
       if (!email && !phone) return bounce("?err=trialcontact");
-      if (!emName || !emPhone) return bounce("?err=trialemergency");
 
       const dob = dobStr ? new Date(dobStr) : null;
       const age = dob && !isNaN(dob.getTime()) ? ageFromDob(dob) : null;
       const isMinor = age !== null ? age < 18 : false;
-      const emergency = {
-        emergencyName: encryptField(emName),
-        emergencyPhone: encryptField(emPhone),
-        emergencyEmail: encryptField(emEmail || null),
-      };
 
-      // Reuse an existing adult by email, else create the person.
+      // Reuse an existing adult by email, else create the person. Emergency
+      // contact, DOB, email and mobile are captured on the waiver they complete.
       let person = email ? await prisma.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } }) : null;
       if (!person) {
         person = await prisma.person.create({
-          data: { firstName: first, lastName: last, email, phone, dob: dob && !isNaN(dob.getTime()) ? dob : null, isMinor, ...emergency },
+          data: { firstName: first, lastName: last, email, phone, dob: dob && !isNaN(dob.getTime()) ? dob : null, isMinor },
           select: { id: true },
         });
       } else {
-        await prisma.person.update({ where: { id: person.id }, data: { phone: phone ?? undefined, ...emergency } });
+        await prisma.person.update({ where: { id: person.id }, data: { phone: phone ?? undefined } });
       }
 
       // Trial registration + roster spot on the team they're trying.
