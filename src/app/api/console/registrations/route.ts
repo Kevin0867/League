@@ -771,36 +771,35 @@ export async function POST(req: Request) {
       const age = dob && !isNaN(dob.getTime()) ? ageFromDob(dob) : null;
       const isMinor = age !== null ? age < 18 : false;
 
-      // Reuse an existing adult by email, else create the person. Emergency
-      // contact, DOB, email and mobile are captured on the waiver they complete.
-      let person = email ? await prisma.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } }) : null;
-      if (!person) {
-        person = await prisma.person.create({
-          data: { firstName: first, lastName: last, email, phone, dob: dob && !isNaN(dob.getTime()) ? dob : null, isMinor },
-          select: { id: true },
-        });
-      } else {
-        await prisma.person.update({ where: { id: person.id }, data: { phone: phone ?? undefined } });
-      }
+      // Create the person, trial registration and roster spot together in one
+      // transaction — so a failure part-way through can never leave an orphan
+      // person with no registration (which would "not show up anywhere"), and
+      // any error is reported instead of surfacing as a blank 500.
+      let personId: string;
+      try {
+        personId = await prisma.$transaction(async (tx) => {
+          const existingPerson = email ? await tx.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } }) : null;
+          const pid = existingPerson
+            ? existingPerson.id
+            : (await tx.person.create({
+                data: { firstName: first, lastName: last, email, phone, dob: dob && !isNaN(dob.getTime()) ? dob : null, isMinor },
+                select: { id: true },
+              })).id;
+          if (existingPerson && phone) await tx.person.update({ where: { id: pid }, data: { phone } });
 
-      // Trial registration + roster spot on the team they're trying.
-      const existingReg = await prisma.registration.findFirst({ where: { personId: person.id, seasonId: team.seasonId }, select: { id: true } });
-      if (!existingReg) {
-        await prisma.registration.create({
-          data: { personId: person.id, seasonId: team.seasonId, divisionId: team.divisionId, status: "ASSIGNED", trial: true, programInterest: "Trial" },
+          const existingReg = await tx.registration.findFirst({ where: { personId: pid, seasonId: team.seasonId }, select: { id: true } });
+          if (existingReg) await tx.registration.update({ where: { id: existingReg.id }, data: { trial: true, status: "ASSIGNED" } });
+          else await tx.registration.create({ data: { personId: pid, seasonId: team.seasonId, divisionId: team.divisionId, status: "ASSIGNED", trial: true, programInterest: "Trial" } });
+
+          const tm = await tx.teamMember.findFirst({ where: { teamId, personId: pid }, select: { id: true } });
+          if (!tm) await tx.teamMember.create({ data: { teamId, personId: pid, roleOnTeam: "PLAYER" } });
+          return pid;
         });
-      } else {
-        await prisma.registration.update({ where: { id: existingReg.id }, data: { trial: true, status: "ASSIGNED" } });
+      } catch (e) {
+        console.error("addTrial create failed", e);
+        return bounce(`?err=trialfailed&why=${encodeURIComponent((e instanceof Error ? e.message : "failed").slice(0, 140))}`);
       }
-      await prisma.teamMember.upsert({
-        where: { teamId_personId: { teamId, personId: person.id } },
-        create: { teamId, personId: person.id, roleOnTeam: "PLAYER" },
-        update: {},
-      }).catch(async () => {
-        // Composite unique may differ; fall back to findFirst + create.
-        const tm = await prisma.teamMember.findFirst({ where: { teamId, personId: person!.id }, select: { id: true } });
-        if (!tm) await prisma.teamMember.create({ data: { teamId, personId: person!.id, roleOnTeam: "PLAYER" } });
-      });
+      const person = { id: personId };
 
       // Notify the player right away so they can sign the waiver: send the waiver
       // link (the essential step) plus an account set-up link, by BOTH email and

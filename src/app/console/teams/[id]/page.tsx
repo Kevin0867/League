@@ -393,7 +393,7 @@ export default async function TeamDetailPage({
       {/* Add a trial player — try-before-you-pay. Creates their account, sends a
           waiver link, and puts them on this team to try a class; no fee is
           charged until an admin converts them. */}
-      <details className="card">
+      <details className="card" open={ok === "trialadded" || (typeof err === "string" && err.startsWith("trial"))}>
         <summary className="cursor-pointer font-semibold text-slate-900">Add a trial player (try a class — no charge)</summary>
         <p className="mt-1 text-sm text-slate-500">
           Sets up their account, texts/emails a waiver to complete, and adds them to {team.name} to try a class. No season fee is charged — convert them later from their registration if they continue.
@@ -402,6 +402,7 @@ export default async function TeamDetailPage({
         {ok === "trialadded" && nomsg && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Trial player added, but we couldn&apos;t send the waiver — {whyMsg ? decodeURIComponent(whyMsg) : "no email or phone was on file"}. Add a contact on their registration and use the waiver card there to resend.</p>}
         {err === "trialname" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter a first and last name.</p>}
         {err === "trialcontact" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter an email or phone so we can send their account + waiver.</p>}
+        {err === "trialfailed" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Couldn&apos;t add the trial player{whyMsg ? ` — ${decodeURIComponent(whyMsg)}` : ""}. Nothing was saved; please try again.</p>}
         <form method="POST" action="/api/console/registrations" className="mt-3 grid gap-3 sm:grid-cols-2">
           <input type="hidden" name="ticket" value={ticket} />
           <input type="hidden" name="op" value="addTrial" />
