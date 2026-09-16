@@ -62,8 +62,9 @@ export function WaiverSignForm({
     const mobileEl = form.elements.namedItem("contactMobile") as HTMLInputElement | null;
     if ((mobileEl?.value.replace(/\D/g, "").length ?? 0) < 10) { missing.push("Enter a valid mobile number."); flag(mobileEl); }
 
-    // Date of birth for every participant.
+    // Date of birth for each PLAYER (not the signing parent/guardian).
     for (const m of participants) {
+      if (m.role === "parent/guardian") continue;
       const el = form.elements.namedItem(`dob_${m.id}`) as HTMLInputElement | null;
       if (!el?.value) { missing.push(`Enter ${m.name}'s date of birth.`); flag(el); }
     }
@@ -134,21 +135,26 @@ export function WaiverSignForm({
           {participants.length > 1 ? "Everyone on this waiver" : "Participant"}
         </p>
         <p className="mt-0.5 text-xs text-slate-500">
-          Date of birth is required{participants.length > 1 ? " for the parent/guardian and each child" : ""}. Gender is optional and helps us place players in the correct division.
+          Date of birth is required for {participants.some((m) => m.role !== "parent/guardian") && participants.length > 1 ? "each player" : "the player"}. Gender is optional and helps us place players in the correct division.
         </p>
         <div className="mt-3 space-y-3">
           {participants.map((m) => {
             const g = m.gender === "MALE" || m.gender === "FEMALE" ? m.gender : "";
+            const isPlayer = m.role !== "parent/guardian";
             return (
               <div key={m.id} className="grid gap-2 rounded-lg bg-white p-2 ring-1 ring-slate-100 sm:grid-cols-[1fr,auto,auto] sm:items-center">
                 <div className="text-sm">
                   <span className="font-medium text-slate-800">{m.name}</span>
                   <span className="ml-1.5 text-xs text-slate-400">({m.role})</span>
                 </div>
-                <div>
-                  <label className="sr-only" htmlFor={`dob_${m.id}`}>{m.name} date of birth</label>
-                  <input id={`dob_${m.id}`} name={`dob_${m.id}`} type="date" max={today} className="input sm:w-44" defaultValue={m.dob} aria-label={`${m.name} date of birth`} />
-                </div>
+                {isPlayer ? (
+                  <div>
+                    <label className="sr-only" htmlFor={`dob_${m.id}`}>{m.name} date of birth</label>
+                    <input id={`dob_${m.id}`} name={`dob_${m.id}`} type="date" max={today} className="input sm:w-44" defaultValue={m.dob} aria-label={`${m.name} date of birth`} />
+                  </div>
+                ) : (
+                  <div className="hidden sm:block" aria-hidden />
+                )}
                 <select name={`gender_${m.id}`} className="input sm:w-32" defaultValue={g} aria-label={`${m.name} gender (optional)`}>
                   <option value="">Gender…</option>
                   <option value="MALE">Male</option>
