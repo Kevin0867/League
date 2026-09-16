@@ -134,6 +134,70 @@ export function AskBrett({ ticket: initialTicket, configured }: { ticket: string
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  // ── Draggable position ────────────────────────────────────────────────────
+  // The widget defaults to the bottom-right, but people can drag it anywhere so
+  // it never covers what they're looking at. The chosen spot (top-left of the
+  // bubble, in px) persists per browser. A small move threshold distinguishes a
+  // drag from a click so dragging never accidentally opens/closes the panel.
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const posRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+  const dragStart = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("askbrett-pos");
+      if (s) { const p = JSON.parse(s); if (typeof p?.x === "number" && typeof p?.y === "number") { setPos(p); posRef.current = p; } }
+    } catch { /* ignore */ }
+  }, []);
+
+  function clampPos(x: number, y: number) {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    const w = rect?.width ?? 200;
+    const h = rect?.height ?? 52;
+    const maxX = window.innerWidth - w - 8;
+    const maxY = window.innerHeight - h - 8;
+    return { x: Math.min(Math.max(8, x), Math.max(8, maxX)), y: Math.min(Math.max(8, y), Math.max(8, maxY)) };
+  }
+
+  function onDragMove(e: PointerEvent) {
+    if (!dragStart.current) return;
+    const dx = e.clientX - dragStart.current.px;
+    const dy = e.clientY - dragStart.current.py;
+    if (!movedRef.current && Math.hypot(dx, dy) < 6) return; // still a click
+    movedRef.current = true;
+    const np = clampPos(dragStart.current.x + dx, dragStart.current.y + dy);
+    posRef.current = np;
+    setPos(np);
+  }
+  function onDragEnd() {
+    window.removeEventListener("pointermove", onDragMove);
+    window.removeEventListener("pointerup", onDragEnd);
+    if (movedRef.current && posRef.current) {
+      try { localStorage.setItem("askbrett-pos", JSON.stringify(posRef.current)); } catch { /* ignore */ }
+    }
+    dragStart.current = null;
+  }
+  function onBubblePointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    movedRef.current = false;
+    dragStart.current = { px: e.clientX, py: e.clientY, x: rect.left, y: rect.top };
+    window.addEventListener("pointermove", onDragMove);
+    window.addEventListener("pointerup", onDragEnd);
+  }
+
+  // Where the bubble sits, and which way the panel opens so it stays on-screen.
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const wrapStyle: React.CSSProperties = pos
+    ? { left: pos.x, top: pos.y }
+    : { right: 20, bottom: 20 };
+  const openUp = pos ? pos.y > vh / 2 : true;
+  const anchorRight = pos ? pos.x > vw / 2 : true;
+
   async function ask(question: string) {
     const q = question.trim();
     if (!q || busy) return;
@@ -174,12 +238,14 @@ export function AskBrett({ ticket: initialTicket, configured }: { ticket: string
   }
 
   return (
-    <>
-      {/* Bubble */}
+    <div ref={wrapRef} className="fixed z-50" style={wrapStyle}>
+      {/* Bubble — click to open, drag to move it anywhere out of your way. */}
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 whitespace-nowrap rounded-full bg-brand-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 ring-2 ring-accent-500 transition hover:bg-brand-800"
-        aria-label="Ask Brett, the all-knowing"
+        onPointerDown={onBubblePointerDown}
+        onClick={() => { if (movedRef.current) { movedRef.current = false; return; } setOpen((v) => !v); }}
+        className="flex touch-none cursor-grab select-none items-center gap-2 whitespace-nowrap rounded-full bg-brand-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/30 ring-2 ring-accent-500 transition hover:bg-brand-800 active:cursor-grabbing"
+        aria-label="Ask Brett, the all-knowing — drag to move"
+        title="Drag to move"
       >
         <span className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-white ring-1 ring-white/40">
           <BrettAvatar className="h-6 w-6" />
@@ -187,9 +253,10 @@ export function AskBrett({ ticket: initialTicket, configured }: { ticket: string
         {open ? "Close" : "Ask Brett, the all-knowing"}
       </button>
 
-      {/* Panel */}
+      {/* Panel — opens toward the side of the screen with the most room, so it
+          stays visible wherever the bubble has been dragged. */}
       {open && (
-        <div className="fixed bottom-20 right-5 z-50 flex h-[70vh] max-h-[600px] w-[calc(100vw-2.5rem)] max-w-[400px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className={`absolute z-50 flex h-[70vh] max-h-[600px] w-[calc(100vw-2.5rem)] max-w-[400px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ${openUp ? "bottom-full mb-3" : "top-full mt-3"} ${anchorRight ? "right-0" : "left-0"}`}>
           <div className="flex items-center justify-between border-b border-slate-200 bg-brand-900 px-4 py-3 text-white">
             <div className="leading-tight">
               <div className="flex items-center gap-2 font-bold">
@@ -287,6 +354,6 @@ export function AskBrett({ ticket: initialTicket, configured }: { ticket: string
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -201,6 +201,9 @@ model Person {
   emergencyName2     String?
   emergencyPhone2    String?
   emergencyRelation2 String?
+  /// The YYYY-MM-DD birthday occurrence a coach was last reminded about, so the
+  /// daily birthday-reminder cron never texts a coach twice for the same birthday.
+  birthdayRemindedOn String?
 
   // DUPR (Dynamic Universal Pickleball Rating)
   duprId             String?
