@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { formatDate } from "@/lib/time";
 import { CONSENT_VERSION, consentRecordText } from "@/lib/consent";
+import { encryptField } from "@/lib/crypto";
 import {
   sendRegistrationConfirmation,
   sendOpenSpotSignupConfirmation,
@@ -91,6 +92,13 @@ async function enrollPlayer(opts: {
   practiceTimes: string[];
   practiceDays: string[];
   comments: string;
+  // Emergency contact fields, already encrypted, stored on every player.
+  emergency?: {
+    emergencyName: string | null;
+    emergencyEmail: string | null;
+    emergencyPhone: string | null;
+    emergencyRelation: string | null;
+  };
   // For an adult who is also the contact, reuse that Person instead of creating one.
   existingPersonId?: string;
   guardianId?: string;
@@ -129,6 +137,7 @@ async function enrollPlayer(opts: {
         isMinor,
         gender: genderFromTeam(player.team) ?? undefined,
         waiverSignedAt: new Date(),
+        ...(opts.emergency ?? {}),
       },
     });
   } else {
@@ -148,6 +157,7 @@ async function enrollPlayer(opts: {
         mediaOptOut: opts.mediaOptOut,
         guardianId: opts.guardianId ?? null,
         waiverSignedAt: new Date(),
+        ...(opts.emergency ?? {}),
       },
     });
     personId = person.id;
@@ -237,6 +247,12 @@ export async function registerAction(
   const email = g("primaryEmail").toLowerCase();
   const phone = g("primaryPhone");
   const comments = g("comments");
+  // Emergency contact (required for everyone). Stored encrypted on each player's
+  // record.
+  const emergencyName = g("emergencyName");
+  const emergencyEmail = g("emergencyEmail");
+  const emergencyPhone = g("emergencyPhone");
+  const emergencyRelation = g("emergencyRelation");
   const password = g("password");
   const passwordConfirm = g("passwordConfirm");
 
@@ -251,6 +267,10 @@ export async function registerAction(
     return { error: hasChildren && !adultPlaying ? "Parent/guardian name is required." : "Your name is required." };
   if (!email) return { error: "An email is required." };
   if (!phone) return { error: "A phone number is required." };
+  if (!emergencyName || !emergencyEmail || !emergencyPhone)
+    return { error: "An emergency contact name, email, and phone number are required." };
+  if (!/.+@.+\..+/.test(emergencyEmail))
+    return { error: "Enter a valid emergency contact email." };
   if (!waiverSigned || !signatureName)
     return { error: "The liability waiver must be read, agreed to, and signed." };
   // Portal access is required — everyone gets an account so we can text them a
@@ -259,6 +279,15 @@ export async function registerAction(
     return { error: "Choose a password (at least 8 characters) to create your portal login." };
   if (password !== passwordConfirm)
     return { error: "Passwords don't match." };
+
+  // Emergency contact, encrypted at rest like the other protected fields — set on
+  // every enrolled player and the primary contact.
+  const emergency = {
+    emergencyName: encryptField(emergencyName),
+    emergencyEmail: encryptField(emergencyEmail),
+    emergencyPhone: encryptField(emergencyPhone),
+    emergencyRelation: encryptField(emergencyRelation || null),
+  };
 
   // Shared preferences.
   const locations = getAll("location").filter(Boolean);
@@ -313,11 +342,12 @@ export async function registerAction(
         lastName: existing.lastName || lastName,
         phone: existing.phone ?? (phone || null),
         mediaOptOut,
+        ...emergency,
       },
     });
   } else {
     const primary = await prisma.person.create({
-      data: { firstName, lastName, email: email || null, phone: phone || null, mediaOptOut },
+      data: { firstName, lastName, email: email || null, phone: phone || null, mediaOptOut, ...emergency },
     });
     primaryId = primary.id;
   }
@@ -365,6 +395,7 @@ export async function registerAction(
       practiceTimes,
       practiceDays,
       comments,
+      emergency,
       existingPersonId: primaryId,
       email: email || undefined,
       phone: phone || undefined,
@@ -413,6 +444,7 @@ export async function registerAction(
         practiceTimes,
         practiceDays,
         comments,
+        emergency,
         guardianId: primaryId,
         // Bring the parent/guardian's contact onto the minor's own record: their
         // phone (minors rarely have their own) and their email as a labeled

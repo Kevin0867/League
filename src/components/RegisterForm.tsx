@@ -202,6 +202,17 @@ export function RegisterForm({
         </div>
       </Section>
 
+      {/* 06 — Emergency contact (required). Someone we can reach if there's an
+          issue at a session — ideally a person other than the registrant. */}
+      <Section n="06" title="Emergency contact" subtitle="Required — someone we can reach in an emergency. Please give a person other than yourself where possible.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Emergency contact name" name="emergencyName" required />
+          <Field label="Relationship" name="emergencyRelation" placeholder="e.g. spouse, parent, friend" />
+          <Field label="Emergency contact email" name="emergencyEmail" type="email" required />
+          <Field label="Emergency contact phone" name="emergencyPhone" type="tel" required />
+        </div>
+      </Section>
+
       {/* Waiver & signature */}
       <Section title="Waiver & consent" subtitle="No player appears on a court-ready roster without a signed waiver. One signature covers everyone listed above.">
         <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4">

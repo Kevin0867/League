@@ -196,6 +196,7 @@ model Person {
   // Emergency contacts (up to two — a primary and a backup).
   emergencyName      String?
   emergencyPhone     String?
+  emergencyEmail     String?
   emergencyRelation  String?
   emergencyName2     String?
   emergencyPhone2    String?

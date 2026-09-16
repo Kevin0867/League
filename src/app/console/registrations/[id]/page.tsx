@@ -670,6 +670,7 @@ export default async function RegistrationDetail({
             <Field label="Name" name="emergencyName" defaultValue={dec(p.emergencyName)} />
             <Field label="Relationship" name="emergencyRelation" defaultValue={dec(p.emergencyRelation)} />
             <Field label="Phone" name="emergencyPhone" type="tel" defaultValue={dec(p.emergencyPhone)} />
+            <Field label="Email" name="emergencyEmail" type="email" defaultValue={dec(p.emergencyEmail)} />
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-3">Emergency contact 2</p>
             <Field label="Name" name="emergencyName2" defaultValue={dec(p.emergencyName2)} />
             <Field label="Relationship" name="emergencyRelation2" defaultValue={dec(p.emergencyRelation2)} />
