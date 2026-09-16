@@ -21,7 +21,10 @@ import { feeStateOf } from "@/lib/domain/feeStatus";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { describeTeamPractice } from "@/lib/domain/practiceInfo";
-import { decryptField } from "@/lib/crypto";
+import { decryptField, encryptField } from "@/lib/crypto";
+import { sendResetLinkForPerson } from "@/lib/domain/passwordResetSend";
+import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
+import { ageFromDob } from "@/lib/domain/messaging-acl";
 
 // Console registration actions: add a walk-in player, and per-registrant roster
 // quick-actions (assign/move to a team, send back to the pool, request the
@@ -740,6 +743,101 @@ export async function POST(req: Request) {
 
     // Email the player (or a minor's parent/guardian) a tokenized, no-login link
     // to complete the participation waiver. Their record updates on signing.
+    // Add a TRIAL player to a team — try-before-you-pay. Creates/reuses the
+    // person (with the required emergency contact), files a trial registration,
+    // puts them on the team to try a class, sets up their portal login (sends a
+    // set-password link), and texts/emails a waiver link. No fee is charged.
+    // Allowed for an admin, or a coach of that team (courtside sign-up).
+    case "addTrial": {
+      if (!actor) return back("?err=auth");
+      const teamId = String(fd.get("teamId") ?? "").trim();
+      const team = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, seasonId: true, divisionId: true, name: true } }) : null;
+      if (!team) return back("?err=fields");
+      const isAdminActor = can(actor.role, "managePlayers");
+      const coachesTeam = isAdminActor || (await coachedTeamIdsForUser(actor.userId)).includes(teamId);
+      if (!coachesTeam) return back("?err=auth");
+
+      const first = String(fd.get("firstName") ?? "").trim();
+      const last = String(fd.get("lastName") ?? "").trim();
+      const email = String(fd.get("email") ?? "").trim().toLowerCase() || null;
+      const phone = String(fd.get("phone") ?? "").trim() || null;
+      const dobStr = String(fd.get("dob") ?? "").trim();
+      const emName = String(fd.get("emergencyName") ?? "").trim();
+      const emPhone = String(fd.get("emergencyPhone") ?? "").trim();
+      const emEmail = String(fd.get("emergencyEmail") ?? "").trim();
+      const backTo = String(fd.get("returnTo") ?? "").trim();
+      const bounce = (qs: string) => NextResponse.redirect(new URL(`${backTo.startsWith("/") ? backTo : `/console/teams/${teamId}`}${qs}`, origin), 303);
+      if (!first || !last) return bounce("?err=trialname");
+      if (!email && !phone) return bounce("?err=trialcontact");
+      if (!emName || !emPhone) return bounce("?err=trialemergency");
+
+      const dob = dobStr ? new Date(dobStr) : null;
+      const age = dob && !isNaN(dob.getTime()) ? ageFromDob(dob) : null;
+      const isMinor = age !== null ? age < 18 : false;
+      const emergency = {
+        emergencyName: encryptField(emName),
+        emergencyPhone: encryptField(emPhone),
+        emergencyEmail: encryptField(emEmail || null),
+      };
+
+      // Reuse an existing adult by email, else create the person.
+      let person = email ? await prisma.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } }) : null;
+      if (!person) {
+        person = await prisma.person.create({
+          data: { firstName: first, lastName: last, email, phone, dob: dob && !isNaN(dob.getTime()) ? dob : null, isMinor, ...emergency },
+          select: { id: true },
+        });
+      } else {
+        await prisma.person.update({ where: { id: person.id }, data: { phone: phone ?? undefined, ...emergency } });
+      }
+
+      // Trial registration + roster spot on the team they're trying.
+      const existingReg = await prisma.registration.findFirst({ where: { personId: person.id, seasonId: team.seasonId }, select: { id: true } });
+      if (!existingReg) {
+        await prisma.registration.create({
+          data: { personId: person.id, seasonId: team.seasonId, divisionId: team.divisionId, status: "ASSIGNED", trial: true, programInterest: "Trial" },
+        });
+      } else {
+        await prisma.registration.update({ where: { id: existingReg.id }, data: { trial: true, status: "ASSIGNED" } });
+      }
+      await prisma.teamMember.upsert({
+        where: { teamId_personId: { teamId, personId: person.id } },
+        create: { teamId, personId: person.id, roleOnTeam: "PLAYER" },
+        update: {},
+      }).catch(async () => {
+        // Composite unique may differ; fall back to findFirst + create.
+        const tm = await prisma.teamMember.findFirst({ where: { teamId, personId: person!.id }, select: { id: true } });
+        if (!tm) await prisma.teamMember.create({ data: { teamId, personId: person!.id, roleOnTeam: "PLAYER" } });
+      });
+
+      // Account setup (creates the login + sends a set-password link) and a
+      // waiver link — both best-effort so a delivery hiccup can't undo the add.
+      await sendResetLinkForPerson(person.id).catch(() => {});
+      try {
+        const token = await signWaiverToken(person.id);
+        const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
+        const em = waiverRequestEmail({ name: first, link, isMinor });
+        if (email) await sendEmail(email, em.subject, em.text, em.html).catch(() => {});
+        if (phone) await sendSms(phone, `PURE Academy — welcome! Please complete your participation waiver before your trial class: ${link}`).catch(() => {});
+      } catch { /* waiver send best-effort */ }
+
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "registration.addTrial", summary: `Added trial player ${first} ${last} to ${team.name}` });
+      return bounce("?ok=trialadded");
+    }
+
+    // Convert a trial to a paying registration: clear the trial flag and send the
+    // combined welcome + apparel + season-fee request (the fee is auto-prorated
+    // to the weeks remaining).
+    case "convertTrial": {
+      if (!actor) return back("?err=auth");
+      if (!can(actor.role, "managePlayers")) return back("?err=auth");
+      if (!reg) return back("?err=notfound");
+      await prisma.registration.update({ where: { id: reg.id }, data: { trial: false } });
+      await ensureSeasonFeePayable(personId, reg.seasonId).catch(() => {});
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "registration.convertTrial", summary: "Converted trial to paying (fee requested)" });
+      return back(`/${reg.id}?ok=trialconverted`);
+    }
+
     case "sendWaiver": {
       if (!actor) return back("?err=auth");
       const person = await prisma.person.findUnique({ where: { id: personId } });

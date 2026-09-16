@@ -319,6 +319,9 @@ model Registration {
   /// this is recorded even for a waitlisted overflow so staff see which team the
   /// person was recruited for. Not a hard FK (a team may later be deleted).
   targetTeamId       String?
+  /// A try-before-you-pay signup: the player has an account + waiver and is on a
+  /// team to try a class, but no season fee is charged until they convert.
+  trial              Boolean   @default(false)
 
   locationPrefs      LocationPreference[]
 

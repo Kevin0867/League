@@ -389,6 +389,38 @@ export default async function TeamDetailPage({
         </div>
       </div>
 
+      {/* Add a trial player — try-before-you-pay. Creates their account, sends a
+          waiver link, and puts them on this team to try a class; no fee is
+          charged until an admin converts them. */}
+      <details className="card">
+        <summary className="cursor-pointer font-semibold text-slate-900">Add a trial player (try a class — no charge)</summary>
+        <p className="mt-1 text-sm text-slate-500">
+          Sets up their account, texts/emails a waiver to complete, and adds them to {team.name} to try a class. No season fee is charged — convert them later from their registration if they continue.
+        </p>
+        {ok === "trialadded" && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Trial player added — account setup + waiver link sent.</p>}
+        {err === "trialname" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter a first and last name.</p>}
+        {err === "trialcontact" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter an email or phone so we can send their account + waiver.</p>}
+        {err === "trialemergency" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">An emergency contact name and phone are required.</p>}
+        <form method="POST" action="/api/console/registrations" className="mt-3 grid gap-3 sm:grid-cols-2">
+          <input type="hidden" name="ticket" value={ticket} />
+          <input type="hidden" name="op" value="addTrial" />
+          <input type="hidden" name="teamId" value={team.id} />
+          <input type="hidden" name="returnTo" value={`/console/teams/${team.id}`} />
+          <div><label className="label">First name</label><input name="firstName" required className="input" /></div>
+          <div><label className="label">Last name</label><input name="lastName" required className="input" /></div>
+          <div><label className="label">Email</label><input name="email" type="email" className="input" /></div>
+          <div><label className="label">Phone</label><input name="phone" type="tel" className="input" /></div>
+          <div><label className="label">Date of birth <span className="text-slate-400">(optional)</span></label><input name="dob" type="date" className="input" /></div>
+          <div className="sm:col-span-2 mt-1 grid gap-3 rounded-lg border-l-4 border-brand-300 bg-slate-50 p-3 sm:grid-cols-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:col-span-3">Emergency contact (required)</p>
+            <div><label className="label">Name</label><input name="emergencyName" required className="input" /></div>
+            <div><label className="label">Phone</label><input name="emergencyPhone" type="tel" required className="input" /></div>
+            <div><label className="label">Email <span className="text-slate-400">(optional)</span></label><input name="emergencyEmail" type="email" className="input" /></div>
+          </div>
+          <div className="sm:col-span-2 flex justify-end"><button className="btn-primary text-sm">Add trial player</button></div>
+        </form>
+      </details>
+
       {/* Team photos — a shared gallery the whole team can add to. Coaches and
           admins here can also remove any item. */}
       <TeamPhotos
