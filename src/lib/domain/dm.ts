@@ -5,6 +5,7 @@ import { appUrl } from "@/lib/stripe";
 import { isStaff, isAdmin } from "@/lib/rbac";
 import { effectiveRoles } from "@/lib/enums";
 import { recordSmsRoute } from "@/lib/domain/smsRouting";
+import { SMS_FULL_CAP } from "@/lib/messaging";
 
 // Direct-message primitives shared by the messaging route handler and the
 // inbound-SMS webhook, so a reply that arrives by text lands in the same 1:1
@@ -104,7 +105,7 @@ export async function notifyOtherParticipants(conversationId: string, senderId: 
     // dependence on a notify toggle or on who's staff. (`notify` is kept for
     // signature compatibility; direct messages always notify on every channel.)
     void notify;
-    const preview = body.length > 160 ? `${body.slice(0, 160)}…` : body;
+    const preview = body.length > SMS_FULL_CAP ? `${body.slice(0, SMS_FULL_CAP).trimEnd()}…` : body;
     for (const p of parts) {
       const per = p.person;
       const staff = per.user ? isStaff(effectiveRoles(per.user)) : false;
