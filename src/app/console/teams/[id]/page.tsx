@@ -105,7 +105,8 @@ export default async function TeamDetailPage({
   if (!(await canViewTeamNotes(id))) redirect("/console");
   const viewer = await getSession();
   const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
-  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia, tp } = await searchParams;
+  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia, tp, nomsg, acct, why } = await searchParams;
+  const whyMsg = why;
   const VIA_LABEL: Record<string, string> = { email: "email", text: "text", both: "email and text" };
   const ticket = await mintConsoleTicket();
   const team = await prisma.team.findUnique({
@@ -397,7 +398,8 @@ export default async function TeamDetailPage({
         <p className="mt-1 text-sm text-slate-500">
           Sets up their account, texts/emails a waiver to complete, and adds them to {team.name} to try a class. No season fee is charged — convert them later from their registration if they continue.
         </p>
-        {ok === "trialadded" && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Trial player added — account setup + waiver link sent. Their emergency contact, date of birth, email and mobile are collected on the waiver.</p>}
+        {ok === "trialadded" && !nomsg && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Trial player added — waiver{via ? ` sent by ${decodeURIComponent(via)}` : " sent"}{acct ? ", plus an account set-up link" : ""}. Their emergency contact, date of birth, email and mobile are collected on the waiver.</p>}
+        {ok === "trialadded" && nomsg && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Trial player added, but we couldn&apos;t send the waiver — {whyMsg ? decodeURIComponent(whyMsg) : "no email or phone was on file"}. Add a contact on their registration and use the waiver card there to resend.</p>}
         {err === "trialname" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter a first and last name.</p>}
         {err === "trialcontact" && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter an email or phone so we can send their account + waiver.</p>}
         <form method="POST" action="/api/console/registrations" className="mt-3 grid gap-3 sm:grid-cols-2">
