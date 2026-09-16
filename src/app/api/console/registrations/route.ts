@@ -802,19 +802,37 @@ export async function POST(req: Request) {
         if (!tm) await prisma.teamMember.create({ data: { teamId, personId: person!.id, roleOnTeam: "PLAYER" } });
       });
 
-      // Account setup (creates the login + sends a set-password link) and a
-      // waiver link — both best-effort so a delivery hiccup can't undo the add.
-      await sendResetLinkForPerson(person.id).catch(() => {});
+      // Notify the player right away so they can sign the waiver: send the waiver
+      // link (the essential step) plus an account set-up link, by BOTH email and
+      // text. We capture whether anything actually went out so the admin gets a
+      // clear result instead of a silent no-op.
+      let emailedOk = false;
+      let textedOk = false;
+      let sendErr: string | null = null;
       try {
         const token = await signWaiverToken(person.id);
         const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
         const em = waiverRequestEmail({ name: first, link, isMinor });
-        if (email) await sendEmail(email, em.subject, em.text, em.html).catch(() => {});
-        if (phone) await sendSms(phone, `PURE Academy — welcome! Please complete your participation waiver before your trial class: ${link}`).catch(() => {});
-      } catch { /* waiver send best-effort */ }
+        if (email) {
+          const r = await sendEmail(email, em.subject, em.text, em.html);
+          if (r.ok) emailedOk = true; else sendErr = r.error ?? "email failed";
+        }
+        if (phone) {
+          const r = await sendSms(phone, `PURE Academy — welcome${first ? `, ${first}` : ""}! Please complete your participation waiver before your trial class: ${link}`);
+          if (r.ok) textedOk = true; else sendErr = r.error ?? "text failed";
+        }
+      } catch (e) {
+        sendErr = e instanceof Error ? e.message : "send failed";
+      }
+      // Account set-up link (creates the login too). Best-effort — the waiver is
+      // the part that must land; this is a convenience on top.
+      const reset = await sendResetLinkForPerson(person.id).catch(() => null);
+      const accountSent = !!(reset && reset.ok);
 
-      await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "registration.addTrial", summary: `Added trial player ${first} ${last} to ${team.name}` });
-      return bounce("?ok=trialadded");
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "registration.addTrial", summary: `Added trial player ${first} ${last} to ${team.name} (waiver ${emailedOk || textedOk ? "sent" : "NOT sent"})` });
+      const channels = [emailedOk ? "email" : null, textedOk ? "text" : null].filter(Boolean).join(" & ");
+      if (emailedOk || textedOk) return bounce(`?ok=trialadded&via=${encodeURIComponent(channels)}${accountSent ? "&acct=1" : ""}`);
+      return bounce(`?ok=trialadded&nomsg=1${sendErr ? `&why=${encodeURIComponent(sendErr.slice(0, 120))}` : ""}`);
     }
 
     // Convert a trial to a paying registration: clear the trial flag and send the
