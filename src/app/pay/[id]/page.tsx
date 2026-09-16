@@ -94,7 +94,7 @@ export default async function PublicPayPage({
         ) : payment!.category === "APPAREL" ? (
           <ApparelOrderCard payment={payment!} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} testMode={testMode} />
         ) : (
-          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} testMode={testMode} />
+          <PayCard payment={payment!} plan={plan} canceled={canceled} err={err} shirtCents={shirtCents} tankCents={tankCents} players={players} testMode={testMode} fullFeeCents={rate?.seasonFeeCents ?? 49500} />
         )}
 
         {/* Can't pay by the deadline? Let the family tell us why in one tap — it
@@ -285,6 +285,7 @@ function PayCard({
   tankCents,
   players,
   testMode,
+  fullFeeCents,
 }: {
   payment: { id: string; amountCents: number; description: string | null; party: { firstName: string } | null };
   plan?: string;
@@ -294,14 +295,21 @@ function PayCard({
   tankCents: number;
   players: { id: string; name: string }[];
   testMode: boolean;
+  fullFeeCents: number;
 }) {
   const recommendInstall = plan === "installments";
   const forWho = payment.party?.firstName ? ` for ${payment.party.firstName}` : "";
+  const isProrated = payment.amountCents < fullFeeCents;
 
   return (
     <div className="card">
       <h1 className="text-2xl font-bold text-slate-900">Pay your season fee{forWho}</h1>
       <p className="mt-1 text-sm text-slate-500">{payment.description ?? "PURE Academy season fee"}</p>
+      {isProrated && (
+        <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Your season fee has been <strong>prorated for a mid-season start</strong> — you&apos;re only charged for the weeks remaining ({formatCents(payment.amountCents)} instead of {formatCents(fullFeeCents)}).
+        </p>
+      )}
 
       {testMode && (
         <p className="mt-3 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">

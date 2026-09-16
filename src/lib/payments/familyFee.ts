@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/stripe";
+import { proratedSeasonFee } from "@/lib/payments/proration";
 
 // Per-player season fee (§8). Each player gets their OWN season-fee invoice, so
 // every payment maps to exactly one player → one team, giving clean per-team
@@ -88,20 +89,30 @@ export async function accruePlayerSeasonFee(opts: {
   feeCents: number;
   seasonName: string;
 }): Promise<AccrualResult> {
-  const { playerId, seasonId, feeCents, seasonName } = opts;
+  const { playerId, seasonId, seasonName } = opts;
 
-  const player = await prisma.person.findUnique({
-    where: { id: playerId },
-    select: { guardianId: true, firstName: true, lastName: true },
-  });
+  const [player, season] = await Promise.all([
+    prisma.person.findUnique({ where: { id: playerId }, select: { guardianId: true, firstName: true, lastName: true } }),
+    prisma.season.findUnique({ where: { id: seasonId }, select: { calendar: true } }),
+  ]);
   const payerId = player?.guardianId ?? playerId;
   const playerName = player ? `${player.firstName} ${player.lastName}`.trim() : null;
+
+  // Prorate a mid-season join: someone starting after week 1 pays only for the
+  // weeks that remain (full fee ÷ 12 × weeks left). The amount is fixed when the
+  // invoice is created — a later resend reuses it, so the price never drifts.
+  const prorated = proratedSeasonFee(opts.feeCents, season?.calendar, new Date());
+  const feeCents = prorated.feeCents;
 
   // The player's team in this season (if placed) — named on the invoice.
   const membership = await prisma.teamMember.findFirst({
     where: { personId: playerId, team: { seasonId } },
     select: { team: { select: { name: true } } },
   });
+  // Description stays the stable base (season · player · team) so a later resend
+  // or a pay-page refresh never rewrites it inconsistently; the prorated AMOUNT
+  // carries the mid-season discount, and the pay page explains it from the
+  // amount vs. the full fee.
   const description = seasonFeeDescription(seasonName, playerName, membership?.team?.name ?? null);
 
   // Already invoiced for this player this season (any payer) → reuse it, so

@@ -99,6 +99,11 @@ export default async function PayPage({
       <div className="card">
         <h1 className="text-2xl font-bold text-slate-900">Pay your season fee</h1>
         <p className="mt-1 text-sm text-slate-500">{payment.description ?? "PURE Academy season fee"}</p>
+        {payment.amountCents < (rate?.seasonFeeCents ?? 49500) && (
+          <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Your season fee is <strong>prorated for a mid-season start</strong> — only the weeks remaining ({formatCents(payment.amountCents)} instead of {formatCents(rate?.seasonFeeCents ?? 49500)}).
+          </p>
+        )}
 
         <p className="mt-2 text-xs text-slate-500">
           Secure checkout is hosted by Stripe — we never see your card details. The fee reserves a place on a
