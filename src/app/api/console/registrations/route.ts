@@ -201,6 +201,89 @@ export async function POST(req: Request) {
     return back("?ok=addPlayer");
   }
 
+  // Add a TRIAL player to a team — try-before-you-pay. Handled here (not in the
+  // switch below) because a new trial player has no personId yet, and the switch
+  // requires one. Creates/reuses the person, files a trial registration, puts
+  // them on the team, and texts/emails a waiver + account link. No fee charged.
+  // Allowed for an admin, or a coach of that team (courtside sign-up).
+  if (op === "addTrial") {
+    const teamId = String(fd.get("teamId") ?? "").trim();
+    const team = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, seasonId: true, divisionId: true, name: true } }) : null;
+    if (!team) return back("?err=fields");
+    const isAdminActor = can(actor.role, "managePlayers");
+    const coachesTeam = isAdminActor || (await coachedTeamIdsForUser(actor.userId)).includes(teamId);
+    if (!coachesTeam) return back("?err=auth");
+
+    const first = String(fd.get("firstName") ?? "").trim();
+    const last = String(fd.get("lastName") ?? "").trim();
+    const email = String(fd.get("email") ?? "").trim().toLowerCase() || null;
+    const phone = String(fd.get("phone") ?? "").trim() || null;
+    const dobStr = String(fd.get("dob") ?? "").trim();
+    const backTo = String(fd.get("returnTo") ?? "").trim();
+    const bounce = (qs: string) => NextResponse.redirect(new URL(`${backTo.startsWith("/") ? backTo : `/console/teams/${teamId}`}${qs}`, origin), 303);
+    if (!first || !last) return bounce("?err=trialname");
+    if (!email && !phone) return bounce("?err=trialcontact");
+
+    const dob = dobStr ? new Date(dobStr) : null;
+    const age = dob && !isNaN(dob.getTime()) ? ageFromDob(dob) : null;
+    const isMinor = age !== null ? age < 18 : false;
+
+    // Person + trial registration + roster spot in one transaction — all-or-
+    // nothing, so a failure can't leave an orphan person that "shows up nowhere".
+    let newPersonId: string;
+    try {
+      newPersonId = await prisma.$transaction(async (tx) => {
+        const existingPerson = email ? await tx.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } }) : null;
+        const pid = existingPerson
+          ? existingPerson.id
+          : (await tx.person.create({
+              data: { firstName: first, lastName: last, email, phone, dob: dob && !isNaN(dob.getTime()) ? dob : null, isMinor },
+              select: { id: true },
+            })).id;
+        if (existingPerson && phone) await tx.person.update({ where: { id: pid }, data: { phone } });
+
+        const existingReg = await tx.registration.findFirst({ where: { personId: pid, seasonId: team.seasonId }, select: { id: true } });
+        if (existingReg) await tx.registration.update({ where: { id: existingReg.id }, data: { trial: true, status: "ASSIGNED" } });
+        else await tx.registration.create({ data: { personId: pid, seasonId: team.seasonId, divisionId: team.divisionId, status: "ASSIGNED", trial: true, programInterest: "Trial" } });
+
+        const tm = await tx.teamMember.findFirst({ where: { teamId, personId: pid }, select: { id: true } });
+        if (!tm) await tx.teamMember.create({ data: { teamId, personId: pid, roleOnTeam: "PLAYER" } });
+        return pid;
+      });
+    } catch (e) {
+      console.error("addTrial create failed", e);
+      return bounce(`?err=trialfailed&why=${encodeURIComponent((e instanceof Error ? e.message : "failed").slice(0, 140))}`);
+    }
+
+    // Notify the player so they can sign the waiver: waiver link (essential) plus
+    // an account set-up link, by email AND text, capturing what actually sent.
+    let emailedOk = false;
+    let textedOk = false;
+    let sendErr: string | null = null;
+    try {
+      const token = await signWaiverToken(newPersonId);
+      const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
+      const em = waiverRequestEmail({ name: first, link, isMinor });
+      if (email) {
+        const r = await sendEmail(email, em.subject, em.text, em.html);
+        if (r.ok) emailedOk = true; else sendErr = r.error ?? "email failed";
+      }
+      if (phone) {
+        const r = await sendSms(phone, `PURE Academy — welcome${first ? `, ${first}` : ""}! Please complete your participation waiver before your trial class: ${link}`);
+        if (r.ok) textedOk = true; else sendErr = r.error ?? "text failed";
+      }
+    } catch (e) {
+      sendErr = e instanceof Error ? e.message : "send failed";
+    }
+    const reset = await sendResetLinkForPerson(newPersonId).catch(() => null);
+    const accountSent = !!(reset && reset.ok);
+
+    await audit({ actorId: actor.userId, entityType: "Person", entityId: newPersonId, action: "registration.addTrial", summary: `Added trial player ${first} ${last} to ${team.name} (waiver ${emailedOk || textedOk ? "sent" : "NOT sent"})` });
+    const channels = [emailedOk ? "email" : null, textedOk ? "text" : null].filter(Boolean).join(" & ");
+    if (emailedOk || textedOk) return bounce(`?ok=trialadded&via=${encodeURIComponent(channels)}${accountSent ? "&acct=1" : ""}`);
+    return bounce(`?ok=trialadded&nomsg=1${sendErr ? `&why=${encodeURIComponent(sendErr.slice(0, 120))}` : ""}`);
+  }
+
   // Bulk-resend outstanding fee requests — scoped to a team's roster (teamId set)
   // or everyone with an unpaid request (no teamId). Does not create new charges.
   if (op === "resendAllFees") {
@@ -743,97 +826,6 @@ export async function POST(req: Request) {
 
     // Email the player (or a minor's parent/guardian) a tokenized, no-login link
     // to complete the participation waiver. Their record updates on signing.
-    // Add a TRIAL player to a team — try-before-you-pay. Creates/reuses the
-    // person (with the required emergency contact), files a trial registration,
-    // puts them on the team to try a class, sets up their portal login (sends a
-    // set-password link), and texts/emails a waiver link. No fee is charged.
-    // Allowed for an admin, or a coach of that team (courtside sign-up).
-    case "addTrial": {
-      if (!actor) return back("?err=auth");
-      const teamId = String(fd.get("teamId") ?? "").trim();
-      const team = teamId ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, seasonId: true, divisionId: true, name: true } }) : null;
-      if (!team) return back("?err=fields");
-      const isAdminActor = can(actor.role, "managePlayers");
-      const coachesTeam = isAdminActor || (await coachedTeamIdsForUser(actor.userId)).includes(teamId);
-      if (!coachesTeam) return back("?err=auth");
-
-      const first = String(fd.get("firstName") ?? "").trim();
-      const last = String(fd.get("lastName") ?? "").trim();
-      const email = String(fd.get("email") ?? "").trim().toLowerCase() || null;
-      const phone = String(fd.get("phone") ?? "").trim() || null;
-      const dobStr = String(fd.get("dob") ?? "").trim();
-      const backTo = String(fd.get("returnTo") ?? "").trim();
-      const bounce = (qs: string) => NextResponse.redirect(new URL(`${backTo.startsWith("/") ? backTo : `/console/teams/${teamId}`}${qs}`, origin), 303);
-      if (!first || !last) return bounce("?err=trialname");
-      if (!email && !phone) return bounce("?err=trialcontact");
-
-      const dob = dobStr ? new Date(dobStr) : null;
-      const age = dob && !isNaN(dob.getTime()) ? ageFromDob(dob) : null;
-      const isMinor = age !== null ? age < 18 : false;
-
-      // Create the person, trial registration and roster spot together in one
-      // transaction — so a failure part-way through can never leave an orphan
-      // person with no registration (which would "not show up anywhere"), and
-      // any error is reported instead of surfacing as a blank 500.
-      let personId: string;
-      try {
-        personId = await prisma.$transaction(async (tx) => {
-          const existingPerson = email ? await tx.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } }) : null;
-          const pid = existingPerson
-            ? existingPerson.id
-            : (await tx.person.create({
-                data: { firstName: first, lastName: last, email, phone, dob: dob && !isNaN(dob.getTime()) ? dob : null, isMinor },
-                select: { id: true },
-              })).id;
-          if (existingPerson && phone) await tx.person.update({ where: { id: pid }, data: { phone } });
-
-          const existingReg = await tx.registration.findFirst({ where: { personId: pid, seasonId: team.seasonId }, select: { id: true } });
-          if (existingReg) await tx.registration.update({ where: { id: existingReg.id }, data: { trial: true, status: "ASSIGNED" } });
-          else await tx.registration.create({ data: { personId: pid, seasonId: team.seasonId, divisionId: team.divisionId, status: "ASSIGNED", trial: true, programInterest: "Trial" } });
-
-          const tm = await tx.teamMember.findFirst({ where: { teamId, personId: pid }, select: { id: true } });
-          if (!tm) await tx.teamMember.create({ data: { teamId, personId: pid, roleOnTeam: "PLAYER" } });
-          return pid;
-        });
-      } catch (e) {
-        console.error("addTrial create failed", e);
-        return bounce(`?err=trialfailed&why=${encodeURIComponent((e instanceof Error ? e.message : "failed").slice(0, 140))}`);
-      }
-      const person = { id: personId };
-
-      // Notify the player right away so they can sign the waiver: send the waiver
-      // link (the essential step) plus an account set-up link, by BOTH email and
-      // text. We capture whether anything actually went out so the admin gets a
-      // clear result instead of a silent no-op.
-      let emailedOk = false;
-      let textedOk = false;
-      let sendErr: string | null = null;
-      try {
-        const token = await signWaiverToken(person.id);
-        const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
-        const em = waiverRequestEmail({ name: first, link, isMinor });
-        if (email) {
-          const r = await sendEmail(email, em.subject, em.text, em.html);
-          if (r.ok) emailedOk = true; else sendErr = r.error ?? "email failed";
-        }
-        if (phone) {
-          const r = await sendSms(phone, `PURE Academy — welcome${first ? `, ${first}` : ""}! Please complete your participation waiver before your trial class: ${link}`);
-          if (r.ok) textedOk = true; else sendErr = r.error ?? "text failed";
-        }
-      } catch (e) {
-        sendErr = e instanceof Error ? e.message : "send failed";
-      }
-      // Account set-up link (creates the login too). Best-effort — the waiver is
-      // the part that must land; this is a convenience on top.
-      const reset = await sendResetLinkForPerson(person.id).catch(() => null);
-      const accountSent = !!(reset && reset.ok);
-
-      await audit({ actorId: actor.userId, entityType: "Person", entityId: person.id, action: "registration.addTrial", summary: `Added trial player ${first} ${last} to ${team.name} (waiver ${emailedOk || textedOk ? "sent" : "NOT sent"})` });
-      const channels = [emailedOk ? "email" : null, textedOk ? "text" : null].filter(Boolean).join(" & ");
-      if (emailedOk || textedOk) return bounce(`?ok=trialadded&via=${encodeURIComponent(channels)}${accountSent ? "&acct=1" : ""}`);
-      return bounce(`?ok=trialadded&nomsg=1${sendErr ? `&why=${encodeURIComponent(sendErr.slice(0, 120))}` : ""}`);
-    }
-
     // Convert a trial to a paying registration: clear the trial flag and send the
     // combined welcome + apparel + season-fee request (the fee is auto-prorated
     // to the weeks remaining).
