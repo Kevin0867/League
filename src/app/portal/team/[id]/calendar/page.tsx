@@ -47,6 +47,13 @@ export default async function TeamCalendarPage({
   const ticket = await mintConsoleTicket();
   const sessions = await listTeamCalendar(teamId, household);
 
+  // Staff (coach/admin) can mark any roster player out from here, so fetch the
+  // roster for the picker.
+  const staffRoster = staffPreview
+    ? (await prisma.teamMember.findMany({ where: { teamId }, include: { person: { select: { id: true, firstName: true, lastName: true } } }, orderBy: { person: { firstName: "asc" } } }))
+        .map((m) => ({ id: m.personId, name: `${m.person.firstName} ${m.person.lastName}`.trim() }))
+    : [];
+
   const today = phoenixDateInput(new Date());
   const upcoming = sessions.filter((s) => phoenixDateInput(s.date) >= today);
   const past = sessions.filter((s) => phoenixDateInput(s.date) < today);
@@ -94,7 +101,24 @@ export default async function TeamCalendarPage({
                   )}
                 </div>
 
-                {s.type === "PRACTICE" && (
+                {s.type === "PRACTICE" && staffPreview && staffRoster.length > 0 && (
+                  <form method="POST" action="/api/team-calendar" className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="absent" />
+                    <input type="hidden" name="teamId" value={teamId} />
+                    <input type="hidden" name="sessionId" value={s.id} />
+                    <input type="hidden" name="returnTo" value={returnTo} />
+                    <div>
+                      <label className="label text-xs">Coach: mark a player out</label>
+                      <select name="personId" className="input py-1 text-sm">
+                        {staffRoster.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <button className="btn-secondary text-sm">Mark out &amp; request a sub</button>
+                  </form>
+                )}
+
+                {s.type === "PRACTICE" && memberList.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {s.iAmOut ? (
                       <form method="POST" action="/api/team-calendar">
