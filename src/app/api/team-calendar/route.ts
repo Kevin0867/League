@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       },
     });
     await audit({ actorId: actor.userId, entityType: "TeamEvent", entityId: ev.id, action: "calendar.addEvent", summary: `Added team event "${title}"` });
-    await notifyEventAdded(teamId, ev);
+    await notifyEventAdded(teamId, ev, actor.userId);
     return back("?ok=eventadded#e-" + ev.id);
   }
 
