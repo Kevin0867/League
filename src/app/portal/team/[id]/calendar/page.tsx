@@ -118,7 +118,7 @@ export default async function TeamCalendarPage({
                   </form>
                 )}
 
-                {s.type === "PRACTICE" && memberList.length > 0 && (
+                {s.type === "PRACTICE" && memberList.length > 0 && !staffPreview && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {s.iAmOut ? (
                       <form method="POST" action="/api/team-calendar">
