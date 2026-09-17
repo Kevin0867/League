@@ -72,6 +72,19 @@ export default async function SessionDetail({
   const coachName = new Map(allCoaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`]));
   const sessionCoachIds = new Set(s.coaches.map((c) => c.coachId));
 
+  // Substitutes: who's marked out, who's been suggested, and who's confirmed for
+  // this date. Open spots = absences not yet covered by a confirmed sub.
+  const subTeamId = s.teams[0]?.teamId ?? null;
+  const [absRows, subSuggestions, subRows] = await Promise.all([
+    prisma.playerAbsence.findMany({ where: { sessionId: id }, orderBy: { createdAt: "asc" } }),
+    prisma.subSuggestion.findMany({ where: { sessionId: id, status: "SUGGESTED" }, orderBy: { createdAt: "asc" } }),
+    prisma.sessionSub.findMany({ where: { sessionId: id }, orderBy: { createdAt: "asc" } }),
+  ]);
+  const subLookupIds = [...new Set([...absRows.map((a) => a.personId), ...subRows.map((x) => x.personId)])];
+  const subNamePeople = subLookupIds.length ? await prisma.person.findMany({ where: { id: { in: subLookupIds } }, select: { id: true, firstName: true, lastName: true } }) : [];
+  const subNameOf = new Map(subNamePeople.map((p) => [p.id, `${p.firstName} ${p.lastName}`.trim()]));
+  const openSpots = Math.max(0, absRows.length - subRows.length);
+
   // Admins manage any session; a coach may open only sessions they cover (as the
   // session coach or a session team's head coach) and sees attendance only —
   // reschedule / relocate / cancel / delete / coach-staffing stay admin-only.
@@ -360,6 +373,90 @@ export default async function SessionDetail({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Substitutes — players out for this date, suggestions, and confirmed
+          subs. Adding a sub creates their record, sends a welcome + waiver, and
+          clears an open spot. Subs aren't charged. */}
+      {subTeamId && (absRows.length > 0 || subRows.length > 0 || subSuggestions.length > 0) && (
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-slate-900">Substitutes</h2>
+            <span className={`text-sm font-medium ${openSpots > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+              {openSpots > 0 ? `${openSpots} spot${openSpots === 1 ? "" : "s"} still open` : "All covered"}
+            </span>
+          </div>
+
+          {absRows.length > 0 && (
+            <div className="mt-3 text-sm">
+              <span className="font-medium text-slate-700">Out this date:</span>{" "}
+              <span className="text-slate-600">{absRows.map((a) => subNameOf.get(a.personId) ?? "A player").join(", ")}</span>
+            </div>
+          )}
+          {subRows.length > 0 && (
+            <div className="mt-1 text-sm">
+              <span className="font-medium text-slate-700">Confirmed subs:</span>{" "}
+              <span className="text-emerald-700">{subRows.map((x) => subNameOf.get(x.personId) ?? "Sub").join(", ")}</span>
+            </div>
+          )}
+
+          {subSuggestions.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested by the team</p>
+              <ul className="mt-2 space-y-2">
+                {subSuggestions.map((sug) => {
+                  const parts = sug.name.trim().split(/\s+/);
+                  const first = parts[0] ?? sug.name;
+                  const last = parts.slice(1).join(" ") || "(sub)";
+                  return (
+                    <li key={sug.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                      <span>
+                        <span className="font-medium text-slate-800">{sug.name}</span>
+                        {(sug.email || sug.phone) && <span className="ml-2 text-xs text-slate-500">{[sug.email, sug.phone].filter(Boolean).join(" · ")}</span>}
+                      </span>
+                      <form method="POST" action="/api/team-calendar">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="addSub" />
+                        <input type="hidden" name="teamId" value={subTeamId} />
+                        <input type="hidden" name="sessionId" value={s.id} />
+                        <input type="hidden" name="returnTo" value={returnTo} />
+                        <input type="hidden" name="firstName" value={first} />
+                        <input type="hidden" name="lastName" value={last} />
+                        <input type="hidden" name="email" value={sug.email ?? ""} />
+                        <input type="hidden" name="phone" value={sug.phone ?? ""} />
+                        <input type="hidden" name="suggestionId" value={sug.id} />
+                        <button className="btn-primary text-xs">Add for this date</button>
+                      </form>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm font-semibold text-brand-700">Add a sub manually →</summary>
+            <p className="mt-1 text-xs text-slate-500">Adds them to this date only, sends a welcome + waiver so they&apos;re cleared to play, and clears a spot. No charge.</p>
+            <form method="POST" action="/api/team-calendar" className="mt-2 grid gap-2 sm:grid-cols-2">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="addSub" />
+              <input type="hidden" name="teamId" value={subTeamId} />
+              <input type="hidden" name="sessionId" value={s.id} />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <input name="firstName" placeholder="First name" required className="input text-sm" />
+              <input name="lastName" placeholder="Last name" required className="input text-sm" />
+              <input name="email" type="email" placeholder="Email" className="input text-sm" />
+              <input name="phone" type="tel" placeholder="Mobile" className="input text-sm" />
+              <div className="sm:col-span-2 flex justify-end"><button className="btn-primary text-sm">Add sub &amp; send waiver</button></div>
+            </form>
+          </details>
+        </div>
+      )}
+
+      {(ok === "subadded" || err === "subaddfailed" || err === "subaddfields") && (
+        <p className={`rounded-lg px-3 py-2 text-sm ${ok === "subadded" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>
+          {ok === "subadded" ? "Sub added for this date — welcome + waiver sent." : err === "subaddfields" ? "A sub needs a first and last name and an email or mobile." : "Couldn't add the sub — please try again."}
+        </p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">

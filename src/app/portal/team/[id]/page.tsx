@@ -117,7 +117,10 @@ export default async function TeamPage({
             <p className="text-sm text-slate-500">{team.division?.name ?? team.levelBand}</p>
           )}
         </div>
-        <Link href="/portal" className="btn-ghost text-sm">← Portal</Link>
+        <div className="flex items-center gap-2">
+          <Link href={`/portal/team/${team.id}/calendar`} className="btn-secondary text-sm">📅 Calendar</Link>
+          <Link href="/portal" className="btn-ghost text-sm">← Portal</Link>
+        </div>
       </div>
 
       {/* Practice & location */}

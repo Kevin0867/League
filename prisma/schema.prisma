@@ -869,6 +869,58 @@ model SessionTeam {
   @@id([sessionId, teamId])
 }
 
+// ── Player absences & substitutes (team calendar) ────────────────────────────
+// A player marks they'll miss a specific practice; that opens a "we need a sub"
+// need for that team & date, notifies the team + coach + admins, and lets anyone
+// suggest a sub. A coach adds a sub for that specific date, which clears one of
+// the open spots. sessionId/personId/teamId are plain tags (no FK) like other
+// lightweight session-scoped records.
+
+/// A player marking they'll miss a specific session.
+model PlayerAbsence {
+  id        String   @id @default(cuid())
+  sessionId String
+  personId  String
+  teamId    String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, personId])
+  @@index([sessionId])
+  @@index([teamId])
+}
+
+/// A suggested substitute for a session — anyone on the team can propose one by
+/// name + contact. The coach reviews and adds them.
+model SubSuggestion {
+  id                  String   @id @default(cuid())
+  sessionId           String
+  teamId              String
+  suggestedByPersonId String?
+  name                String
+  email               String?
+  phone               String?
+  /// SUGGESTED | ADDED | DECLINED
+  status              String   @default("SUGGESTED")
+  addedPersonId       String?
+  createdAt           DateTime @default(now())
+
+  @@index([sessionId, status])
+}
+
+/// A substitute confirmed to play a specific session (clears one open spot).
+model SessionSub {
+  id            String   @id @default(cuid())
+  sessionId     String
+  personId      String
+  teamId        String
+  addedByUserId String?
+  createdAt     DateTime @default(now())
+
+  @@unique([sessionId, personId])
+  @@index([sessionId])
+}
+
 /// Coach on a session — supports substitute/backup coverage per session (§5)
 /// and assistant-coach payout at 50% (§9).
 model SessionCoach {
