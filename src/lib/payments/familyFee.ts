@@ -88,6 +88,9 @@ export async function accruePlayerSeasonFee(opts: {
   seasonId: string;
   feeCents: number;
   seasonName: string;
+  /** When false, use feeCents exactly (no mid-season proration) — for an
+   *  admin-set custom/discounted season fee. Default true. */
+  prorate?: boolean;
 }): Promise<AccrualResult> {
   const { playerId, seasonId, seasonName } = opts;
 
@@ -100,9 +103,9 @@ export async function accruePlayerSeasonFee(opts: {
 
   // Prorate a mid-season join: someone starting after week 1 pays only for the
   // weeks that remain (full fee ÷ 12 × weeks left). The amount is fixed when the
-  // invoice is created — a later resend reuses it, so the price never drifts.
-  const prorated = proratedSeasonFee(opts.feeCents, season?.calendar, new Date());
-  const feeCents = prorated.feeCents;
+  // invoice is created — a later resend reuses it, so the price never drifts. A
+  // custom/discounted fee (prorate=false) is used exactly as given.
+  const feeCents = opts.prorate === false ? opts.feeCents : proratedSeasonFee(opts.feeCents, season?.calendar, new Date()).feeCents;
 
   // The player's team in this season (if placed) — named on the invoice.
   const membership = await prisma.teamMember.findFirst({

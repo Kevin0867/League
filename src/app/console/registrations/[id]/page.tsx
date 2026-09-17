@@ -43,6 +43,8 @@ const OK: Record<string, string> = {
   resent: "Notification resent.",
   assign: "Player assigned.",
   fee: "Season fee requested.",
+  feeset: "Season fee set to the custom amount — once it's paid, the season shows fully paid.",
+  feesetsent: "Custom season fee set and the pay request sent — once it's paid, the season shows fully paid.",
   refund: "Refund started.",
   waiverSent: "Waiver request emailed.",
   sentall: "Sent — welcome, season fee + apparel, and waiver, in one combined email to the family.",
@@ -541,6 +543,29 @@ export default async function RegistrationDetail({
                   </form>
                 </details>
               )}
+              {/* Set a custom / discounted season fee — reprices this player's
+                  actual season-fee invoice, so paying it (online or offline)
+                  shows the season fully paid at what they really owe. */}
+              {!paid && (
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">Set a custom / discounted season fee…</summary>
+                  <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-brand-50 p-3">
+                    {hidden}<input type="hidden" name="op" value="setSeasonFee" />
+                    <label className="block text-xs font-medium text-brand-900">
+                      Season fee for {p.firstName} ($)
+                      <input name="amount" type="number" min="0" step="0.01" required placeholder="e.g. 350.00" className="input mt-1 py-1 text-sm" />
+                    </label>
+                    <p className="text-[11px] text-brand-800/80">
+                      Sets this player&apos;s season fee to this exact amount (a discount, scholarship, etc.). It replaces the standard rate on their invoice, so once it&apos;s paid they show fully paid for the season.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button name="send" value="1" className="btn-primary py-1 text-xs">Set &amp; send pay request</button>
+                      <button className="btn-secondary py-1 text-xs">Set amount only</button>
+                    </div>
+                  </form>
+                </details>
+              )}
+
               {/* Mark paid outside Stripe — check, Class Wallet, cash, in-kind.
                   Available until the fee is settled in full; records HOW it was paid. */}
               {!paid && (
