@@ -223,6 +223,22 @@ export default async function PortalHome({
         </div>
       </Link>
 
+      {/* Team Calendar — practices/events + let the team know if you can't make it. */}
+      {teamIds.length > 0 && (
+        <Link
+          href={`/portal/team/${teamIds[0]}/calendar`}
+          className="block rounded-xl border border-brand-200 bg-white px-5 py-4 shadow-sm transition hover:bg-brand-50"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-base font-bold text-slate-900">📅 Team Calendar</div>
+              <div className="mt-0.5 text-sm text-slate-500">Notify the team if you can&apos;t make a practice.</div>
+            </div>
+            <span className="shrink-0 text-brand-600">→</span>
+          </div>
+        </Link>
+      )}
+
       {/* Leave feedback — a note for the office and/or the coach, with optional media. */}
       <Link
         href="/portal/feedback"
