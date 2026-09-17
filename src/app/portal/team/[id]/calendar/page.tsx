@@ -6,6 +6,19 @@ import { formatSessionDay, formatTime12, phoenixDateInput } from "@/lib/time";
 import { listTeamCalendar, teamDescription } from "@/lib/domain/teamCalendar";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { Notice } from "@/components/Notice";
+import { CalendarView, type CalEvent } from "@/components/CalendarView";
+
+function toEvents(sessions: { id: string; date: Date; startTime: string; type: string; title: string; openSpots: number }[]): CalEvent[] {
+  return sessions.map((s) => ({
+    id: s.id,
+    dateISO: phoenixDateInput(s.date),
+    time: formatTime12(s.startTime),
+    title: s.title,
+    tone: s.type === "PRACTICE" ? "practice" : s.type === "LEAGUE_MATCH" ? "league" : s.type === "CHAMPIONSHIP" ? "championship" : "other",
+    openSpots: s.openSpots || undefined,
+    href: `#s-${s.id}`,
+  }));
+}
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Team Calendar" };
@@ -85,6 +98,8 @@ export default async function TeamCalendarPage({
       {sp.err === "subfields" && <Notice kind="error" title="Add their details">A sub needs a name and an email or mobile number.</Notice>}
       {sp.err && sp.err !== "subfields" && <Notice kind="error" title="Something went wrong">Please try again.</Notice>}
 
+      <CalendarView events={toEvents(sessions)} initialView="month" initialDateISO={today} />
+
       <section className="card">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming</h2>
         {upcoming.length === 0 ? (
@@ -123,7 +138,7 @@ export default async function TeamCalendarPage({
                   </form>
                 )}
 
-                {s.type === "PRACTICE" && staffPreview && s.openSpots > 0 && (
+                {s.type === "PRACTICE" && staffPreview && (
                   <details className="mt-2 rounded-lg bg-emerald-50 p-2">
                     <summary className="cursor-pointer text-sm font-semibold text-emerald-800">Add a sub for this date →</summary>
                     <p className="mt-1 text-xs text-slate-500">Adds them to this date only, sends a welcome + waiver so they&apos;re cleared to play, and clears a spot. No charge.</p>

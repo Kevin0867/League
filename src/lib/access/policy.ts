@@ -21,6 +21,7 @@ export const COACH_CONSOLE_PREFIXES = [
   "/console/locations", // venues directory (view) — directions + site contacts
   "/console/league", // league standings/fixtures (view)
   "/console/teams", // teams (view others; their roster + progress notes)
+  "/console/team-calendar", // day/week/month/year calendar for their teams
   "/console/profile", // their own coach profile & account
   "/console/inbox", // messaging with admins/coaches/their team families
   "/console/announcements", // announcements sent to them (read + mark read)
