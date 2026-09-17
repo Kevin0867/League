@@ -112,9 +112,9 @@ export async function notifySubNeeded(sessionId: string, teamId: string): Promis
   const link = `${appUrl()}/portal/team/${teamId}/calendar`;
   const spots = open === 1 ? "1 spot" : `${open} spots`;
   const body = open === 1
-    ? `Sub needed for ${team.name} (${desc}) — ${when}${loc}. A player can't make it, so we have 1 open spot. Know a sub? Suggest one in the team calendar: ${link}`
-    : `We now have ${spots} open for ${team.name} (${desc}) — ${when}${loc}. Know someone who can sub? Suggest a sub in the team calendar: ${link}`;
-  const subject = `Sub needed — ${team.name}`;
+    ? `PLAYER SUB NEEDED for ${team.name} (${desc}) — ${when}${loc}. A player can't make it, so we have 1 open spot. Know a sub? Suggest one in the team calendar: ${link}`
+    : `PLAYER SUB NEEDED — we now have ${spots} open for ${team.name} (${desc}) — ${when}${loc}. Know someone who can sub? Suggest a sub in the team calendar: ${link}`;
+  const subject = `Player sub needed — ${team.name}`;
   try {
     await dispatchMessage({ senderId: null, audienceType: "TEAM", audienceRef: teamId, channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "SUB_REQUEST", subject, body });
     await dispatchMessage({ senderId: null, audienceType: "ALL_ADMINS", channels: ["IN_APP", "EMAIL"], triggerType: "SUB_REQUEST", subject, body });
