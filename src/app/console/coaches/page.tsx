@@ -6,6 +6,8 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { can, requireAdmin } from "@/lib/rbac";
 import { StaffForm } from "./StaffForm";
 import { AddCoachForm } from "./AddCoachForm";
+import { coachEarnings } from "@/lib/domain/coachEarnings";
+import { formatCents } from "@/lib/money";
 import { TableFilter } from "@/components/TableFilter";
 import { LoginStatus } from "@/components/LoginStatus";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
@@ -92,6 +94,11 @@ export default async function CoachesPage({
     select: { personId: true, lastLoginAt: true, active: true },
   });
   const accountByPerson = new Map(accountRows.map((a) => [a.personId as string, a]));
+
+  // Earned fees per coach — the running total from their completed practices +
+  // lessons, keyed by coach id (click through to the session-by-session breakdown).
+  const earnings = await coachEarnings();
+  const earnedByCoachId = new Map(earnings.map((e) => [e.coachId, e.totalCents]));
 
   // Availability completeness — a coach only shows up as a location/day match in
   // Coach matching once they've set both locations and day/time blocks.
@@ -240,6 +247,7 @@ export default async function CoachesPage({
               <th>Waiver</th>
               <th>Availability</th>
               <th className="hidden md:table-cell">Teams</th>
+              <th>Earned</th>
               <th className="hidden lg:table-cell">Recruited</th>
               <th className="text-right">Manage</th>
             </tr>
@@ -314,6 +322,15 @@ export default async function CoachesPage({
                       : <span className="badge bg-amber-100 text-amber-800" title={`Missing: ${avail.missing.join(", ")}`}>needs {avail.missing.join(" + ")}</span>}
                   </td>
                   <td className="hidden text-slate-600 md:table-cell">{coach?._count.teams ?? 0}</td>
+                  <td>
+                    {coach ? (
+                      <Link href={`/console/payouts?coach=${coach.id}`} className="font-medium text-brand-700 hover:text-brand-800 hover:underline" title="See the practices behind this total">
+                        {formatCents(earnedByCoachId.get(coach.id) ?? 0)}
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="hidden text-slate-600 lg:table-cell">
                     {coach?._count.recruits ?? 0}
                     <span className="ml-1 text-xs text-slate-400">credit{(coach?._count.recruits ?? 0) === 1 ? "" : "s"}</span>
@@ -337,9 +354,9 @@ export default async function CoachesPage({
               );
             })}
             {coaches.length === 0 && (
-              <tr><td colSpan={10} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
+              <tr><td colSpan={11} className="py-8 text-center text-slate-400">No coaches yet.</td></tr>
             )}
-            <tr data-filter-empty hidden><td colSpan={10} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
+            <tr data-filter-empty hidden><td colSpan={11} className="py-8 text-center text-slate-400">No coaches match your search.</td></tr>
           </tbody>
         </table>
       </div>
