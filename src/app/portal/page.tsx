@@ -402,7 +402,7 @@ export default async function PortalHome({
           {registrations.length === 0 && (
             <div className="card text-sm text-slate-500">
               No registrations yet.{" "}
-              <Link href="/open-spots" className="font-medium text-brand-700">Register for the season →</Link>
+              <Link href="/open-spots" className="btn-link">Register for the season →</Link>
             </div>
           )}
           {registrations.map((r) => (
@@ -473,7 +473,7 @@ export default async function PortalHome({
                   return (
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
                       <span className="text-slate-600">{addr ?? f.name}</span>
-                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer" className="shrink-0 font-medium text-brand-700 hover:underline">Directions →</a>
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer" className="btn-chip-brand shrink-0">Directions →</a>
                     </div>
                   );
                 })()}
@@ -501,14 +501,14 @@ export default async function PortalHome({
                 <form method="POST" action="/api/portal">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="markAllMessagesRead" />
-                  <button className="text-xs font-medium text-brand-700 hover:underline">Mark all read</button>
+                  <button className="btn-chip-brand">Mark all read</button>
                 </form>
               )}
               {inbox.some((r) => r.readAt) && (
                 <form method="POST" action="/api/portal">
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="clearReadMessages" />
-                  <button className="text-xs font-medium text-slate-500 hover:underline">Clear read</button>
+                  <button className="btn-chip-muted">Clear read</button>
                 </form>
               )}
             </div>
@@ -549,7 +549,7 @@ export default async function PortalHome({
                         <input type="hidden" name="ticket" value={ticket} />
                         <input type="hidden" name="op" value="deleteMessage" />
                         <input type="hidden" name="recipientId" value={r.id} />
-                        <button className="text-xs font-medium text-rose-600 hover:underline">Delete</button>
+                        <button className="btn-chip-danger">Delete</button>
                       </form>
                     </div>
                   </div>

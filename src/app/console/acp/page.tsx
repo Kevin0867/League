@@ -176,7 +176,7 @@ export default async function ConsoleAcpPage({
                         <input type="hidden" name="ticket" value={ticket} />
                         <input type="hidden" name="op" value="interestToEntry" />
                         <input type="hidden" name="interestId" value={i.id} />
-                        <button className="whitespace-nowrap text-xs font-semibold text-brand-700 hover:underline">Create entry →</button>
+                        <button className="btn-chip-brand whitespace-nowrap">Create entry →</button>
                       </form>
                     </td>
                   </tr>

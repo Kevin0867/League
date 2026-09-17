@@ -117,7 +117,7 @@ export function DeleteSeasonButton({ seasonId, ticket, disabled }: { seasonId: s
       <input type="hidden" name="ticket" value={ticket} />
       <input type="hidden" name="op" value="deleteSeason" />
       <input type="hidden" name="seasonId" value={seasonId} />
-      <button className="text-xs text-rose-600 hover:underline">Delete season</button>
+      <button className="btn-chip-danger">Delete season</button>
     </form>
   );
 }
@@ -145,7 +145,7 @@ export function EditableDivision({
         </span>
         <span className="flex items-center gap-3">
           <span className="text-xs text-slate-400">{division.registrations} reg.</span>
-          <button onClick={() => setEdit(true)} className="text-xs text-brand-700 hover:underline">Edit</button>
+          <button onClick={() => setEdit(true)} className="btn-chip-brand">Edit</button>
           {division.registrations === 0 && <DeleteDivisionButton divisionId={division.id} ticket={ticket} />}
         </span>
       </li>
@@ -214,7 +214,7 @@ export function DeleteDivisionButton({ divisionId, ticket }: { divisionId: strin
       <input type="hidden" name="ticket" value={ticket} />
       <input type="hidden" name="op" value="deleteDivision" />
       <input type="hidden" name="divisionId" value={divisionId} />
-      <button className="text-xs text-rose-600 hover:underline">Remove</button>
+      <button className="btn-chip-danger">Remove</button>
     </form>
   );
 }

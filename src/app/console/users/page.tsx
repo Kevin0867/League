@@ -207,7 +207,7 @@ export default async function UsersPage({
                               <input type="hidden" name="ticket" value={ticket} />
                               <input type="hidden" name="op" value="resendInvite" />
                               <input type="hidden" name="userId" value={u.id} />
-                              <button className="text-xs font-semibold text-brand-700 hover:underline" title="Email a fresh set-password link">Resend invite</button>
+                              <button className="btn-chip-brand" title="Email a fresh set-password link">Resend invite</button>
                             </form>
                           )}
                           {!isSelf && (
@@ -220,7 +220,7 @@ export default async function UsersPage({
                               <input type="hidden" name="op" value="toggleActive" />
                               <input type="hidden" name="userId" value={u.id} />
                               <input type="hidden" name="active" value={u.active ? "false" : "true"} />
-                              <button className="text-xs text-slate-500 hover:underline">{u.active ? "Disable" : "Enable"}</button>
+                              <button className="btn-chip-muted">{u.active ? "Disable" : "Enable"}</button>
                             </form>
                           )}
                         </div>
@@ -250,7 +250,7 @@ export default async function UsersPage({
                               <input type="hidden" name="ticket" value={ticket} />
                               <input type="hidden" name="op" value="inviteLink" />
                               <input type="hidden" name="userId" value={u.id} />
-                              <button className="text-xs font-semibold text-brand-700 hover:underline" title="Generate a link to copy and send yourself">Get set-password link</button>
+                              <button className="btn-chip-brand" title="Generate a link to copy and send yourself">Get set-password link</button>
                             </form>
 
                             {/* Delete — guarded behind a second disclosure so it's deliberate. Hidden for your own login. */}

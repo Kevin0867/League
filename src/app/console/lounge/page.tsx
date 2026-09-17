@@ -138,7 +138,7 @@ export default async function LoungePage({
                           <input type="hidden" name="op" value="decline" />
                           <input type="hidden" name="requestId" value={r.id} />
                           <input type="hidden" name="returnTo" value="/console/lounge" />
-                          <button className="text-xs text-rose-600 hover:underline">Decline</button>
+                          <button className="btn-chip-danger">Decline</button>
                         </form>
                       </>
                     )}
@@ -152,7 +152,7 @@ export default async function LoungePage({
                         <input type="hidden" name="op" value="cancel" />
                         <input type="hidden" name="requestId" value={r.id} />
                         <input type="hidden" name="returnTo" value="/console/lounge" />
-                        <button className="text-xs text-slate-500 hover:underline">Your request · cancel</button>
+                        <button className="btn-chip-muted">Your request · cancel</button>
                       </form>
                     )}
                     {!pending && !isMine && myCoachId && (
@@ -200,7 +200,7 @@ export default async function LoungePage({
                       {hidden}
                       <input type="hidden" name="op" value={p.pinned ? "unpin" : "pin"} />
                       <input type="hidden" name="postId" value={p.id} />
-                      <button className="font-medium text-brand-600 hover:underline">{p.pinned ? "unpin" : "pin"}</button>
+                      <button className="btn-chip-brand">{p.pinned ? "unpin" : "pin"}</button>
                     </form>
                   )}
                   {(admin || p.authorPersonId === myPersonId) && (
@@ -208,7 +208,7 @@ export default async function LoungePage({
                       {hidden}
                       <input type="hidden" name="op" value="deletePost" />
                       <input type="hidden" name="postId" value={p.id} />
-                      <button className="text-rose-600 hover:underline">delete</button>
+                      <button className="btn-chip-danger">delete</button>
                     </form>
                   )}
                 </div>
@@ -228,7 +228,7 @@ export default async function LoungePage({
                           {hidden}
                           <input type="hidden" name="op" value="deleteReply" />
                           <input type="hidden" name="replyId" value={r.id} />
-                          <button className="text-xs text-rose-500 hover:underline">×</button>
+                          <button className="btn-chip-danger">×</button>
                         </form>
                       )}
                       <p className="whitespace-pre-wrap text-slate-600">{r.body}</p>

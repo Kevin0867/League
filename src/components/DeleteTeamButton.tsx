@@ -16,7 +16,7 @@ export function DeleteTeamButton({ teamId, ticket, teamName }: { teamId: string;
       <input type="hidden" name="ticket" value={ticket} />
       <input type="hidden" name="op" value="deleteTeam" />
       <input type="hidden" name="teamId" value={teamId} />
-      <button className="text-sm font-semibold text-rose-600 hover:underline">Delete team</button>
+      <button className="btn-chip-danger">Delete team</button>
     </form>
   );
 }

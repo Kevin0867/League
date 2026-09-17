@@ -533,7 +533,7 @@ function MatchLinesSetup({
                   {hidden}
                   <input type="hidden" name="op" value="removeLine" />
                   <input type="hidden" name="lineId" value={l.id} />
-                  <button className="text-xs text-rose-600 hover:underline">remove</button>
+                  <button className="btn-chip-danger">remove</button>
                 </form>
               </div>
               <form method="POST" action="/api/console/league" className="grid gap-2 sm:grid-cols-2">

@@ -107,15 +107,15 @@ export default async function FeedbackConsole({ searchParams }: { searchParams: 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {f.consentPublish && f.coachId && (
                     f.published ? (
-                      <MiniForm ticket={ticket} op="publish" id={f.id} extra={{ on: "0" }} label="Unpublish" className="text-xs font-medium text-slate-500 hover:underline" />
+                      <MiniForm ticket={ticket} op="publish" id={f.id} extra={{ on: "0" }} label="Unpublish" className="btn-chip-muted" />
                     ) : (
                       <MiniForm ticket={ticket} op="publish" id={f.id} extra={{ on: "1" }} label="Publish to coach profile" className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700" />
                     )
                   )}
                   {f.status !== "HIDDEN" ? (
-                    <MiniForm ticket={ticket} op="setStatus" id={f.id} extra={{ status: "HIDDEN" }} label="Hide" className="text-xs font-medium text-rose-600 hover:underline" />
+                    <MiniForm ticket={ticket} op="setStatus" id={f.id} extra={{ status: "HIDDEN" }} label="Hide" className="btn-chip-danger" />
                   ) : (
-                    <MiniForm ticket={ticket} op="setStatus" id={f.id} extra={{ status: "REVIEWED" }} label="Unhide" className="text-xs font-medium text-brand-600 hover:underline" />
+                    <MiniForm ticket={ticket} op="setStatus" id={f.id} extra={{ status: "REVIEWED" }} label="Unhide" className="btn-chip-brand" />
                   )}
                 </div>
               </li>

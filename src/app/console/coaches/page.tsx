@@ -229,7 +229,7 @@ export default async function CoachesPage({
               <input type="hidden" name="ticket" value={ticket} />
               <input type="hidden" name="op" value="hideAll" />
               <input type="hidden" name="returnTo" value="/console/coaches" />
-              <button className="text-sm text-slate-500 hover:text-rose-600 hover:underline">Hide all</button>
+              <button className="btn-chip-danger">Hide all</button>
             </form>
           </div>
         )}
@@ -276,7 +276,7 @@ export default async function CoachesPage({
                         {coach.publishedOnSite ? (
                           <>
                             <span className="badge bg-emerald-100 text-emerald-800">Published</span>
-                            <button className="text-xs text-slate-500 hover:text-rose-600 hover:underline">Hide</button>
+                            <button className="btn-chip-danger">Hide</button>
                             {siteReadiness(person, coach).length > 0 && (
                               <span className="badge bg-amber-100 text-amber-800" title={`Missing: ${siteReadiness(person, coach).join(", ")}`}>not on site</span>
                             )}
@@ -284,7 +284,7 @@ export default async function CoachesPage({
                         ) : (
                           <>
                             <span className="badge bg-slate-100 text-slate-500">Hidden</span>
-                            <button className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">Publish</button>
+                            <button className="btn-chip-brand">Publish</button>
                           </>
                         )}
                       </form>
@@ -312,7 +312,7 @@ export default async function CoachesPage({
                         <input type="hidden" name="personId" value={person.id} />
                         <input type="hidden" name="returnTo" value="/console/coaches" />
                         <span className="badge bg-amber-100 text-amber-800">not signed</span>
-                        <button className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">Send waiver</button>
+                        <button className="btn-chip-brand">Send waiver</button>
                       </form>
                     )}
                   </td>
@@ -336,7 +336,7 @@ export default async function CoachesPage({
                     <span className="ml-1 text-xs text-slate-400">credit{(coach?._count.recruits ?? 0) === 1 ? "" : "s"}</span>
                   </td>
                   <td className="whitespace-nowrap text-right">
-                    <Link href={`/console/coaches/${person.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">Edit</Link>
+                    <Link href={`/console/coaches/${person.id}`} className="btn-chip-brand">Edit</Link>
                     {session && can(session.role, "manageCoaches") && (
                       <>
                         <span className="mx-1.5 text-slate-300">·</span>

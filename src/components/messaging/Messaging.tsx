@@ -121,7 +121,7 @@ export function ConversationView({
             <input type="hidden" name="op" value="archive" />
             <input type="hidden" name="conversationId" value={thread.id} />
             <input type="hidden" name="returnTo" value={basePath} />
-            <button className="text-xs text-slate-400 hover:text-slate-600 hover:underline">Archive</button>
+            <button className="btn-chip-muted">Archive</button>
           </form>
         )}
       </div>

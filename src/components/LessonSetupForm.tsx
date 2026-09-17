@@ -94,7 +94,7 @@ export function LessonSetupForm({
                 <input value={p.phone} onChange={(e) => set(i, "phone", e.target.value)} name="pPhone" type="tel" className="input" />
                 {people.length > 1 && (
                   <button type="button" onClick={() => setPeople((ps) => ps.filter((_, j) => j !== i))}
-                    className="mb-1 shrink-0 text-xs text-rose-600 hover:underline">remove</button>
+                    className="btn-chip-danger mb-1 shrink-0">remove</button>
                 )}
               </div>
             </div>

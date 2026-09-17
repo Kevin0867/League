@@ -503,11 +503,11 @@ export default async function RegistrationDetail({
               <div className="mt-2 flex gap-3">
                 <form method="POST" action="/api/console/registrations">
                   {hidden}<input type="hidden" name="op" value="unassign" />
-                  <button className="text-xs text-slate-500 hover:underline">Send back to pool</button>
+                  <button className="btn-chip-muted">Send back to pool</button>
                 </form>
                 <form method="POST" action="/api/console/registrations">
                   {hidden}<input type="hidden" name="op" value="resendAssignment" />
-                  <button className="text-xs text-brand-700 hover:underline">Resend assignment email</button>
+                  <button className="btn-chip-brand">Resend assignment email</button>
                 </form>
               </div>
             )}
@@ -629,7 +629,7 @@ export default async function RegistrationDetail({
               {paid && (
                 <form method="POST" action="/api/console/registrations">
                   {hidden}<input type="hidden" name="op" value="refund" />
-                  <button className="text-xs text-rose-600 hover:underline">Start refund</button>
+                  <button className="btn-chip-danger">Start refund</button>
                 </form>
               )}
             </div>

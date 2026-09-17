@@ -59,7 +59,7 @@ export default async function PortalFeedbackPage({
       {sp.ok === "1" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Thank you — your feedback was sent. 🎾
-          <div className="mt-2"><Link href="/portal" className="font-semibold text-emerald-800 underline">Back to portal</Link></div>
+          <div className="mt-3"><Link href="/portal" className="btn-primary text-sm">Back to portal</Link></div>
         </div>
       )}
       {sp.err && (

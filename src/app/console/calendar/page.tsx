@@ -146,7 +146,7 @@ export default async function SeasonCalendarPage({
               <input type="hidden" name="op" value="resetSeasonCalendar" />
               <input type="hidden" name="seasonId" value={season.id} />
               <input type="hidden" name="returnTo" value="/console/calendar" />
-              <button className="text-rose-600 hover:underline">Reset to the standard template</button>
+              <button className="btn-chip-danger">Reset to the standard template</button>
             </form>
           )}
         </div>

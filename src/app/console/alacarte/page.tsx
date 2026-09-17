@@ -185,7 +185,7 @@ export default async function AlaCartePage({
                     <input type="hidden" name="op" value="toggleOffering" />
                     <input type="hidden" name="offeringId" value={o.id} />
                     <input type="hidden" name="active" value={o.active ? "0" : "1"} />
-                    <button className="text-xs text-slate-500 hover:underline">{o.active ? "Deactivate" : "Reactivate"}</button>
+                    <button className="btn-chip-muted">{o.active ? "Deactivate" : "Reactivate"}</button>
                   </form>
                 </div>
               );

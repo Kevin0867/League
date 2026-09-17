@@ -82,7 +82,7 @@ export function RegisterForm({
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-600">Child #{i + 1}</span>
                   {kidCount > 1 && (
-                    <button type="button" onClick={() => setKidCount((c) => c - 1)} className="text-xs text-rose-600 hover:underline">
+                    <button type="button" onClick={() => setKidCount((c) => c - 1)} className="btn-chip-danger">
                       Remove
                     </button>
                   )}

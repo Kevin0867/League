@@ -252,7 +252,7 @@ export default async function FacilitiesPage({
                       <input type="hidden" name="ticket" value={ticket} />
                       <input type="hidden" name="op" value="archive" />
                       <input type="hidden" name="facilityId" value={f.id} />
-                      <button className="text-xs text-slate-500 hover:underline">Archive</button>
+                      <button className="btn-chip-muted">Archive</button>
                     </form>
                     <DeleteFacilityButton
                       facilityId={f.id}
@@ -285,7 +285,7 @@ export default async function FacilitiesPage({
                   <input type="hidden" name="ticket" value={ticket} />
                   <input type="hidden" name="op" value="unarchive" />
                   <input type="hidden" name="facilityId" value={f.id} />
-                  <button className="text-xs font-medium text-brand-600 hover:underline">Restore</button>
+                  <button className="btn-chip-brand">Restore</button>
                 </form>
               </li>
             ))}

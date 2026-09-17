@@ -69,7 +69,7 @@ export function AttributeImportRow({
         {picked ? (
           <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5">
             <span className="truncate text-emerald-900">{picked.name}{picked.email ? <span className="text-emerald-600"> · {picked.email}</span> : ""}</span>
-            <button type="button" onClick={() => { setPicked(null); setQuery(""); }} className="ml-auto text-xs text-emerald-700 hover:underline">change</button>
+            <button type="button" onClick={() => { setPicked(null); setQuery(""); }} className="btn-chip-brand ml-auto">change</button>
           </div>
         ) : (
           <>

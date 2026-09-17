@@ -71,7 +71,7 @@ export function MediaAttach({ label = "Add photo / video", library = false, auth
           <button
             type="button"
             onClick={() => { setUrl(null); setType(null); }}
-            className="text-xs font-medium text-rose-600 hover:underline"
+            className="btn-chip-danger"
           >
             Remove
           </button>

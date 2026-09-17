@@ -100,7 +100,7 @@ export default async function PortalAccessPage({
                       {p.hasEmail ? (
                         <TextResetLinkButton personId={p.personId} ticket={ticket} returnTo="/console/portal-access" label="Send access" />
                       ) : (
-                        <Link href={`/console/registrations?q=${encodeURIComponent(p.name)}`} className="text-xs font-semibold text-amber-700 hover:underline">Add an email →</Link>
+                        <Link href={`/console/registrations?q=${encodeURIComponent(p.name)}`} className="btn-chip-brand">Add an email →</Link>
                       )}
                     </td>
                   </tr>

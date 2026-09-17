@@ -95,7 +95,7 @@ export default async function LadderPage({
                         <input type="hidden" name="ticket" value={ticket} />
                         <input type="hidden" name="op" value="removeEntry" />
                         <input type="hidden" name="entryId" value={e.id} />
-                        <button className="text-rose-600 hover:underline">remove</button>
+                        <button className="btn-chip-danger">remove</button>
                       </form>
                     </span>
                   </li>

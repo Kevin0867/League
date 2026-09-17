@@ -112,7 +112,7 @@ export function PoolCard({
       <div className="mt-2.5 space-y-2 border-t border-slate-100 pt-2.5">
         <div className="flex items-center justify-between text-xs text-slate-500">
           <span>{selected.size} selected</span>
-          <button type="button" className="text-brand-600 hover:underline"
+          <button type="button" className="btn-chip-brand"
             onClick={() => setSelected(new Set(pool.members.map((m) => m.registrationId)))}>
             select all
           </button>

@@ -137,7 +137,7 @@ export default async function AcpEntryDetail({
                     {hidden}
                     <input type="hidden" name="op" value="removePlayer" />
                     <input type="hidden" name="playerId" value={p.id} />
-                    <button className="text-xs text-rose-600 hover:underline">remove</button>
+                    <button className="btn-chip-danger">remove</button>
                   </form>
                 </li>
               ))}

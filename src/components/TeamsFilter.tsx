@@ -32,7 +32,7 @@ export function TeamsFilter({ markets, divisions }: { markets: string[]; divisio
         {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
       </select>
       {(market || division) && (
-        <button type="button" onClick={() => { setMarket(""); setDivision(""); }} className="text-sm text-slate-500 hover:text-brand-700 hover:underline">
+        <button type="button" onClick={() => { setMarket(""); setDivision(""); }} className="btn-chip-brand">
           Clear
         </button>
       )}

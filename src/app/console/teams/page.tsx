@@ -463,20 +463,20 @@ export default async function TeamBuildBoard({
                         <span className="text-slate-400">· {t._count.members} player{t._count.members === 1 ? "" : "s"}{t.published ? " · published" : ""}</span>
                       </span>
                       <span className="flex items-center gap-3">
-                        <Link href={`/console/teams/${t.id}`} className="text-xs font-medium text-brand-600 hover:underline">Manage</Link>
+                        <Link href={`/console/teams/${t.id}`} className="btn-chip-brand">Manage</Link>
                         <ConfirmSubmit
                           action="/api/console/teams"
                           fields={{ ticket, op: "mergeTeams", keepId: t.id, removeIds: group.filter((o) => o.id !== t.id).map((o) => o.id).join(",") }}
                           confirm={`Keep this "${t.name}" and merge the other ${group.length - 1} duplicate(s) into it? Their players move onto this team and the duplicates are deleted. This can't be undone.`}
                           label="Keep & merge others"
-                          className="text-xs font-medium text-emerald-700 hover:underline"
+                          className="btn-chip-brand"
                         />
                         <ConfirmSubmit
                           action="/api/console/teams"
                           fields={{ ticket, op: "deleteTeam", teamId: t.id }}
                           confirm={`Delete this "${t.name}" team? Its ${t._count.members} player(s) return to the assignment pool. This can't be undone.`}
                           label="Delete"
-                          className="text-xs font-medium text-rose-600 hover:underline"
+                          className="btn-chip-danger"
                         />
                       </span>
                     </div>

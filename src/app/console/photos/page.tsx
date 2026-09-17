@@ -87,7 +87,7 @@ export default async function ConsolePhotosPage({
                   <input type="hidden" name="teamId" value={p.teamId} />
                   <input type="hidden" name="photoId" value={p.id} />
                   <input type="hidden" name="returnTo" value={returnTo} />
-                  <button className="text-xs text-rose-600 hover:underline">Remove</button>
+                  <button className="btn-chip-danger">Remove</button>
                 </form>
               </div>
             </figure>
