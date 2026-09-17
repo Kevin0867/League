@@ -159,8 +159,10 @@ export async function listTeamEvents(teamId: string): Promise<TeamEventItem[]> {
   return prisma.teamEvent.findMany({ where: { teamId }, orderBy: [{ date: "asc" }, { startTime: "asc" }] });
 }
 
-/** Notify the team + coach that a member/coach/admin added a calendar event. */
-export async function notifyEventAdded(teamId: string, ev: TeamEventItem): Promise<void> {
+/** Notify the team + coach that a member/coach/admin added a calendar event.
+ *  `senderUserId` is the adder's User id (NOT their Person id) — dispatchMessage
+ *  resolves the sender by User id, so passing a Person id breaks the send. */
+export async function notifyEventAdded(teamId: string, ev: TeamEventItem, senderUserId: string | null): Promise<void> {
   const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
   if (!team) return;
   const when = `${formatSessionDay(ev.date, "long")}${ev.startTime ? ` at ${formatTime12(ev.startTime)}` : ""}`;
@@ -171,7 +173,7 @@ export async function notifyEventAdded(teamId: string, ev: TeamEventItem): Promi
   const subject = `New team event — ${team.name}: ${ev.title}`;
   const body = `${who} added a team event to ${team.name}'s calendar: "${ev.title}" — ${when}${where}.${ev.description ? ` ${ev.description}` : ""} See the team calendar: ${link}`;
   try {
-    await dispatchMessage({ senderId: ev.createdByPersonId, audienceType: "TEAM", audienceRef: teamId, channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "TEAM_EVENT", subject, body });
+    await dispatchMessage({ senderId: senderUserId, audienceType: "TEAM", audienceRef: teamId, channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "TEAM_EVENT", subject, body });
   } catch (e) {
     console.error("notifyEventAdded failed", e);
   }
