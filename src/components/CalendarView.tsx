@@ -89,7 +89,7 @@ export function CalendarView({ events, initialView = "month", initialDateISO }: 
         {view === "month" && <MonthGrid focus={focus} today={today} byDay={byDay} Pill={Pill} onDay={(d) => { setFocus(d); setView("day"); }} />}
         {view === "week" && <WeekGrid focus={focus} today={today} byDay={byDay} Pill={Pill} />}
         {view === "day" && <DayList focus={focus} byDay={byDay} Pill={Pill} />}
-        {view === "year" && <YearGrid focus={focus} today={today} byDay={byDay} onMonth={(d) => { setFocus(d); setView("month"); }} />}
+        {view === "year" && <YearGrid focus={focus} today={today} byDay={byDay} onMonth={(d) => { setFocus(d); setView("month"); }} onDay={(d) => { setFocus(d); setView("day"); }} />}
       </div>
     </div>
   );
@@ -152,7 +152,7 @@ function DayList({ focus, byDay, Pill }: { focus: Date; byDay: Map<string, CalEv
   );
 }
 
-function YearGrid({ focus, today, byDay, onMonth }: { focus: Date; today: Date; byDay: Map<string, CalEvent[]>; onMonth: (d: Date) => void }) {
+function YearGrid({ focus, today, byDay, onMonth, onDay }: { focus: Date; today: Date; byDay: Map<string, CalEvent[]>; onMonth: (d: Date) => void; onDay: (d: Date) => void }) {
   const year = focus.getFullYear();
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -168,10 +168,20 @@ function YearGrid({ focus, today, byDay, onMonth }: { focus: Date; today: Date; 
               {cells.map((d, i) => {
                 const inMonth = d.getMonth() === m;
                 const has = (byDay.get(iso(d)) ?? []).length > 0;
+                if (!inMonth) return <div key={i} className="h-5" />;
                 return (
-                  <div key={i} className={`flex h-4 items-center justify-center text-[9px] ${!inMonth ? "text-transparent" : sameDay(d, today) ? "font-bold text-brand-700" : has ? "font-semibold text-brand-700" : "text-slate-400"}`}>
-                    <span className={has && inMonth ? "flex h-4 w-4 items-center justify-center rounded-full bg-brand-100" : ""}>{d.getDate()}</span>
-                  </div>
+                  <button
+                    key={i}
+                    onClick={() => onDay(d)}
+                    title={has ? `${(byDay.get(iso(d)) ?? []).length} event(s)` : "Open this day"}
+                    className={`flex h-5 items-center justify-center rounded text-[9px] hover:bg-brand-50 ${
+                      sameDay(d, today) ? "bg-brand-600 font-bold text-white hover:bg-brand-600"
+                      : has ? "bg-brand-100 font-semibold text-brand-700"
+                      : "text-slate-500"
+                    }`}
+                  >
+                    {d.getDate()}
+                  </button>
                 );
               })}
             </div>
