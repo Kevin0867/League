@@ -93,6 +93,7 @@ const SECTIONS: NavSection[] = [
       { href: "/console/compliance", label: "Compliance", roles: ["COO", "DIRECTOR"] },
       { href: "/console/consent", label: "Consent log", roles: ["COO", "DIRECTOR"] },
       { href: "/console/feedback", label: "Feedback", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/stats", label: "Stats", roles: ["COO", "CEO", "DIRECTOR"], match: ["/console/stats"] },
       { href: "/console/reports", label: "Reports", roles: ["COO", "CEO", "DIRECTOR"] },
       { href: "/console/system", label: "System", roles: ["COO", "DIRECTOR"] },
       { href: "/console/organizations", label: "Mission Control", roles: ["COO", "DIRECTOR"], match: ["/console/organizations"] },
