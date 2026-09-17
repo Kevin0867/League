@@ -3,11 +3,12 @@ import { requireUser, isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatSessionDay, formatTime12, phoenixDateInput } from "@/lib/time";
-import { listTeamCalendar, teamDescription, teamRosterStatus } from "@/lib/domain/teamCalendar";
+import { listTeamCalendar, teamDescription, teamRosterStatus, listTeamEvents } from "@/lib/domain/teamCalendar";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { Notice } from "@/components/Notice";
 import { CalendarView, type CalEvent } from "@/components/CalendarView";
 import { RosterStatus, RosterStatusLegend } from "@/components/RosterStatus";
+import { AddTeamEventForm, TeamEventList } from "@/components/TeamEvents";
 
 function toEvents(sessions: { id: string; date: Date; startTime: string; type: string; title: string; openSpots: number }[]): CalEvent[] {
   return sessions.map((s) => ({
@@ -60,6 +61,7 @@ export default async function TeamCalendarPage({
   const memberList = me ? [me, ...me.dependents].filter((p) => memberIds.has(p.id)) : [];
   const ticket = await mintConsoleTicket();
   const sessions = await listTeamCalendar(teamId, household);
+  const events = await listTeamEvents(teamId);
 
   // Staff (coach/admin) can mark any roster player out from here, so fetch the
   // roster for the picker.
@@ -75,6 +77,17 @@ export default async function TeamCalendarPage({
   // Availability per practice — who's in, out (sub needed), or hasn't responded —
   // so the whole team, the coach, and admins can see it.
   const rosterStatus = await teamRosterStatus(teamId, upcoming.filter((s) => s.type === "PRACTICE").map((s) => s.id));
+
+  // Team-added events shown on the grid + in their own list.
+  const eventCal: CalEvent[] = events.map((e) => ({
+    id: `e-${e.id}`,
+    dateISO: phoenixDateInput(e.date),
+    time: e.startTime ? formatTime12(e.startTime) : "All day",
+    title: e.title,
+    tone: "other",
+    href: `#e-${e.id}`,
+  }));
+  const upcomingEvents = events.filter((e) => phoenixDateInput(e.date) >= today);
 
   const returnTo = `/portal/team/${teamId}/calendar`;
 
@@ -101,9 +114,14 @@ export default async function TeamCalendarPage({
       {sp.ok === "suggested" && <Notice kind="success" title="Sub suggested">Thanks! Your coach will review and add them.</Notice>}
       {sp.ok === "subadded" && <Notice kind="success" title="Sub added">Added for this date — a welcome + waiver was sent so they&apos;re cleared to play.</Notice>}
       {sp.err === "subfields" && <Notice kind="error" title="Add their details">A sub needs a name and an email or mobile number.</Notice>}
-      {sp.err && sp.err !== "subfields" && <Notice kind="error" title="Something went wrong">Please try again.</Notice>}
+      {sp.ok === "eventadded" && <Notice kind="success" title="Event added">Your team and coach have been notified.</Notice>}
+      {sp.ok === "eventdeleted" && <Notice kind="success" title="Event removed">The team event was removed.</Notice>}
+      {sp.err === "eventfields" && <Notice kind="error" title="Add the basics">An event needs at least a name and a date.</Notice>}
+      {sp.err && !["subfields", "eventfields"].includes(sp.err) && <Notice kind="error" title="Something went wrong">Please try again.</Notice>}
 
-      <CalendarView events={toEvents(sessions)} initialView="month" initialDateISO={today} />
+      <AddTeamEventForm teamId={teamId} ticket={ticket} returnTo={returnTo} />
+
+      <CalendarView events={[...toEvents(sessions), ...eventCal]} initialView="month" initialDateISO={today} />
 
       <section className="card">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -222,6 +240,8 @@ export default async function TeamCalendarPage({
           </ul>
         )}
       </section>
+
+      <TeamEventList events={upcomingEvents} teamId={teamId} ticket={ticket} returnTo={returnTo} canManage={staffPreview} householdIds={household} />
 
       {past.length > 0 && (
         <details className="card">

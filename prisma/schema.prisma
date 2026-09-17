@@ -890,6 +890,28 @@ model PlayerAbsence {
   @@index([teamId])
 }
 
+/// A lightweight, user-added team calendar event (team dinner, extra hit,
+/// social) — distinct from Session, which carries coaching pay, attendance, and
+/// the auto-close cron. Team members, the coach, and admins can add these; adding
+/// notifies the team. Plain teamId tag (no FK), like the other calendar records.
+model TeamEvent {
+  id                String   @id @default(cuid())
+  teamId            String
+  title             String
+  description       String?
+  location          String?
+  date              DateTime
+  startTime         String?  // "HH:MM"
+  endTime           String?  // "HH:MM"
+  createdByPersonId String?
+  createdByName     String?
+  /// PLAYER | COACH | ADMIN — who added it, for the "added by" note.
+  createdByRole     String   @default("PLAYER")
+  createdAt         DateTime @default(now())
+
+  @@index([teamId, date])
+}
+
 /// A suggested substitute for a session — anyone on the team can propose one by
 /// name + contact. The coach reviews and adds them.
 model SubSuggestion {

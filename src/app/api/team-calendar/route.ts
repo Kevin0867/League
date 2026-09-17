@@ -4,7 +4,7 @@ import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { isAdmin } from "@/lib/rbac";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
-import { notifySubNeeded, notifySubSuggested } from "@/lib/domain/teamCalendar";
+import { notifySubNeeded, notifySubSuggested, notifyEventAdded } from "@/lib/domain/teamCalendar";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { sendResetLinkForPerson } from "@/lib/domain/passwordResetSend";
@@ -35,13 +35,61 @@ export async function POST(req: Request) {
   if (!actor) return back("?err=auth");
   const me = await prisma.user.findUnique({ where: { id: actor.userId }, select: { personId: true } });
   const household = await householdOf(me?.personId ?? null);
-  if (!teamId || !sessionId) return back("?err=fields");
+  if (!teamId) return back("?err=fields");
 
   // Membership: a household member is on this team, OR the actor is a coach of
   // it / an admin.
   const memberIds = (await prisma.teamMember.findMany({ where: { teamId, personId: { in: household } }, select: { personId: true } })).map((m) => m.personId);
-  const isCoachOrAdmin = isAdmin(actor.roles) || (await coachedTeamIdsForUser(actor.userId)).includes(teamId);
+  const admin = isAdmin(actor.roles);
+  const isCoach = !admin && (await coachedTeamIdsForUser(actor.userId)).includes(teamId);
+  const isCoachOrAdmin = admin || isCoach;
   if (memberIds.length === 0 && !isCoachOrAdmin) return back("?err=perm");
+
+  // ── Team-added calendar events (no session needed) ──────────────────────────
+  // Team members, the coach, and admins can add an event; adding notifies the
+  // whole team + coach and records who added it.
+  if (op === "addEvent") {
+    const title = String(fd.get("title") ?? "").trim().slice(0, 140);
+    const dateStr = String(fd.get("date") ?? "").trim();
+    if (!title || !dateStr) return back("?err=eventfields");
+    // Store at noon UTC so it lands on the intended day in Phoenix (UTC-7).
+    const date = new Date(`${dateStr}T12:00:00Z`);
+    if (isNaN(date.getTime())) return back("?err=eventfields");
+    const startTime = String(fd.get("startTime") ?? "").trim() || null;
+    const endTime = String(fd.get("endTime") ?? "").trim() || null;
+    const location = String(fd.get("location") ?? "").trim().slice(0, 200) || null;
+    const description = String(fd.get("description") ?? "").trim().slice(0, 1000) || null;
+    const role = admin ? "ADMIN" : isCoach ? "COACH" : "PLAYER";
+    const meName = me?.personId
+      ? await prisma.person.findUnique({ where: { id: me.personId }, select: { firstName: true, lastName: true } })
+      : null;
+    const ev = await prisma.teamEvent.create({
+      data: {
+        teamId, title, description, location, date, startTime, endTime,
+        createdByPersonId: me?.personId ?? null,
+        createdByName: meName ? `${meName.firstName} ${meName.lastName}`.trim() : null,
+        createdByRole: role,
+      },
+    });
+    await audit({ actorId: actor.userId, entityType: "TeamEvent", entityId: ev.id, action: "calendar.addEvent", summary: `Added team event "${title}"` });
+    await notifyEventAdded(teamId, ev);
+    return back("?ok=eventadded#e-" + ev.id);
+  }
+
+  if (op === "deleteEvent") {
+    const eventId = String(fd.get("eventId") ?? "").trim();
+    if (!eventId) return back("?err=fields");
+    const ev = await prisma.teamEvent.findUnique({ where: { id: eventId }, select: { teamId: true, createdByPersonId: true } });
+    if (!ev || ev.teamId !== teamId) return back("?err=perm");
+    const mine = !!ev.createdByPersonId && household.includes(ev.createdByPersonId);
+    if (!mine && !isCoachOrAdmin) return back("?err=perm");
+    await prisma.teamEvent.delete({ where: { id: eventId } });
+    await audit({ actorId: actor.userId, entityType: "TeamEvent", entityId: eventId, action: "calendar.deleteEvent", summary: "Removed team event" });
+    return back("?ok=eventdeleted");
+  }
+
+  // The remaining ops all act on a specific session.
+  if (!sessionId) return back("?err=fields");
 
   if (op === "absent") {
     // Mark a household member out for this session.
