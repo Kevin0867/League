@@ -3,10 +3,11 @@ import { requireUser, isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatSessionDay, formatTime12, phoenixDateInput } from "@/lib/time";
-import { listTeamCalendar, teamDescription } from "@/lib/domain/teamCalendar";
+import { listTeamCalendar, teamDescription, teamRosterStatus } from "@/lib/domain/teamCalendar";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { Notice } from "@/components/Notice";
 import { CalendarView, type CalEvent } from "@/components/CalendarView";
+import { RosterStatus, RosterStatusLegend } from "@/components/RosterStatus";
 
 function toEvents(sessions: { id: string; date: Date; startTime: string; type: string; title: string; openSpots: number }[]): CalEvent[] {
   return sessions.map((s) => ({
@@ -71,6 +72,10 @@ export default async function TeamCalendarPage({
   const upcoming = sessions.filter((s) => phoenixDateInput(s.date) >= today);
   const past = sessions.filter((s) => phoenixDateInput(s.date) < today);
 
+  // Availability per practice — who's in, out (sub needed), or hasn't responded —
+  // so the whole team, the coach, and admins can see it.
+  const rosterStatus = await teamRosterStatus(teamId, upcoming.filter((s) => s.type === "PRACTICE").map((s) => s.id));
+
   const returnTo = `/portal/team/${teamId}/calendar`;
 
   return (
@@ -101,7 +106,10 @@ export default async function TeamCalendarPage({
       <CalendarView events={toEvents(sessions)} initialView="month" initialDateISO={today} />
 
       <section className="card">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming</h2>
+          <RosterStatusLegend />
+        </div>
         {upcoming.length === 0 ? (
           <p className="text-sm text-slate-400">No upcoming sessions scheduled yet.</p>
         ) : (
@@ -120,6 +128,12 @@ export default async function TeamCalendarPage({
                     </span>
                   )}
                 </div>
+
+                {s.type === "PRACTICE" && (
+                  <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50/60 p-2">
+                    <RosterStatus members={rosterStatus.get(s.id) ?? []} />
+                  </div>
+                )}
 
                 {s.type === "PRACTICE" && staffPreview && staffRoster.length > 0 && (
                   <form method="POST" action="/api/team-calendar" className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2">
