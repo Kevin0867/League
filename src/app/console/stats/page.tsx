@@ -83,7 +83,7 @@ export default async function StatsPage() {
           <div className="card">
             <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-semibold text-slate-900">Ratings &amp; reviews</h2>
-              <Link href="/console/feedback" className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">
+              <Link href="/console/feedback" className="btn-chip-brand">
                 Read {ratings.reviews === 1 ? "the review" : "all reviews"} →
               </Link>
             </div>

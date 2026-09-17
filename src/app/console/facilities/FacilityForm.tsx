@@ -66,7 +66,7 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
 
   if (!open) {
     return editing ? (
-      <button onClick={() => setOpen(true)} className="text-sm font-medium text-brand-700 hover:underline">Edit</button>
+      <button onClick={() => setOpen(true)} className="btn-chip-brand">Edit</button>
     ) : (
       <button onClick={() => setOpen(true)} className="btn-primary">+ Add facility</button>
     );
@@ -179,7 +179,7 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                       onChange={(e) => setBlocks((bs) => bs.map((x, j) => (j === i ? { ...x, courtCount: parseInt(e.target.value, 10) || 1 } : x)))}
                     />
                   </div>
-                  <button type="button" onClick={() => removeBlock(i)} className="mb-1.5 text-xs text-rose-600 hover:underline">Remove</button>
+                  <button type="button" onClick={() => removeBlock(i)} className="btn-chip-danger mb-1.5">Remove</button>
                 </div>
               ))}
             </div>
@@ -216,7 +216,7 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                       onChange={(e) => setBlocked((bs) => bs.map((x, j) => (j === i ? { ...x, endTime: e.target.value } : x)))}
                     />
                   </div>
-                  <button type="button" onClick={() => removeBlocked(i)} className="mb-1.5 text-xs text-rose-600 hover:underline">Remove</button>
+                  <button type="button" onClick={() => removeBlocked(i)} className="btn-chip-danger mb-1.5">Remove</button>
                 </div>
               ))}
             </div>
@@ -376,7 +376,7 @@ export function DeleteFacilityButton({
       <input type="hidden" name="ticket" value={ticket} />
       <input type="hidden" name="op" value="delete" />
       <input type="hidden" name="facilityId" value={facilityId} />
-      <button className="text-xs text-rose-600 hover:underline">Remove</button>
+      <button className="btn-chip-danger">Remove</button>
     </form>
   );
 }

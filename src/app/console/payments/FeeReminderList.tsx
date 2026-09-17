@@ -74,7 +74,7 @@ export function FeeReminderList({ ticket, recipients }: { ticket: string; recipi
 
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs text-slate-500">{selected.size} of {recipients.length} selected</span>
-          <button type="button" onClick={() => setAll(!allOn)} className="text-xs font-medium text-brand-600 hover:underline">
+          <button type="button" onClick={() => setAll(!allOn)} className="btn-chip-brand">
             {allOn ? "Deselect all" : "Select all"}
           </button>
         </div>

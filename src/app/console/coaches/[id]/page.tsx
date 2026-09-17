@@ -217,7 +217,7 @@ export default async function EditCoachPage({
                     fields={{ ticket, op: "assignCoach", teamId: t.id, coachId: "", returnTo }}
                     confirm={`Remove ${person.firstName} as head coach of "${t.name}"?`}
                     label="Remove"
-                    className="text-xs text-rose-600 hover:underline"
+                    className="btn-chip-danger"
                   />
                 </li>
               ))}
@@ -269,7 +269,7 @@ export default async function EditCoachPage({
               <div className="text-xs text-slate-400">{earned.sessionCount} completed practice{earned.sessionCount === 1 ? "" : "s"}</div>
             </div>
           </div>
-          <Link href={`/console/payouts?coach=${coach!.id}`} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:text-brand-800 hover:underline">
+          <Link href={`/console/payouts?coach=${coach!.id}`} className="btn-link mt-3">
             See every practice behind this — coaching vs. sub coverage →
           </Link>
         </section>

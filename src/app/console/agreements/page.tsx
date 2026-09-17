@@ -77,7 +77,7 @@ export default async function AgreementsPage({
                     <button className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100">Text agreement</button>
                   </form>
                 ) : (
-                  <Link href={`/console/coaches/${c.personId}`} className="text-xs text-amber-700 hover:underline">Add contact →</Link>
+                  <Link href={`/console/coaches/${c.personId}`} className="btn-chip-brand">Add contact →</Link>
                 )}
               </li>
             ))}

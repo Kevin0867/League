@@ -311,7 +311,7 @@ export default async function TeamDetailPage({
               <input type="hidden" name="ticket" value={ticket} />
               <input type="hidden" name="op" value="toggleTeamTest" />
               <input type="hidden" name="teamId" value={team.id} />
-              <button className="text-xs font-medium text-slate-400 hover:underline">{team.isTest ? "Unmark test" : "Mark test"}</button>
+              <button className="btn-chip-muted">{team.isTest ? "Unmark test" : "Mark test"}</button>
             </form>
           )}
         </div>
@@ -695,7 +695,7 @@ export default async function TeamDetailPage({
                     fields={{ ticket, op: "deleteSession", sessionId: s.id, returnTo: `/console/teams/${team.id}` }}
                     confirm={`Delete the ${formatDate(s.date)} practice for "${team.name}"? The team is not notified. To call it off with a notice, open it and use Cancel instead.`}
                     label="delete"
-                    className="text-xs text-rose-600 hover:underline"
+                    className="btn-chip-danger"
                     danger
                   />
                 </div>
@@ -856,7 +856,7 @@ export default async function TeamDetailPage({
                           fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
                           confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
                           label="remove"
-                          className="text-xs text-rose-600 hover:underline"
+                          className="btn-chip-danger"
                         />
                       )}
                     </div>
@@ -920,7 +920,7 @@ export default async function TeamDetailPage({
                 <input type="hidden" name="ticket" value={ticket} />
                 <input type="hidden" name="op" value="resendAllFees" />
                 <input type="hidden" name="teamId" value={team.id} />
-                <button className="text-sm font-semibold text-brand-700 hover:underline">Resend reminders to unpaid players</button>
+                <button className="btn-chip-brand">Resend reminders to unpaid players</button>
               </form>
               {feePayments.length > 0 && (
                 <div className="mt-3 border-t border-slate-100 pt-3">
@@ -1050,7 +1050,7 @@ export default async function TeamDetailPage({
                       <input type="hidden" name="op" value="removeTeamCoach" />
                       <input type="hidden" name="teamId" value={team.id} />
                       <input type="hidden" name="coachId" value={tc.coachId} />
-                      <button className="text-xs text-rose-600 hover:underline">Remove</button>
+                      <button className="btn-chip-danger">Remove</button>
                     </form>
                   </span>
                 </div>

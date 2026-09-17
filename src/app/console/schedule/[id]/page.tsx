@@ -310,7 +310,7 @@ export default async function SessionDetail({
                       <input type="hidden" name="op" value="decline" />
                       <input type="hidden" name="requestId" value={activeSub.id} />
                       <input type="hidden" name="returnTo" value={returnTo} />
-                      <button className="text-sm text-rose-600 hover:underline">Deny</button>
+                      <button className="btn-chip-danger">Deny</button>
                     </form>
                   </>
                 )}
@@ -619,7 +619,7 @@ export default async function SessionDetail({
                           <input type="hidden" name="returnTo" value={returnTo} />
                           <input type="hidden" name="sessionId" value={s.id} />
                           <input type="hidden" name="coachId" value={c.coachId} />
-                          <button className="text-xs text-rose-600 hover:underline">Remove</button>
+                          <button className="btn-chip-danger">Remove</button>
                         </form>
                       )}
                     </span>

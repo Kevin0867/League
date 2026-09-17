@@ -32,7 +32,7 @@ export default async function WatchPage({ params }: { params: Promise<{ id: stri
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <Logo href={staff ? "/console/training" : "/portal/training"} />
-          <Link href={staff ? "/console/training" : "/portal/training"} className="text-sm font-medium text-brand-700 hover:underline">All videos →</Link>
+          <Link href={staff ? "/console/training" : "/portal/training"} className="btn-link">All videos →</Link>
         </div>
       </header>
 

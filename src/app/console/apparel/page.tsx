@@ -260,9 +260,9 @@ export default async function ApparelReportPage({
                       <input type="hidden" name="op" value="setOne" />
                       <input type="hidden" name="id" value={r.id} />
                       <span className="text-xs text-slate-500">{r.fulfillment === "PENDING" ? "to order" : r.fulfillment.toLowerCase()}</span>
-                      {r.fulfillment !== "ORDERED" && <button name="to" value="ORDERED" className="text-xs font-semibold text-brand-700 hover:underline">ordered</button>}
-                      {r.fulfillment !== "DELIVERED" && <button name="to" value="DELIVERED" className="text-xs font-semibold text-brand-700 hover:underline">delivered</button>}
-                      {r.fulfillment !== "PENDING" && <button name="to" value="PENDING" className="text-xs text-slate-400 hover:underline">reset</button>}
+                      {r.fulfillment !== "ORDERED" && <button name="to" value="ORDERED" className="btn-chip-brand">ordered</button>}
+                      {r.fulfillment !== "DELIVERED" && <button name="to" value="DELIVERED" className="btn-chip-brand">delivered</button>}
+                      {r.fulfillment !== "PENDING" && <button name="to" value="PENDING" className="btn-chip-muted">reset</button>}
                     </form>
                   ) : (
                     <span className="text-xs text-slate-400">awaiting payment</span>

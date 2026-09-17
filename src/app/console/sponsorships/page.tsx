@@ -225,7 +225,7 @@ export default async function SponsorshipsPage({
                       <select name="status" defaultValue={d.status} className={`badge border-0 ${STATUS_STYLE[d.status] ?? "bg-slate-100 text-slate-600"}`}>
                         {STATUSES.map((s) => <option key={s} value={s}>{s.toLowerCase()}</option>)}
                       </select>
-                      <button className="text-xs text-brand-600 hover:underline">save</button>
+                      <button className="btn-chip-brand">save</button>
                     </form>
                   </td>
                   <td className="text-right"><ConfirmSubmit action="/api/console/sponsorships" fields={{ ticket, op: "sponsorshipDelete", id: d.id }} confirm={`Delete this sponsorship?`} label="Delete" className="btn-secondary text-xs" danger /></td>

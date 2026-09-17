@@ -108,7 +108,7 @@ export default async function TrainingLibraryPage({
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
-                <Link href={`/watch/${v.id}`} target="_blank" className="text-xs font-semibold text-brand-700 hover:underline">▶ Open video page</Link>
+                <Link href={`/watch/${v.id}`} target="_blank" className="btn-chip-brand">▶ Open video page</Link>
                 <CopyUrlButton url={`${appUrl()}/watch/${v.id}`} label="Copy share link" />
                 <CopyUrlButton url={v.videoUrl} label="Copy file link" />
                 <form method="POST" action="/api/console/training" className="inline">
@@ -127,7 +127,7 @@ export default async function TrainingLibraryPage({
                   <input type="hidden" name="op" value="delete" />
                   <input type="hidden" name="id" value={v.id} />
                   <input type="hidden" name="returnTo" value="/console/training" />
-                  <button className="text-xs text-rose-600 hover:underline">Delete</button>
+                  <button className="btn-chip-danger">Delete</button>
                 </form>
               </div>
 

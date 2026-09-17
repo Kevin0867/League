@@ -82,6 +82,25 @@ body {
     @apply inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5
       text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900;
   }
+  /* Compact "chip" buttons — small, bordered, obviously tappable — for in-row and
+     in-table actions (Edit, Manage, Remove, Publish, Resend…) that used to be
+     bare text links. Clear button affordance without the bulk of a full pill, so
+     dense admin tables stay legible. Three tones: brand (default action),
+     danger (destructive), muted (neutral/secondary). */
+  .btn-chip {
+    @apply inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2.5 py-1
+      text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2
+      focus-visible:ring-accent-400 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-chip-brand {
+    @apply btn-chip border-brand-200 bg-brand-50 text-brand-700 hover:border-brand-300 hover:bg-brand-100;
+  }
+  .btn-chip-danger {
+    @apply btn-chip border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100;
+  }
+  .btn-chip-muted {
+    @apply btn-chip border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900;
+  }
   .card {
     @apply rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70;
   }

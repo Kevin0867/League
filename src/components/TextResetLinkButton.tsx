@@ -7,7 +7,7 @@ export function TextResetLinkButton({
   ticket,
   returnTo,
   label = "Text reset link",
-  className = "text-xs font-semibold text-brand-700 hover:text-brand-800 hover:underline",
+  className = "btn-chip-brand",
 }: {
   personId?: string;
   userId?: string;

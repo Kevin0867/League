@@ -42,7 +42,7 @@ export default async function HandbookPage() {
             )
           )}
         </div>
-        <Link href="/console/forms" className="mt-3 inline-block text-xs font-semibold text-brand-700 hover:underline">All player tracking documents →</Link>
+        <Link href="/console/forms" className="btn-link mt-3">All player tracking documents →</Link>
       </section>
 
       {/* Inline viewer — great on desktop/tablet. On phones, the "Open" button

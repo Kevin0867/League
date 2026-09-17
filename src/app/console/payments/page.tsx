@@ -384,7 +384,7 @@ export default async function PaymentsPage({
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                     {r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">✉ {r.email}</a>}
                     {r.phone && <a href={`tel:${r.phone}`} className="text-brand-700 hover:underline">📞 {r.phone}</a>}
-                    {r.paymentId && <a href={`/pay/${r.paymentId}`} className="text-brand-700 hover:underline">Open their invoice →</a>}
+                    {r.paymentId && <a href={`/pay/${r.paymentId}`} className="btn-chip-brand">Open their invoice →</a>}
                     <form method="POST" action="/api/console/payer-response" className="ml-auto inline">
                       <input type="hidden" name="ticket" value={ticket} />
                       <input type="hidden" name="op" value="resolve" />
@@ -407,7 +407,7 @@ export default async function PaymentsPage({
                       <input type="hidden" name="ticket" value={ticket} />
                       <input type="hidden" name="op" value="reopen" />
                       <input type="hidden" name="responseId" value={r.id} />
-                      <button className="shrink-0 font-semibold text-slate-400 hover:text-brand-700 hover:underline">reopen</button>
+                      <button className="btn-chip-brand shrink-0">reopen</button>
                     </form>
                   </li>
                 ))}
@@ -792,7 +792,7 @@ export default async function PaymentsPage({
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-baseline justify-between">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Payouts (est.)</div>
-            <Link href="/console/payouts" className="text-[11px] font-semibold text-brand-600 hover:text-brand-800 hover:underline">Coach detail →</Link>
+            <Link href="/console/payouts" className="btn-chip-brand">Coach detail →</Link>
           </div>
           <div className="mt-1 text-2xl font-extrabold text-slate-900">{formatCents(estPayoutsCents)}</div>
           <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">

@@ -185,7 +185,7 @@ export default async function SetupPage({
                 <input type="hidden" name="ticket" value={ticket} />
                 <input type="hidden" name="op" value="toggleSeasonTest" />
                 <input type="hidden" name="seasonId" value={s.id} />
-                <button className="text-xs font-medium text-slate-500 hover:underline">{s.isTest ? "Unmark test" : "Mark as test"}</button>
+                <button className="btn-chip-muted">{s.isTest ? "Unmark test" : "Mark as test"}</button>
               </form>
               <EditSeasonForm ticket={ticket} season={{ id: s.id, name: s.name, program: s.program, startDate: iso(s.startDate), endDate: iso(s.endDate), opensOn: iso(s.opensOn), closesOn: closeDayInput(s.closesOn) }} />
               <DeleteSeasonButton seasonId={s.id} ticket={ticket} disabled={s._count.registrations > 0} />

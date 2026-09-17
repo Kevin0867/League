@@ -54,7 +54,7 @@ export function PoolsSearch({
         {s && (
           <span className="text-sm text-slate-500">
             {filtered.length} pool{filtered.length === 1 ? "" : "s"} match
-            <button type="button" onClick={() => setQ("")} className="ml-2 text-brand-600 hover:underline">clear</button>
+            <button type="button" onClick={() => setQ("")} className="btn-chip-brand ml-2">clear</button>
           </span>
         )}
       </div>

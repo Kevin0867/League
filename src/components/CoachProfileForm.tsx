@@ -312,7 +312,7 @@ export function CoachProfileForm({
               </div>
               {blocks.length > 1 && (
                 <button type="button" onClick={() => setBlocks((bs) => bs.filter((_, j) => j !== i))}
-                  className="mb-1 text-xs text-rose-600 hover:underline">remove</button>
+                  className="btn-chip-danger mb-1">remove</button>
               )}
             </div>
           ))}
