@@ -77,6 +77,70 @@ export async function listTeamCalendar(teamId: string, householdIds: string[]): 
   });
 }
 
+// Per-practice availability, so the coach, teammates, and admins can see at a
+// glance who's in, who's out (sub needed), and who hasn't responded yet.
+export type RosterStatusKind = "in" | "out" | "pending";
+export type RosterMember = { personId: string; name: string; status: RosterStatusKind; isSub: boolean };
+
+const STATUS_ORDER: Record<RosterStatusKind, number> = { out: 0, pending: 1, in: 2 };
+
+/**
+ * The roster availability for each of the given sessions:
+ *   • out     — the player marked themselves out (a sub is needed), or a coach
+ *               recorded them absent/excused.
+ *   • in      — checked in / marked present.
+ *   • pending — on the roster but hasn't checked in or marked out yet.
+ * Added substitutes are included too, tagged isSub. Sorted out → pending → in,
+ * then by name, so "who's out" reads first.
+ */
+export async function teamRosterStatus(teamId: string, sessionIds: string[]): Promise<Map<string, RosterMember[]>> {
+  const map = new Map<string, RosterMember[]>();
+  if (sessionIds.length === 0) return map;
+
+  const [members, absences, attendance, subs] = await Promise.all([
+    prisma.teamMember.findMany({ where: { teamId }, select: { person: { select: { id: true, firstName: true, lastName: true } } } }),
+    prisma.playerAbsence.findMany({ where: { sessionId: { in: sessionIds } }, select: { sessionId: true, personId: true } }),
+    prisma.attendance.findMany({ where: { sessionId: { in: sessionIds } }, select: { sessionId: true, personId: true, status: true } }),
+    prisma.sessionSub.findMany({ where: { sessionId: { in: sessionIds } }, select: { sessionId: true, personId: true } }),
+  ]);
+
+  // Names for subs (SessionSub carries no person relation).
+  const subPersonIds = [...new Set(subs.map((s) => s.personId))];
+  const subPeople = subPersonIds.length
+    ? await prisma.person.findMany({ where: { id: { in: subPersonIds } }, select: { id: true, firstName: true, lastName: true } })
+    : [];
+  const nameById = new Map<string, string>();
+  for (const m of members) nameById.set(m.person.id, `${m.person.firstName} ${m.person.lastName}`.trim());
+  for (const p of subPeople) nameById.set(p.id, `${p.firstName} ${p.lastName}`.trim());
+
+  const absentKey = new Set(absences.map((a) => `${a.sessionId}:${a.personId}`));
+  const attByKey = new Map(attendance.map((a) => [`${a.sessionId}:${a.personId}`, a.status]));
+  const subsBySession = new Map<string, string[]>();
+  for (const s of subs) { const arr = subsBySession.get(s.sessionId) ?? []; arr.push(s.personId); subsBySession.set(s.sessionId, arr); }
+
+  const statusFor = (sessionId: string, personId: string): RosterStatusKind => {
+    const att = attByKey.get(`${sessionId}:${personId}`);
+    if (att === "PRESENT") return "in";
+    if (absentKey.has(`${sessionId}:${personId}`) || att === "ABSENT" || att === "EXCUSED") return "out";
+    return "pending";
+  };
+
+  for (const sessionId of sessionIds) {
+    const rows: RosterMember[] = members.map((m) => ({
+      personId: m.person.id,
+      name: nameById.get(m.person.id) ?? "Player",
+      status: statusFor(sessionId, m.person.id),
+      isSub: false,
+    }));
+    for (const pid of subsBySession.get(sessionId) ?? []) {
+      rows.push({ personId: pid, name: nameById.get(pid) ?? "Sub", status: statusFor(sessionId, pid), isSub: true });
+    }
+    rows.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.name.localeCompare(b.name));
+    map.set(sessionId, rows);
+  }
+  return map;
+}
+
 /** Open spots (absences not yet covered by a sub) for one session. */
 export async function openSpotsFor(sessionId: string): Promise<number> {
   const [abs, subs] = await Promise.all([

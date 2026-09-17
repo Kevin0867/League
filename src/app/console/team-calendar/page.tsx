@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { requireStaff, isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
-import { phoenixDateInput, formatTime12 } from "@/lib/time";
-import { listTeamCalendar, teamDescription } from "@/lib/domain/teamCalendar";
+import { phoenixDateInput, formatTime12, formatSessionDay } from "@/lib/time";
+import { listTeamCalendar, teamDescription, teamRosterStatus, type RosterMember } from "@/lib/domain/teamCalendar";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { CalendarView, type CalEvent } from "@/components/CalendarView";
+import { RosterStatus, RosterStatusLegend } from "@/components/RosterStatus";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Team calendar" };
@@ -46,6 +47,10 @@ export default async function ConsoleTeamCalendarPage({
     href: `/console/schedule/${s.id}`,
   }));
   const today = phoenixDateInput(new Date());
+  const upcomingPractices = cal.filter((s) => s.type === "PRACTICE" && phoenixDateInput(s.date) >= today);
+  const rosterStatus: Map<string, RosterMember[]> = selected
+    ? await teamRosterStatus(selected, upcomingPractices.map((s) => s.id))
+    : new Map();
 
   return (
     <div className="space-y-4">
@@ -86,6 +91,36 @@ export default async function ConsoleTeamCalendarPage({
           )}
 
           <CalendarView events={events} initialView="month" initialDateISO={today} />
+
+          {selectedTeam && (
+            <div className="rounded-xl border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 p-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Upcoming practices — who&apos;s in</h2>
+                <RosterStatusLegend />
+              </div>
+              {upcomingPractices.length === 0 ? (
+                <p className="p-3 text-sm text-slate-400">No upcoming practices scheduled.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {upcomingPractices.map((s) => (
+                    <li key={s.id} className="p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <Link href={`/console/schedule/${s.id}`} className="text-sm font-semibold text-slate-900 hover:text-brand-700 hover:underline">
+                          {formatSessionDay(s.date, "long")} · {formatTime12(s.startTime)}
+                        </Link>
+                        {s.openSpots > 0 && (
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                            {s.openSpots} sub{s.openSpots === 1 ? "" : "s"} needed
+                          </span>
+                        )}
+                      </div>
+                      <RosterStatus members={rosterStatus.get(s.id) ?? []} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
