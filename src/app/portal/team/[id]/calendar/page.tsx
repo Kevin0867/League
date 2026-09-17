@@ -68,7 +68,11 @@ export default async function TeamCalendarPage({
           <h1 className="text-2xl font-bold text-slate-900">{team.name} — calendar</h1>
           <p className="mt-0.5 text-sm text-slate-500">Practices and events. Can&apos;t make a practice? Mark it below so we can line up a sub.</p>
         </div>
-        <Link href={`/portal/team/${teamId}`} className="btn-ghost text-sm">← Team</Link>
+        {staffPreview && memberList.length === 0 ? (
+          <Link href={`/console/teams/${teamId}`} className="btn-ghost text-sm">← Console</Link>
+        ) : (
+          <Link href={`/portal/team/${teamId}`} className="btn-ghost text-sm">← Team</Link>
+        )}
       </div>
 
       {staffPreview && memberList.length === 0 && (
@@ -77,6 +81,7 @@ export default async function TeamCalendarPage({
       {sp.ok === "absent" && <Notice kind="success" title="Thanks for the heads-up">Your team, coach, and the office have been notified that a sub is needed.</Notice>}
       {sp.ok === "present" && <Notice kind="success" title="You&apos;re back in">We&apos;ve marked you as attending again.</Notice>}
       {sp.ok === "suggested" && <Notice kind="success" title="Sub suggested">Thanks! Your coach will review and add them.</Notice>}
+      {sp.ok === "subadded" && <Notice kind="success" title="Sub added">Added for this date — a welcome + waiver was sent so they&apos;re cleared to play.</Notice>}
       {sp.err === "subfields" && <Notice kind="error" title="Add their details">A sub needs a name and an email or mobile number.</Notice>}
       {sp.err && sp.err !== "subfields" && <Notice kind="error" title="Something went wrong">Please try again.</Notice>}
 
@@ -116,6 +121,25 @@ export default async function TeamCalendarPage({
                     </div>
                     <button className="btn-secondary text-sm">Mark out &amp; request a sub</button>
                   </form>
+                )}
+
+                {s.type === "PRACTICE" && staffPreview && s.openSpots > 0 && (
+                  <details className="mt-2 rounded-lg bg-emerald-50 p-2">
+                    <summary className="cursor-pointer text-sm font-semibold text-emerald-800">Add a sub for this date →</summary>
+                    <p className="mt-1 text-xs text-slate-500">Adds them to this date only, sends a welcome + waiver so they&apos;re cleared to play, and clears a spot. No charge.</p>
+                    <form method="POST" action="/api/team-calendar" className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="addSub" />
+                      <input type="hidden" name="teamId" value={teamId} />
+                      <input type="hidden" name="sessionId" value={s.id} />
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <input name="firstName" placeholder="First name" required className="input text-sm" />
+                      <input name="lastName" placeholder="Last name" required className="input text-sm" />
+                      <input name="email" type="email" placeholder="Email" className="input text-sm" />
+                      <input name="phone" type="tel" placeholder="Mobile" className="input text-sm" />
+                      <div className="sm:col-span-2 flex justify-end"><button className="btn-primary text-sm">Add sub &amp; send waiver</button></div>
+                    </form>
+                  </details>
                 )}
 
                 {s.type === "PRACTICE" && memberList.length > 0 && !staffPreview && (

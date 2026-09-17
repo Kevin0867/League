@@ -370,10 +370,10 @@ export default async function TeamDetailPage({
             <div className="text-sm font-semibold text-brand-800">Message the whole team →</div>
             <div className="mt-0.5 text-xs text-slate-500">Post one update (practice reminder, homework, schedule note) to every player and parent at once.</div>
           </Link>
-          <Link href={`/portal/team/${team.id}/calendar`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
-            <div className="text-sm font-semibold text-brand-800">Team calendar (player view) →</div>
-            <div className="mt-0.5 text-xs text-slate-500">See exactly what players see — practices with an &ldquo;I can&apos;t make this practice&rdquo; button that requests a sub.</div>
-          </Link>
+          <a href={`/portal/team/${team.id}/calendar`} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
+            <div className="text-sm font-semibold text-brand-800">Team calendar (player view) ↗</div>
+            <div className="mt-0.5 text-xs text-slate-500">Opens in a new tab. Practices with a &ldquo;mark a player out&rdquo; control that requests a sub — and lets you add a sub for a date.</div>
+          </a>
           <Link href="/console/inbox" className="rounded-lg border border-slate-200 px-3 py-3 hover:bg-slate-50">
             <div className="text-sm font-semibold text-slate-800">Messages (Inbox) →</div>
             <div className="mt-0.5 text-xs text-slate-500">A private, back-and-forth conversation with one parent, player, or another coach.</div>
