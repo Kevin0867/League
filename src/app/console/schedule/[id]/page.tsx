@@ -378,14 +378,38 @@ export default async function SessionDetail({
       {/* Substitutes — players out for this date, suggestions, and confirmed
           subs. Adding a sub creates their record, sends a welcome + waiver, and
           clears an open spot. Subs aren't charged. */}
-      {subTeamId && (absRows.length > 0 || subRows.length > 0 || subSuggestions.length > 0) && (
+      {subTeamId && (
         <div className="card">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold text-slate-900">Substitutes</h2>
-            <span className={`text-sm font-medium ${openSpots > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-              {openSpots > 0 ? `${openSpots} spot${openSpots === 1 ? "" : "s"} still open` : "All covered"}
+            <span className={`text-sm font-medium ${openSpots > 0 ? "text-amber-700" : absRows.length > 0 ? "text-emerald-700" : "text-slate-400"}`}>
+              {openSpots > 0 ? `${openSpots} spot${openSpots === 1 ? "" : "s"} still open` : absRows.length > 0 ? "All covered" : "No one's out"}
             </span>
           </div>
+
+          {/* Mark a player out on their behalf (e.g. they texted the coach) — fires
+              the same "sub needed" notification the player's own button does. */}
+          {(() => {
+            const outIds = new Set(absRows.map((a) => a.personId));
+            const available = roster.filter((m) => !outIds.has(m.personId));
+            if (available.length === 0) return null;
+            return (
+              <form method="POST" action="/api/team-calendar" className="mt-3 flex flex-wrap items-end gap-2">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="absent" />
+                <input type="hidden" name="teamId" value={subTeamId} />
+                <input type="hidden" name="sessionId" value={s.id} />
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <div>
+                  <label className="label">Mark a player out</label>
+                  <select name="personId" className="input py-1.5 text-sm">
+                    {available.map((m) => <option key={m.personId} value={m.personId}>{m.person.firstName} {m.person.lastName}</option>)}
+                  </select>
+                </div>
+                <button className="btn-secondary text-sm">Mark out &amp; request a sub</button>
+              </form>
+            );
+          })()}
 
           {absRows.length > 0 && (
             <div className="mt-3 text-sm">
@@ -453,9 +477,12 @@ export default async function SessionDetail({
         </div>
       )}
 
-      {(ok === "subadded" || err === "subaddfailed" || err === "subaddfields") && (
-        <p className={`rounded-lg px-3 py-2 text-sm ${ok === "subadded" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"}`}>
-          {ok === "subadded" ? "Sub added for this date — welcome + waiver sent." : err === "subaddfields" ? "A sub needs a first and last name and an email or mobile." : "Couldn't add the sub — please try again."}
+      {(ok === "subadded" || ok === "absent" || ok === "present" || err === "subaddfailed" || err === "subaddfields") && (
+        <p className={`rounded-lg px-3 py-2 text-sm ${err ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-800"}`}>
+          {ok === "subadded" ? "Sub added for this date — welcome + waiver sent." :
+           ok === "absent" ? "Player marked out — the team, coach, and office were notified that a sub is needed." :
+           ok === "present" ? "Player marked back in." :
+           err === "subaddfields" ? "A sub needs a first and last name and an email or mobile." : "Couldn't add the sub — please try again."}
         </p>
       )}
 
