@@ -60,13 +60,22 @@ export default async function ConsoleTeamCalendarPage({
   const rosterStatus: Map<string, RosterMember[]> = selected
     ? await teamRosterStatus(selected, upcomingPractices.map((s) => s.id))
     : new Map();
+  // Roster for the "mark a player out" picker — staff act on players from here in
+  // the console, so nobody has to open the player portal.
+  const staffRoster = selected
+    ? (await prisma.teamMember.findMany({
+        where: { teamId: selected },
+        include: { person: { select: { id: true, firstName: true, lastName: true } } },
+        orderBy: { person: { firstName: "asc" } },
+      })).map((m) => ({ id: m.personId, name: `${m.person.firstName} ${m.person.lastName}`.trim() }))
+    : [];
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Team calendar</h1>
         <p className="mt-0.5 text-sm text-slate-500">
-          {admin ? "Any team's" : "Your teams'"} practices and events. Click a session to open it — that&apos;s where you add a sub for a date. Players see their own team&apos;s calendar in the portal.
+          {admin ? "Any team's" : "Your teams'"} practices and events. Add a team event, mark a player out, or add a sub for a date — all from here. Click a session to open its full check-in &amp; roster. Players see their own team&apos;s calendar in their portal.
         </p>
       </div>
 
@@ -95,14 +104,17 @@ export default async function ConsoleTeamCalendarPage({
           {selectedTeam && (
             <p className="text-xs text-slate-500">
               {teamDescription(selectedTeam)} · <Link href={`/console/teams/${selectedTeam.id}`} className="text-brand-700 hover:underline">team page</Link>
-              {" · "}<a href={`/portal/team/${selectedTeam.id}/calendar`} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline">player view ↗</a>
             </p>
           )}
 
           {sp.ok === "eventadded" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Event added — the team and coach were notified.</div>}
           {sp.ok === "eventdeleted" && <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">Team event removed.</div>}
+          {sp.ok === "absent" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Player marked out — the team, coach, and office were notified a sub is needed.</div>}
+          {sp.ok === "present" && <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">Player marked back in.</div>}
+          {sp.ok === "subadded" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Sub added for that date — a welcome + waiver was sent so they&apos;re cleared to play.</div>}
           {sp.err === "eventfields" && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">An event needs at least a name and a date.</div>}
-          {sp.err && !["eventfields"].includes(sp.err) && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Something went wrong — please try again.</div>}
+          {sp.err === "subaddfields" && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">A sub needs a first &amp; last name and an email or mobile number.</div>}
+          {sp.err && !["eventfields", "subaddfields"].includes(sp.err) && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Something went wrong — please try again.</div>}
 
           {selectedTeam && <AddTeamEventForm teamId={selectedTeam.id} ticket={ticket} returnTo={eventReturnTo} />}
 
@@ -123,7 +135,7 @@ export default async function ConsoleTeamCalendarPage({
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {upcomingPractices.map((s) => (
-                    <li key={s.id} className="p-3">
+                    <li key={s.id} id={`s-${s.id}`} className="p-3 scroll-mt-20">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <Link href={`/console/schedule/${s.id}`} className="text-sm font-semibold text-slate-900 hover:text-brand-700 hover:underline">
                           {formatSessionDay(s.date, "long")} · {formatTime12(s.startTime)}
@@ -135,6 +147,42 @@ export default async function ConsoleTeamCalendarPage({
                         )}
                       </div>
                       <RosterStatus members={rosterStatus.get(s.id) ?? []} />
+
+                      {/* Staff act right here — no need to open the player portal. */}
+                      <div className="mt-3 flex flex-wrap items-end gap-2">
+                        {staffRoster.length > 0 && (
+                          <form method="POST" action="/api/team-calendar" className="flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2">
+                            <input type="hidden" name="ticket" value={ticket} />
+                            <input type="hidden" name="op" value="absent" />
+                            <input type="hidden" name="teamId" value={selectedTeam.id} />
+                            <input type="hidden" name="sessionId" value={s.id} />
+                            <input type="hidden" name="returnTo" value={eventReturnTo} />
+                            <div>
+                              <label className="label text-xs">Mark a player out</label>
+                              <select name="personId" className="input py-1 text-sm">
+                                {staffRoster.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                              </select>
+                            </div>
+                            <button className="btn-secondary text-sm">Mark out &amp; request a sub</button>
+                          </form>
+                        )}
+                        <details className="rounded-lg bg-emerald-50 p-2">
+                          <summary className="btn-secondary list-none cursor-pointer text-sm">Add a sub for this date</summary>
+                          <p className="mt-1 text-xs text-slate-500">Adds them to this date only, sends a welcome + waiver so they&apos;re cleared to play, and clears a spot. No charge.</p>
+                          <form method="POST" action="/api/team-calendar" className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <input type="hidden" name="ticket" value={ticket} />
+                            <input type="hidden" name="op" value="addSub" />
+                            <input type="hidden" name="teamId" value={selectedTeam.id} />
+                            <input type="hidden" name="sessionId" value={s.id} />
+                            <input type="hidden" name="returnTo" value={eventReturnTo} />
+                            <input name="firstName" placeholder="First name" required className="input text-sm" />
+                            <input name="lastName" placeholder="Last name" required className="input text-sm" />
+                            <input name="email" type="email" placeholder="Email" className="input text-sm" />
+                            <input name="phone" type="tel" placeholder="Mobile" className="input text-sm" />
+                            <div className="sm:col-span-2 flex justify-end"><button className="btn-primary text-sm">Add sub &amp; send waiver</button></div>
+                          </form>
+                        </details>
+                      </div>
                     </li>
                   ))}
                 </ul>
