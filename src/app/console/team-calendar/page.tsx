@@ -2,10 +2,12 @@ import Link from "next/link";
 import { requireStaff, isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { phoenixDateInput, formatTime12, formatSessionDay } from "@/lib/time";
-import { listTeamCalendar, teamDescription, teamRosterStatus, type RosterMember } from "@/lib/domain/teamCalendar";
+import { listTeamCalendar, teamDescription, teamRosterStatus, listTeamEvents, type RosterMember } from "@/lib/domain/teamCalendar";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { CalendarView, type CalEvent } from "@/components/CalendarView";
 import { RosterStatus, RosterStatusLegend } from "@/components/RosterStatus";
+import { AddTeamEventForm, TeamEventList } from "@/components/TeamEvents";
+import { mintConsoleTicket } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Team calendar" };
@@ -17,10 +19,11 @@ export const metadata = { title: "Team calendar" };
 export default async function ConsoleTeamCalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ team?: string }>;
+  searchParams: Promise<{ team?: string; ok?: string; err?: string }>;
 }) {
   const session = await requireStaff();
   const sp = await searchParams;
+  const ticket = await mintConsoleTicket();
   const admin = isAdmin(session.roles ?? [session.role]);
   const coachedIds = admin ? null : await coachedTeamIdsForUser(session.userId);
 
@@ -37,6 +40,7 @@ export default async function ConsoleTeamCalendarPage({
   const selected = sp.team && teams.some((t) => t.id === sp.team) ? sp.team : teams[0]?.id ?? null;
   const selectedTeam = teams.find((t) => t.id === selected) ?? null;
   const cal = selected ? await listTeamCalendar(selected, []) : [];
+  const teamEvents = selected ? await listTeamEvents(selected) : [];
   const events: CalEvent[] = cal.map((s) => ({
     id: s.id,
     dateISO: phoenixDateInput(s.date),
@@ -46,8 +50,13 @@ export default async function ConsoleTeamCalendarPage({
     openSpots: s.openSpots || undefined,
     href: `/console/schedule/${s.id}`,
   }));
+  for (const e of teamEvents) {
+    events.push({ id: `e-${e.id}`, dateISO: phoenixDateInput(e.date), time: e.startTime ? formatTime12(e.startTime) : "All day", title: e.title, tone: "other", href: `#e-${e.id}` });
+  }
   const today = phoenixDateInput(new Date());
   const upcomingPractices = cal.filter((s) => s.type === "PRACTICE" && phoenixDateInput(s.date) >= today);
+  const upcomingEvents = teamEvents.filter((e) => phoenixDateInput(e.date) >= today);
+  const eventReturnTo = `/console/team-calendar${selected ? `?team=${selected}` : ""}`;
   const rosterStatus: Map<string, RosterMember[]> = selected
     ? await teamRosterStatus(selected, upcomingPractices.map((s) => s.id))
     : new Map();
@@ -90,7 +99,18 @@ export default async function ConsoleTeamCalendarPage({
             </p>
           )}
 
+          {sp.ok === "eventadded" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Event added — the team and coach were notified.</div>}
+          {sp.ok === "eventdeleted" && <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">Team event removed.</div>}
+          {sp.err === "eventfields" && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">An event needs at least a name and a date.</div>}
+          {sp.err && !["eventfields"].includes(sp.err) && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Something went wrong — please try again.</div>}
+
+          {selectedTeam && <AddTeamEventForm teamId={selectedTeam.id} ticket={ticket} returnTo={eventReturnTo} />}
+
           <CalendarView events={events} initialView="month" initialDateISO={today} />
+
+          {selectedTeam && (
+            <TeamEventList events={upcomingEvents} teamId={selectedTeam.id} ticket={ticket} returnTo={eventReturnTo} canManage />
+          )}
 
           {selectedTeam && (
             <div className="rounded-xl border border-slate-200 bg-white">

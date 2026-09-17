@@ -141,6 +141,42 @@ export async function teamRosterStatus(teamId: string, sessionIds: string[]): Pr
   return map;
 }
 
+export type TeamEventItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  date: Date;
+  startTime: string | null;
+  endTime: string | null;
+  createdByPersonId: string | null;
+  createdByName: string | null;
+  createdByRole: string;
+};
+
+/** A team's user-added events (dinners, extra hits, socials), date ascending. */
+export async function listTeamEvents(teamId: string): Promise<TeamEventItem[]> {
+  return prisma.teamEvent.findMany({ where: { teamId }, orderBy: [{ date: "asc" }, { startTime: "asc" }] });
+}
+
+/** Notify the team + coach that a member/coach/admin added a calendar event. */
+export async function notifyEventAdded(teamId: string, ev: TeamEventItem): Promise<void> {
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+  if (!team) return;
+  const when = `${formatSessionDay(ev.date, "long")}${ev.startTime ? ` at ${formatTime12(ev.startTime)}` : ""}`;
+  const where = ev.location ? ` · ${ev.location}` : "";
+  const roleLabel = ev.createdByRole === "COACH" ? "your coach" : ev.createdByRole === "ADMIN" ? "the office" : "a teammate";
+  const who = ev.createdByName ? `${ev.createdByName} (${roleLabel})` : roleLabel;
+  const link = `${appUrl()}/portal/team/${teamId}/calendar`;
+  const subject = `New team event — ${team.name}: ${ev.title}`;
+  const body = `${who} added a team event to ${team.name}'s calendar: "${ev.title}" — ${when}${where}.${ev.description ? ` ${ev.description}` : ""} See the team calendar: ${link}`;
+  try {
+    await dispatchMessage({ senderId: ev.createdByPersonId, audienceType: "TEAM", audienceRef: teamId, channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "TEAM_EVENT", subject, body });
+  } catch (e) {
+    console.error("notifyEventAdded failed", e);
+  }
+}
+
 /** Open spots (absences not yet covered by a sub) for one session. */
 export async function openSpotsFor(sessionId: string): Promise<number> {
   const [abs, subs] = await Promise.all([
