@@ -35,6 +35,7 @@ const SECTIONS: NavSection[] = [
       // in-page views — instead of three near-identically-named "board" routes.
       // Labeled "Teams" because that's the word admins look for.
       { href: "/console/teams", label: "Teams", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/pools", "/console/board", "/console/teams"] },
+      { href: "/console/team-calendar", label: "Team calendar", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/team-calendar"] },
       { href: "/console/team-import", label: "Team import", roles: ["COO", "DIRECTOR"] },
       { href: "/console/requests", label: "Placement requests", roles: ["COO", "DIRECTOR"] },
       { href: "/console/photos", label: "Team Photos", roles: ["COO", "DIRECTOR"], match: ["/console/photos"] },
