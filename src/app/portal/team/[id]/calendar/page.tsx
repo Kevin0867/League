@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/rbac";
+import { requireUser, isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatSessionDay, formatTime12, phoenixDateInput } from "@/lib/time";
 import { listTeamCalendar, teamDescription } from "@/lib/domain/teamCalendar";
+import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
 import { Notice } from "@/components/Notice";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,10 @@ export default async function TeamCalendarPage({
     include: { division: { select: { name: true } }, facility: { select: { name: true } } },
   });
   const myMembers = team ? await prisma.teamMember.findMany({ where: { teamId, personId: { in: household } }, select: { personId: true } }) : [];
-  if (!team || myMembers.length === 0) {
+  // Coaches of the team and admins can preview the player calendar (they aren't
+  // rostered players, so they don't see a personal "I can't make it" button).
+  const staffPreview = isAdmin(session.roles ?? [session.role]) || (await coachedTeamIdsForUser(session.userId)).includes(teamId);
+  if (!team || (myMembers.length === 0 && !staffPreview)) {
     return (
       <div className="mx-auto max-w-lg py-10 text-center">
         <h1 className="text-xl font-bold text-slate-900">Team not found</h1>
@@ -60,6 +64,9 @@ export default async function TeamCalendarPage({
         <Link href={`/portal/team/${teamId}`} className="btn-ghost text-sm">← Team</Link>
       </div>
 
+      {staffPreview && memberList.length === 0 && (
+        <Notice kind="info" title="Preview — this is what players see">Players on this team see a <strong>&ldquo;I can&apos;t make this practice&rdquo;</strong> button on each practice below. You&apos;re viewing as staff, so you don&apos;t have a personal button here.</Notice>
+      )}
       {sp.ok === "absent" && <Notice kind="success" title="Thanks for the heads-up">Your team, coach, and the office have been notified that a sub is needed.</Notice>}
       {sp.ok === "present" && <Notice kind="success" title="You&apos;re back in">We&apos;ve marked you as attending again.</Notice>}
       {sp.ok === "suggested" && <Notice kind="success" title="Sub suggested">Thanks! Your coach will review and add them.</Notice>}
