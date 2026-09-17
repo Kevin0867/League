@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/RoadmapNote";
 import { requireAdmin } from "@/lib/rbac";
 import { academyStats } from "@/lib/domain/stats";
@@ -82,7 +83,9 @@ export default async function StatsPage() {
           <div className="card">
             <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-semibold text-slate-900">Ratings &amp; reviews</h2>
-              <span className="text-xs text-slate-400">Family feedback — the &ldquo;why&rdquo; is in the review text</span>
+              <Link href="/console/feedback" className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline">
+                Read {ratings.reviews === 1 ? "the review" : "all reviews"} →
+              </Link>
             </div>
             <div className="mt-3 grid gap-4 sm:grid-cols-[auto,1fr] sm:items-center">
               <div className="flex items-center gap-4">
@@ -112,14 +115,16 @@ export default async function StatsPage() {
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-slate-200 p-3">
+              <Link href="/console/feedback" className="rounded-lg border border-slate-200 p-3 hover:border-brand-300 hover:bg-brand-50/40">
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Written reviews</div>
                 <div className="mt-1 text-2xl font-extrabold text-slate-900">{ratings.reviews}</div>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="mt-0.5 text-[11px] font-semibold text-brand-600">Read them →</div>
+              </Link>
+              <Link href="/console/feedback" className="rounded-lg border border-slate-200 p-3 hover:border-brand-300 hover:bg-brand-50/40">
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Testimonials published</div>
                 <div className="mt-1 text-2xl font-extrabold text-slate-900">{ratings.published}</div>
-              </div>
+                <div className="mt-0.5 text-[11px] font-semibold text-brand-600">Manage →</div>
+              </Link>
               <div className="rounded-lg border border-slate-200 p-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Ratings given</div>
                 <div className="mt-1 text-2xl font-extrabold text-slate-900">{ratings.count}</div>

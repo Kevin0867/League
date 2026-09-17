@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { financeSummary } from "@/lib/payments/summary";
 
 // Academy & League stats for the active season(s). Everything here is derived
 // from live data — no manual entry. Season-scoped where a season applies;
@@ -19,7 +20,7 @@ export type StatGroup = { title: string; stats: StatValue[] };
 export type CoachHours = { name: string; hours: number; sessions: number };
 export type RatingsSummary = { count: number; avg: number; reviews: number; published: number; dist: number[] };
 
-const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (n: number) => n.toLocaleString("en-US");
 /** Hours from minutes, one decimal, trimmed (90 → "1.5", 120 → "2"). */
 const hrs = (minutes: number) => {
@@ -42,14 +43,16 @@ export async function academyStats(): Promise<{
     return { groups: [], seasonNames: [], coachLeaderboard: [], ratings: empty };
   }
 
-  const [regs, teams, coachStaff, sessions, attendance, fixtures, payments, apparel, feedback, lessons, alaBookings] = await Promise.all([
+  const [regs, teams, coachStaff, sessions, attendance, fixtures, finance, apparel, feedback, lessons, alaBookings] = await Promise.all([
     prisma.registration.findMany({ where: { seasonId: { in: seasonIds }, status: { notIn: DEAD_REG } }, select: { personId: true, createdAt: true, person: { select: { waiverSignedAt: true } } } }),
     prisma.team.findMany({ where: { seasonId: { in: seasonIds }, isTest: false }, select: { id: true, divisionId: true, facilityId: true, coachId: true, _count: { select: { members: true } }, assistantCoaches: { select: { coachId: true } } } }),
     prisma.coach.findMany({ select: { id: true, person: { select: { firstName: true, lastName: true } } } }),
     prisma.session.findMany({ where: { seasonId: { in: seasonIds } }, select: { id: true, type: true, status: true, startTime: true, endTime: true, facilityId: true, coaches: { select: { coachId: true } } } }),
     prisma.attendance.findMany({ where: { session: { seasonId: { in: seasonIds } } }, select: { status: true } }),
     acpSeasonIds.length ? prisma.fixture.findMany({ where: { homeTeam: { seasonId: { in: acpSeasonIds } } }, select: { status: true, homeTeamId: true, awayTeamId: true } }) : Promise.resolve([]),
-    prisma.payment.findMany({ where: { seasonId: { in: seasonIds }, direction: "IN" }, select: { status: true, amountCents: true } }),
+    // Money mirrors the Payments page exactly (live Stripe totals, whole ledger)
+    // so the two never disagree — not season-scoped like the rest of the stats.
+    financeSummary(),
     prisma.apparelOrderItem.count({ where: { payment: { seasonId: { in: seasonIds } } } }),
     prisma.feedback.findMany({ select: { published: true, rating: true, body: true } }),
     prisma.lessonRequest.count(),
@@ -106,10 +109,10 @@ export async function academyStats(): Promise<{
   const leagueTeamIds = new Set<string>();
   for (const f of fixtures) { if (f.homeTeamId) leagueTeamIds.add(f.homeTeamId); if (f.awayTeamId) leagueTeamIds.add(f.awayTeamId); }
 
-  // Money
-  const collected = payments.filter((p) => p.status === "PAID").reduce((a, p) => a + p.amountCents, 0);
-  const outstanding = payments.filter((p) => ["REQUESTED", "PENDING"].includes(p.status)).reduce((a, p) => a + p.amountCents, 0);
-  const refunded = payments.filter((p) => p.status === "REFUNDED").reduce((a, p) => a + p.amountCents, 0);
+  // Money — straight from the shared finance summary (same as the Payments page).
+  const collected = finance.collectedCents;
+  const outstanding = finance.requestedCents;
+  const refunded = finance.refundedCents;
 
   // Ratings & reviews (aggregate — no NPS; the "why" lives in the review text).
   const dist = [0, 0, 0, 0, 0];
@@ -131,7 +134,7 @@ export async function academyStats(): Promise<{
       title: "Money",
       stats: [
         { label: "Collected", value: usd(collected) },
-        { label: "Outstanding", value: usd(outstanding) },
+        { label: "Requested / pending", value: usd(outstanding) },
         { label: "Refunded", value: usd(refunded) },
       ],
     },
