@@ -372,7 +372,7 @@ export default async function TeamDetailPage({
           </Link>
           <Link href={`/console/team-calendar?team=${team.id}`} className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-3 hover:bg-brand-100">
             <div className="text-sm font-semibold text-brand-800">Team calendar →</div>
-            <div className="mt-0.5 text-xs text-slate-500">Day / week / month / year view with who&apos;s in, out, and needs a sub — add a team event, mark a player out, or add a sub for a date. A link there previews the player view.</div>
+            <div className="mt-0.5 text-xs text-slate-500">Day / week / month / year view with who&apos;s in, out, and needs a sub — add a team event, mark a player out, or add a sub for a date.</div>
           </Link>
           <Link href="/console/inbox" className="rounded-lg border border-slate-200 px-3 py-3 hover:bg-slate-50">
             <div className="text-sm font-semibold text-slate-800">Messages (Inbox) →</div>
