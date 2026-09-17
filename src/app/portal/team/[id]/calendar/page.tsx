@@ -140,7 +140,7 @@ export default async function TeamCalendarPage({
 
                 {s.type === "PRACTICE" && staffPreview && (
                   <details className="mt-2 rounded-lg bg-emerald-50 p-2">
-                    <summary className="cursor-pointer text-sm font-semibold text-emerald-800">Add a sub for this date →</summary>
+                    <summary className="btn-secondary list-none cursor-pointer text-sm">Add a sub for this date</summary>
                     <p className="mt-1 text-xs text-slate-500">Adds them to this date only, sends a welcome + waiver so they&apos;re cleared to play, and clears a spot. No charge.</p>
                     <form method="POST" action="/api/team-calendar" className="mt-2 grid gap-2 sm:grid-cols-2">
                       <input type="hidden" name="ticket" value={ticket} />
@@ -187,7 +187,7 @@ export default async function TeamCalendarPage({
 
                     {s.openSpots > 0 && (
                       <details className="w-full">
-                        <summary className="cursor-pointer text-sm font-medium text-brand-700">Suggest a sub →</summary>
+                        <summary className="btn-secondary list-none cursor-pointer text-sm">Suggest a sub</summary>
                         <form method="POST" action="/api/team-calendar" className="mt-2 grid gap-2 sm:grid-cols-3">
                           <input type="hidden" name="ticket" value={ticket} />
                           <input type="hidden" name="op" value="suggest" />
