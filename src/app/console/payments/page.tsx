@@ -13,13 +13,12 @@ import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
-import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
+import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
 import { feeStateOf } from "@/lib/domain/feeStatus";
-import { payableCompletedRows } from "@/lib/domain/coachPay";
 import { personSearchOR } from "@/lib/domain/personSearch";
 
 export const dynamic = "force-dynamic";
@@ -232,24 +231,16 @@ export default async function PaymentsPage({
   // DELIVERED. Rate comes from the coach's profile (season pay ÷ 12 sessions, i.e.
   // $1,200/season → $100/session), falling back to the default per-session rate.
   // $0 until practices begin — nothing is owed for sessions that haven't happened.
-  const SESSIONS_PER_SEASON = 12;
-  const [coachPayoutAgg, facilityDueAgg, paidRows, coachRates] = await Promise.all([
+  const [coachPayoutAgg, facilityDueAgg, coachEarn] = await Promise.all([
     prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
     prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
     // Pay accrues on completion: payable rows on classes whose end time has
-    // passed (not cancelled). Substitute coverage already moved the payable flag
-    // to whoever worked the class.
-    payableCompletedRows(),
-    prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
+    // passed (not cancelled), role-aware. Substitute coverage already moved the
+    // payable flag to whoever worked the class. This is the same breakdown the
+    // /console/payouts drill-down shows, so the figures reconcile exactly.
+    coachEarnings(),
   ]);
-  const completedByCoach = new Map<string, number>();
-  for (const r of paidRows) completedByCoach.set(r.coachId, (completedByCoach.get(r.coachId) ?? 0) + 1);
-  const rateMap = new Map(coachRates.map((c) => [c.id, c.seasonPayCents]));
-  const perSessionFor = (coachId: string) => {
-    const seasonPay = rateMap.get(coachId);
-    return seasonPay && seasonPay > 0 ? Math.round(seasonPay / SESSIONS_PER_SEASON) : COACH_PER_SESSION_CENTS;
-  };
-  const accruedCoachCents = [...completedByCoach.entries()].reduce((s, [coachId, count]) => s + perSessionFor(coachId) * count, 0);
+  const accruedCoachCents = coachEarn.reduce((s, c) => s + c.totalCents, 0);
   const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
   const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : accruedCoachCents;
   const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;
@@ -799,13 +790,19 @@ export default async function PaymentsPage({
         </div>
         <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Payouts (est.)</div>
+          <div className="flex items-baseline justify-between">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Payouts (est.)</div>
+            <Link href="/console/payouts" className="text-[11px] font-semibold text-brand-600 hover:text-brand-800 hover:underline">Coach detail →</Link>
+          </div>
           <div className="mt-1 text-2xl font-extrabold text-slate-900">{formatCents(estPayoutsCents)}</div>
           <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
-            <div className="flex justify-between"><dt>Coaches</dt><dd className="font-semibold text-slate-700">{formatCents(coachEstCents)}</dd></div>
+            <div className="flex justify-between">
+              <dt><Link href="/console/payouts" className="hover:text-brand-700 hover:underline">Coaches</Link></dt>
+              <dd className="font-semibold text-slate-700">{formatCents(coachEstCents)}</dd>
+            </div>
             <div className="flex justify-between"><dt>Facilities</dt><dd className="font-semibold text-slate-700">{formatCents(facilityEstCents)}</dd></div>
           </dl>
-          <p className="mt-1 text-[11px] text-slate-400">Accrues as sessions are delivered — not yet disbursed.</p>
+          <p className="mt-1 text-[11px] text-slate-400">Accrues as sessions are delivered — not yet disbursed. <Link href="/console/payouts" className="text-brand-600 hover:underline">See who&apos;s owed &amp; how →</Link></p>
         </div>
       </div>
 

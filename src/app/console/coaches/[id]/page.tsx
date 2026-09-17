@@ -12,6 +12,8 @@ import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { CoachWriteups } from "./CoachWriteups";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { coachEarnings } from "@/lib/domain/coachEarnings";
+import { formatCents } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +75,11 @@ export default async function EditCoachPage({
     orderBy: { occurredAt: "desc" },
     take: 200,
   });
+
+  // Earned fees from completed practices (+ lessons/clinics). Only meaningful
+  // once the coach has a profile row; the full session-by-session breakdown
+  // lives on /console/payouts?coach=<id>.
+  const earned = coach ? (await coachEarnings({ coachId: coach.id }))[0] ?? null : null;
 
   return (
     <div className="space-y-6">
@@ -247,6 +254,26 @@ export default async function EditCoachPage({
           </form>
         )}
       </section>
+
+      {earned && (
+        <section className="card">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 className="font-semibold text-slate-900">Earned this season</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                From completed practices, credited by the clock{earned.alaCarteCents > 0 ? ", plus private lessons & clinics" : ""}. Not yet disbursed.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-extrabold text-slate-900">{formatCents(earned.totalCents)}</div>
+              <div className="text-xs text-slate-400">{earned.sessionCount} completed practice{earned.sessionCount === 1 ? "" : "s"}</div>
+            </div>
+          </div>
+          <Link href={`/console/payouts?coach=${coach!.id}`} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:text-brand-800 hover:underline">
+            See every practice behind this — coaching vs. sub coverage →
+          </Link>
+        </section>
+      )}
 
       <CoachProfileForm
         ticket={ticket}
