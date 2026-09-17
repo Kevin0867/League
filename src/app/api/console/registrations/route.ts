@@ -687,6 +687,60 @@ export async function POST(req: Request) {
       return backRF("?ok=fee");
     }
 
+    // Set a CUSTOM (e.g. discounted) season fee for this player and optionally
+    // send the pay request. It sets the player's actual season-fee invoice to the
+    // given amount — so when paid (online or offline) the season shows fully paid
+    // at what they really owe, not the standard rate.
+    case "setSeasonFee": {
+      if (!reg) return back("?err=fields");
+      const person = await prisma.person.findUnique({ where: { id: personId } });
+      if (!person) return back("?err=fields");
+      const amountRaw = String(fd.get("amount") ?? "").trim();
+      const cents = amountRaw ? Math.round(parseFloat(amountRaw) * 100) : NaN;
+      if (!Number.isFinite(cents) || cents < 0) return back(`/${reg.id}?err=amount`);
+      const season = await prisma.season.findUnique({ where: { id: reg.seasonId }, select: { name: true } });
+      const seasonName = season?.name ?? "Season";
+
+      const covering = await prisma.payment.findMany({
+        where: { seasonId: reg.seasonId, category: "PLAYER_FEE", OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }] },
+        orderBy: { createdAt: "desc" },
+      });
+      if (covering.some((x) => x.status === "PAID")) return back(`/${reg.id}?err=alreadypaid`);
+
+      let paymentId: string;
+      let payerId: string;
+      const target = covering.find((x) => ["REQUESTED", "PENDING", "FAILED"].includes(x.status));
+      if (target) {
+        // Reprice the existing unpaid invoice to the custom amount.
+        await prisma.payment.update({ where: { id: target.id }, data: { amountCents: cents } });
+        paymentId = target.id;
+        payerId = target.partyId ?? personId;
+      } else {
+        // No invoice yet — create the season fee at exactly this amount.
+        const res = await accruePlayerSeasonFee({ playerId: personId, seasonId: reg.seasonId, feeCents: cents, seasonName, prorate: false });
+        paymentId = res.paymentId;
+        payerId = res.payerId;
+      }
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: paymentId, action: "REQUESTED", summary: `Custom season fee $${(cents / 100).toFixed(2)} set for ${person.firstName} ${person.lastName}` });
+
+      // Optionally send the pay request now.
+      if (fd.get("send") != null) {
+        const [payer, payment] = await Promise.all([
+          prisma.person.findUnique({ where: { id: payerId } }),
+          prisma.payment.findUnique({ where: { id: paymentId } }),
+        ]);
+        if (payer && payment) {
+          const email = paymentRequestEmail({ name: payer.firstName, amountCents: payment.amountCents, description: payment.description ?? `${seasonName} season fee`, paymentId: payment.id });
+          await dispatchMessage({
+            senderId: actor.userId, seasonId: reg.seasonId, audienceType: "SINGLE_PERSON", audienceRef: payerId,
+            channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "PAYMENT_REQUEST", subject: email.subject, body: email.text, html: email.html, smsBody: email.sms,
+          }).catch(() => {});
+        }
+        return back(`/${reg.id}?ok=feesetsent`);
+      }
+      return back(`/${reg.id}?ok=feeset`);
+    }
+
     // Mark a fee PAID outside Stripe — a check, Class Wallet, cash, or an in-kind
     // credit. Records HOW it was paid from a free-text note. Settles the player's
     // outstanding (or partially-paid subscription) invoice; if no fee has been
