@@ -219,7 +219,7 @@ export default async function TeamDetailPage({
   const feeBadge = (personId: string) => {
     const d = feeStateDisplay(feeStateByPerson.get(personId) ?? "none");
     const tone = d.tone === "emerald" ? "text-emerald-700" : d.tone === "amber" ? "text-amber-600" : "text-slate-400";
-    return <span className={`ml-2 ${tone}`}>{d.check ? "✓ " : ""}{d.label}</span>;
+    return <span className={tone}>{d.check ? "✓ " : ""}{d.label}</span>;
   };
 
   // Colors used by OTHER teams in this team's gender+level group (divisionCode) —
@@ -785,31 +785,48 @@ export default async function TeamDetailPage({
             ) : (
               <ul className="divide-y divide-slate-100">
                 {team.members.map((m) => (
-                  <li key={m.id} className="flex items-center justify-between py-2">
-                    <div>
-                      <Link href={admin ? profileHref(m.personId) : `/console/teams/${team.id}/progress/${m.personId}`} className="text-sm font-medium text-slate-800 hover:text-brand-700 hover:underline">
-                        {m.person.firstName} {m.person.lastName}
-                      </Link>
-                      <div className="text-xs text-slate-400">
-                        {m.person.duprRating ? `DUPR ${m.person.duprRating}` : "no rating"}
-                        {feeBadge(m.personId)}
-                        {!hasFamilyEmail(m.person) && <span className="ml-2 text-amber-600">⚠ no email</span>}
-                        {!m.person.waiverSignedAt && <span className="ml-2 text-amber-600">⚠ no waiver</span>}
+                  <li key={m.id} className="py-3">
+                    {/* Player identity + status — full width, easy to scan. */}
+                    <Link href={admin ? profileHref(m.personId) : `/console/teams/${team.id}/progress/${m.personId}`} className="text-sm font-semibold text-slate-900 hover:text-brand-700 hover:underline">
+                      {m.person.firstName} {m.person.lastName}
+                    </Link>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+                      <span>{m.person.duprRating ? `DUPR ${m.person.duprRating}` : "no rating"}</span>
+                      {feeBadge(m.personId)}
+                      {!hasFamilyEmail(m.person) && <span className="text-amber-600">⚠ no email</span>}
+                      {!m.person.waiverSignedAt && <span className="text-amber-600">⚠ no waiver</span>}
+                    </div>
+                    {/* Apparel this player ordered — visible to coaches too. */}
+                    {(apparelByPerson.get(m.personId)?.length ?? 0) > 0 ? (
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        👕 {apparelByPerson.get(m.personId)!.map((a, i) => (
+                          <span key={i}>{i > 0 ? ", " : ""}{a.label}{!a.paid ? <span className="text-amber-600"> (unpaid)</span> : ""}</span>
+                        ))}
                       </div>
-                      {/* Apparel this player ordered — visible to coaches too. */}
-                      {(apparelByPerson.get(m.personId)?.length ?? 0) > 0 ? (
-                        <div className="mt-0.5 text-xs text-slate-500">
-                          👕 {apparelByPerson.get(m.personId)!.map((a, i) => (
-                            <span key={i}>{i > 0 ? ", " : ""}{a.label}{!a.paid ? <span className="text-amber-600"> (unpaid)</span> : ""}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-0.5 text-xs text-slate-300">No apparel ordered</div>
+                    ) : (
+                      <div className="mt-0.5 text-xs text-slate-300">No apparel ordered</div>
+                    )}
+
+                    {/* Actions — clear buttons. Simple actions on one row; the two
+                        that open a panel sit below so they never crowd the row. */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Link href={`/console/teams/${team.id}/progress/${m.personId}`} className="btn-chip-brand">Notes</Link>
+                      {admin && (
+                        <TextResetLinkButton personId={m.personId} ticket={ticket} returnTo={`/console/teams/${team.id}`} label="Reset link" />
+                      )}
+                      {admin && (
+                        <ConfirmSubmit
+                          action="/api/console/teams"
+                          fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
+                          confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
+                          label="Remove"
+                          className="btn-chip-danger"
+                        />
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="mt-1.5 space-y-1.5">
                       <details className="text-xs">
-                        <summary className="cursor-pointer font-semibold text-brand-600 hover:underline">photo</summary>
+                        <summary className="btn-chip-brand inline-flex w-fit list-none cursor-pointer [&::-webkit-details-marker]:hidden">📷 Photo</summary>
                         <div className="mt-1.5">
                           {/* Coach or admin can snap/upload a photo for this player. */}
                           <ImageUploadForm
@@ -824,40 +841,28 @@ export default async function TeamDetailPage({
                           />
                         </div>
                       </details>
-                      <Link href={`/console/teams/${team.id}/progress/${m.personId}`} className="text-xs font-semibold text-brand-600 hover:underline">
-                        notes
-                      </Link>
-                      {admin && (
-                        <TextResetLinkButton personId={m.personId} ticket={ticket} returnTo={`/console/teams/${team.id}`} />
-                      )}
                       {admin && (
                         <details className="text-xs">
-                          <summary className="cursor-pointer font-semibold text-brand-600 hover:underline">request payment</summary>
+                          <summary className="btn-chip-brand inline-flex w-fit list-none cursor-pointer [&::-webkit-details-marker]:hidden">💳 Request payment</summary>
                           {/* One tap to send this player their season-fee + apparel
                               pay link. The poster picks the channel; the button they
                               click IS the choice (email / text / both). */}
-                          <form method="POST" action="/api/console/registrations" className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            <input type="hidden" name="ticket" value={ticket} />
-                            <input type="hidden" name="op" value="requestPayment" />
-                            <input type="hidden" name="personId" value={m.personId} />
-                            <input type="hidden" name="teamId" value={team.id} />
-                            <input type="hidden" name="seasonId" value={team.seasonId} />
-                            <input type="hidden" name="returnTo" value={`/console/teams/${team.id}`} />
-                            <button name="channel" value="email" className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 font-semibold text-brand-700 hover:bg-brand-100">Email</button>
-                            <button name="channel" value="text" className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 font-semibold text-brand-700 hover:bg-brand-100">Text</button>
-                            <button name="channel" value="both" className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 font-semibold text-brand-700 hover:bg-brand-100">Both</button>
-                          </form>
-                          <p className="mt-1 text-[11px] text-slate-400">Sends the season fee &amp; apparel pay link.</p>
+                          <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                            <form method="POST" action="/api/console/registrations" className="flex flex-wrap items-center gap-1.5">
+                              <input type="hidden" name="ticket" value={ticket} />
+                              <input type="hidden" name="op" value="requestPayment" />
+                              <input type="hidden" name="personId" value={m.personId} />
+                              <input type="hidden" name="teamId" value={team.id} />
+                              <input type="hidden" name="seasonId" value={team.seasonId} />
+                              <input type="hidden" name="returnTo" value={`/console/teams/${team.id}`} />
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Send by</span>
+                              <button name="channel" value="email" className="btn-chip-brand">Email</button>
+                              <button name="channel" value="text" className="btn-chip-brand">Text</button>
+                              <button name="channel" value="both" className="btn-chip-brand">Both</button>
+                            </form>
+                            <p className="mt-1 text-[11px] text-slate-400">Sends the season fee &amp; apparel pay link.</p>
+                          </div>
                         </details>
-                      )}
-                      {admin && (
-                        <ConfirmSubmit
-                          action="/api/console/teams"
-                          fields={{ ticket, op: "removePlayer", teamId: team.id, personId: m.personId }}
-                          confirm={`Remove ${m.person.firstName} ${m.person.lastName} from this team? They go back to the pool (no email is sent to the family).`}
-                          label="remove"
-                          className="btn-chip-danger"
-                        />
                       )}
                     </div>
                   </li>
