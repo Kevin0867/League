@@ -36,10 +36,14 @@ const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.get
 const startOfWeek = (d: Date) => addDays(d, -d.getDay());
 const sameDay = (a: Date, b: Date) => iso(a) === iso(b);
 
-export function CalendarView({ events, initialView = "month", initialDateISO }: { events: CalEvent[]; initialView?: View; initialDateISO?: string }) {
+export function CalendarView({ events, initialView = "month", initialDateISO, todayISO }: { events: CalEvent[]; initialView?: View; initialDateISO?: string; todayISO?: string }) {
   const [view, setView] = useState<View>(initialView);
-  const [focus, setFocus] = useState<Date>(() => (initialDateISO ? parse(initialDateISO) : new Date()));
-  const today = new Date();
+  // "Today" is the Phoenix calendar day (passed from the server), not the
+  // viewer's device day — so the highlighted day and the Today button are always
+  // correct in Arizona time regardless of where the person is signed in from.
+  const todayRef = todayISO ? parse(todayISO) : new Date();
+  const [focus, setFocus] = useState<Date>(() => (initialDateISO ? parse(initialDateISO) : todayISO ? parse(todayISO) : new Date()));
+  const today = todayRef;
 
   const byDay = useMemo(() => {
     const m = new Map<string, CalEvent[]>();
@@ -74,7 +78,7 @@ export function CalendarView({ events, initialView = "month", initialDateISO }: 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 p-3">
         <div className="flex items-center gap-2">
           <button onClick={() => step(-1)} className="rounded-md border border-slate-200 px-2 py-1 text-sm hover:bg-slate-50" aria-label="Previous">←</button>
-          <button onClick={() => setFocus(new Date())} className="rounded-md border border-slate-200 px-2 py-1 text-sm hover:bg-slate-50">Today</button>
+          <button onClick={() => setFocus(todayISO ? parse(todayISO) : new Date())} className="rounded-md border border-slate-200 px-2 py-1 text-sm hover:bg-slate-50">Today</button>
           <button onClick={() => step(1)} className="rounded-md border border-slate-200 px-2 py-1 text-sm hover:bg-slate-50" aria-label="Next">→</button>
           <span className="ml-1 text-sm font-semibold text-slate-900">{heading}</span>
         </div>
