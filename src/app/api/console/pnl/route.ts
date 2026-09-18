@@ -19,10 +19,11 @@ export async function POST(req: Request) {
   const op = String(fd.get("op") ?? "");
   const rawReturn = String(fd.get("returnTo") ?? "").trim();
   const dest = rawReturn.startsWith("/") && !rawReturn.startsWith("//") ? rawReturn : "/console/pnl";
-  const back = (qs: string) => NextResponse.redirect(new URL(`${dest}${qs}`, origin), 303);
+  // Preserve the chosen date range (returnTo already carries ?from=&to=).
+  const back = (flag: string) => NextResponse.redirect(new URL(`${dest}${dest.includes("?") ? "&" : "?"}${flag}`, origin), 303);
 
   const actor = await actorFromForm(fd);
-  if (!actor || !isAdmin(actor.roles)) return back("?err=auth");
+  if (!actor || !isAdmin(actor.roles)) return back("err=auth");
 
   if (op === "add") {
     const month = String(fd.get("month") ?? "").trim();
@@ -31,30 +32,31 @@ export async function POST(req: Request) {
     const kind = normKind(String(fd.get("kind") ?? ""));
     const amountCents = dollarsToCents(String(fd.get("amount") ?? ""));
     const note = String(fd.get("note") ?? "").trim().slice(0, 300) || null;
-    if (!/^\d{4}-\d{2}$/.test(month) || !["REVENUE", "EXPENSE"].includes(section) || !label) return back("?err=fields");
+    if (!/^\d{4}-\d{2}$/.test(month) || !["REVENUE", "EXPENSE"].includes(section) || !label) return back("err=fields");
     const created = await prisma.pnlEntry.create({ data: { month, section, label, kind, amountCents, note } });
     await audit({ actorId: actor.userId, entityType: "PnlEntry", entityId: created.id, action: "pnl.add", summary: `Added ${section.toLowerCase()} "${label}" (${month})` });
-    return back(`?month=${month}&ok=added`);
+    return back("ok=added");
   }
 
   if (op === "update") {
     const id = String(fd.get("id") ?? "").trim();
-    const existing = id ? await prisma.pnlEntry.findUnique({ where: { id }, select: { month: true } }) : null;
-    if (!existing) return back("?err=notfound");
+    const existing = id ? await prisma.pnlEntry.findUnique({ where: { id }, select: { id: true } }) : null;
+    if (!existing) return back("err=notfound");
     const label = String(fd.get("label") ?? "").trim().slice(0, 120);
+    const month = String(fd.get("month") ?? "").trim();
     const kind = normKind(String(fd.get("kind") ?? ""));
     const amountCents = dollarsToCents(String(fd.get("amount") ?? ""));
-    await prisma.pnlEntry.update({ where: { id }, data: { ...(label ? { label } : {}), kind, amountCents } });
-    return back(`?month=${existing.month}&ok=saved`);
+    await prisma.pnlEntry.update({ where: { id }, data: { ...(label ? { label } : {}), ...(/^\d{4}-\d{2}$/.test(month) ? { month } : {}), kind, amountCents } });
+    return back("ok=saved");
   }
 
   if (op === "delete") {
     const id = String(fd.get("id") ?? "").trim();
-    const existing = id ? await prisma.pnlEntry.findUnique({ where: { id }, select: { month: true } }) : null;
-    if (!existing) return back("?err=notfound");
+    const existing = id ? await prisma.pnlEntry.findUnique({ where: { id }, select: { id: true } }) : null;
+    if (!existing) return back("err=notfound");
     await prisma.pnlEntry.delete({ where: { id } });
-    return back(`?month=${existing.month}&ok=deleted`);
+    return back("ok=deleted");
   }
 
-  return back("?err=op");
+  return back("err=op");
 }
