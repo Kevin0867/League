@@ -63,6 +63,10 @@ const OK_MSG: Record<string, string> = {
   edited: "Practice updated.",
   cancel: "Session cancelled.",
   teamfeedback: "Feedback request sent to this team's families (text + email).",
+  waitlisted: "Added to the waitlist. They stay off the roster until you place them.",
+  waitlistremoved: "Removed from the waitlist.",
+  promoted: "Placed on the team from the waitlist — the family got the welcome email.",
+  promotedOver: `Placed from the waitlist — this team is now over the target of ${TEAM_CAP}. Move a player to another team to get back to ${TEAM_CAP}.`,
 };
 
 const ERR_MSG: Record<string, string> = {
@@ -79,6 +83,8 @@ const ERR_MSG: Record<string, string> = {
   dupname: "A team with that name already exists this season — here it is. Give the new team a distinct name (e.g. a different color).",
   player: "Missing player.",
   cap: `That team is at the maximum of ${TEAM_MAX} — remove a player before adding another.`,
+  capfull: `Can't place them — this team is at the maximum of ${TEAM_MAX}. Remove a player first, then place from the waitlist.`,
+  alreadyon: "That player is already on this team's roster.",
   notfound: "Team not found.",
   publish: "Team cannot be published yet.",
   op: "Unknown action.",
@@ -160,6 +166,23 @@ export default async function TeamDetailPage({
   }
 
   const roster = rosterStatus(team.members.length, team.coachPlays);
+
+  // Waitlist — people waiting for a spot on this team (kept off the roster),
+  // oldest first (FIFO). Names/contact fetched separately (no relation).
+  const waitlistRows = await prisma.teamWaitlist.findMany({ where: { teamId: team.id }, orderBy: { createdAt: "asc" } });
+  const waitlistPeople = waitlistRows.length
+    ? await prisma.person.findMany({ where: { id: { in: waitlistRows.map((w) => w.personId) } }, select: { id: true, firstName: true, lastName: true, email: true, phone: true } })
+    : [];
+  const waitlistPersonById = new Map(waitlistPeople.map((p) => [p.id, p]));
+  const waitlist = waitlistRows.map((w) => {
+    const p = waitlistPersonById.get(w.personId);
+    return {
+      personId: w.personId,
+      name: p ? `${p.firstName} ${p.lastName}`.trim() : "Player",
+      contact: [p?.email, p?.phone].filter(Boolean).join(" · "),
+      note: w.note,
+    };
+  });
   const publish = canPublishTeam(team, team.facility, team.members.length);
   const missing = teamMissingFields(team);
 
@@ -870,6 +893,51 @@ export default async function TeamDetailPage({
               </ul>
             )}
             {admin && <AddPlayerToTeam ticket={ticket} teamId={team.id} candidates={candidates} atCap={roster.atMax} overCap={roster.overCap} />}
+
+            {/* Waitlist — people waiting for a spot (kept off the roster). Place
+                one on the team when a spot opens, or remove them. */}
+            {admin && (waitlist.length > 0 || roster.atMax) && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-amber-800">Waitlist {waitlist.length > 0 ? `(${waitlist.length})` : ""}</h3>
+                  {roster.atMax && <span className="text-[11px] font-medium uppercase tracking-wide text-amber-600">team is full</span>}
+                </div>
+                {waitlist.length === 0 ? (
+                  <p className="mt-1 text-xs text-slate-500">No one waiting. When the team is full, use “+ Add players” below to add someone to the waitlist.</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {waitlist.map((w, i) => (
+                      <li key={w.personId} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[11px] font-semibold text-amber-700">{i + 1}</span>
+                          <span className="font-medium text-slate-800">{w.name}</span>
+                          {w.contact && <div className="ml-7 text-xs text-slate-500">{w.contact}</div>}
+                          {w.note && <div className="ml-7 text-xs italic text-slate-400">“{w.note}”</div>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <ConfirmSubmit
+                            action="/api/console/teams"
+                            fields={{ ticket, op: "waitlistPromote", teamId: team.id, personId: w.personId }}
+                            confirm={roster.atMax
+                              ? `${w.name}: the team is at the max of ${TEAM_MAX}. Remove a player first, then place them. Try anyway?`
+                              : `Place ${w.name} on ${team.name}? They'll be added to the roster and the family gets the welcome email.`}
+                            label="Place on team"
+                            className="btn-chip-brand"
+                          />
+                          <ConfirmSubmit
+                            action="/api/console/teams"
+                            fields={{ ticket, op: "waitlistRemove", teamId: team.id, personId: w.personId }}
+                            confirm={`Remove ${w.name} from the waitlist?`}
+                            label="Remove"
+                            className="btn-chip-danger"
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Publish gate + payment tools — admin only */}
