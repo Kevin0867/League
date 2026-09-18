@@ -81,7 +81,7 @@ export async function claimPracticeSub(opts: {
   const msg =
     `Thanks for joining the ${teamName} on ${when}${where}! Here's your info — you'll also get the normal practice reminders.${directions} ` +
     `To claim your spot you must complete the participation waiver: set your portal password and sign it here — ${link} ` +
-    `This step must be completed for you to hold the spot on this practice. If you can't make it, please let your coach know.`;
+    `Please complete this within 2 hours or your spot will be released for someone else. If you can't make it, please let your coach know.`;
   if (phone) await sendSms(phone, msg).catch(() => {});
   if (email) await sendEmail(email, `Complete your waiver to claim your spot — ${teamName}`, msg).catch(() => {});
 
