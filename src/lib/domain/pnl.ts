@@ -6,40 +6,38 @@ import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { isSessionComplete } from "@/lib/domain/coachPay";
 import { stripeChargesSince, paymentsSince } from "@/lib/payments/reconcile";
 
-// P&L model. Two kinds of numbers:
-//   • AUTO, computed live from real data — booked revenue (cash actually
-//     collected in the month) and scheduled coach cost (delivered/again-scheduled
-//     practices × the per-session rate). Read-only.
-//   • MANUAL PnlEntry rows the admin edits — extra revenue and every expense,
-//     plus FORECAST projection rows.
-// Booked revenue is the point of the ask: a subscription's PAID installment
-// counts in the month it cleared; its unpaid installments show as FORECAST in
-// their scheduled months — never as this month's revenue.
+// P&L, driven by a date range the admin chooses. Booked revenue is cash actually
+// collected in the window — from the SAME source as the Payments "Collected"
+// figure (live Stripe charges net of refunds, incl. apparel, since the
+// collection start, plus offline payments) — so the two always agree. Forecast
+// is money expected but not yet in: a subscription's unpaid installments at their
+// scheduled dates, and outstanding one-time fees. Expenses (coach session pay is
+// auto; everything else is editable) and manual revenue are line items the admin
+// adds; line items are tagged to a month.
 
-const monthOf = (d: Date) => phoenixDateInput(d).slice(0, 7); // "YYYY-MM" in Phoenix
 export const thisMonth = () => phoenixDateInput(new Date()).slice(0, 7);
+export const today = () => phoenixDateInput(new Date());
+const monthOf = (d: Date) => phoenixDateInput(d).slice(0, 7);
 
 export function monthLabel(month: string): string {
   const [y, m] = month.split("-").map((x) => parseInt(x, 10));
   return new Date(Date.UTC(y, (m || 1) - 1, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
+function nextMonth(m: string): string {
+  const [y, mo] = m.split("-").map((x) => parseInt(x, 10));
+  const d = new Date(Date.UTC(y, mo, 1)); // mo is 1-based → this is the next month
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
-export type MonthAuto = { bookedCents: number; forecastCents: number; coachCostCents: number };
-export type PnlEntryRow = { id: string; section: string; label: string; amountCents: number; kind: string; note: string | null };
+export type PnlEntryRow = { id: string; section: string; label: string; amountCents: number; kind: string; note: string | null; month: string };
 
 type Contribution = { day: string; bucket: "booked" | "forecast"; cents: number };
 
 /**
  * Every revenue contribution, tagged by Phoenix day and booked-vs-forecast.
- *   • BOOKED (collected) comes from the SAME source as the Payments "Collected"
- *     figure — live Stripe charges net of refunds since the collection start,
- *     plus offline (manual) payments — so the P&L and Payments always agree.
- *     Falls back to app records if Stripe isn't configured.
- *   • FORECAST is always from app records (Stripe can't see the future): a
- *     subscription's unpaid installments at their scheduled dates, and
- *     outstanding one-time fees.
- * Booked already includes apparel (it's part of each Stripe charge) and is net
- * of refunds, which is why summing this equals the Payments total.
+ * BOOKED comes from the same source as the Payments "Collected" figure (live
+ * Stripe net of refunds + offline payments); FORECAST is from app records
+ * (unpaid installments at their scheduled dates + outstanding one-time fees).
  */
 async function revenueContributions(): Promise<Contribution[]> {
   const { unix: sinceUnix } = paymentsSince();
@@ -55,15 +53,10 @@ async function revenueContributions(): Promise<Contribution[]> {
     prisma.payment.findMany({ where: { direction: "IN", status: "PAID", method: "MANUAL", category: { not: "REFUND" } }, select: { amountCents: true, paidAt: true, createdAt: true } }),
   ]);
 
-  // ── Booked ────────────────────────────────────────────────────────────────
   if (charges) {
-    // Authoritative: Stripe charges (net of refunds), by the day they cleared.
     for (const c of charges) out.push({ day: day(new Date(c.created * 1000)), bucket: "booked", cents: c.netCents });
-    // Offline payments never touch Stripe — fold them in, like the Payments page.
     for (const p of manual) out.push({ day: day(p.paidAt ?? p.createdAt), bucket: "booked", cents: p.amountCents });
   } else {
-    // Stripe not configured — reconstruct from app records: paid fees + paid
-    // installments + apparel, net of recorded refunds.
     const [apparel, refunds] = await Promise.all([
       prisma.apparelOrderItem.findMany({ where: { payment: { direction: "IN", status: "PAID" } }, select: { unitPriceCents: true, quantity: true, payment: { select: { paidAt: true, createdAt: true } } } }),
       prisma.payment.findMany({ where: { direction: "OUT", category: "REFUND", status: "PAID" }, select: { amountCents: true, paidAt: true, createdAt: true } }),
@@ -82,7 +75,6 @@ async function revenueContributions(): Promise<Contribution[]> {
     for (const r of refunds) out.push({ day: day(r.paidAt ?? r.createdAt), bucket: "booked", cents: -r.amountCents });
   }
 
-  // ── Forecast (always from app records) ──────────────────────────────────────
   for (const p of pays) {
     if (p.installmentPlan) {
       const total = p.installmentsTotal ?? 3;
@@ -96,24 +88,7 @@ async function revenueContributions(): Promise<Contribution[]> {
   return out;
 }
 
-/** Revenue by Phoenix month, split into booked (collected) vs forecast. */
-export async function revenueByMonth(): Promise<Map<string, { bookedCents: number; forecastCents: number }>> {
-  const contribs = await revenueContributions();
-  const m = new Map<string, { bookedCents: number; forecastCents: number }>();
-  for (const c of contribs) {
-    const month = c.day.slice(0, 7);
-    const cur = m.get(month) ?? { bookedCents: 0, forecastCents: 0 };
-    if (c.bucket === "booked") cur.bookedCents += c.cents; else cur.forecastCents += c.cents;
-    m.set(month, cur);
-  }
-  return m;
-}
-
-/**
- * Booked (collected) and forecast revenue between two Phoenix calendar days
- * (inclusive, "YYYY-MM-DD") — matches the Payments "Collected" methodology, for
- * any window the admin chooses.
- */
+/** Booked + forecast revenue between two Phoenix days (inclusive, "YYYY-MM-DD"). */
 export async function revenueBetween(fromDay: string, toDay: string): Promise<{ bookedCents: number; forecastCents: number }> {
   const contribs = await revenueContributions();
   let booked = 0, forecast = 0;
@@ -142,86 +117,64 @@ export async function coachCostBetween(fromDay: string, toDay: string): Promise<
   return cost;
 }
 
-/** Delivered/again-scheduled practice coach cost per month (auto expense seed). */
-export async function coachCostByMonth(): Promise<Map<string, number>> {
-  const [rate, sessions] = await Promise.all([
-    prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true } }),
-    prisma.session.findMany({ where: { type: "PRACTICE" }, select: { date: true, endTime: true, status: true, coaches: { select: { payable: true } } } }),
-  ]);
-  const per = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
-  const now = new Date();
-  const m = new Map<string, number>();
-  for (const s of sessions) {
-    if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
-    const payableCount = s.coaches.filter((c) => c.payable).length;
-    if (payableCount === 0) continue;
-    const month = monthOf(s.date);
-    m.set(month, (m.get(month) ?? 0) + per * payableCount);
-  }
-  return m;
+/** Manual line items whose month falls within [fromMonth, toMonth] (inclusive). */
+export async function entriesInMonthRange(fromMonth: string, toMonth: string): Promise<PnlEntryRow[]> {
+  const rows = await prisma.pnlEntry.findMany({
+    where: { month: { gte: fromMonth, lte: toMonth } },
+    orderBy: [{ month: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  return rows.map((e) => ({ id: e.id, section: e.section, label: e.label, amountCents: e.amountCents, kind: e.kind, note: e.note, month: e.month }));
 }
 
-export type PnlMonth = {
-  month: string;
-  auto: MonthAuto;
+export type PnlRange = {
+  fromDay: string;
+  toDay: string;
+  months: string[];
+  auto: { bookedCents: number; forecastCents: number; coachCostCents: number };
   revenue: PnlEntryRow[];
   expenses: PnlEntryRow[];
+  totals: {
+    bookedRevenue: number; forecastRevenue: number; projectedRevenue: number;
+    actualExpenses: number; projectedExpenses: number;
+    netBooked: number; netProjected: number;
+  };
 };
 
-/** Full P&L: every relevant month with its auto figures and manual line items. */
-export async function pnlModel(): Promise<{ months: PnlMonth[]; entries: PnlEntryRow[] }> {
-  const [rev, coach, entriesRaw] = await Promise.all([
-    revenueByMonth(),
-    coachCostByMonth(),
-    prisma.pnlEntry.findMany({ orderBy: [{ month: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }] }),
+/** The full P&L for a chosen date range. */
+export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange> {
+  const fromMonth = fromDay.slice(0, 7);
+  const toMonth = toDay.slice(0, 7);
+  const [rev, coach, entries] = await Promise.all([
+    revenueBetween(fromDay, toDay),
+    coachCostBetween(fromDay, toDay),
+    entriesInMonthRange(fromMonth, toMonth),
   ]);
 
-  const monthSet = new Set<string>([thisMonth()]);
-  for (const k of rev.keys()) monthSet.add(k);
-  for (const k of coach.keys()) monthSet.add(k);
-  for (const e of entriesRaw) monthSet.add(e.month);
-  const months = [...monthSet].sort();
+  const months: string[] = [];
+  for (let m = fromMonth; m <= toMonth && months.length < 120; m = nextMonth(m)) months.push(m);
+  if (months.length === 0) months.push(fromMonth);
 
-  const entries: PnlEntryRow[] = entriesRaw.map((e) => ({ id: e.id, section: e.section, label: e.label, amountCents: e.amountCents, kind: e.kind, note: e.note }));
-  const byMonth = new Map<string, PnlEntryRow[]>();
-  for (const e of entriesRaw) {
-    const arr = byMonth.get(e.month) ?? [];
-    arr.push({ id: e.id, section: e.section, label: e.label, amountCents: e.amountCents, kind: e.kind, note: e.note });
-    byMonth.set(e.month, arr);
-  }
+  const revenue = entries.filter((e) => e.section === "REVENUE");
+  const expenses = entries.filter((e) => e.section === "EXPENSE");
+  const sum = (rows: PnlEntryRow[], kind: string) => rows.filter((r) => r.kind === kind).reduce((s, r) => s + r.amountCents, 0);
 
-  const out: PnlMonth[] = months.map((month) => {
-    const r = rev.get(month) ?? { bookedCents: 0, forecastCents: 0 };
-    const rows = byMonth.get(month) ?? [];
-    return {
-      month,
-      auto: { bookedCents: r.bookedCents, forecastCents: r.forecastCents, coachCostCents: coach.get(month) ?? 0 },
-      revenue: rows.filter((x) => x.section === "REVENUE"),
-      expenses: rows.filter((x) => x.section === "EXPENSE"),
-    };
-  });
-  return { months: out, entries };
-}
-
-/** Totals for one month. */
-export function monthTotals(m: PnlMonth) {
-  const manualRevActual = m.revenue.filter((r) => r.kind === "ACTUAL").reduce((s, r) => s + r.amountCents, 0);
-  const manualRevForecast = m.revenue.filter((r) => r.kind === "FORECAST").reduce((s, r) => s + r.amountCents, 0);
-  const expActual = m.expenses.filter((r) => r.kind === "ACTUAL").reduce((s, r) => s + r.amountCents, 0);
-  const expForecast = m.expenses.filter((r) => r.kind === "FORECAST").reduce((s, r) => s + r.amountCents, 0);
-
-  const bookedRevenue = m.auto.bookedCents + manualRevActual;
-  const projectedRevenue = bookedRevenue + m.auto.forecastCents + manualRevForecast;
-  const actualExpenses = m.auto.coachCostCents + expActual;
-  const projectedExpenses = actualExpenses + expForecast;
+  const bookedRevenue = rev.bookedCents + sum(revenue, "ACTUAL");
+  const forecastRevenue = rev.forecastCents + sum(revenue, "FORECAST");
+  const actualExpenses = coach + sum(expenses, "ACTUAL");
+  const projectedExpenses = actualExpenses + sum(expenses, "FORECAST");
 
   return {
-    bookedRevenue,
-    forecastRevenue: m.auto.forecastCents + manualRevForecast,
-    projectedRevenue,
-    actualExpenses,
-    projectedExpenses,
-    netBooked: bookedRevenue - actualExpenses,
-    netProjected: projectedRevenue - projectedExpenses,
+    fromDay, toDay, months,
+    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, coachCostCents: coach },
+    revenue, expenses,
+    totals: {
+      bookedRevenue,
+      forecastRevenue,
+      projectedRevenue: bookedRevenue + forecastRevenue,
+      actualExpenses,
+      projectedExpenses,
+      netBooked: bookedRevenue - actualExpenses,
+      netProjected: (bookedRevenue + forecastRevenue) - projectedExpenses,
+    },
   };
 }
