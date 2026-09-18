@@ -20,6 +20,9 @@ export type FacilityInitial = {
   weekdayRateCents: number;
   weekendRateCents: number;
   percentageRate: number | null;
+  courtCostDayCents: number | null;
+  courtCostNightCents: number | null;
+  courtNightStartsAt: string | null;
   primaryContact: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -253,6 +256,27 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
                   <input name="percentageRate" type="number" step="0.1" className="input" placeholder="15" defaultValue={facility?.percentageRate ? String((facility.percentageRate * 100).toFixed(0)) : ""} />
                 </div>
               )}
+            </div>
+
+            {/* Court rent for the P&L — what the Academy pays to rent courts here,
+                per court per hour, with a higher night rate after a cutoff. */}
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="text-sm font-semibold text-slate-700">Court rent (for the P&amp;L)</div>
+              <p className="mt-0.5 text-xs text-slate-500">What the Academy pays to rent courts here — per court, per hour. The night rate applies after the cutoff (many venues charge more under lights). This is pulled into the P&amp;L as this location&apos;s court cost, calculated from delivered practices.</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="label">Day rate ($/court/hr)</label>
+                  <input name="courtCostDay" type="number" step="0.01" className="input" placeholder="10.00" defaultValue={facility?.courtCostDayCents != null ? dollars(facility.courtCostDayCents) : ""} />
+                </div>
+                <div>
+                  <label className="label">Night rate ($/court/hr)</label>
+                  <input name="courtCostNight" type="number" step="0.01" className="input" placeholder="13.00" defaultValue={facility?.courtCostNightCents != null ? dollars(facility.courtCostNightCents) : ""} />
+                </div>
+                <div>
+                  <label className="label">Night starts at</label>
+                  <input name="courtNightStartsAt" type="time" className="input" defaultValue={facility?.courtNightStartsAt ?? "17:00"} />
+                </div>
+              </div>
             </div>
           </Section>
 

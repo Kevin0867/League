@@ -25,7 +25,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
 
   const pnl: PnlRange = valid
     ? await pnlRange(from, to)
-    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, coachCostCents: 0 }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0 } };
+    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, coachCostCents: 0, courtCosts: [] }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0 } };
   const t = pnl.totals;
   const returnTo = `${RT}?from=${from}&to=${to}`;
   const addMonth = pnl.months[pnl.months.length - 1] ?? to.slice(0, 7);
@@ -88,7 +88,10 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         returnTo={returnTo}
         months={pnl.months}
         addMonth={addMonth}
-        autoRows={pnl.auto.coachCostCents > 0 ? [{ label: "Coach session pay (delivered)", value: pnl.auto.coachCostCents, note: "Delivered practices in range × the per-session rate. Auto." }] : []}
+        autoRows={[
+          ...(pnl.auto.coachCostCents > 0 ? [{ label: "Coach session pay (delivered)", value: pnl.auto.coachCostCents, note: "What coaches are owed for practices delivered in this range — per-coach rate, role-aware. Matches Payouts. Auto." }] : []),
+          ...pnl.auto.courtCosts.map((c) => ({ label: `Court rent — ${c.facilityName}`, value: c.cents, note: "Delivered practices × courts × hours × the facility's court rate (day/night split). Auto — set the rates on the facility." })),
+        ]}
         rows={pnl.expenses}
       />
 

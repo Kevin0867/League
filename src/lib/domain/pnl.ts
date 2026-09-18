@@ -4,7 +4,10 @@ import { installmentChargeDates } from "@/lib/payments/receipt";
 import { phoenixDateInput } from "@/lib/time";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { isSessionComplete } from "@/lib/domain/coachPay";
+import { coachSessionPayCents } from "@/lib/domain/finance";
 import { stripeChargesSince, paymentsSince } from "@/lib/payments/reconcile";
+
+const SESSIONS_PER_SEASON = 12;
 
 // P&L, driven by a date range the admin chooses. Booked revenue is cash actually
 // collected in the window — from the SAME source as the Payments "Collected"
@@ -107,20 +110,78 @@ export async function revenueBetween(fromDay: string, toDay: string): Promise<{ 
   return { bookedCents: booked, forecastCents: forecast, forecastPlayers: players.size };
 }
 
-/** Delivered-practice coach session pay between two Phoenix days (inclusive). */
+/** Day/night hour split for a session, using the facility's night-start time. */
+function dayNightHours(startTime: string, endTime: string, nightStart: string): { dayHours: number; nightHours: number } {
+  const toMin = (t: string) => { const [h, m] = (t || "0:0").split(":").map((x) => parseInt(x, 10)); return (h || 0) * 60 + (m || 0); };
+  const s = toMin(startTime), e = toMin(endTime), n = toMin(nightStart || "17:00");
+  if (e <= s) return { dayHours: 0, nightHours: 0 };
+  const dayMins = Math.max(0, Math.min(e, n) - s);
+  const nightMins = Math.max(0, e - Math.max(s, n));
+  return { dayHours: dayMins / 60, nightHours: nightMins / 60 };
+}
+
+export type CourtCost = { facilityName: string; cents: number };
+
+/**
+ * Court rent per facility between two Phoenix days (inclusive) — the P&L expense
+ * for renting courts. For each DELIVERED practice at a facility with court rates
+ * set: courts × hours × rate, splitting hours into day vs night (after the
+ * facility's night-start time, default 5pm) at their respective rates.
+ */
+export async function courtCostByFacilityBetween(fromDay: string, toDay: string): Promise<CourtCost[]> {
+  const sessions = await prisma.session.findMany({
+    where: { type: "PRACTICE" },
+    select: {
+      date: true, startTime: true, endTime: true, status: true, courtCount: true,
+      facility: { select: { name: true, courtCostDayCents: true, courtCostNightCents: true, courtNightStartsAt: true } },
+    },
+  });
+  const now = new Date();
+  const byFacility = new Map<string, number>();
+  for (const s of sessions) {
+    if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
+    const day = phoenixDateInput(s.date);
+    if (day < fromDay || day > toDay) continue;
+    const f = s.facility;
+    if (!f || (f.courtCostDayCents == null && f.courtCostNightCents == null)) continue;
+    const dayRate = f.courtCostDayCents ?? f.courtCostNightCents ?? 0;
+    const nightRate = f.courtCostNightCents ?? f.courtCostDayCents ?? 0;
+    const { dayHours, nightHours } = dayNightHours(s.startTime, s.endTime, f.courtNightStartsAt ?? "17:00");
+    const courts = Math.max(1, s.courtCount);
+    const cost = Math.round(courts * (dayHours * dayRate + nightHours * nightRate));
+    if (cost <= 0) continue;
+    byFacility.set(f.name, (byFacility.get(f.name) ?? 0) + cost);
+  }
+  return [...byFacility.entries()].map(([facilityName, cents]) => ({ facilityName, cents })).sort((a, b) => b.cents - a.cents);
+}
+
+/**
+ * Coach session pay for delivered practices between two Phoenix days (inclusive)
+ * — the same figure coaches are actually owed (per-coach rate = their season pay
+ * ÷ 12, else the default; role-aware, assistant at 50%; a substitute earns the
+ * class they covered). Matches the Payouts drill-down, scoped to the range.
+ */
 export async function coachCostBetween(fromDay: string, toDay: string): Promise<number> {
-  const [rate, sessions] = await Promise.all([
-    prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true } }),
-    prisma.session.findMany({ where: { type: "PRACTICE" }, select: { date: true, endTime: true, status: true, coaches: { select: { payable: true } } } }),
+  const [rate, coaches, sessions] = await Promise.all([
+    prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
+    prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
+    prisma.session.findMany({ where: { type: "PRACTICE" }, select: { date: true, endTime: true, status: true, coaches: { select: { coachId: true, role: true, payable: true } } } }),
   ]);
-  const per = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
+  const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
+  const assistantPct = rate?.assistantPct ?? 0.5;
+  const proPer = rate?.proCoachPerSessionCents ?? null;
+  const seasonPayById = new Map(coaches.map((c) => [c.id, c.seasonPayCents]));
+  const baseFor = (id: string) => { const sp = seasonPayById.get(id); return sp && sp > 0 ? Math.round(sp / SESSIONS_PER_SEASON) : defaultPer; };
   const now = new Date();
   let cost = 0;
   for (const s of sessions) {
     if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
     const day = phoenixDateInput(s.date);
     if (day < fromDay || day > toDay) continue;
-    cost += per * s.coaches.filter((c) => c.payable).length;
+    for (const c of s.coaches) {
+      if (!c.payable) continue;
+      cost += coachSessionPayCents(c.role, baseFor(c.coachId), assistantPct, proPer);
+    }
   }
   return cost;
 }
@@ -138,7 +199,7 @@ export type PnlRange = {
   fromDay: string;
   toDay: string;
   months: string[];
-  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; coachCostCents: number };
+  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; coachCostCents: number; courtCosts: CourtCost[] };
   revenue: PnlEntryRow[];
   expenses: PnlEntryRow[];
   totals: {
@@ -152,11 +213,13 @@ export type PnlRange = {
 export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange> {
   const fromMonth = fromDay.slice(0, 7);
   const toMonth = toDay.slice(0, 7);
-  const [rev, coach, entries] = await Promise.all([
+  const [rev, coach, courtCosts, entries] = await Promise.all([
     revenueBetween(fromDay, toDay),
     coachCostBetween(fromDay, toDay),
+    courtCostByFacilityBetween(fromDay, toDay),
     entriesInMonthRange(fromMonth, toMonth),
   ]);
+  const courtTotal = courtCosts.reduce((s, c) => s + c.cents, 0);
 
   const months: string[] = [];
   for (let m = fromMonth; m <= toMonth && months.length < 120; m = nextMonth(m)) months.push(m);
@@ -168,12 +231,12 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
 
   const bookedRevenue = rev.bookedCents + sum(revenue, "ACTUAL");
   const forecastRevenue = rev.forecastCents + sum(revenue, "FORECAST");
-  const actualExpenses = coach + sum(expenses, "ACTUAL");
+  const actualExpenses = coach + courtTotal + sum(expenses, "ACTUAL");
   const projectedExpenses = actualExpenses + sum(expenses, "FORECAST");
 
   return {
     fromDay, toDay, months,
-    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, coachCostCents: coach },
+    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, coachCostCents: coach, courtCosts },
     revenue, expenses,
     totals: {
       bookedRevenue,
