@@ -82,6 +82,21 @@ export async function GET(req: Request) {
     : [];
   const phoneOf = new Map(coaches.map((c) => [c.id, c.person?.phone ?? null]));
 
+  // Session substitutes get the same reminders as the roster — they claimed a
+  // spot for this date, so they need to know where to be. SessionSub is a plain
+  // tag (no relation), so resolve the persons by id.
+  const subsFor = async (ids: string[]) => {
+    const map = new Map<string, { id: string; firstName: string; phone: string | null; smsConsentAt: Date | null; guardian: { firstName: string | null; phone: string | null; smsConsentAt: Date | null } | null }[]>();
+    if (!ids.length) return map;
+    const rows = await prisma.sessionSub.findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true, personId: true } });
+    const pids = [...new Set(rows.map((r) => r.personId))];
+    const people = pids.length ? await prisma.person.findMany({ where: { id: { in: pids } }, select: { id: true, firstName: true, phone: true, smsConsentAt: true, guardian: { select: { firstName: true, phone: true, smsConsentAt: true } } } }) : [];
+    const byId = new Map(people.map((p) => [p.id, p]));
+    for (const r of rows) { const p = byId.get(r.personId); if (!p) continue; const a = map.get(r.sessionId) ?? []; a.push(p); map.set(r.sessionId, a); }
+    return map;
+  };
+  const candSubs = await subsFor(candidates.map((s) => s.id));
+
   let texted = 0; // coach texts
   let players = 0; // player/parent texts
   let reminded = 0;
@@ -107,7 +122,7 @@ export async function GET(req: Request) {
     // Players + guardians with a phone: time, place, and a self-check-in
     // link scoped to that player. Dedupe by phone so a parent coaching their own
     // kid, or two players sharing a number, aren't double-texted.
-    const roster = s.teams.flatMap((st) => st.team.members.map((m) => m.person));
+    const roster = [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(candSubs.get(s.id) ?? [])];
     const sentTo = new Set<string>();
     for (const p of roster) {
       const token = await signCheckinToken(s.id, p.id);
@@ -168,6 +183,7 @@ export async function GET(req: Request) {
       },
     },
   });
+  const soonSubs = await subsFor(soon.map((s) => s.id));
   for (const s of soon) {
     const startUtc = phoenixWallTimeToUtc(s.date, s.startTime);
     const minsUntil = (startUtc.getTime() - now.getTime()) / 60000;
@@ -185,7 +201,7 @@ export async function GET(req: Request) {
     const wherePart = [facilityName, address].filter(Boolean).join(", ");
     const whereText = wherePart ? ` at ${wherePart}` : "";
 
-    const roster = s.teams.flatMap((st) => st.team.members.map((m) => m.person));
+    const roster = [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(soonSubs.get(s.id) ?? [])];
     const sentTo = new Set<string>();
     for (const p of roster) {
       const recips: { phone: string; name: string }[] = [];

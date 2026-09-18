@@ -6,6 +6,7 @@ import { dispatchMessage } from "@/lib/messaging";
 import { describeTeamPractice, dayOfWeekPlural, practiceTimeRange } from "@/lib/domain/practiceInfo";
 import { teamCategoryLabel } from "@/lib/domain/teamName";
 import { appUrl } from "@/lib/stripe";
+import { formatSessionDay, formatTime12, phoenixDateInput } from "@/lib/time";
 
 // The public "Open Spots" marketing page and its plumbing. A team is advertised
 // only when an admin checks "Make spots available" (Team.acceptingSignups) and
@@ -91,6 +92,70 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
     };
   });
   return opts?.includeFull ? rows : rows.filter((r) => r.spotsLeft > 0);
+}
+
+export type SubNeeded = {
+  sessionId: string;
+  teamId: string;
+  teamName: string;
+  category: string | null;
+  type: string;
+  dateLabel: string;
+  timeLabel: string;
+  location: string | null;
+  spotsOpen: number;
+};
+
+/**
+ * Upcoming practices/matches that need a substitute — a roster player marked out
+ * and the spot isn't covered yet. Public-safe: it never names who's out, only the
+ * team, level, date/time, location (cross streets for a private home), and how
+ * many spots are open. Ordered soonest first.
+ */
+export async function listSubsNeeded(seasonId: string): Promise<SubNeeded[]> {
+  const todayISO = phoenixDateInput(new Date());
+  const from = new Date(Date.now() - 1 * 86400000);
+  const sessions = await prisma.session.findMany({
+    where: { seasonId, type: { in: ["PRACTICE", "LEAGUE_MATCH"] }, status: { in: ["SCHEDULED", "RESCHEDULED"] }, date: { gte: from } },
+    select: {
+      id: true, type: true, date: true, startTime: true,
+      facility: { select: { name: true, isPrivate: true, crossStreets: true, generalArea: true } },
+      teams: { include: { team: { select: { id: true, name: true, isTest: true, club: true, market: true, divisionCode: true, gender: true, levelBand: true, division: { select: { name: true } } } } } },
+    },
+    orderBy: { date: "asc" },
+  });
+  const ids = sessions.map((s) => s.id);
+  const [abs, subs] = await Promise.all([
+    ids.length ? prisma.playerAbsence.findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true } }) : Promise.resolve([]),
+    ids.length ? prisma.sessionSub.findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true } }) : Promise.resolve([]),
+  ]);
+  const count = (rows: { sessionId: string }[]) => { const m = new Map<string, number>(); for (const r of rows) m.set(r.sessionId, (m.get(r.sessionId) ?? 0) + 1); return m; };
+  const absBy = count(abs);
+  const subBy = count(subs);
+
+  const out: SubNeeded[] = [];
+  for (const s of sessions) {
+    if (phoenixDateInput(s.date) < todayISO) continue; // upcoming only
+    const open = Math.max(0, (absBy.get(s.id) ?? 0) - (subBy.get(s.id) ?? 0));
+    if (open <= 0) continue;
+    const team = s.teams[0]?.team;
+    if (!team || team.isTest || team.club !== "PURE") continue;
+    const f = s.facility;
+    const locationBits = f?.isPrivate ? [f.crossStreets || f.generalArea, team.market] : [f?.name, team.market];
+    const category = team.division?.name || teamCategoryLabel({ divisionCode: team.divisionCode, gender: team.gender, divisionName: team.division?.name ?? null });
+    out.push({
+      sessionId: s.id,
+      teamId: team.id,
+      teamName: team.name,
+      category: category || team.divisionCode || team.levelBand || null,
+      type: s.type,
+      dateLabel: formatSessionDay(s.date, "long"),
+      timeLabel: formatTime12(s.startTime),
+      location: locationBits.filter(Boolean).join(" · ") || null,
+      spotsOpen: open,
+    });
+  }
+  return out;
 }
 
 /** Place a paid open-spots recruit on the team they signed up for. Called from

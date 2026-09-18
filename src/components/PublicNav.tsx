@@ -34,11 +34,17 @@ export async function PublicNav() {
 
         {/* Desktop nav — spans the row now that the logo is gone. */}
         <nav className="hidden flex-1 items-center justify-center gap-x-5 gap-y-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-brand-500 xl:flex">
-          {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className="whitespace-nowrap hover:text-brand-900">
-              {l.label}
-            </Link>
-          ))}
+          {LINKS.map((l) =>
+            l.href === "/open-spots" ? (
+              <Link key={l.href} href={l.href} className="whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1.5 text-white shadow-sm transition-colors hover:bg-emerald-700">
+                {l.label}
+              </Link>
+            ) : (
+              <Link key={l.href} href={l.href} className="whitespace-nowrap hover:text-brand-900">
+                {l.label}
+              </Link>
+            )
+          )}
         </nav>
 
         {/* Auth actions — pushed to the right; never wrap. */}
@@ -65,7 +71,11 @@ export async function PublicNav() {
                 <Link
                   key={l.href}
                   href={l.href}
-                  className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-900"
+                  className={
+                    l.href === "/open-spots"
+                      ? "mb-1 block rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                      : "block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-900"
+                  }
                 >
                   {l.label}
                 </Link>
