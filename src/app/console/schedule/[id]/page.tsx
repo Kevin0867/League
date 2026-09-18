@@ -29,6 +29,8 @@ const OK_LABEL: Record<string, string> = {
   edited: "Session updated.",
   subAdded: "Coach added to this class.",
   subRemoved: "Coach removed from this class.",
+  subremoved: "Sub removed — their spot is back on the open-spots page for someone else to claim.",
+  submoved: "Sub moved to the other practice — they've been notified of the new date.",
   cancelrequested: "Cancellation request sent to the admins.",
 };
 
@@ -38,6 +40,8 @@ const ERR_LABEL: Record<string, string> = {
   facility: "Choose a facility to relocate to.",
   coachgate: "That coach isn't cleared to be assigned (background check required).",
   subclash: "That coach already covers another class at this time. Use “add anyway” to override.",
+  movedest: "That practice isn't available to move the sub to.",
+  movefailed: "Couldn't move the sub — please try again.",
   op: "Unknown action.",
 };
 
@@ -75,14 +79,25 @@ export default async function SessionDetail({
   // Substitutes: who's marked out, who's been suggested, and who's confirmed for
   // this date. Open spots = absences not yet covered by a confirmed sub.
   const subTeamId = s.teams[0]?.teamId ?? null;
-  const [absRows, subSuggestions, subRows] = await Promise.all([
+  const [absRows, subSuggestions, subRows, movePractices] = await Promise.all([
     prisma.playerAbsence.findMany({ where: { sessionId: id }, orderBy: { createdAt: "asc" } }),
     prisma.subSuggestion.findMany({ where: { sessionId: id, status: "SUGGESTED" }, orderBy: { createdAt: "asc" } }),
     prisma.sessionSub.findMany({ where: { sessionId: id }, orderBy: { createdAt: "asc" } }),
+    // Same team's OTHER upcoming practices — the destinations for "move a sub".
+    subTeamId
+      ? prisma.session.findMany({
+          where: { id: { not: id }, teams: { some: { teamId: subTeamId } }, type: { in: ["PRACTICE", "LEAGUE_MATCH"] }, status: { in: ["SCHEDULED", "RESCHEDULED"] }, date: { gte: new Date(Date.now() - 86400000) } },
+          orderBy: { date: "asc" },
+          select: { id: true, date: true, startTime: true },
+          take: 30,
+        })
+      : Promise.resolve([]),
   ]);
+  const upcomingMoveTargets = movePractices.filter((mp) => phoenixDateInput(mp.date) >= phoenixDateInput(new Date()));
   const subLookupIds = [...new Set([...absRows.map((a) => a.personId), ...subRows.map((x) => x.personId)])];
-  const subNamePeople = subLookupIds.length ? await prisma.person.findMany({ where: { id: { in: subLookupIds } }, select: { id: true, firstName: true, lastName: true } }) : [];
+  const subNamePeople = subLookupIds.length ? await prisma.person.findMany({ where: { id: { in: subLookupIds } }, select: { id: true, firstName: true, lastName: true, email: true, phone: true, waiverSignedAt: true } }) : [];
   const subNameOf = new Map(subNamePeople.map((p) => [p.id, `${p.firstName} ${p.lastName}`.trim()]));
+  const subInfoOf = new Map(subNamePeople.map((p) => [p.id, p]));
   const openSpots = Math.max(0, absRows.length - subRows.length);
 
   // Admins manage any session; a coach may open only sessions they cover (as the
@@ -418,9 +433,57 @@ export default async function SessionDetail({
             </div>
           )}
           {subRows.length > 0 && (
-            <div className="mt-1 text-sm">
-              <span className="font-medium text-slate-700">Confirmed subs:</span>{" "}
-              <span className="text-emerald-700">{subRows.map((x) => subNameOf.get(x.personId) ?? "Sub").join(", ")}</span>
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Confirmed subs for this practice</p>
+              <ul className="mt-2 space-y-2">
+                {subRows.map((x) => {
+                  const info = subInfoOf.get(x.personId);
+                  const name = info ? `${info.firstName} ${info.lastName}`.trim() : "Sub";
+                  const contact = [info?.email, info?.phone].filter(Boolean).join(" · ");
+                  const viaWebsite = !x.addedByUserId;
+                  const waiverDone = !!info?.waiverSignedAt;
+                  return (
+                    <li key={x.id} className="rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-2 text-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="font-medium text-slate-800">{name}</span>
+                          <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${waiverDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                            {waiverDone ? "waiver signed" : "waiver pending"}
+                          </span>
+                          <span className="ml-2 text-[11px] uppercase tracking-wide text-slate-400">{viaWebsite ? "claimed online" : "added by staff"}</span>
+                          {contact && <div className="mt-0.5 text-xs text-slate-500">{contact}</div>}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {upcomingMoveTargets.length > 0 && (
+                            <form method="POST" action="/api/team-calendar" className="flex items-center gap-1">
+                              <input type="hidden" name="ticket" value={ticket} />
+                              <input type="hidden" name="op" value="moveSub" />
+                              <input type="hidden" name="teamId" value={subTeamId} />
+                              <input type="hidden" name="sessionId" value={s.id} />
+                              <input type="hidden" name="personId" value={x.personId} />
+                              <input type="hidden" name="returnTo" value={returnTo} />
+                              <select name="toSessionId" required defaultValue="" className="input w-auto py-1 text-xs">
+                                <option value="" disabled>Move to…</option>
+                                {upcomingMoveTargets.map((mp) => (
+                                  <option key={mp.id} value={mp.id}>{formatSessionDay(mp.date, "short")} · {formatTime12(mp.startTime)}</option>
+                                ))}
+                              </select>
+                              <button className="btn-secondary text-xs">Move</button>
+                            </form>
+                          )}
+                          <ConfirmSubmit
+                            action="/api/team-calendar"
+                            fields={{ ticket, op: "removeSub", teamId: subTeamId, sessionId: s.id, personId: x.personId, returnTo }}
+                            label="Remove"
+                            confirm={`Remove ${name} from this practice? Their spot goes back on the open-spots page for someone else to claim, and they'll be told it was released.`}
+                            className="btn-chip-danger"
+                          />
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 

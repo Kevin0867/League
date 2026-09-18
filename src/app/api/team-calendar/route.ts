@@ -4,7 +4,7 @@ import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { isAdmin } from "@/lib/rbac";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
-import { notifySubNeeded, notifySubSuggested, notifyEventAdded } from "@/lib/domain/teamCalendar";
+import { notifySubNeeded, notifySubSuggested, notifyEventAdded, notifySubReleased, notifySubMoved } from "@/lib/domain/teamCalendar";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { sendResetLinkForPerson } from "@/lib/domain/passwordResetSend";
@@ -162,6 +162,51 @@ export async function POST(req: Request) {
     await sendResetLinkForPerson(personId).catch(() => {});
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "calendar.addSub", summary: `Added sub ${first} ${last}` });
     return back("?ok=subadded#s-" + sessionId);
+  }
+
+  // Coach/admin: remove a sub from this practice. Their SessionSub is deleted,
+  // which reopens the spot (the player's absence is still uncovered), so it goes
+  // straight back onto the public open-spots page for someone else to claim. The
+  // removed sub is told their spot was released.
+  if (op === "removeSub") {
+    if (!isCoachOrAdmin) return back("?err=perm");
+    const personId = String(fd.get("personId") ?? "").trim();
+    if (!personId) return back("?err=fields");
+    const removed = await prisma.sessionSub.deleteMany({ where: { sessionId, personId, teamId } });
+    if (removed.count > 0) {
+      await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "calendar.removeSub", summary: `Removed sub ${personId}` });
+      await notifySubReleased(sessionId, teamId, personId).catch(() => {});
+    }
+    return back("?ok=subremoved#s-" + sessionId);
+  }
+
+  // Coach/admin: move a sub from this practice to another of the same team's
+  // upcoming practices. The origin spot reopens (back on the website); the sub
+  // and the target date's team/coach are notified.
+  if (op === "moveSub") {
+    if (!isCoachOrAdmin) return back("?err=perm");
+    const personId = String(fd.get("personId") ?? "").trim();
+    const toSessionId = String(fd.get("toSessionId") ?? "").trim();
+    if (!personId || !toSessionId || toSessionId === sessionId) return back("?err=fields");
+    // The destination must be a session this same team is on.
+    const target = await prisma.session.findFirst({ where: { id: toSessionId, teams: { some: { teamId } } }, select: { id: true } });
+    if (!target) return back("?err=movedest#s-" + sessionId);
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.sessionSub.deleteMany({ where: { sessionId, personId } });
+        await tx.sessionSub.upsert({
+          where: { sessionId_personId: { sessionId: toSessionId, personId } },
+          create: { sessionId: toSessionId, personId, teamId, addedByUserId: actor.userId },
+          update: {},
+        });
+      });
+    } catch {
+      return back("?err=movefailed#s-" + sessionId);
+    }
+    const p = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } });
+    await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "calendar.moveSub", summary: `Moved sub ${personId} to ${toSessionId}` });
+    await notifySubMoved(toSessionId, teamId, personId, p ? `${p.firstName} ${p.lastName}`.trim() : "A sub").catch(() => {});
+    return back("?ok=submoved#s-" + sessionId);
   }
 
   return back("?err=op");

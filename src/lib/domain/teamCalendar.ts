@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/stripe";
 import { dispatchMessage } from "@/lib/messaging";
+import { sendEmail, sendSms } from "@/lib/notify";
 import { formatSessionDay, formatTime12 } from "@/lib/time";
 
 // Team calendar + substitute workflow. A player marks they'll miss a practice,
@@ -243,6 +244,68 @@ export async function notifySubSuggested(sessionId: string, teamId: string, sub:
   } catch (e) {
     console.error("notifySubSuggested failed", e);
   }
+}
+
+/** Tell a removed sub directly that their spot has been released (so it can go
+ *  back on the open-spots page). Best-effort SMS + email to the person's own
+ *  contact — subs may not be portal users. */
+export async function notifySubReleased(sessionId: string, teamId: string, personId: string): Promise<void> {
+  const [ctx, person] = await Promise.all([
+    sessionContext(sessionId),
+    prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, email: true, phone: true } }),
+  ]);
+  if (!ctx?.team || !person) return;
+  const { session, team } = ctx;
+  const when = `${formatSessionDay(session.date, "long")} at ${formatTime12(session.startTime)}`;
+  const msg = `Update from PURE Academy: your spot to sub for ${team.name} on ${when} is no longer needed, so we've released it. Thanks for offering to fill in — we hope to have you on the court another time!`;
+  try {
+    if (person.email) await sendEmail(person.email, `Your sub spot was released — ${team.name}`, msg).catch(() => {});
+    if (person.phone) await sendSms(person.phone, msg).catch(() => {});
+  } catch (e) {
+    console.error("notifySubReleased failed", e);
+  }
+}
+
+/** Tell a sub their spot was auto-released because they didn't complete the
+ *  waiver in time. Points them back to the open-spots page to claim again. */
+export async function notifySubAutoReleased(sessionId: string, teamId: string, personId: string): Promise<void> {
+  const [ctx, person] = await Promise.all([
+    sessionContext(sessionId),
+    prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, email: true, phone: true } }),
+  ]);
+  if (!ctx?.team || !person) return;
+  const { session, team } = ctx;
+  const when = `${formatSessionDay(session.date, "long")} at ${formatTime12(session.startTime)}`;
+  const link = `${appUrl()}/open-spots`;
+  const msg = `PURE Academy: your spot to sub for ${team.name} on ${when} was released because the participation waiver wasn't completed within 2 hours. No problem — you can still claim this or another open spot here: ${link}`;
+  try {
+    if (person.email) await sendEmail(person.email, `Your sub spot was released — ${team.name}`, msg).catch(() => {});
+    if (person.phone) await sendSms(person.phone, msg).catch(() => {});
+  } catch (e) {
+    console.error("notifySubAutoReleased failed", e);
+  }
+}
+
+/** Tell a moved sub their spot changed to a new practice date, and notify the
+ *  target date's team/coach that the sub is joining them. */
+export async function notifySubMoved(toSessionId: string, teamId: string, personId: string, subName: string): Promise<void> {
+  const [ctx, person] = await Promise.all([
+    sessionContext(toSessionId),
+    prisma.person.findUnique({ where: { id: personId }, select: { email: true, phone: true } }),
+  ]);
+  if (!ctx?.team || !person) return;
+  const { session, team } = ctx;
+  const when = `${formatSessionDay(session.date, "long")} at ${formatTime12(session.startTime)}`;
+  const where = session.facility?.name ? ` at ${session.facility.name}` : "";
+  const msg = `Update from PURE Academy: your sub spot for ${team.name} has been moved to ${when}${where}. You'll get the normal practice reminders. If that date doesn't work for you, please let your coach know.`;
+  try {
+    if (person.email) await sendEmail(person.email, `Your sub date changed — ${team.name}`, msg).catch(() => {});
+    if (person.phone) await sendSms(person.phone, msg).catch(() => {});
+  } catch (e) {
+    console.error("notifySubMoved failed", e);
+  }
+  // Let the new date's team + coach know they've got a sub joining.
+  await notifySubJoined(toSessionId, teamId, subName).catch(() => {});
 }
 
 /** Tell the coach + the team that a sub is joining them for a specific date. */

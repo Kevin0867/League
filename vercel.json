@@ -9,6 +9,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/release-unwaivered-subs",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/auto-close-sessions",
       "schedule": "*/15 * * * *"
     },
