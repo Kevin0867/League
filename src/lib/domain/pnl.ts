@@ -31,7 +31,7 @@ function nextMonth(m: string): string {
 
 export type PnlEntryRow = { id: string; section: string; label: string; amountCents: number; kind: string; note: string | null; month: string };
 
-type Contribution = { day: string; bucket: "booked" | "forecast"; cents: number };
+type Contribution = { day: string; bucket: "booked" | "forecast"; cents: number; personId?: string | null };
 
 /**
  * Every revenue contribution, tagged by Phoenix day and booked-vs-forecast.
@@ -48,7 +48,7 @@ async function revenueContributions(): Promise<Contribution[]> {
     stripeChargesSince(sinceUnix).catch(() => null),
     prisma.payment.findMany({
       where: { direction: "IN", status: { in: ["PAID", "PENDING", "REQUESTED"] }, category: { not: "REFUND" } },
-      select: { amountCents: true, status: true, paidAt: true, createdAt: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true },
+      select: { amountCents: true, status: true, paidAt: true, createdAt: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },
     }),
     prisma.payment.findMany({ where: { direction: "IN", status: "PAID", method: "MANUAL", category: { not: "REFUND" } }, select: { amountCents: true, paidAt: true, createdAt: true } }),
   ]);
@@ -75,28 +75,36 @@ async function revenueContributions(): Promise<Contribution[]> {
     for (const r of refunds) out.push({ day: day(r.paidAt ?? r.createdAt), bucket: "booked", cents: -r.amountCents });
   }
 
+  const playerOf = (p: { coveredPersonIds: unknown; partyId: string | null }) => {
+    const c = Array.isArray(p.coveredPersonIds) ? p.coveredPersonIds : [];
+    return (c.length ? String(c[0]) : p.partyId) ?? null;
+  };
   for (const p of pays) {
+    const who = playerOf(p);
     if (p.installmentPlan) {
       const total = p.installmentsTotal ?? 3;
       const per = Math.round(p.amountCents / total);
       const dates = installmentChargeDates(p.createdAt);
-      for (let i = p.installmentsPaid ?? 0; i < total; i++) out.push({ day: day(dates[i] ?? p.createdAt), bucket: "forecast", cents: per });
+      for (let i = p.installmentsPaid ?? 0; i < total; i++) out.push({ day: day(dates[i] ?? p.createdAt), bucket: "forecast", cents: per, personId: who });
     } else if (p.status !== "PAID") {
-      out.push({ day: day(p.createdAt), bucket: "forecast", cents: p.amountCents });
+      out.push({ day: day(p.createdAt), bucket: "forecast", cents: p.amountCents, personId: who });
     }
   }
   return out;
 }
 
-/** Booked + forecast revenue between two Phoenix days (inclusive, "YYYY-MM-DD"). */
-export async function revenueBetween(fromDay: string, toDay: string): Promise<{ bookedCents: number; forecastCents: number }> {
+/** Booked + forecast revenue between two Phoenix days (inclusive, "YYYY-MM-DD"),
+ *  with a count of distinct players making up the forecast. */
+export async function revenueBetween(fromDay: string, toDay: string): Promise<{ bookedCents: number; forecastCents: number; forecastPlayers: number }> {
   const contribs = await revenueContributions();
   let booked = 0, forecast = 0;
+  const players = new Set<string>();
   for (const c of contribs) {
     if (c.day < fromDay || c.day > toDay) continue;
-    if (c.bucket === "booked") booked += c.cents; else forecast += c.cents;
+    if (c.bucket === "booked") booked += c.cents;
+    else { forecast += c.cents; if (c.personId) players.add(c.personId); }
   }
-  return { bookedCents: booked, forecastCents: forecast };
+  return { bookedCents: booked, forecastCents: forecast, forecastPlayers: players.size };
 }
 
 /** Delivered-practice coach session pay between two Phoenix days (inclusive). */
@@ -130,7 +138,7 @@ export type PnlRange = {
   fromDay: string;
   toDay: string;
   months: string[];
-  auto: { bookedCents: number; forecastCents: number; coachCostCents: number };
+  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; coachCostCents: number };
   revenue: PnlEntryRow[];
   expenses: PnlEntryRow[];
   totals: {
@@ -165,7 +173,7 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
 
   return {
     fromDay, toDay, months,
-    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, coachCostCents: coach },
+    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, coachCostCents: coach },
     revenue, expenses,
     totals: {
       bookedRevenue,

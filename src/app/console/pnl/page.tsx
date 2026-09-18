@@ -25,7 +25,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
 
   const pnl: PnlRange = valid
     ? await pnlRange(from, to)
-    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, coachCostCents: 0 }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0 } };
+    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, coachCostCents: 0 }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0 } };
   const t = pnl.totals;
   const returnTo = `${RT}?from=${from}&to=${to}`;
   const addMonth = pnl.months[pnl.months.length - 1] ?? to.slice(0, 7);
@@ -75,7 +75,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         addMonth={addMonth}
         autoRows={[
           { label: "Booked revenue (collected)", value: pnl.auto.bookedCents, note: "Cash actually collected in this range — live from Stripe (net of refunds, includes apparel) + offline payments. Matches Payments. Auto." },
-          ...(pnl.auto.forecastCents > 0 ? [{ label: "Scheduled / outstanding (forecast)", value: pnl.auto.forecastCents, note: "Installments due later + unpaid one-time fees expected in this range. Auto." }] : []),
+          ...(pnl.auto.forecastCents > 0 ? [{ label: `Scheduled / outstanding (forecast) · ${pnl.auto.forecastPlayers} player${pnl.auto.forecastPlayers === 1 ? "" : "s"}`, value: pnl.auto.forecastCents, note: "Installments due later + unpaid one-time fees expected in this range. Auto." }] : []),
         ]}
         rows={pnl.revenue}
       />
