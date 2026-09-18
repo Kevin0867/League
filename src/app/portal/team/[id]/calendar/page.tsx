@@ -121,7 +121,7 @@ export default async function TeamCalendarPage({
 
       <AddTeamEventForm teamId={teamId} ticket={ticket} returnTo={returnTo} />
 
-      <CalendarView events={[...toEvents(sessions), ...eventCal]} initialView="month" initialDateISO={today} />
+      <CalendarView events={[...toEvents(sessions), ...eventCal]} initialView="month" initialDateISO={today} todayISO={today} />
 
       <section className="card">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

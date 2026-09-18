@@ -118,7 +118,7 @@ export default async function ConsoleTeamCalendarPage({
 
           {selectedTeam && <AddTeamEventForm teamId={selectedTeam.id} ticket={ticket} returnTo={eventReturnTo} />}
 
-          <CalendarView events={events} initialView="month" initialDateISO={today} />
+          <CalendarView events={events} initialView="month" initialDateISO={today} todayISO={today} />
 
           {selectedTeam && (
             <TeamEventList events={upcomingEvents} teamId={selectedTeam.id} ticket={ticket} returnTo={eventReturnTo} canManage />

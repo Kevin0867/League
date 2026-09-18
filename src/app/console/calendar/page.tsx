@@ -5,6 +5,7 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { getSeasonWeeks, weekStatus, DIVISION_MIN_TEAMS, type WeekKind, type WeekPlan, type WeekStatus } from "@/lib/domain/seasonCalendar";
 import { ConsolidateDivisions } from "./ConsolidateDivisions";
+import { phoenixDateInput } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,9 @@ export default async function SeasonCalendarPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const now = new Date();
+  // Anchor "now" to the Phoenix calendar day (noon UTC on it) so the current-week
+  // highlight is right in Arizona time, not the server's UTC clock.
+  const now = new Date(`${phoenixDateInput(new Date())}T12:00:00Z`);
   const session = await getSession();
   const admin = session ? isAdmin(session.role) : false;
   const ticket = await mintConsoleTicket();
