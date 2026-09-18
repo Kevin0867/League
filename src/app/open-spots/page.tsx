@@ -102,7 +102,7 @@ export default async function OpenSpotsPage({ searchParams }: { searchParams: Pr
           <section id="subs">
             <h2 className="text-lg font-bold text-brand-900">Subs needed for practice / match</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Fill in for a single practice — <span className="font-semibold text-emerald-700">no charge</span>. Claim a spot, sign the quick waiver, and you&apos;re set. We&apos;ll text you the details and directions.
+              Fill in for a single practice — <span className="font-semibold text-emerald-700">no charge</span>. Claim a spot, sign the waiver, and you&apos;re set. We&apos;ll text you the details and directions.
             </p>
 
             {subs.length === 0 ? (
