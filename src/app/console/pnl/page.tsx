@@ -2,7 +2,8 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
-import { pnlModel, monthTotals, monthLabel, thisMonth, type PnlMonth, type PnlEntryRow } from "@/lib/domain/pnl";
+import { pnlModel, monthTotals, monthLabel, thisMonth, revenueBetween, coachCostBetween, type PnlMonth, type PnlEntryRow } from "@/lib/domain/pnl";
+import { phoenixDateInput } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "P&L" };
@@ -21,6 +22,17 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
   const t = monthTotals(selected);
   const returnTo = `${RT}?month=${selectedKey}`;
 
+  // Custom date range for pulling revenue over any window (not just a month).
+  const today = phoenixDateInput(new Date());
+  const dayRe = /^\d{4}-\d{2}-\d{2}$/;
+  const rangeFrom = sp.from && dayRe.test(sp.from) ? sp.from : `${thisMonth()}-01`;
+  const rangeTo = sp.to && dayRe.test(sp.to) ? sp.to : today;
+  const rangeValid = rangeFrom <= rangeTo;
+  const [rangeRev, rangeCoach] = rangeValid
+    ? await Promise.all([revenueBetween(rangeFrom, rangeTo), coachCostBetween(rangeFrom, rangeTo)])
+    : [{ bookedCents: 0, forecastCents: 0 }, 0];
+  const rangeNet = rangeRev.bookedCents - rangeCoach;
+
   return (
     <div className="space-y-6">
       <PageHeader title="P&amp;L" subtitle="Track revenue and expenses by month. Booked revenue is cash actually collected — a subscription's paid installment counts now; the rest is forecast." />
@@ -30,6 +42,34 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
       {sp.ok === "deleted" && <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">Line item removed.</div>}
       {sp.err === "fields" && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Give the line item a name (and pick a month).</div>}
       {sp.err && sp.err !== "fields" && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Something went wrong — please try again.</div>}
+
+      {/* Custom date range — pull collected revenue for any window you choose. */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Revenue for a date range</h2>
+        <p className="mt-0.5 text-sm text-slate-500">Choose any start and end date to see exactly what was collected (booked) in that window — a subscription installment counts on the day it cleared.</p>
+        <form method="GET" action={RT} className="mt-3 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="month" value={selectedKey} />
+          <div>
+            <label className="label text-xs">From</label>
+            <input name="from" type="date" defaultValue={rangeFrom} className="input py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="label text-xs">To</label>
+            <input name="to" type="date" defaultValue={rangeTo} className="input py-1.5 text-sm" />
+          </div>
+          <button className="btn-primary text-sm">Pull revenue</button>
+        </form>
+        {!rangeValid ? (
+          <p className="mt-3 text-sm text-rose-700">The “from” date needs to be on or before the “to” date.</p>
+        ) : (
+          <div className="mt-4 grid gap-4 sm:grid-cols-4">
+            <Stat label="Booked revenue" value={formatCents(rangeRev.bookedCents)} tone="emerald" sub={`${rangeFrom} → ${rangeTo}`} />
+            <Stat label="Forecast revenue" value={formatCents(rangeRev.forecastCents)} sub="scheduled / outstanding in range" />
+            <Stat label="Coach session pay" value={formatCents(rangeCoach)} tone="rose" sub="delivered practices in range" />
+            <Stat label="Net (booked − coach)" value={formatCents(rangeNet)} tone={rangeNet >= 0 ? "emerald" : "rose"} sub="add your expenses below" />
+          </div>
+        )}
+      </div>
 
       {/* Month picker */}
       <div className="flex flex-wrap items-center gap-2">
@@ -58,7 +98,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         ticket={ticket}
         returnTo={returnTo}
         autoRows={[
-          { label: "Booked revenue (collected)", value: selected.auto.bookedCents, note: "Cash in this month — one-time fees paid + each subscription installment that cleared. Auto." },
+          { label: "Booked revenue (collected)", value: selected.auto.bookedCents, note: "Cash actually collected this month — live from Stripe (net of refunds, includes apparel) + offline payments. Matches Payments. Auto." },
           ...(selected.auto.forecastCents > 0 ? [{ label: "Scheduled / outstanding (forecast)", value: selected.auto.forecastCents, note: "Installments due later + unpaid one-time fees, expected this month. Auto." }] : []),
         ]}
         rows={selected.revenue}

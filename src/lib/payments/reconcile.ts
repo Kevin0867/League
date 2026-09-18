@@ -298,6 +298,34 @@ export async function stripeCollectedBreakdown(sinceUnix?: number): Promise<{ to
 }
 
 /**
+ * Every succeeded Stripe charge since `sinceUnix`, with its created time and NET
+ * amount (amount − refunded). Same source and rules as stripeCollectedBreakdown,
+ * but per-charge so callers can bucket collected revenue by an arbitrary day,
+ * month, or date range — and always agree with the "Collected" figure. Returns
+ * null if Stripe isn't configured (callers fall back to app records).
+ */
+export async function stripeChargesSince(sinceUnix?: number): Promise<{ created: number; netCents: number; invoice: boolean }[] | null> {
+  if (!isStripeConfigured()) return null;
+  const client = stripe();
+  const out: { created: number; netCents: number; invoice: boolean }[] = [];
+  let startingAfter: string | undefined;
+  for (let page = 0; page < 40; page++) {
+    const batch: Stripe.Response<Stripe.ApiList<Stripe.Charge>> = await client.charges.list({
+      limit: 100,
+      ...(sinceUnix ? { created: { gte: sinceUnix } } : {}),
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    for (const c of batch.data) {
+      if (c.status !== "succeeded" || !c.paid) continue;
+      out.push({ created: c.created, netCents: c.amount - c.amount_refunded, invoice: !!c.invoice });
+    }
+    if (!batch.has_more || batch.data.length === 0) break;
+    startingAfter = batch.data[batch.data.length - 1]?.id;
+  }
+  return out;
+}
+
+/**
  * Remove rows the CSV reconciler CREATED (its early versions recorded a full
  * charge — fee + apparel — as a new fee, which double-counts against a fee the
  * webhook already recorded). Those rows are identifiable: they carry the Stripe
