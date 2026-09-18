@@ -20,6 +20,7 @@ import { CopyLink } from "@/components/CopyLink";
 import { appUrl } from "@/lib/stripe";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { ensureFamilyCalendarToken } from "@/lib/domain/familyCalendar";
+import { feeStateOf } from "@/lib/domain/feeStatus";
 import { playerSubSessions } from "@/lib/domain/subbing";
 import { SubbingList } from "@/components/SubbingList";
 
@@ -97,8 +98,15 @@ export default async function PortalHome({
         orderBy: { createdAt: "desc" },
       })
     : [];
+  // An active 3-payment plan (first installment in) is PENDING but NOT "due" —
+  // it auto-charges on schedule, so it must never show as a balance owed with a
+  // "pay now" button (that's how a player on a plan was told to pay $495 again).
+  // Split it out and show it as a plan-status card instead. Mirrors the console's
+  // feeStateOf so the portal and admin agree.
+  const isActiveSub = (p: (typeof payments)[number]) => feeStateOf(p) === "subscription";
+  const subscriptionPayments = payments.filter((p) => p.status === "PENDING" && isActiveSub(p));
   // Outstanding fees drive a top-of-page call to action; the rest is history.
-  const outstandingPayments = payments.filter((p) => p.status === "REQUESTED" || p.status === "PENDING");
+  const outstandingPayments = payments.filter((p) => (p.status === "REQUESTED" || p.status === "PENDING") && !isActiveSub(p));
   const failedPayments = payments.filter((p) => p.status === "FAILED");
   const paymentHistory = payments.filter((p) => !["REQUESTED", "PENDING", "FAILED"].includes(p.status));
   const totalOutstanding = outstandingPayments.reduce((s, p) => s + p.amountCents, 0);
@@ -401,6 +409,42 @@ export default async function PortalHome({
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* On a payment plan — informational, no "pay now" (it auto-charges). */}
+      {subscriptionPayments.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Payment plan</h2>
+          <div className="space-y-3">
+            {subscriptionPayments.map((p) => {
+              const total = p.installmentsTotal ?? 3;
+              const per = Math.round(p.amountCents / total);
+              const paid = p.installmentsPaid ?? 0;
+              const remaining = Math.max(0, total - paid);
+              const dates = installmentChargeDates(p.createdAt);
+              const nextDate = paid < total ? dates[paid] : null;
+              return (
+                <div key={p.id} className="card border-l-4 border-emerald-500">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-bold text-slate-900">You&apos;re on the {total}-payment plan</div>
+                      <div className="text-xs text-slate-500">{p.description ?? p.category.replace(/_/g, " ")}</div>
+                    </div>
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800">
+                      {formatCents(per * paid)} paid
+                    </span>
+                  </div>
+                  <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                    {paid} of {total} payments made{remaining > 0 ? `, ${remaining} to go` : ""}.
+                    {nextDate
+                      ? ` Your next payment of ${formatCents(per)} is scheduled for ${formatStamp(nextDate)} — it's charged automatically, so there's nothing you need to do.`
+                      : " All payments complete. Thank you!"}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
