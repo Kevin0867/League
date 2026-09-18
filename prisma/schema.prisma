@@ -890,6 +890,28 @@ model PlayerAbsence {
   @@index([teamId])
 }
 
+/// An editable P&L line item for a given month (Phoenix "YYYY-MM"). Booked
+/// revenue and scheduled coach/facility costs are computed live from real data;
+/// these rows are the admin's own editable additions — extra revenue, and every
+/// expense (rent, marketing, supplies…) — plus FORECAST rows for projecting a
+/// month or the whole program. Amounts are cents. No FK; month is a plain tag.
+model PnlEntry {
+  id          String   @id @default(cuid())
+  month       String   // "YYYY-MM" (Phoenix calendar month)
+  /// REVENUE | EXPENSE
+  section     String
+  label       String
+  amountCents Int      @default(0)
+  /// ACTUAL (booked/committed) | FORECAST (projection only)
+  kind        String   @default("ACTUAL")
+  note        String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([month])
+}
+
 /// A lightweight, user-added team calendar event (team dinner, extra hit,
 /// social) — distinct from Session, which carries coaching pay, attendance, and
 /// the auto-close cron. Team members, the coach, and admins can add these; adding
