@@ -2,9 +2,11 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { formatCents } from "@/lib/money";
-import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT, SUPPORT_ADDRESS } from "@/lib/payments/receipt";
+import { ACADEMY_LOGO, PADEL_LOGO, splitInstallments, INSTALLMENT_COUNT, SUPPORT_ADDRESS, installmentChargeDates } from "@/lib/payments/receipt";
 import { SeasonFeePayForm } from "./SeasonFeePayForm";
 import { refreshSeasonFeeDescription } from "@/lib/payments/familyFee";
+import { feeStateOf } from "@/lib/domain/feeStatus";
+import { formatStamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +89,8 @@ export default async function PublicPayPage({
             <h1 className="mt-4 text-xl font-bold text-slate-900">You&apos;re all set</h1>
             <p className="mt-2 text-slate-500">This fee has already been paid. Thank you!</p>
           </div>
+        ) : feeStateOf(payment!) === "subscription" ? (
+          <PlanStatusCard payment={payment!} />
         ) : payment!.category === "ALA_CARTE" ? (
           <OneOffPayCard payment={payment!} title="Confirm your spot" fallbackDesc="PURE Academy clinic" canceled={canceled} err={err} />
         ) : payment!.category === "CUSTOM" || payment!.category === "ACP_ENTRY" ? (
@@ -99,7 +103,7 @@ export default async function PublicPayPage({
 
         {/* Can't pay by the deadline? Let the family tell us why in one tap — it
             routes to staff for a personal follow-up. Only while still unpaid. */}
-        {!invalid && payment!.status !== "PAID" && payment!.category !== "APPAREL" && (
+        {!invalid && payment!.status !== "PAID" && payment!.category !== "APPAREL" && feeStateOf(payment!) !== "subscription" && (
           heard === "1" ? (
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center text-sm text-emerald-800">
               <div className="mx-auto mb-1 grid h-8 w-8 place-items-center rounded-full bg-emerald-100">✓</div>
@@ -142,6 +146,44 @@ export default async function PublicPayPage({
           <a href={`mailto:${SUPPORT_ADDRESS}`} className="text-brand-600 underline">{SUPPORT_ADDRESS}</a>.
         </p>
       </div>
+    </div>
+  );
+}
+
+// Already on the 3-payment plan (first installment cleared): never offer to pay
+// again — it auto-charges on schedule. Show the plan status instead.
+function PlanStatusCard({
+  payment,
+}: {
+  payment: { amountCents: number; description: string | null; createdAt: Date; installmentsPaid: number; installmentsTotal: number | null };
+}) {
+  const total = payment.installmentsTotal ?? INSTALLMENT_COUNT;
+  const per = Math.round(payment.amountCents / total);
+  const paid = payment.installmentsPaid ?? 0;
+  const remaining = Math.max(0, total - paid);
+  const dates = installmentChargeDates(payment.createdAt);
+  const nextDate = paid < total ? dates[paid] : null;
+  return (
+    <div className="card">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-2xl">✓</div>
+      <h1 className="mt-4 text-center text-xl font-bold text-slate-900">You&apos;re on the {total}-payment plan</h1>
+      <p className="mt-2 text-center text-sm text-slate-500">{payment.description ?? "PURE Academy season fee"}</p>
+      <div className="mt-4 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-100">
+        <div className="flex items-center justify-between">
+          <span className="font-medium">Paid so far</span>
+          <span className="text-lg font-bold">{formatCents(per * paid)}</span>
+        </div>
+        <p className="mt-2">
+          {paid} of {total} payments made{remaining > 0 ? `, ${remaining} to go` : ""}.
+          {nextDate
+            ? ` Your next payment of ${formatCents(per)} is scheduled for ${formatStamp(nextDate)} — it's charged automatically, so there's nothing you need to do.`
+            : " All payments complete. Thank you!"}
+        </p>
+      </div>
+      <p className="mt-4 text-center text-xs text-slate-400">
+        Questions about your plan? Contact us at{" "}
+        <a href={`mailto:${SUPPORT_ADDRESS}`} className="text-brand-600 underline">{SUPPORT_ADDRESS}</a>.
+      </p>
     </div>
   );
 }
