@@ -7,6 +7,8 @@ import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { appUrl } from "@/lib/stripe";
 import { CopyLink } from "@/components/CopyLink";
+import { coachSubSessions } from "@/lib/domain/subbing";
+import { SubbingList } from "@/components/SubbingList";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Today" };
@@ -70,6 +72,10 @@ export default async function TodayPage() {
     return { team: t, pick, kind, sortKey, checked: pick?._count.attendance ?? 0 };
   });
   cards.sort((a, b) => a.sortKey - b.sortKey);
+
+  // Practices this coach is covering for teams they don't coach (subbing), in
+  // next-practice order — with directions, so they know exactly where to be.
+  const subbing = coach ? await coachSubSessions(coach.id, teamIds) : [];
 
   // Calendar subscription — practices, matches & lessons on the coach's phone.
   let calFeedUrl: string | null = null;
@@ -139,8 +145,12 @@ export default async function TodayPage() {
         <p className="text-sm text-slate-500">{niceToday}{summary ? ` · ${summary}` : ""}</p>
       </div>
 
+      <SubbingList sessions={subbing} coach />
+
       {teams.length === 0 ? (
-        <div className="card text-sm text-slate-500">You&rsquo;re not assigned to any teams yet. An admin adds you as a team&rsquo;s coach.</div>
+        subbing.length === 0 && (
+          <div className="card text-sm text-slate-500">You&rsquo;re not assigned to any teams yet. An admin adds you as a team&rsquo;s coach.</div>
+        )
       ) : (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Your teams</h2>

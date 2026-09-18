@@ -20,6 +20,8 @@ import { CopyLink } from "@/components/CopyLink";
 import { appUrl } from "@/lib/stripe";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { ensureFamilyCalendarToken } from "@/lib/domain/familyCalendar";
+import { playerSubSessions } from "@/lib/domain/subbing";
+import { SubbingList } from "@/components/SubbingList";
 
 const PAY_ERRORS: Record<string, { title: string; detail: string }> = {
   notfound: { title: "We couldn't find that invoice", detail: "The payment link may be out of date. Refresh the page and try again, or contact us if it persists." },
@@ -58,6 +60,11 @@ export default async function PortalHome({
         orderBy: { submittedAt: "desc" },
       })
     : [];
+
+  // Dates this household is subbing in for (added as a one-date sub) — shown up
+  // top so a sub sees where to be, with directions, even though they're not on
+  // the team roster.
+  const subbing = await playerSubSessions(peopleIds);
 
   const memberships = peopleIds.length
     ? await prisma.teamMember.findMany({
@@ -222,6 +229,9 @@ export default async function PortalHome({
           <span className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-bold text-white">Book →</span>
         </div>
       </Link>
+
+      {/* You're subbing — where to be, when, and directions (in next-practice order). */}
+      <SubbingList sessions={subbing} />
 
       {/* Team Calendar — practices/events + let the team know if you can't make it. */}
       {teamIds.length > 0 && (
