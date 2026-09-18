@@ -7,13 +7,15 @@ export const dynamic = "force-dynamic";
 export default async function ResetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string; error?: string; invite?: string }>;
+  searchParams: Promise<{ token?: string; error?: string; invite?: string; next?: string }>;
 }) {
-  const { token, error, invite } = await searchParams;
+  const { token, error, invite, next } = await searchParams;
   const invalid = error === "invalid" || !token;
   const message =
     error === "short" ? "Password must be at least 8 characters." : error === "mismatch" ? "Passwords don't match." : null;
   const isInvite = invite === "1";
+  // Only honor a local path as the post-set destination (e.g. straight to the waiver).
+  const nextPath = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
 
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-br from-slate-50 to-brand-50 px-4">
@@ -37,6 +39,7 @@ export default async function ResetPage({
           ) : (
             <form method="POST" action="/api/auth/reset" className="mt-5 space-y-4">
               <input type="hidden" name="token" value={token} />
+              {nextPath && <input type="hidden" name="next" value={nextPath} />}
               <PasswordField name="password" label="New password" confirm hint="At least 8 characters." />
               {message && (
                 <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{message}</p>

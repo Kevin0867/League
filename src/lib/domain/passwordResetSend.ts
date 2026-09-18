@@ -31,6 +31,54 @@ async function ensureLogin(email: string, role: "PLAYER" | "PARENT", personId: s
   return created.id;
 }
 
+// Mint a single "set your password, then land on `nextPath`" link for a person
+// — creating their portal login if needed (guardian's for a minor with no email
+// of their own). Used to fold the waiver + password steps into ONE message when
+// someone claims a sub spot. Returns null when there's no email anywhere to base
+// a login on (caller falls back to a plain public link, e.g. the waiver itself).
+export async function mintPortalAccessLink(personId: string, nextPath: string): Promise<string | null> {
+  const person = await prisma.person.findUnique({
+    where: { id: personId },
+    select: {
+      id: true, firstName: true, lastName: true, email: true, email2: true, email3: true, phone: true,
+      _count: { select: { dependents: true } },
+      user: { select: { id: true, active: true } },
+      guardian: {
+        select: {
+          id: true, email: true, email2: true, email3: true, phone: true,
+          user: { select: { id: true, active: true } },
+        },
+      },
+    },
+  });
+  if (!person) return null;
+
+  const guardian = person.guardian;
+  let accountUserId: string;
+
+  if (person.user) {
+    if (!person.user.active) return null;
+    accountUserId = person.user.id;
+  } else if (guardian?.user) {
+    if (!guardian.user.active) return null;
+    accountUserId = guardian.user.id;
+  } else {
+    const personEmails = emailsOf(person);
+    const guardianEmails = guardian ? emailsOf(guardian) : [];
+    if (personEmails.length) {
+      accountUserId = await ensureLogin(personEmails[0], person._count.dependents > 0 ? "PARENT" : "PLAYER", person.id);
+    } else if (guardian && guardianEmails.length) {
+      accountUserId = await ensureLogin(guardianEmails[0], "PARENT", guardian.id);
+    } else {
+      return null; // No email to base a login on.
+    }
+  }
+
+  const token = await createResetToken(accountUserId, INVITE_TTL_MS);
+  const local = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/portal";
+  return `${appUrl()}/reset?token=${token}&invite=1&next=${encodeURIComponent(local)}`;
+}
+
 export async function sendResetLinkForPerson(personId: string): Promise<ResetSendResult> {
   const person = await prisma.person.findUnique({
     where: { id: personId },

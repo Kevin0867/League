@@ -15,9 +15,13 @@ export async function POST(req: Request) {
   const token = String(form.get("token") ?? "");
   const password = String(form.get("password") ?? "");
   const passwordConfirm = String(form.get("passwordConfirm") ?? "");
+  // Optional post-set destination (e.g. straight to the waiver). Local paths only.
+  const nextRaw = String(form.get("next") ?? "").trim();
+  const nextPath = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : null;
 
+  const nextQs = nextPath ? `&next=${encodeURIComponent(nextPath)}` : "";
   const bail = (error: string) =>
-    NextResponse.redirect(new URL(`/reset?token=${encodeURIComponent(token)}&error=${error}`, origin), 303);
+    NextResponse.redirect(new URL(`/reset?token=${encodeURIComponent(token)}&error=${error}${nextQs}`, origin), 303);
 
   if (password.length < 8) return bail("short");
   if (password !== passwordConfirm) return bail("mismatch");
@@ -41,7 +45,7 @@ export async function POST(req: Request) {
     personId: user.personId ?? null,
     name,
   });
-  const res = NextResponse.redirect(new URL(isStaff(roles) ? "/console" : "/portal", origin), 303);
+  const res = NextResponse.redirect(new URL(nextPath ?? (isStaff(roles) ? "/console" : "/portal"), origin), 303);
   res.cookies.set(SESSION_COOKIE, jwt, sessionCookieOptions);
   return res;
 }
