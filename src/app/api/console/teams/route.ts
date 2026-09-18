@@ -635,6 +635,8 @@ export async function POST(req: Request) {
         create: { teamId, personId, roleOnTeam: "PLAYER" },
         update: {},
       });
+      // If they were on this team's waitlist, they're placed now — clear it.
+      await prisma.teamWaitlist.deleteMany({ where: { teamId, personId } });
       await prisma.registration.updateMany({ where: { personId, seasonId: team.seasonId }, data: { status: "ASSIGNED" } });
       // Placing a player (incl. off the waitlist) clears them to pay — ensure a
       // season-fee invoice exists so they can pay the fee + apparel right away.
@@ -646,6 +648,66 @@ export async function POST(req: Request) {
 
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster${overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
       return back(overCap ? "?ok=addPlayerOver" : "?ok=addPlayer");
+    }
+
+    // Add a person to a (usually full) team's waitlist — kept OFF the roster, so
+    // it never affects capacity. Ordered by createdAt. Silent (no family email),
+    // like removePlayer; promotion later sends the normal team welcome.
+    case "waitlistAdd": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      if (!teamId || !personId) return back("?err=player");
+      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { seasonId: true } });
+      if (!team) return back("?err=notfound");
+      // Already on the roster? Nothing to waitlist.
+      const onRoster = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId, personId } }, select: { teamId: true } });
+      if (onRoster) return back("?err=alreadyon");
+      await prisma.teamWaitlist.upsert({
+        where: { teamId_personId: { teamId, personId } },
+        create: { teamId, personId, seasonId: team.seasonId, addedByUserId: actor.userId, note: String(formData.get("note") ?? "").trim().slice(0, 300) || null },
+        update: {},
+      });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "waitlist.add", summary: `Waitlisted ${personId}` });
+      return back("?ok=waitlisted");
+    }
+
+    case "waitlistRemove": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      if (!teamId || !personId) return back("?err=player");
+      await prisma.teamWaitlist.deleteMany({ where: { teamId, personId } });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "waitlist.remove", summary: `Removed ${personId} from waitlist` });
+      return back("?ok=waitlistremoved");
+    }
+
+    // Promote a waitlisted person onto the team — same placement as addPlayer
+    // (respecting the admin max), then clear their waitlist entry. On success the
+    // player gets the normal team welcome (first placement).
+    case "waitlistPromote": {
+      if (!actor || !can(actor.role, "manageTeams")) return back("?err=auth");
+      const personId = String(formData.get("personId") ?? "");
+      if (!teamId || !personId) return back("?err=player");
+      const team = await prisma.team.findUnique({ where: { id: teamId }, include: { _count: { select: { members: true } } } });
+      if (!team) return back("?err=notfound");
+      const already = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId, personId } } });
+      const effective = team._count.members + (team.coachPlays ? 1 : 0) + (already ? 0 : 1);
+      // Can't place past the hard ceiling — remove a player first, then promote.
+      if (effective > TEAM_MAX) return back("?err=capfull");
+      const overCap = effective > TEAM_CAP;
+
+      const seasonTeamIds = (await prisma.team.findMany({ where: { seasonId: team.seasonId }, select: { id: true } })).map((t) => t.id);
+      const firstPlacement = !(await prisma.teamMember.findFirst({ where: { personId, teamId: { in: seasonTeamIds } }, select: { id: true } }));
+      const otherTeamIds = (await prisma.team.findMany({ where: { seasonId: team.seasonId, id: { not: teamId } }, select: { id: true } })).map((t) => t.id);
+      if (otherTeamIds.length) await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: otherTeamIds } } });
+
+      await prisma.teamMember.upsert({ where: { teamId_personId: { teamId, personId } }, create: { teamId, personId, roleOnTeam: "PLAYER" }, update: {} });
+      await prisma.teamWaitlist.deleteMany({ where: { teamId, personId } });
+      await prisma.registration.updateMany({ where: { personId, seasonId: team.seasonId }, data: { status: "ASSIGNED" } });
+      await ensureSeasonFeePayable(personId, team.seasonId);
+      if (firstPlacement) await sendTeamLaunch({ personId, seasonId: team.seasonId, senderId: actor.userId });
+
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "waitlist.promote", summary: `Promoted ${personId} off waitlist to roster${overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
+      return back(overCap ? "?ok=promotedOver" : "?ok=promoted");
     }
 
     case "publishTeam": {

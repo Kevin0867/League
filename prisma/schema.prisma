@@ -972,6 +972,22 @@ model SessionSub {
   @@index([sessionId])
 }
 
+/// A person waiting for a spot on a full team. Kept off the roster (doesn't
+/// count toward capacity); ordered by createdAt (FIFO). When a spot opens an
+/// admin promotes them onto the team, which removes the waitlist entry.
+model TeamWaitlist {
+  id            String   @id @default(cuid())
+  teamId        String
+  personId      String
+  seasonId      String?
+  note          String?
+  addedByUserId String?
+  createdAt     DateTime @default(now())
+
+  @@unique([teamId, personId])
+  @@index([teamId])
+}
+
 /// Coach on a session — supports substitute/backup coverage per session (§5)
 /// and assistant-coach payout at 50% (§9).
 model SessionCoach {

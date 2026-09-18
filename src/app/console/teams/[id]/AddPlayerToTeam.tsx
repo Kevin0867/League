@@ -37,8 +37,8 @@ export function AddPlayerToTeam({
       </summary>
       <div className="border-t border-slate-100 p-3">
         {atCap ? (
-          <p className="mb-2 rounded-md bg-rose-50 px-2 py-1 text-xs text-rose-700">
-            This team is at the maximum of {TEAM_MAX} — remove a player before adding another.
+          <p className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700">
+            This team is full (max {TEAM_MAX}). Adding someone here puts them on the <span className="font-semibold">waitlist</span> — they stay off the roster until you place them.
           </p>
         ) : overCap ? (
           <p className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700">
@@ -66,16 +66,16 @@ export function AddPlayerToTeam({
                   </span>
                   <form method="POST" action="/api/console/teams">
                     <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="addPlayer" />
+                    {/* When the team is full, adding puts them on the waitlist
+                        instead of the roster. */}
+                    <input type="hidden" name="op" value={atCap ? "waitlistAdd" : "addPlayer"} />
                     <input type="hidden" name="teamId" value={teamId} />
                     <input type="hidden" name="personId" value={c.id} />
                     <button
                       type="submit"
-                      disabled={atCap}
-                      title={atCap ? `Team is at the maximum of ${TEAM_MAX}` : undefined}
-                      className="rounded-md bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold text-white ${atCap ? "bg-amber-600 hover:bg-amber-700" : "bg-brand-600 hover:bg-brand-700"}`}
                     >
-                      Add
+                      {atCap ? "Waitlist" : "Add"}
                     </button>
                   </form>
                 </li>
