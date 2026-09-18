@@ -14,6 +14,14 @@ function dollarsToCents(v: FormDataEntryValue | null): number {
   const n = parseFloat(String(v ?? "").replace(/[^0-9.]/g, ""));
   return isNaN(n) ? 0 : Math.round(n * 100);
 }
+// Like dollarsToCents but null when left blank (so an unset court rate stays
+// null — "not configured" — rather than $0 "free").
+function centsOrNull(v: FormDataEntryValue | null): number | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = parseFloat(s.replace(/[^0-9.]/g, ""));
+  return isNaN(n) ? null : Math.round(n * 100);
+}
 
 // Validate the `attachments` JSON the photo picker submits: only http(s) URLs
 // and IMAGE/VIDEO kinds, never trusting the client blindly.
@@ -98,6 +106,9 @@ export async function POST(req: Request) {
     weekdayRateCents: dollarsToCents(formData.get("weekdayRate")),
     weekendRateCents: dollarsToCents(formData.get("weekendRate")),
     percentageRate,
+    courtCostDayCents: centsOrNull(formData.get("courtCostDay")),
+    courtCostNightCents: centsOrNull(formData.get("courtCostNight")),
+    courtNightStartsAt: String(formData.get("courtNightStartsAt") ?? "").trim() || null,
     primaryContact: String(formData.get("primaryContact") ?? "").trim() || null,
     contactEmail: String(formData.get("contactEmail") ?? "").trim() || null,
     contactPhone: String(formData.get("contactPhone") ?? "").trim() || null,
