@@ -244,3 +244,20 @@ export async function notifySubSuggested(sessionId: string, teamId: string, sub:
     console.error("notifySubSuggested failed", e);
   }
 }
+
+/** Tell the coach + the team that a sub is joining them for a specific date. */
+export async function notifySubJoined(sessionId: string, teamId: string, subName: string): Promise<void> {
+  const ctx = await sessionContext(sessionId);
+  if (!ctx?.team) return;
+  const { session, team } = ctx;
+  const dayText = formatSessionDay(session.date, "long");
+  const where = session.facility?.name ? ` at ${session.facility.name}` : "";
+  const subject = `Sub joining — ${team.name}`;
+  const body = `Good news — ${subName} is going to join you for the ${dayText} practice at ${formatTime12(session.startTime)}${where}. See you on the court!`;
+  try {
+    // TEAM audience = the roster + the coach, so one send reaches everyone.
+    await dispatchMessage({ senderId: null, audienceType: "TEAM", audienceRef: teamId, channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "SUB_JOINED", subject, body });
+  } catch (e) {
+    console.error("notifySubJoined failed", e);
+  }
+}
