@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { createCheckoutRedirect } from "@/lib/payments/checkout";
 import { saveApparelForPayment, apparelRequiredFor, isApparelOnly, apparelTotalCents } from "@/lib/payments/apparel";
 import { normalizeCart } from "@/lib/domain/apparel";
+import { feeStateOf } from "@/lib/domain/feeStatus";
 
 // PUBLIC season-fee checkout — no login required. The payment id (an unguessable
 // cuid) in the form body is the capability token, so a parent who has no account
@@ -22,7 +23,13 @@ export async function POST(req: Request) {
 
   // Team apparel is required for a season fee. Persist the cart (server-priced)
   // before checkout; reject if the fee needs apparel and none was chosen.
-  const payment = await prisma.payment.findUnique({ where: { id: paymentId }, select: { partyId: true, category: true, coveredPersonIds: true } });
+  const payment = await prisma.payment.findUnique({ where: { id: paymentId }, select: { partyId: true, category: true, coveredPersonIds: true, status: true, installmentPlan: true, installmentsPaid: true, stripeSubscriptionId: true } });
+  // Someone already on the 3-payment plan must never be able to start a second
+  // checkout (which would charge the full fee again). The plan auto-charges; send
+  // them back to the pay page, which shows their plan status.
+  if (payment && feeStateOf(payment) === "subscription") {
+    return NextResponse.redirect(new URL(`/pay/${paymentId}`, origin), 303);
+  }
   if (payment && apparelRequiredFor(payment.category)) {
     const allowed = Array.isArray(payment.coveredPersonIds)
       ? (payment.coveredPersonIds as string[])
