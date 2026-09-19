@@ -126,7 +126,7 @@ export default async function PaymentsPage({
   // whether they started via Stripe checkout or were marked as paying-by-plan.
   const allActiveSubs = await prisma.payment.findMany({
     where: { direction: "IN", installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 } },
-    select: { amountCents: true, installmentsPaid: true, installmentsTotal: true },
+    select: { amountCents: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },
   });
   const subsCount = allActiveSubs.length;
   const subsCollectedCents = allActiveSubs.reduce((s, p) => {
@@ -192,6 +192,22 @@ export default async function PaymentsPage({
   // Families to actually remind: assigned players only, excluding active
   // 3-payment subscriptions (paying on schedule — not an unpaid fee).
   const remindable = outstandingAssigned.filter((p) => feeStateOf(p) !== "subscription");
+
+  // Placement × payment cross-tabs. "Unplaced but paying" = money in from
+  // families NOT on a team (paid in full or on a plan) — real cash that just
+  // isn't projected as season revenue until they're seated. "Assigned, not paid"
+  // = players on a team who still owe (what reminders target).
+  const paidFees = await prisma.payment.findMany({
+    where: { direction: "IN", status: "PAID", category: "PLAYER_FEE" },
+    select: { amountCents: true, partyId: true, coveredPersonIds: true },
+  });
+  const unassignedPaid = paidFees.filter((p) => !coversAssigned(p));
+  const unassignedPaidCents = unassignedPaid.reduce((s, p) => s + p.amountCents, 0);
+  const unassignedSubs = allActiveSubs.filter((p) => !coversAssigned(p));
+  const unassignedSubCollectedCents = unassignedSubs.reduce((s, p) => {
+    const total = p.installmentsTotal ?? 3;
+    return s + Math.round(p.amountCents / total) * Math.min(p.installmentsPaid ?? 1, total);
+  }, 0);
   const remindableDue = Math.max(0, remindable.reduce((s, p) => s + p.amountCents, 0) - remindable.reduce((s, p) => {
     if (!p.installmentPlan || !p.installmentsPaid) return s;
     const total = p.installmentsTotal ?? 3;
@@ -823,6 +839,34 @@ export default async function PaymentsPage({
             <div className="flex justify-between"><dt>Facilities</dt><dd className="font-semibold text-slate-700">{formatCents(facilityEstCents)}</dd></div>
           </dl>
           <p className="mt-1 text-[11px] text-slate-400">Accrues as sessions are delivered — not yet disbursed. <Link href="/console/payouts" className="text-brand-600 hover:underline">See who&apos;s owed &amp; how →</Link></p>
+        </div>
+      </div>
+
+      {/* Placement × payment — money and families that the headline figures split
+          out: paid/paying families not yet on a team, and rostered players who owe. */}
+      <div className="card">
+        <h2 className="font-semibold text-slate-900">Placement &amp; payment</h2>
+        <p className="mt-0.5 text-xs text-slate-500">How money in and money owed break down by whether the player is on a team.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {/* Unplaced but paying */}
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Unplaced but paying</div>
+            <div className="mt-1 text-xl font-extrabold text-slate-900">{formatCents(unassignedPaidCents + unassignedSubCollectedCents)}</div>
+            <p className="text-[11px] text-slate-400">Money in from families not yet on a team (not counted in season revenue projections).</p>
+            <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-600">
+              <div className="flex justify-between"><dt>Paid in full · {unassignedPaid.length}</dt><dd className="font-semibold text-slate-800">{formatCents(unassignedPaidCents)}</dd></div>
+              <div className="flex justify-between"><dt>On a plan (collected) · {unassignedSubs.length}</dt><dd className="font-semibold text-slate-800">{formatCents(unassignedSubCollectedCents)}</dd></div>
+            </dl>
+          </div>
+          {/* Assigned, not paid */}
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Assigned, not paid</div>
+            <div className="mt-1 text-xl font-extrabold text-amber-600">{formatCents(remindableDue)}</div>
+            <p className="text-[11px] text-slate-400">Players on a team who still owe — this is what fee reminders target.</p>
+            <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-600">
+              <div className="flex justify-between"><dt>Families</dt><dd className="font-semibold text-slate-800">{remindable.length}</dd></div>
+            </dl>
+          </div>
         </div>
       </div>
 
