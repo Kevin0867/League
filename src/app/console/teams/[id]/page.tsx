@@ -169,7 +169,7 @@ export default async function TeamDetailPage({
 
   // Waitlist — people waiting for a spot on this team (kept off the roster),
   // oldest first (FIFO). Names/contact fetched separately (no relation).
-  const waitlistRows = await prisma.teamWaitlist.findMany({ where: { teamId: team.id }, orderBy: { createdAt: "asc" } });
+  const waitlistRows = await prisma.teamWaitlist.findMany({ where: { teamId: team.id, status: { in: ["WAITING", "OFFERED"] } }, orderBy: { createdAt: "asc" } });
   const waitlistPeople = waitlistRows.length
     ? await prisma.person.findMany({ where: { id: { in: waitlistRows.map((w) => w.personId) } }, select: { id: true, firstName: true, lastName: true, email: true, phone: true } })
     : [];
@@ -181,6 +181,8 @@ export default async function TeamDetailPage({
       name: p ? `${p.firstName} ${p.lastName}`.trim() : "Player",
       contact: [p?.email, p?.phone].filter(Boolean).join(" · "),
       note: w.note,
+      offered: w.status === "OFFERED",
+      offerExpiresAt: w.offerExpiresAt,
     };
   });
   const publish = canPublishTeam(team, team.facility, team.members.length);
@@ -911,6 +913,11 @@ export default async function TeamDetailPage({
                         <div className="min-w-0">
                           <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[11px] font-semibold text-amber-700">{i + 1}</span>
                           <span className="font-medium text-slate-800">{w.name}</span>
+                          {w.offered && (
+                            <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                              Offered{w.offerExpiresAt ? ` · expires ${formatStamp(w.offerExpiresAt)}` : ""}
+                            </span>
+                          )}
                           {w.contact && <div className="ml-7 text-xs text-slate-500">{w.contact}</div>}
                           {w.note && <div className="ml-7 text-xs italic text-slate-400">“{w.note}”</div>}
                         </div>

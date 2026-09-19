@@ -1,8 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { TEAM_CAP } from "@/lib/enums";
-import { sendEmail } from "@/lib/notify";
+import { sendEmail, sendSms } from "@/lib/notify";
 import { dispatchMessage } from "@/lib/messaging";
+import { ageFromDob } from "@/lib/domain/messaging-acl";
+import { signWaiverToken } from "@/lib/domain/waiverRenewal";
+import { mintPortalAccessLink } from "@/lib/domain/passwordResetSend";
 import { describeTeamPractice, dayOfWeekPlural, practiceTimeRange } from "@/lib/domain/practiceInfo";
 import { teamCategoryLabel } from "@/lib/domain/teamName";
 import { appUrl } from "@/lib/stripe";
@@ -39,6 +42,10 @@ export function teamCapacity(capacity: number | null | undefined): number {
   return capacity && capacity > 0 ? capacity : TEAM_CAP;
 }
 
+// A full team (roster at capacity) can still take a couple of players onto a
+// public waitlist, so a spot that opens up has someone ready to fill it.
+export const WAITLIST_CAP = 2;
+
 export type OpenSpotTeam = {
   id: string;
   name: string;
@@ -48,6 +55,10 @@ export type OpenSpotTeam = {
   capacity: number;
   roster: number;
   spotsLeft: number;
+  full: boolean;
+  waitlistCount: number;
+  waitlistCap: number;
+  waitlistOpen: boolean;
 };
 
 /** The teams to show — either only those with room (public page) or all
@@ -64,6 +75,12 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
     },
     orderBy: [{ market: "asc" }, { name: "asc" }],
   });
+  // Waitlist counts per team, so full teams can advertise waitlist availability.
+  const teamIds = teams.map((t) => t.id);
+  const wlCounts = teamIds.length
+    ? await prisma.teamWaitlist.groupBy({ by: ["teamId"], where: { teamId: { in: teamIds } }, _count: { _all: true } })
+    : [];
+  const wlByTeam = new Map(wlCounts.map((w) => [w.teamId, w._count._all]));
   const rows = teams.map((t) => {
     const capacity = teamCapacity(t.capacity);
     const roster = t._count.members + (t.coachPlays ? 1 : 0);
@@ -78,6 +95,9 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
     // falling back to a derived label if a team has no division linked.
     const category = t.division?.name || teamCategoryLabel({ divisionCode: t.divisionCode, gender: t.gender, divisionName: t.division?.name ?? null });
     const dayTime = [dayOfWeekPlural(t.dayOfWeek), practiceTimeRange(t.startTime)].filter(Boolean).join(" · ");
+    const spotsLeft = Math.max(0, capacity - roster);
+    const full = spotsLeft <= 0;
+    const waitlistCount = wlByTeam.get(t.id) ?? 0;
     return {
       id: t.id,
       // The admin-entered team name, shown identically here and on the signup
@@ -88,10 +108,17 @@ export async function listOpenSpotTeams(seasonId: string, opts?: { includeFull?:
       location: locationBits.filter(Boolean).join(" · ") || null,
       capacity,
       roster,
-      spotsLeft: Math.max(0, capacity - roster),
+      spotsLeft,
+      full,
+      waitlistCount,
+      waitlistCap: WAITLIST_CAP,
+      waitlistOpen: full && waitlistCount < WAITLIST_CAP,
     };
   });
-  return opts?.includeFull ? rows : rows.filter((r) => r.spotsLeft > 0);
+  // Public page shows every team: those with open spots, plus full ones (which
+  // offer the waitlist). Only drop full teams whose waitlist is also full when
+  // NOT including full — the admin manager passes includeFull to see them all.
+  return opts?.includeFull ? rows : rows.filter((r) => r.spotsLeft > 0 || r.waitlistOpen);
 }
 
 export type SubNeeded = {
@@ -324,4 +351,95 @@ async function holdForReview(personId: string, teamId: string, teamName: string,
       `${appUrl()}/console/registrations`,
     ].filter(Boolean).join("\n"),
   ).catch(() => {});
+}
+
+export type JoinWaitlistResult =
+  | { ok: true; teamName: string; position: number }
+  | { ok: false; reason: "fields" | "notfound" | "notfull" | "waitlistfull" | "already" };
+
+/** PUBLIC: a family joins a full team's waitlist from the open-spots page. No
+ *  charge, no placement — they're recorded on the team's waitlist (kept off the
+ *  roster) and an admin places them when a spot opens. Guards the per-team
+ *  waitlist cap, notifies the family (with their position) and the office. */
+export async function joinTeamWaitlist(opts: {
+  teamId: string; firstName: string; lastName: string; email: string | null; phone: string | null; dob: Date | null;
+}): Promise<JoinWaitlistResult> {
+  const first = opts.firstName.trim();
+  const last = opts.lastName.trim();
+  const email = opts.email?.trim().toLowerCase() || null;
+  const phone = opts.phone?.trim() || null;
+  if (!first || !last || (!email && !phone)) return { ok: false, reason: "fields" };
+
+  const team = await prisma.team.findUnique({
+    where: { id: opts.teamId },
+    select: { id: true, name: true, seasonId: true, acceptingSignups: true, capacity: true, coachPlays: true, _count: { select: { members: true } } },
+  });
+  if (!team || !team.acceptingSignups) return { ok: false, reason: "notfound" };
+  const cap = teamCapacity(team.capacity);
+  const roster = team._count.members + (team.coachPlays ? 1 : 0);
+  if (roster < cap) return { ok: false, reason: "notfull" }; // there's a real spot — sign up + pay instead
+
+  const dob = opts.dob && !isNaN(opts.dob.getTime()) ? opts.dob : null;
+  const age = dob ? ageFromDob(dob) : null;
+
+  let position: number;
+  let personId: string;
+  try {
+    const out = await prisma.$transaction(async (tx) => {
+      const existing = email ? await tx.person.findFirst({ where: { email, NOT: { isMinor: true } }, select: { id: true } }) : null;
+      const pid = existing
+        ? existing.id
+        : (await tx.person.create({ data: { firstName: first, lastName: last, email, phone, dob, isMinor: age !== null ? age < 18 : false }, select: { id: true } })).id;
+      if (existing && phone) await tx.person.update({ where: { id: pid }, data: { phone } });
+
+      // Already on the roster? Then they're not waitlisting.
+      const onRoster = await tx.teamMember.findUnique({ where: { teamId_personId: { teamId: team.id, personId: pid } }, select: { teamId: true } });
+      if (onRoster) throw new Error("already");
+      const alreadyWaiting = await tx.teamWaitlist.findUnique({ where: { teamId_personId: { teamId: team.id, personId: pid } }, select: { id: true } });
+      if (alreadyWaiting) throw new Error("already");
+
+      const count = await tx.teamWaitlist.count({ where: { teamId: team.id } });
+      if (count >= WAITLIST_CAP) throw new Error("waitlistfull");
+      await tx.teamWaitlist.create({ data: { teamId: team.id, personId: pid, seasonId: team.seasonId, addedByUserId: null } });
+      return { pid, position: count + 1 };
+    });
+    personId = out.pid;
+    position = out.position;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "already") return { ok: false, reason: "already" };
+    return { ok: false, reason: "waitlistfull" };
+  }
+
+  // Get them ready NOW so placement is instant if a spot opens: one link to set
+  // a portal password and sign the participation waiver. Falls back to the plain
+  // public waiver link if we can't mint a portal link (no email on file).
+  let readyLink = `${appUrl()}/portal`;
+  try {
+    const token = await signWaiverToken(personId);
+    const waiverPath = `/waiver/sign?token=${encodeURIComponent(token)}`;
+    const combined = await mintPortalAccessLink(personId, waiverPath);
+    readyLink = combined ?? `${appUrl()}${waiverPath}`;
+  } catch { /* best-effort */ }
+
+  // Confirm to the family (with position + the get-ready link), and tell the office.
+  const nth = position === 1 ? "1st" : position === 2 ? "2nd" : `${position}th`;
+  const familyMsg =
+    `Thanks for joining the waitlist for ${team.name}! You're ${nth} in line. The team is full right now, but we'll reach out as soon as a spot opens. ` +
+    `To be ready to jump in, please complete the participation waiver now — set your portal password and sign it here: ${readyLink} ` +
+    `No payment is due unless a spot opens and you accept it.`;
+  if (email) await sendEmail(email, `You're on the waitlist — ${team.name}`, familyMsg).catch(() => {});
+  if (phone) await sendSms(phone, familyMsg).catch(() => {});
+  await sendEmail(
+    TEAM_INBOX,
+    `New waitlist signup — ${team.name}`,
+    [
+      `${first} ${last} joined the waitlist for ${team.name} from the open-spots page (position ${position}).`,
+      [email, phone].filter(Boolean).length ? `Contact: ${[email, phone].filter(Boolean).join(" · ")}` : "",
+      "",
+      `Place them from the team page when a spot opens: ${appUrl()}/console/teams/${team.id}`,
+    ].filter(Boolean).join("\n"),
+  ).catch(() => {});
+
+  return { ok: true, teamName: team.name, position };
 }
