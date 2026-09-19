@@ -178,6 +178,20 @@ export type CourtCostLine = {
   weekend: boolean;
   cents: number;        // this session's court cost
 };
+type FacilityRates = { courtCostDayCents: number | null; courtCostEveningCents: number | null; courtCostWeekendCents: number | null; courtEveningStartsAt: string | null };
+/** Court cost for one practice session at a facility, applying the day/evening
+ *  split and weekend flat rate. 0 if the facility has no rates set. */
+function courtCostOfSession(s: { date: Date; startTime: string; endTime: string; courtCount: number }, f: FacilityRates): number {
+  if (f.courtCostDayCents == null && f.courtCostEveningCents == null && f.courtCostWeekendCents == null) return 0;
+  const courts = Math.max(1, s.courtCount);
+  const { dayHours, eveningHours } = dayEveningHours(s.startTime, s.endTime, f.courtEveningStartsAt ?? "17:00");
+  const dow = s.date.getUTCDay();
+  if ((dow === 0 || dow === 6) && f.courtCostWeekendCents != null) return Math.round(courts * (dayHours + eveningHours) * f.courtCostWeekendCents);
+  const dayRate = f.courtCostDayCents ?? f.courtCostEveningCents ?? 0;
+  const eveningRate = f.courtCostEveningCents ?? f.courtCostDayCents ?? 0;
+  return Math.round(courts * (dayHours * dayRate + eveningHours * eveningRate));
+}
+
 export type CourtCost = {
   facilityId: string;
   facilityName: string;
@@ -485,15 +499,45 @@ export type MonthPnl = {
   installmentCents: number; unpaidFeeCents: number;
 };
 
-/** The 5 statement figures per month across a season — both bases. Revenue is
- *  bucketed once (one Stripe read); coach pay and line items are summed per month. */
+/**
+ * The 5 statement figures per month across a season, on BOTH bases — a real
+ * forecast. Booked = collected revenue + delivered coach pay + delivered court +
+ * actual expense lines. Forecast = collected + scheduled revenue + coach pay AND
+ * court fees for EVERY scheduled practice that month (from the season schedule &
+ * facility rates) + all non-court expense lines. Court is auto-projected from the
+ * schedule here (not the pulled ledger lines), so future months aren't $0.
+ */
 export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
   if (months.length === 0) return [];
-  const [contribs, directorPct, allEntries] = await Promise.all([
+  const now = new Date();
+  const [contribs, directorPct, allEntries, rate, coachRows, sessions] = await Promise.all([
     revenueContributions(),
     getDirectorPct(),
     entriesInMonthRange(months[0], months[months.length - 1]),
+    prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
+    prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
+    prisma.session.findMany({
+      where: { type: "PRACTICE" },
+      select: {
+        date: true, startTime: true, endTime: true, status: true, courtCount: true,
+        coaches: { select: { coachId: true, role: true, payable: true } },
+        facility: { select: { courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true, courtEveningStartsAt: true } },
+      },
+    }),
   ]);
+  const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
+  const assistantPct = rate?.assistantPct ?? 0.5;
+  const proPer = rate?.proCoachPerSessionCents ?? null;
+  const seasonPayById = new Map(coachRows.map((c) => [c.id, c.seasonPayCents]));
+  const baseFor = (id: string) => { const sp = seasonPayById.get(id); return sp && sp > 0 ? Math.round(sp / SESSIONS_PER_SEASON) : defaultPer; };
+
+  // Coach pay + court cost each session contributes, tagged by month + basis.
+  const sessionCost = (s: (typeof sessions)[number]) => {
+    const coach = s.coaches.reduce((sum, c) => (c.payable ? sum + coachSessionPayCents(c.role, baseFor(c.coachId), assistantPct, proPer) : sum), 0);
+    const court = s.facility ? courtCostOfSession(s, s.facility) : 0;
+    return { coach, court };
+  };
+
   const sumKind = (rows: PnlEntryRow[], kind: string) => rows.filter((r) => r.kind === kind).reduce((s, r) => s + r.amountCents, 0);
   const sumAll = (rows: PnlEntryRow[]) => rows.reduce((s, r) => s + r.amountCents, 0);
   const out: MonthPnl[] = [];
@@ -505,15 +549,27 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
       if (c.bucket === "booked") booked += c.cents;
       else if (c.kind === "installment") installment += c.cents;
       else unpaid += c.cents;
-      forecastRev += c.cents; // forecast basis = booked + forecast
+      forecastRev += c.cents;
+    }
+    // Coach + court for this month, split delivered (booked) vs scheduled (forecast).
+    let coachDelivered = 0, coachScheduled = 0, courtDelivered = 0, courtScheduled = 0;
+    for (const s of sessions) {
+      const day = phoenixDateInput(s.date);
+      if (day < mStart || day > mEnd) continue;
+      if (s.status === "CANCELLED") continue;
+      const { coach, court } = sessionCost(s);
+      coachScheduled += coach; courtScheduled += court;
+      if (isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) { coachDelivered += coach; courtDelivered += court; }
     }
     const revLines = allEntries.filter((e) => e.month === m && e.section === "REVENUE");
-    const expLines = allEntries.filter((e) => e.month === m && e.section === "EXPENSE");
-    const coach = await coachCostBetween(mStart, mEnd);
+    // Court rent is auto-projected above, so drop pulled "Court rent —" lines to
+    // avoid double-counting; keep all other expense lines (rent, supplies, etc.).
+    const expLines = allEntries.filter((e) => e.month === m && e.section === "EXPENSE" && !e.label.startsWith("Court rent — "));
+
     const bookedRevenue = booked + sumKind(revLines, "ACTUAL");
     const forecastRevenue = forecastRev + sumAll(revLines);
-    const actualExpense = coach + sumKind(expLines, "ACTUAL");
-    const forecastExpense = coach + sumAll(expLines);
+    const actualExpense = coachDelivered + courtDelivered + sumKind(expLines, "ACTUAL");
+    const forecastExpense = coachScheduled + courtScheduled + sumAll(expLines);
     const bookedNet = bookedRevenue - actualExpense;
     const forecastNet = forecastRevenue - forecastExpense;
     const bookedDirector = Math.max(0, Math.round(bookedNet * directorPct));

@@ -235,7 +235,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="font-semibold text-slate-900">Season breakdown{season ? ` — ${season.name}` : ""}</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Every month of the season, {basis} basis. Toggle Booked/Forecast above.</p>
+              <p className="mt-0.5 text-xs text-slate-500">Every month of the season, {basis} basis. Forecast projects coach pay &amp; court fees for all scheduled practices (from the schedule &amp; facility rates), plus scheduled revenue. Toggle Booked/Forecast above.</p>
             </div>
             <Link href={qp({ season: showSeason ? "0" : "1" })} className="btn-secondary text-sm">{showSeason ? "Hide" : "Show season breakdown"}</Link>
           </div>
