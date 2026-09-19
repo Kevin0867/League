@@ -99,7 +99,7 @@ export default async function HomePage() {
               <img
                 src={directorImg}
                 alt="Stephanie Newton — Phoenix Firebirds, Major League Pickleball"
-                className="aspect-[4/3] w-full object-cover"
+                className="aspect-[4/3] w-full object-cover object-top"
               />
             </div>
             <div>
