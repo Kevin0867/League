@@ -135,6 +135,16 @@ function fmtHours(ln: CourtCostLine): string {
   if (ln.eveningHours > 0) return `${h(total)} (eve)`;
   return `${h(total)} (day)`;
 }
+// Effective per-court-per-hour rate for a line (cost ÷ courts ÷ hours) — for a
+// single-tier day it's the exact rate; for a mixed day+evening session it's the
+// blended rate. Makes a facility whose evening/weekend rate ≠ its day rate obvious.
+function fmtRate(ln: CourtCostLine): string {
+  const totalHours = ln.dayHours + ln.eveningHours;
+  if (totalHours <= 0 || ln.courts <= 0) return "—";
+  const perCents = ln.cents / (ln.courts * totalHours);
+  const blended = ln.dayHours > 0 && ln.eveningHours > 0 && !ln.weekend;
+  return `${formatCents(Math.round(perCents))}${blended ? "*" : ""}`;
+}
 
 // Court rent computed from facility rates — a preview + a button to pull it into
 // editable line items (one Court-rent expense per facility, per month in range).
@@ -152,9 +162,14 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
       <div className="mt-2 space-y-2">
         {courtCosts.map((c) => (
           <details key={c.facilityName} className="rounded border border-amber-200 bg-white/70">
-            <summary className="flex cursor-pointer items-center justify-between px-2.5 py-1.5 text-xs">
-              <span className="font-medium text-slate-700">Court rent — {c.facilityName} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "day" : "days"})</span></span>
-              <span className="font-semibold text-slate-800">{formatCents(c.cents)}</span>
+            <summary className="cursor-pointer px-2.5 py-1.5 text-xs">
+              <span className="flex items-center justify-between">
+                <span className="font-medium text-slate-700">Court rent — {c.facilityName} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "day" : "days"})</span></span>
+                <span className="font-semibold text-slate-800">{formatCents(c.cents)}</span>
+              </span>
+              <span className="mt-0.5 block text-[11px] text-slate-500">
+                Saved rates — Day {c.dayRateCents != null ? formatCents(c.dayRateCents) : "—"} · Evening {c.eveningRateCents != null ? formatCents(c.eveningRateCents) : "(uses day)"} · Weekend {c.weekendRateCents != null ? formatCents(c.weekendRateCents) : "(uses day/eve)"} · eve after {c.eveningStartsAt}
+              </span>
             </summary>
             <table className="w-full border-t border-amber-100 text-[11px] text-slate-600">
               <thead className="text-slate-400">
@@ -162,6 +177,7 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
                   <th className="px-2.5 py-1 text-left font-medium">Day</th>
                   <th className="px-2 py-1 text-right font-medium">Courts</th>
                   <th className="px-2 py-1 text-right font-medium">Hours</th>
+                  <th className="px-2 py-1 text-right font-medium">$/ct/hr</th>
                   <th className="px-2.5 py-1 text-right font-medium">Cost</th>
                 </tr>
               </thead>
@@ -171,6 +187,7 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
                     <td className="px-2.5 py-1">{fmtDay(ln.day)}</td>
                     <td className="px-2 py-1 text-right">{ln.courts}</td>
                     <td className="px-2 py-1 text-right">{fmtHours(ln)}</td>
+                    <td className="px-2 py-1 text-right">{fmtRate(ln)}</td>
                     <td className="px-2.5 py-1 text-right font-medium text-slate-700">{formatCents(ln.cents)}</td>
                   </tr>
                 ))}
@@ -179,6 +196,7 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
           </details>
         ))}
       </div>
+      <p className="mt-1 text-[11px] text-amber-700">$/ct/hr is the effective rate (cost ÷ courts ÷ hours). <span className="font-mono">*</span> = a blended day+evening session. If a facility should be one flat rate, set its Day / Evening / Weekend rates to match (or leave Evening &amp; Weekend blank to reuse the Day rate).</p>
       <form method="POST" action="/api/console/pnl" className="mt-2">
         <input type="hidden" name="ticket" value={ticket} />
         <input type="hidden" name="op" value="pullCourtCosts" />

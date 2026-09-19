@@ -128,7 +128,17 @@ export type CourtCostLine = {
   weekend: boolean;
   cents: number;        // this session's court cost
 };
-export type CourtCost = { facilityName: string; cents: number; lines: CourtCostLine[] };
+export type CourtCost = {
+  facilityName: string;
+  cents: number;
+  lines: CourtCostLine[];
+  // The facility's configured rates (cents/court/hr), surfaced so the P&L shows
+  // exactly what rates drove the numbers.
+  dayRateCents: number | null;
+  eveningRateCents: number | null;
+  weekendRateCents: number | null;
+  eveningStartsAt: string;
+};
 
 /**
  * Court rent per facility between two Phoenix days (inclusive) — the P&L expense
@@ -145,7 +155,8 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
     },
   });
   const now = new Date();
-  const byFacility = new Map<string, { cents: number; lines: CourtCostLine[] }>();
+  type Agg = { cents: number; lines: CourtCostLine[]; dayRateCents: number | null; eveningRateCents: number | null; weekendRateCents: number | null; eveningStartsAt: string };
+  const byFacility = new Map<string, Agg>();
   for (const s of sessions) {
     if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
     const day = phoenixDateInput(s.date);
@@ -170,13 +181,17 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
       cost = Math.round(courts * (dayHours * dayRate + eveningHours * eveningRate));
     }
     if (cost <= 0) continue;
-    const agg = byFacility.get(f.name) ?? { cents: 0, lines: [] };
+    const agg = byFacility.get(f.name) ?? {
+      cents: 0, lines: [],
+      dayRateCents: f.courtCostDayCents, eveningRateCents: f.courtCostEveningCents,
+      weekendRateCents: f.courtCostWeekendCents, eveningStartsAt: f.courtEveningStartsAt ?? "17:00",
+    };
     agg.cents += cost;
     agg.lines.push({ day, courts, dayHours, eveningHours, weekend: isWeekend && f.courtCostWeekendCents != null, cents: cost });
     byFacility.set(f.name, agg);
   }
   return [...byFacility.entries()]
-    .map(([facilityName, v]) => ({ facilityName, cents: v.cents, lines: v.lines.sort((a, b) => a.day.localeCompare(b.day)) }))
+    .map(([facilityName, v]) => ({ facilityName, cents: v.cents, lines: v.lines.sort((a, b) => a.day.localeCompare(b.day)), dayRateCents: v.dayRateCents, eveningRateCents: v.eveningRateCents, weekendRateCents: v.weekendRateCents, eveningStartsAt: v.eveningStartsAt }))
     .sort((a, b) => b.cents - a.cents);
 }
 
