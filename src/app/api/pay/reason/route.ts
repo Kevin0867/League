@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { sendEmail } from "@/lib/notify";
+import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
+import { ADMIN_ROLES } from "@/lib/enums";
 
 // Where pay-page questions/replies land so the team sees them immediately.
 const TEAM_INBOX = process.env.TEAM_INBOX_EMAIL ?? "team@purepickleball.com";
@@ -68,6 +69,21 @@ export async function POST(req: Request) {
     );
   } catch (e) {
     console.error("payer-response team email failed", e);
+  }
+
+  // Text every admin so we're notified right away — the email alone is easy to
+  // miss. Direct SMS (operational alert), deduped by number.
+  try {
+    const admins = await prisma.user.findMany({
+      where: { active: true, role: { in: ADMIN_ROLES as unknown as string[] }, person: { phone: { not: null } } },
+      select: { person: { select: { phone: true } } },
+    });
+    const phones = [...new Set(admins.map((a) => a.person?.phone).filter((p): p is string => !!p))];
+    const contact = [pay.party?.phone, pay.party?.email].filter(Boolean).join(" · ");
+    const sms = `PURE pay page — ${who}: ${REASONS[reason]}${note ? ` (“${note}”)` : ""}.${contact ? ` ${contact}.` : ""} Follow up in Payments.`;
+    for (const ph of phones) await sendSms(ph, sms).catch(() => {});
+  } catch (e) {
+    console.error("payer-response admin SMS failed", e);
   }
 
   return back("?heard=1");
