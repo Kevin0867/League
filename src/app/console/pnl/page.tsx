@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
-import { pnlRange, monthLabel, today, type PnlRange, type PnlEntryRow } from "@/lib/domain/pnl";
+import { pnlRange, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost } from "@/lib/domain/pnl";
 import { paymentsSince } from "@/lib/payments/reconcile";
 import { phoenixDateInput } from "@/lib/time";
 
@@ -37,6 +37,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
       {sp.ok === "added" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Line item added.</div>}
       {sp.ok === "saved" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
       {sp.ok === "deleted" && <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">Line item removed.</div>}
+      {sp.ok === "courtpulled" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Court rent pulled into editable line items{sp.n ? ` (${sp.n})` : ""} — edit any amount below.</div>}
       {sp.err === "fields" && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Give the line item a name, amount, and month.</div>}
       {sp.err && !["fields"].includes(sp.err) && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Something went wrong — please try again.</div>}
 
@@ -90,9 +91,13 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         addMonth={addMonth}
         autoRows={[
           ...(pnl.auto.coachCostCents > 0 ? [{ label: "Coach session pay (delivered)", value: pnl.auto.coachCostCents, note: "What coaches are owed for practices delivered in this range — per-coach rate, role-aware. Matches Payouts. Auto." }] : []),
-          ...pnl.auto.courtCosts.map((c) => ({ label: `Court rent — ${c.facilityName}`, value: c.cents, note: "Delivered practices × courts × hours × the facility's court rate (day/night split). Auto — set the rates on the facility." })),
         ]}
         rows={pnl.expenses}
+        beforeAdd={
+          pnl.auto.courtCosts.length > 0 ? (
+            <CourtRentPull ticket={ticket} returnTo={returnTo} from={from} to={to} courtCosts={pnl.auto.courtCosts} />
+          ) : null
+        }
       />
 
       {/* Net */}
@@ -116,6 +121,37 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
   );
 }
 
+// Court rent computed from facility rates — a preview + a button to pull it into
+// editable line items (one Court-rent expense per facility, per month in range).
+function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: string; returnTo: string; from: string; to: string; courtCosts: CourtCost[] }) {
+  const total = courtCosts.reduce((s, c) => s + c.cents, 0);
+  return (
+    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-amber-900">Court rent from facility rates <span className="font-normal text-amber-700">(computed)</span></div>
+          <div className="mt-0.5 text-[11px] text-amber-700">Delivered practices × courts × hours × each facility&apos;s day/night rate. Pull it in to get an editable line item per court that you can adjust.</div>
+        </div>
+        <div className="text-sm font-semibold text-amber-900">{formatCents(total)}</div>
+      </div>
+      <ul className="mt-2 space-y-0.5 text-xs text-slate-600">
+        {courtCosts.map((c) => (
+          <li key={c.facilityName} className="flex justify-between"><span>Court rent — {c.facilityName}</span><span className="font-medium text-slate-700">{formatCents(c.cents)}</span></li>
+        ))}
+      </ul>
+      <form method="POST" action="/api/console/pnl" className="mt-2">
+        <input type="hidden" name="ticket" value={ticket} />
+        <input type="hidden" name="op" value="pullCourtCosts" />
+        <input type="hidden" name="from" value={from} />
+        <input type="hidden" name="to" value={to} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        <button className="btn-secondary text-sm">Pull into editable line items ↓</button>
+        <span className="ml-2 text-[11px] text-slate-500">Creates/refreshes a Court rent line per facility for each month in range. Re-pull to recompute.</span>
+      </form>
+    </div>
+  );
+}
+
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "emerald" | "rose" }) {
   const color = tone === "emerald" ? "text-emerald-700" : tone === "rose" ? "text-rose-700" : "text-slate-900";
   return (
@@ -128,11 +164,12 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub?:
 }
 
 function Section({
-  title, section, ticket, returnTo, months, addMonth, autoRows, rows,
+  title, section, ticket, returnTo, months, addMonth, autoRows, rows, beforeAdd,
 }: {
   title: string; section: "REVENUE" | "EXPENSE"; ticket: string; returnTo: string;
   months: string[]; addMonth: string;
   autoRows: { label: string; value: number; note?: string }[]; rows: PnlEntryRow[];
+  beforeAdd?: React.ReactNode;
 }) {
   const total = autoRows.reduce((s, r) => s + r.value, 0) + rows.reduce((s, r) => s + r.amountCents, 0);
   return (
@@ -173,6 +210,8 @@ function Section({
           <button name="op" value="delete" className="btn-chip-danger" formNoValidate>Delete</button>
         </form>
       ))}
+
+      {beforeAdd}
 
       <form method="POST" action="/api/console/pnl" className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2">
         <input type="hidden" name="ticket" value={ticket} />

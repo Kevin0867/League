@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { seedCourtCostEntries } from "@/lib/domain/pnl";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,18 @@ export async function POST(req: Request) {
     const amountCents = dollarsToCents(String(fd.get("amount") ?? ""));
     await prisma.pnlEntry.update({ where: { id }, data: { ...(label ? { label } : {}), ...(/^\d{4}-\d{2}$/.test(month) ? { month } : {}), kind, amountCents } });
     return back("ok=saved");
+  }
+
+  // Pull the computed court rent into editable line items — one per facility for
+  // each month in the chosen range. Re-pulling refreshes the amounts.
+  if (op === "pullCourtCosts") {
+    const dayRe = /^\d{4}-\d{2}-\d{2}$/;
+    const from = String(fd.get("from") ?? "").trim();
+    const to = String(fd.get("to") ?? "").trim();
+    if (!dayRe.test(from) || !dayRe.test(to) || from > to) return back("err=fields");
+    const { created, updated } = await seedCourtCostEntries(from, to);
+    await audit({ actorId: actor.userId, entityType: "PnlEntry", entityId: "court", action: "pnl.pullCourtCosts", summary: `Pulled court rent (${created} added, ${updated} updated)` });
+    return back(`ok=courtpulled&n=${created + updated}`);
   }
 
   if (op === "delete") {

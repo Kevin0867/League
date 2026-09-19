@@ -155,6 +155,38 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
   return [...byFacility.entries()].map(([facilityName, cents]) => ({ facilityName, cents })).sort((a, b) => b.cents - a.cents);
 }
 
+/** Court rent per facility for a single Phoenix month ("YYYY-MM"). */
+export async function courtCostByFacilityForMonth(month: string): Promise<CourtCost[]> {
+  return courtCostByFacilityBetween(`${month}-01`, `${month}-31`);
+}
+
+/**
+ * "Pull in" the computed court rent as EDITABLE line items — one Court-rent
+ * expense per facility, per month in the range. Upserts by (month, label) so
+ * re-pulling refreshes the amounts to the latest computed figure instead of
+ * duplicating. Returns how many rows were created vs updated.
+ */
+export async function seedCourtCostEntries(fromDay: string, toDay: string): Promise<{ created: number; updated: number }> {
+  const fromMonth = fromDay.slice(0, 7);
+  const toMonth = toDay.slice(0, 7);
+  let created = 0, updated = 0;
+  for (let m = fromMonth; m <= toMonth && created + updated < 1000; m = nextMonth(m)) {
+    const costs = await courtCostByFacilityForMonth(m);
+    for (const c of costs) {
+      const label = `Court rent — ${c.facilityName}`;
+      const existing = await prisma.pnlEntry.findFirst({ where: { month: m, section: "EXPENSE", label } });
+      if (existing) {
+        await prisma.pnlEntry.update({ where: { id: existing.id }, data: { amountCents: c.cents, kind: "ACTUAL" } });
+        updated++;
+      } else {
+        await prisma.pnlEntry.create({ data: { month: m, section: "EXPENSE", label, kind: "ACTUAL", amountCents: c.cents, note: "Pulled from facility court rates — edit freely." } });
+        created++;
+      }
+    }
+  }
+  return { created, updated };
+}
+
 /**
  * Coach session pay for delivered practices between two Phoenix days (inclusive)
  * — the same figure coaches are actually owed (per-coach rate = their season pay
@@ -219,8 +251,6 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
     courtCostByFacilityBetween(fromDay, toDay),
     entriesInMonthRange(fromMonth, toMonth),
   ]);
-  const courtTotal = courtCosts.reduce((s, c) => s + c.cents, 0);
-
   const months: string[] = [];
   for (let m = fromMonth; m <= toMonth && months.length < 120; m = nextMonth(m)) months.push(m);
   if (months.length === 0) months.push(fromMonth);
@@ -231,7 +261,10 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
 
   const bookedRevenue = rev.bookedCents + sum(revenue, "ACTUAL");
   const forecastRevenue = rev.forecastCents + sum(revenue, "FORECAST");
-  const actualExpenses = coach + courtTotal + sum(expenses, "ACTUAL");
+  // Court rent is NOT auto-summed here — it's "pulled in" as editable line items
+  // (see seedCourtCostEntries), so it's counted via sum(expenses) once pulled.
+  // courtCosts stays in `auto` only as the computed preview to pull from.
+  const actualExpenses = coach + sum(expenses, "ACTUAL");
   const projectedExpenses = actualExpenses + sum(expenses, "FORECAST");
 
   return {
