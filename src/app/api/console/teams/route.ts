@@ -619,11 +619,15 @@ export async function POST(req: Request) {
       const team = await prisma.team.findUnique({ where: { id: teamId }, include: { _count: { select: { members: true } } } });
       if (!team) return back("?err=notfound");
       // Admins may add over the target of 8 up to the hard ceiling of 10, so they
-      // can add a player and then move another off. Only 11+ is refused.
+      // can add a player and then move another off. Past 10 is refused UNLESS the
+      // admin explicitly overrides (force=1) — then a full team can still take
+      // another player straight onto the roster.
+      const force = formData.get("force") === "1";
       const already = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId, personId } } });
       const effective = team._count.members + (team.coachPlays ? 1 : 0) + (already ? 0 : 1);
-      if (effective > TEAM_MAX) return back("?err=cap");
+      if (effective > TEAM_MAX && !force) return back("?err=cap");
       const overCap = effective > TEAM_CAP;
+      const overMax = effective > TEAM_MAX;
       // First placement this season (on no team yet) → auto-welcome after placing.
       const seasonTeamIds = (await prisma.team.findMany({ where: { seasonId: team.seasonId }, select: { id: true } })).map((t) => t.id);
       const firstPlacement = !(await prisma.teamMember.findFirst({ where: { personId, teamId: { in: seasonTeamIds } }, select: { id: true } }));
@@ -650,8 +654,8 @@ export async function POST(req: Request) {
       // season doesn't re-send.
       if (firstPlacement) await sendTeamLaunch({ personId, seasonId: team.seasonId, senderId: actor.userId });
 
-      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster${overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
-      return back(overCap ? "?ok=addPlayerOver" : "?ok=addPlayer");
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster${overMax ? ` (OVERRIDE — over max, now ${effective})` : overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
+      return back(overMax ? "?ok=addPlayerForced" : overCap ? "?ok=addPlayerOver" : "?ok=addPlayer");
     }
 
     // Add a person to a (usually full) team's waitlist — kept OFF the roster, so
@@ -693,10 +697,12 @@ export async function POST(req: Request) {
       if (!teamId || !personId) return back("?err=player");
       const team = await prisma.team.findUnique({ where: { id: teamId }, include: { _count: { select: { members: true } } } });
       if (!team) return back("?err=notfound");
+      const forcePromote = formData.get("force") === "1";
       const already = await prisma.teamMember.findUnique({ where: { teamId_personId: { teamId, personId } } });
       const effective = team._count.members + (team.coachPlays ? 1 : 0) + (already ? 0 : 1);
-      // Can't place past the hard ceiling — remove a player first, then promote.
-      if (effective > TEAM_MAX) return back("?err=capfull");
+      // Past the hard ceiling, require an explicit override (force=1); otherwise
+      // ask the admin to remove a player first.
+      if (effective > TEAM_MAX && !forcePromote) return back("?err=capfull");
       const overCap = effective > TEAM_CAP;
 
       const seasonTeamIds = (await prisma.team.findMany({ where: { seasonId: team.seasonId }, select: { id: true } })).map((t) => t.id);
