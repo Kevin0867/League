@@ -46,6 +46,7 @@ const OK_MSG: Record<string, string> = {
   updateTeam: "Team fields saved.",
   addPlayer: "Player added to the roster.",
   addPlayerOver: `Player added — this team is now over the target of ${TEAM_CAP}. Move a player to another team to get back to ${TEAM_CAP}.`,
+  addPlayerForced: `Player added to the roster — the full-team cap was overridden. This team is now over the max of ${TEAM_MAX}.`,
   removePlayer: "Player removed back to the pool.",
   publishTeam: "Team published to families.",
   unpublishTeam: "Team unpublished.",
@@ -924,9 +925,9 @@ export default async function TeamDetailPage({
                         <div className="flex items-center gap-2">
                           <ConfirmSubmit
                             action="/api/console/teams"
-                            fields={{ ticket, op: "waitlistPromote", teamId: team.id, personId: w.personId }}
+                            fields={{ ticket, op: "waitlistPromote", teamId: team.id, personId: w.personId, ...(roster.atMax ? { force: "1" } : {}) }}
                             confirm={roster.atMax
-                              ? `${w.name}: the team is at the max of ${TEAM_MAX}. Remove a player first, then place them. Try anyway?`
+                              ? `${w.name}: the team is already at the max of ${TEAM_MAX}. Place them anyway and override the cap?`
                               : `Place ${w.name} on ${team.name}? They'll be added to the roster and the family gets the welcome email.`}
                             label="Place on team"
                             className="btn-chip-brand"
