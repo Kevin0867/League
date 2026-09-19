@@ -2,9 +2,11 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
-import { pnlRange, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost, type CourtCostLine, type CoachCost } from "@/lib/domain/pnl";
+import { pnlRange, pnlSeasonByMonth, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost, type CourtCostLine, type CoachCost, type MonthPnl } from "@/lib/domain/pnl";
 import { paymentsSince } from "@/lib/payments/reconcile";
 import { phoenixDateInput, formatTime12 } from "@/lib/time";
+import { prisma } from "@/lib/db";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "P&L" };
@@ -12,23 +14,57 @@ export const metadata = { title: "P&L" };
 const RT = "/console/pnl";
 const dayRe = /^\d{4}-\d{2}-\d{2}$/;
 
+// Months (YYYY-MM) spanned by a date range, inclusive.
+function monthsFromTo(start: Date, end: Date): string[] {
+  const out: string[] = [];
+  let y = start.getUTCFullYear(), m = start.getUTCMonth();
+  const ey = end.getUTCFullYear(), em = end.getUTCMonth();
+  while ((y < ey || (y === ey && m <= em)) && out.length < 24) {
+    out.push(`${y}-${String(m + 1).padStart(2, "0")}`);
+    m++; if (m > 11) { m = 0; y++; }
+  }
+  return out;
+}
+const monthBounds = (m: string) => ({ from: `${m}-01`, to: `${m}-${new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).getUTCDate()}` });
+
 export default async function PnlPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requireAdmin();
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
+
+  // The active season drives the month presets and the season-wide view.
+  const season =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { name: true, startDate: true, endDate: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { name: true, startDate: true, endDate: true } }));
+  const seasonMonths = season ? monthsFromTo(season.startDate, season.endDate) : [];
 
   // Default range = since we started collecting (matches the Payments total) → today.
   const startDefault = phoenixDateInput(paymentsSince().date);
   const from = sp.from && dayRe.test(sp.from) ? sp.from : startDefault;
   const to = sp.to && dayRe.test(sp.to) ? sp.to : today();
   const valid = from <= to;
+  // Statement basis: booked (collected / committed) vs forecast (full projection).
+  const basis: "booked" | "forecast" = sp.basis === "booked" ? "booked" : "forecast";
+  const showSeason = sp.season === "1";
+  const qp = (extra: Record<string, string>) => {
+    const p = new URLSearchParams({ from, to, basis, ...(showSeason ? { season: "1" } : {}), ...extra });
+    return `${RT}?${p.toString()}`;
+  };
 
   const pnl: PnlRange = valid
     ? await pnlRange(from, to)
     : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, coachCostCents: 0, coaches: [], courtCosts: [] }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0, revenueTotal: 0, expenseTotal: 0, netIncome: 0, directorPayCents: 0, netToPureCents: 0, directorPct: 0.15 } };
   const t = pnl.totals;
-  const returnTo = `${RT}?from=${from}&to=${to}`;
+  const returnTo = qp({});
   const addMonth = pnl.months[pnl.months.length - 1] ?? to.slice(0, 7);
+
+  // The statement figures on the chosen basis.
+  const stmt = basis === "booked"
+    ? (() => { const revenue = t.bookedRevenue, expenses = t.actualExpenses, net = t.netBooked, director = Math.max(0, Math.round(net * t.directorPct)); return { revenue, expenses, net, director, netToPure: net - director }; })()
+    : { revenue: t.revenueTotal, expenses: t.expenseTotal, net: t.netIncome, director: t.directorPayCents, netToPure: t.netToPureCents };
+
+  // Season-wide month-by-month breakdown (only computed when opened).
+  const seasonRows: MonthPnl[] = showSeason && seasonMonths.length ? await pnlSeasonByMonth(seasonMonths) : [];
 
   return (
     <div className="space-y-6">
@@ -41,21 +77,58 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
       {sp.err === "fields" && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Give the line item a name, amount, and month.</div>}
       {sp.err && !["fields"].includes(sp.err) && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">Something went wrong — please try again.</div>}
 
-      {/* Date range — the single control that drives the whole P&L. */}
-      <div className="card">
-        <form method="GET" action={RT} className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="label text-xs">From</label>
-            <input name="from" type="date" defaultValue={from} className="input py-1.5 text-sm" />
+      {/* Timeframe + basis controls. */}
+      <div className="card space-y-3">
+        {/* Quick timeframe presets — season months + full season. */}
+        {seasonMonths.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs font-medium text-slate-500">Timeframe:</span>
+            {seasonMonths.map((m) => {
+              const b = monthBounds(m);
+              const active = from === b.from && to === b.to;
+              return (
+                <Link key={m} href={qp({ from: b.from, to: b.to })} className={`rounded-full px-2.5 py-1 text-xs font-medium ${active ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                  {monthLabel(m).replace(/ \d{4}$/, "")}
+                </Link>
+              );
+            })}
+            {season && (() => {
+              const fs = phoenixDateInput(season.startDate), fe = phoenixDateInput(season.endDate);
+              const active = from === fs && to === fe;
+              return <Link href={qp({ from: fs, to: fe })} className={`rounded-full px-2.5 py-1 text-xs font-medium ${active ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Full season</Link>;
+            })()}
           </div>
+        )}
+        {/* Custom range + revenue/statement basis. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <form method="GET" action={RT} className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="basis" value={basis} />
+            {showSeason && <input type="hidden" name="season" value="1" />}
+            <div>
+              <label className="label text-xs">From</label>
+              <input name="from" type="date" defaultValue={from} className="input py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="label text-xs">To</label>
+              <input name="to" type="date" defaultValue={to} className="input py-1.5 text-sm" />
+            </div>
+            <button className="btn-primary text-sm">Update</button>
+          </form>
+          {/* Revenue basis: booked vs forecast — flips the whole statement. */}
           <div>
-            <label className="label text-xs">To</label>
-            <input name="to" type="date" defaultValue={to} className="input py-1.5 text-sm" />
+            <span className="label text-xs">Revenue</span>
+            <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm">
+              <Link href={qp({ basis: "booked" })} className={`px-3 py-1.5 ${basis === "booked" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>Booked</Link>
+              <Link href={qp({ basis: "forecast" })} className={`px-3 py-1.5 ${basis === "forecast" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>Forecast</Link>
+            </div>
           </div>
-          <button className="btn-primary text-sm">Update</button>
-          <span className="ml-1 text-xs text-slate-400">Tip: set From to when you started collecting and To to today to match Payments. Extend To into the future to project ahead.</span>
-        </form>
-        {!valid && <p className="mt-3 text-sm text-rose-700">The “from” date needs to be on or before the “to” date.</p>}
+        </div>
+        <p className="text-xs text-slate-400">
+          {basis === "booked"
+            ? "Booked: revenue actually collected and delivered/committed expenses only."
+            : "Forecast: full projection — scheduled/outstanding revenue and every expense line (incl. Forecast court rent)."}
+        </p>
+        {!valid && <p className="text-sm text-rose-700">The “from” date needs to be on or before the “to” date.</p>}
       </div>
 
       {/* Revenue */}
@@ -108,26 +181,119 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
           </form>
         </div>
         <dl className="divide-y divide-slate-100 text-sm">
-          <WaterRow label="Total revenue" value={t.revenueTotal} strong />
-          <WaterRow label="Total expenses" value={-t.expenseTotal} />
-          <WaterRow label="Net income" value={t.netIncome} strong tone={t.netIncome >= 0 ? "emerald" : "rose"} />
-          <WaterRow label={`Director's pay (${+(t.directorPct * 100).toFixed(2)}% of net income)`} value={-t.directorPayCents} />
-          <WaterRow label="Net to PURE" value={t.netToPureCents} strong big tone={t.netToPureCents >= 0 ? "emerald" : "rose"} />
+          <WaterRow label={`Total revenue (${basis})`} value={stmt.revenue} strong />
+          <WaterRow label="Total expenses" value={-stmt.expenses} />
+          <WaterRow label="Net income" value={stmt.net} strong tone={stmt.net >= 0 ? "emerald" : "rose"} />
+          <WaterRow label={`Director's pay (${+(t.directorPct * 100).toFixed(2)}% of net income)`} value={-stmt.director} />
+          <WaterRow label="Net to PURE" value={stmt.netToPure} strong big tone={stmt.netToPure >= 0 ? "emerald" : "rose"} />
         </dl>
-        <p className="mt-2 text-[11px] text-slate-400">Net income = revenue − expenses. The Director earns {+(t.directorPct * 100).toFixed(2)}% of net income; Net to PURE is what&apos;s left. Totals include every line (set a court line to Forecast to project the whole month).</p>
+        <p className="mt-2 text-[11px] text-slate-400">Net income = revenue − expenses. The Director earns {+(t.directorPct * 100).toFixed(2)}% of net income; Net to PURE is what&apos;s left. Showing the <span className="font-medium">{basis}</span> basis (toggle above).</p>
       </div>
 
-      {/* Summary */}
+      {/* Summary — expandable */}
       <div className="card bg-slate-50">
-        <h2 className="mb-3 font-semibold text-slate-900">Summary</h2>
-        <div className="grid gap-3 sm:grid-cols-5">
-          <Stat label="Revenue" value={formatCents(t.revenueTotal)} tone="emerald" />
-          <Stat label="Expenses" value={formatCents(t.expenseTotal)} tone="rose" />
-          <Stat label="Net income" value={formatCents(t.netIncome)} tone={t.netIncome >= 0 ? "emerald" : "rose"} />
-          <Stat label={`Director's pay (${+(t.directorPct * 100).toFixed(2)}%)`} value={formatCents(t.directorPayCents)} />
-          <Stat label="Net to PURE" value={formatCents(t.netToPureCents)} tone={t.netToPureCents >= 0 ? "emerald" : "rose"} />
-        </div>
+        <h2 className="mb-1 font-semibold text-slate-900">Summary</h2>
+        <p className="mb-3 text-xs text-slate-500">{basis === "booked" ? "Booked basis" : "Forecast basis"} · {from} → {to}. Click Revenue or Expenses to break them down.</p>
+        <dl className="divide-y divide-slate-100 text-sm">
+          {/* Revenue — expand to components */}
+          <details className="py-1">
+            <summary className="flex cursor-pointer items-center justify-between py-1">
+              <span className="font-semibold text-slate-800">▸ Revenue</span>
+              <span className="tabular-nums font-bold text-emerald-700">{formatCents(stmt.revenue)}</span>
+            </summary>
+            <div className="mt-1 space-y-1 pl-4 text-xs text-slate-600">
+              <SumLine label={basis === "booked" ? "Collected (booked)" : "Collected + scheduled/outstanding"} value={basis === "booked" ? pnl.auto.bookedCents : pnl.auto.bookedCents + pnl.auto.forecastCents} />
+              {pnl.revenue.filter((r) => basis === "forecast" || r.kind === "ACTUAL").map((r) => (
+                <SumLine key={r.id} label={`${r.label} (${r.kind === "FORECAST" ? "forecast" : "actual"})`} value={r.amountCents} />
+              ))}
+            </div>
+          </details>
+          {/* Expenses — expand to components */}
+          <details className="py-1">
+            <summary className="flex cursor-pointer items-center justify-between py-1">
+              <span className="font-semibold text-slate-800">▸ Expenses</span>
+              <span className="tabular-nums font-bold text-rose-700">{formatCents(stmt.expenses)}</span>
+            </summary>
+            <div className="mt-1 space-y-1 pl-4 text-xs text-slate-600">
+              {pnl.auto.coaches.map((c) => <SumLine key={c.coachId} label={`Coach — ${c.name}`} value={c.cents} />)}
+              {pnl.expenses.filter((r) => basis === "forecast" || r.kind === "ACTUAL").map((r) => (
+                <SumLine key={r.id} label={`${r.label} (${r.kind === "FORECAST" ? "forecast" : "actual"})`} value={r.amountCents} />
+              ))}
+            </div>
+          </details>
+          <WaterRow label="Net income" value={stmt.net} strong tone={stmt.net >= 0 ? "emerald" : "rose"} />
+          <WaterRow label={`Director's pay (${+(t.directorPct * 100).toFixed(2)}%)`} value={stmt.director} />
+          <WaterRow label="Net to PURE" value={stmt.netToPure} strong tone={stmt.netToPure >= 0 ? "emerald" : "rose"} />
+        </dl>
       </div>
+
+      {/* Season-wide view — month by month, following the season calendar */}
+      {seasonMonths.length > 0 && (
+        <div className="card">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-semibold text-slate-900">Season breakdown{season ? ` — ${season.name}` : ""}</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Every month of the season, {basis} basis. Toggle Booked/Forecast above.</p>
+            </div>
+            <Link href={qp({ season: showSeason ? "0" : "1" })} className="btn-secondary text-sm">{showSeason ? "Hide" : "Show season breakdown"}</Link>
+          </div>
+          {showSeason && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead className="text-slate-400">
+                  <tr className="border-b border-slate-200 text-xs">
+                    <th className="px-2 py-1.5 text-left font-medium">Month</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Revenue</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Expenses</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Net income</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Director&apos;s pay</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Net to PURE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {seasonRows.map((r) => {
+                    const rev = basis === "booked" ? r.bookedRevenueCents : r.forecastRevenueCents;
+                    const exp = basis === "booked" ? r.actualExpenseCents : r.forecastExpenseCents;
+                    const net = basis === "booked" ? r.bookedNetCents : r.forecastNetCents;
+                    const dir = basis === "booked" ? r.bookedDirectorCents : r.forecastDirectorCents;
+                    const pure = basis === "booked" ? r.bookedNetToPureCents : r.forecastNetToPureCents;
+                    return (
+                      <tr key={r.month} className="border-b border-slate-100">
+                        <td className="px-2 py-1.5"><Link href={qp(monthBounds(r.month))} className="text-brand-700 hover:underline">{monthLabel(r.month)}</Link></td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-emerald-700">{formatCents(rev)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-rose-700">{formatCents(exp)}</td>
+                        <td className={`px-2 py-1.5 text-right tabular-nums ${net >= 0 ? "text-slate-800" : "text-rose-700"}`}>{formatCents(net)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{formatCents(dir)}</td>
+                        <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${pure >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{formatCents(pure)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  {(() => {
+                    const sum = (pick: (r: MonthPnl) => number) => seasonRows.reduce((s, r) => s + pick(r), 0);
+                    const rev = basis === "booked" ? sum((r) => r.bookedRevenueCents) : sum((r) => r.forecastRevenueCents);
+                    const exp = basis === "booked" ? sum((r) => r.actualExpenseCents) : sum((r) => r.forecastExpenseCents);
+                    const net = basis === "booked" ? sum((r) => r.bookedNetCents) : sum((r) => r.forecastNetCents);
+                    const dir = basis === "booked" ? sum((r) => r.bookedDirectorCents) : sum((r) => r.forecastDirectorCents);
+                    const pure = basis === "booked" ? sum((r) => r.bookedNetToPureCents) : sum((r) => r.forecastNetToPureCents);
+                    return (
+                      <tr className="border-t-2 border-slate-300 font-semibold">
+                        <td className="px-2 py-2">Season total</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-emerald-700">{formatCents(rev)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-rose-700">{formatCents(exp)}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums ${net >= 0 ? "text-slate-900" : "text-rose-700"}`}>{formatCents(net)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-slate-700">{formatCents(dir)}</td>
+                        <td className={`px-2 py-2 text-right tabular-nums ${pure >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{formatCents(pure)}</td>
+                      </tr>
+                    );
+                  })()}
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <p className="text-xs text-slate-400">
         Booked revenue and coach session pay are computed live from real payments and delivered practices. Everything else is yours to edit —
@@ -307,6 +473,16 @@ function WaterRow({ label, value, strong, big, tone }: { label: string; value: n
       <span className={`tabular-nums ${strong ? "font-bold" : "font-medium"} ${big ? "text-xl" : "text-sm"} ${color}`}>
         {neg ? `− ${formatCents(Math.abs(value))}` : formatCents(value)}
       </span>
+    </div>
+  );
+}
+
+// A compact label/value line inside an expandable summary section.
+function SumLine({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-slate-500">{label}</span>
+      <span className="tabular-nums font-medium text-slate-700">{formatCents(value)}</span>
     </div>
   );
 }
