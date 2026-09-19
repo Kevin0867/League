@@ -178,12 +178,13 @@ export async function courtCostByFacilityForMonth(month: string): Promise<CourtC
  * re-pulling refreshes the amounts to the latest computed figure instead of
  * duplicating. Returns how many rows were created vs updated.
  */
-export async function seedCourtCostEntries(fromDay: string, toDay: string): Promise<{ created: number; updated: number }> {
+export async function seedCourtCostEntries(fromDay: string, toDay: string): Promise<{ created: number; updated: number; removed: number }> {
   const fromMonth = fromDay.slice(0, 7);
   const toMonth = toDay.slice(0, 7);
-  let created = 0, updated = 0;
+  let created = 0, updated = 0, removed = 0;
   for (let m = fromMonth; m <= toMonth && created + updated < 1000; m = nextMonth(m)) {
     const costs = await courtCostByFacilityForMonth(m);
+    const wanted = new Set(costs.map((c) => `Court rent — ${c.facilityName}`));
     for (const c of costs) {
       const label = `Court rent — ${c.facilityName}`;
       const existing = await prisma.pnlEntry.findFirst({ where: { month: m, section: "EXPENSE", label } });
@@ -195,8 +196,14 @@ export async function seedCourtCostEntries(fromDay: string, toDay: string): Prom
         created++;
       }
     }
+    // Self-clean: remove any previously-pulled Court rent line for this month
+    // that no longer computes to a cost (e.g. the practices behind it were
+    // removed). Scoped to our "Court rent — " lines only.
+    const stale = await prisma.pnlEntry.findMany({ where: { month: m, section: "EXPENSE", label: { startsWith: "Court rent — " } }, select: { id: true, label: true } });
+    const toDelete = stale.filter((e) => !wanted.has(e.label)).map((e) => e.id);
+    if (toDelete.length) { await prisma.pnlEntry.deleteMany({ where: { id: { in: toDelete } } }); removed += toDelete.length; }
   }
-  return { created, updated };
+  return { created, updated, removed };
 }
 
 /**
