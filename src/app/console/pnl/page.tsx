@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
-import { pnlRange, pnlSeasonByMonth, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost, type CourtCostLine, type CoachCost, type MonthPnl } from "@/lib/domain/pnl";
+import { pnlRange, pnlSeasonByMonth, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost, type CourtCostLine, type CoachCost, type MonthPnl, type ForecastLine } from "@/lib/domain/pnl";
 import { paymentsSince } from "@/lib/payments/reconcile";
 import { phoenixDateInput, formatTime12 } from "@/lib/time";
 import { prisma } from "@/lib/db";
@@ -53,7 +53,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
 
   const pnl: PnlRange = valid
     ? await pnlRange(from, to)
-    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, coachCostCents: 0, coaches: [], courtCosts: [] }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0, revenueTotal: 0, expenseTotal: 0, netIncome: 0, directorPayCents: 0, netToPureCents: 0, directorPct: 0.15 } };
+    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, installmentCents: 0, unpaidFeeCents: 0, forecastLines: [], coachCostCents: 0, coaches: [], courtCosts: [] }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0, revenueTotal: 0, expenseTotal: 0, netIncome: 0, directorPayCents: 0, netToPureCents: 0, directorPct: 0.15 } };
   const t = pnl.totals;
   const returnTo = qp({});
   const addMonth = pnl.months[pnl.months.length - 1] ?? to.slice(0, 7);
@@ -144,6 +144,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
           ...(pnl.auto.forecastCents > 0 ? [{ label: `Scheduled / outstanding (forecast) · ${pnl.auto.forecastPlayers} player${pnl.auto.forecastPlayers === 1 ? "" : "s"}`, value: pnl.auto.forecastCents, note: "Installments due later + unpaid one-time fees expected in this range. Auto." }] : []),
         ]}
         rows={pnl.revenue}
+        beforeAdd={pnl.auto.forecastCents > 0 ? <ForecastBreakdown installmentCents={pnl.auto.installmentCents} unpaidFeeCents={pnl.auto.unpaidFeeCents} lines={pnl.auto.forecastLines} /> : null}
       />
 
       {/* Expenses */}
@@ -474,6 +475,49 @@ function WaterRow({ label, value, strong, big, tone }: { label: string; value: n
         {neg ? `− ${formatCents(Math.abs(value))}` : formatCents(value)}
       </span>
     </div>
+  );
+}
+
+// What makes up the forecast (scheduled/outstanding) revenue — installments
+// still due vs unpaid one-time fees, and the players behind each — so a forecast
+// that looks too high can be audited (e.g. a family that already paid but whose
+// invoice wasn't marked paid still shows as an unpaid fee).
+function ForecastBreakdown({ installmentCents, unpaidFeeCents, lines }: { installmentCents: number; unpaidFeeCents: number; lines: ForecastLine[] }) {
+  const total = installmentCents + unpaidFeeCents;
+  return (
+    <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <summary className="flex cursor-pointer items-center justify-between text-sm">
+        <span className="font-semibold text-slate-700">What&apos;s in the forecast? <span className="font-normal text-slate-400">({lines.length} player{lines.length === 1 ? "" : "s"})</span></span>
+        <span className="font-semibold text-slate-800">{formatCents(total)}</span>
+      </summary>
+      <div className="mt-2 space-y-1 text-xs">
+        <div className="flex justify-between font-medium text-slate-600"><span>Subscription installments still due</span><span className="tabular-nums">{formatCents(installmentCents)}</span></div>
+        <div className="flex justify-between font-medium text-slate-600"><span>Unpaid one-time fees</span><span className="tabular-nums">{formatCents(unpaidFeeCents)}</span></div>
+        <p className="pt-1 text-[11px] text-slate-400">If this looks too high, it usually means invoices marked outstanding for families who already paid (reconcile Payments), or players on payment plans with installments still due.</p>
+        <div className="mt-2 max-h-64 overflow-y-auto rounded border border-slate-200 bg-white">
+          <table className="w-full text-[11px]">
+            <thead className="sticky top-0 bg-slate-50 text-slate-400">
+              <tr className="border-b border-slate-100">
+                <th className="px-2 py-1 text-left font-medium">Player</th>
+                <th className="px-2 py-1 text-right font-medium">Installments</th>
+                <th className="px-2 py-1 text-right font-medium">Unpaid fee</th>
+                <th className="px-2 py-1 text-right font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l, i) => (
+                <tr key={i} className="border-b border-slate-50 last:border-0">
+                  <td className="px-2 py-1 text-slate-700">{l.name}</td>
+                  <td className="px-2 py-1 text-right tabular-nums text-slate-500">{l.installmentCents ? formatCents(l.installmentCents) : "—"}</td>
+                  <td className="px-2 py-1 text-right tabular-nums text-slate-500">{l.unpaidFeeCents ? formatCents(l.unpaidFeeCents) : "—"}</td>
+                  <td className="px-2 py-1 text-right font-medium tabular-nums text-slate-700">{formatCents(l.cents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
   );
 }
 
