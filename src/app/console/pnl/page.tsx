@@ -141,7 +141,8 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         addMonth={addMonth}
         autoRows={[
           { label: "Booked revenue (collected)", value: pnl.auto.bookedCents, note: "Cash actually collected in this range — live from Stripe (net of refunds, includes apparel) + offline payments. Matches Payments. Auto." },
-          ...(pnl.auto.forecastCents > 0 ? [{ label: `Scheduled / outstanding (forecast) · ${pnl.auto.forecastPlayers} player${pnl.auto.forecastPlayers === 1 ? "" : "s"}`, value: pnl.auto.forecastCents, note: "Installments due later + unpaid one-time fees expected in this range. Auto." }] : []),
+          ...(pnl.auto.installmentCents > 0 ? [{ label: "Subscription installments (scheduled)", value: pnl.auto.installmentCents, note: "Future installments from active payment plans (assigned players). Auto." }] : []),
+          ...(pnl.auto.unpaidFeeCents > 0 ? [{ label: "Unpaid fees — assigned players", value: pnl.auto.unpaidFeeCents, note: "Placed players who owe and aren't on a plan. If they've actually paid, reconcile in Payments and this drops off. Auto." }] : []),
         ]}
         rows={pnl.revenue}
         beforeAdd={pnl.auto.forecastCents > 0 ? <ForecastBreakdown installmentCents={pnl.auto.installmentCents} unpaidFeeCents={pnl.auto.unpaidFeeCents} lines={pnl.auto.forecastLines} /> : null}
@@ -261,7 +262,16 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
                     return (
                       <tr key={r.month} className="border-b border-slate-100">
                         <td className="px-2 py-1.5"><Link href={qp(monthBounds(r.month))} className="text-brand-700 hover:underline">{monthLabel(r.month)}</Link></td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-emerald-700">{formatCents(rev)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-emerald-700">
+                          {formatCents(rev)}
+                          {basis === "forecast" && (r.installmentCents > 0 || r.unpaidFeeCents > 0) && (
+                            <div className="text-[10px] font-normal text-slate-400">
+                              {r.installmentCents > 0 ? `${formatCents(r.installmentCents)} installments` : ""}
+                              {r.installmentCents > 0 && r.unpaidFeeCents > 0 ? " · " : ""}
+                              {r.unpaidFeeCents > 0 ? `${formatCents(r.unpaidFeeCents)} unpaid` : ""}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-rose-700">{formatCents(exp)}</td>
                         <td className={`px-2 py-1.5 text-right tabular-nums ${net >= 0 ? "text-slate-800" : "text-rose-700"}`}>{formatCents(net)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{formatCents(dir)}</td>

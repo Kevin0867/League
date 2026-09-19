@@ -471,6 +471,8 @@ export type MonthPnl = {
   month: string;
   bookedRevenueCents: number; actualExpenseCents: number; bookedNetCents: number; bookedDirectorCents: number; bookedNetToPureCents: number;
   forecastRevenueCents: number; forecastExpenseCents: number; forecastNetCents: number; forecastDirectorCents: number; forecastNetToPureCents: number;
+  // Forecast revenue split, so "why is it growing" is visible per month.
+  installmentCents: number; unpaidFeeCents: number;
 };
 
 /** The 5 statement figures per month across a season — both bases. Revenue is
@@ -487,10 +489,12 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
   const out: MonthPnl[] = [];
   for (const m of months) {
     const mStart = `${m}-01`, mEnd = `${m}-31`;
-    let booked = 0, forecastRev = 0;
+    let booked = 0, forecastRev = 0, installment = 0, unpaid = 0;
     for (const c of contribs) {
       if (c.day < mStart || c.day > mEnd) continue;
       if (c.bucket === "booked") booked += c.cents;
+      else if (c.kind === "installment") installment += c.cents;
+      else unpaid += c.cents;
       forecastRev += c.cents; // forecast basis = booked + forecast
     }
     const revLines = allEntries.filter((e) => e.month === m && e.section === "REVENUE");
@@ -508,6 +512,7 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
       month: m,
       bookedRevenueCents: bookedRevenue, actualExpenseCents: actualExpense, bookedNetCents: bookedNet, bookedDirectorCents: bookedDirector, bookedNetToPureCents: bookedNet - bookedDirector,
       forecastRevenueCents: forecastRevenue, forecastExpenseCents: forecastExpense, forecastNetCents: forecastNet, forecastDirectorCents: forecastDirector, forecastNetToPureCents: forecastNet - forecastDirector,
+      installmentCents: installment, unpaidFeeCents: unpaid,
     });
   }
   return out;
