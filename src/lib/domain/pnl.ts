@@ -34,7 +34,7 @@ function nextMonth(m: string): string {
 
 export type PnlEntryRow = { id: string; section: string; label: string; amountCents: number; kind: string; note: string | null; month: string };
 
-type Contribution = { day: string; bucket: "booked" | "forecast"; cents: number; personId?: string | null };
+type Contribution = { day: string; bucket: "booked" | "forecast"; cents: number; personId?: string | null; kind?: "installment" | "unpaidFee" };
 
 /**
  * Every revenue contribution, tagged by Phoenix day and booked-vs-forecast.
@@ -88,26 +88,46 @@ async function revenueContributions(): Promise<Contribution[]> {
       const total = p.installmentsTotal ?? 3;
       const per = Math.round(p.amountCents / total);
       const dates = installmentChargeDates(p.createdAt);
-      for (let i = p.installmentsPaid ?? 0; i < total; i++) out.push({ day: day(dates[i] ?? p.createdAt), bucket: "forecast", cents: per, personId: who });
+      for (let i = p.installmentsPaid ?? 0; i < total; i++) out.push({ day: day(dates[i] ?? p.createdAt), bucket: "forecast", cents: per, personId: who, kind: "installment" });
     } else if (p.status !== "PAID") {
-      out.push({ day: day(p.createdAt), bucket: "forecast", cents: p.amountCents, personId: who });
+      out.push({ day: day(p.createdAt), bucket: "forecast", cents: p.amountCents, personId: who, kind: "unpaidFee" });
     }
   }
   return out;
 }
 
-/** Booked + forecast revenue between two Phoenix days (inclusive, "YYYY-MM-DD"),
- *  with a count of distinct players making up the forecast. */
-export async function revenueBetween(fromDay: string, toDay: string): Promise<{ bookedCents: number; forecastCents: number; forecastPlayers: number }> {
+export type ForecastLine = { personId: string | null; name: string; cents: number; installmentCents: number; unpaidFeeCents: number };
+export type RevenueDetail = {
+  bookedCents: number; forecastCents: number; forecastPlayers: number;
+  installmentCents: number; unpaidFeeCents: number; forecastLines: ForecastLine[];
+};
+
+/** Booked + forecast revenue between two Phoenix days (inclusive), with a
+ *  breakdown of what makes up the forecast — installments still due vs unpaid
+ *  one-time fees, grouped by player — so the projection can be audited. */
+export async function revenueBetween(fromDay: string, toDay: string): Promise<RevenueDetail> {
   const contribs = await revenueContributions();
-  let booked = 0, forecast = 0;
+  let booked = 0, forecast = 0, installmentCents = 0, unpaidFeeCents = 0;
   const players = new Set<string>();
+  const byPerson = new Map<string, { installment: number; unpaid: number }>();
   for (const c of contribs) {
     if (c.day < fromDay || c.day > toDay) continue;
-    if (c.bucket === "booked") booked += c.cents;
-    else { forecast += c.cents; if (c.personId) players.add(c.personId); }
+    if (c.bucket === "booked") { booked += c.cents; continue; }
+    forecast += c.cents;
+    if (c.personId) players.add(c.personId);
+    const key = c.personId ?? "unknown";
+    const agg = byPerson.get(key) ?? { installment: 0, unpaid: 0 };
+    if (c.kind === "installment") { agg.installment += c.cents; installmentCents += c.cents; }
+    else { agg.unpaid += c.cents; unpaidFeeCents += c.cents; }
+    byPerson.set(key, agg);
   }
-  return { bookedCents: booked, forecastCents: forecast, forecastPlayers: players.size };
+  const ids = [...byPerson.keys()].filter((k) => k !== "unknown");
+  const people = ids.length ? await prisma.person.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, lastName: true } }) : [];
+  const nameById = new Map(people.map((p) => [p.id, `${p.firstName} ${p.lastName}`.trim()]));
+  const forecastLines: ForecastLine[] = [...byPerson.entries()]
+    .map(([id, v]) => ({ personId: id === "unknown" ? null : id, name: id === "unknown" ? "Unknown" : (nameById.get(id) ?? "Unknown"), cents: v.installment + v.unpaid, installmentCents: v.installment, unpaidFeeCents: v.unpaid }))
+    .sort((a, b) => b.cents - a.cents);
+  return { bookedCents: booked, forecastCents: forecast, forecastPlayers: players.size, installmentCents, unpaidFeeCents, forecastLines };
 }
 
 /** Day/evening hour split for a session, using the facility's evening-start time. */
@@ -344,7 +364,7 @@ export type PnlRange = {
   fromDay: string;
   toDay: string;
   months: string[];
-  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; coachCostCents: number; coaches: CoachCost[]; courtCosts: CourtCost[] };
+  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; installmentCents: number; unpaidFeeCents: number; forecastLines: ForecastLine[]; coachCostCents: number; coaches: CoachCost[]; courtCosts: CourtCost[] };
   revenue: PnlEntryRow[];
   expenses: PnlEntryRow[];
   totals: {
@@ -411,7 +431,7 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
 
   return {
     fromDay, toDay, months,
-    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, coachCostCents: coach, coaches, courtCosts },
+    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, installmentCents: rev.installmentCents, unpaidFeeCents: rev.unpaidFeeCents, forecastLines: rev.forecastLines, coachCostCents: coach, coaches, courtCosts },
     revenue, expenses,
     totals: {
       bookedRevenue,
