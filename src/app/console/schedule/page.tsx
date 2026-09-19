@@ -9,6 +9,7 @@ import { formatTime12, formatTimeRange12, formatSessionDay } from "@/lib/time";
 import { ScheduleCalendar, type CalSession } from "@/components/ScheduleCalendar";
 import { PrintButton } from "@/components/PrintButton";
 import { AddPracticeForm } from "./AddPracticeForm";
+import { PrunePracticesForm } from "./PrunePracticesForm";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { generatePracticeDates } from "@/lib/domain/schedule";
 import { weekOfSeason } from "@/lib/domain/practiceInfo";
@@ -32,6 +33,7 @@ const OK_LABEL: Record<string, string> = {
   addedquiet: "Practice added. The team was not notified.",
   deleted: "Session deleted.",
   cleared: "Practices cleared — you can regenerate them below.",
+  prunedbefore: "Removed practices before that date.",
 };
 
 const ERR_LABEL: Record<string, string> = {
@@ -184,7 +186,9 @@ export default async function SchedulePage({
 
       {ok && (
         <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {ok === "cleared" && n ? `${n} practice${n === "1" ? "" : "s"} cleared — you can regenerate them below.` : OK_LABEL[ok] ?? "Done."}
+          {ok === "cleared" && n ? `${n} practice${n === "1" ? "" : "s"} cleared — you can regenerate them below.`
+            : ok === "prunedbefore" ? `Removed ${n ?? 0} practice${n === "1" ? "" : "s"} dated before the cutoff.`
+            : OK_LABEL[ok] ?? "Done."}
         </div>
       )}
       {err && (
@@ -215,6 +219,19 @@ export default async function SchedulePage({
             you can add a <span className="font-medium">one-off practice</span> (a make-up or an extra session) for a team you coach below.
           </p>
         </div>
+      )}
+
+      {scheduleAdmin && (
+        <details className="card border-l-4 border-rose-300">
+          <summary className="cursor-pointer text-sm font-semibold text-rose-700">Clean up pre-season practices</summary>
+          <p className="mt-2 text-xs text-slate-500">
+            Delete every <span className="font-medium">practice</span> dated before a date — for phantom practices generated before the season really started.
+            Only practices are removed (never league matches or championships), and each team&apos;s practices can be regenerated afterward.
+          </p>
+          <div className="mt-3">
+            <PrunePracticesForm ticket={ticket} defaultBefore="2026-09-13" />
+          </div>
+        </details>
       )}
 
       {scheduleAdmin && ungenerated.length > 0 && (
