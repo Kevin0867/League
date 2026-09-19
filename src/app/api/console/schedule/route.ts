@@ -362,6 +362,32 @@ export async function POST(req: Request) {
     return back(`?ok=cleared&n=${ids.length}`);
   }
 
+  // Bulk cleanup: delete every PRACTICE dated before a cutoff — for pre-season
+  // phantom practices (e.g. generated from a too-early season start). Admin/
+  // scheduling only. Clears plain-tag rows (no FK) for those sessions first so
+  // nothing orphans, then deletes the sessions (cascades their coaches/teams/
+  // attendance). Only PRACTICE sessions — never matches/championships.
+  if (op === "deletePracticesBefore") {
+    if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
+    const before = String(formData.get("before") ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(before)) return back("?err=adddate");
+    const cutoff = new Date(`${before}T00:00:00Z`);
+    const rows = await prisma.session.findMany({ where: { type: "PRACTICE", date: { lt: cutoff } }, select: { id: true } });
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      await prisma.playerAbsence.deleteMany({ where: { sessionId: { in: ids } } }).catch(() => {});
+      await prisma.sessionSub.deleteMany({ where: { sessionId: { in: ids } } }).catch(() => {});
+      await prisma.subSuggestion.deleteMany({ where: { sessionId: { in: ids } } }).catch(() => {});
+      try {
+        await prisma.session.deleteMany({ where: { id: { in: ids } } });
+      } catch {
+        return back("?err=sessionlinked");
+      }
+    }
+    await audit({ actorId: actor.userId, entityType: "Season", entityId: "schedule", action: "DELETE_PRACTICES_BEFORE", summary: `Deleted ${ids.length} practice(s) dated before ${before}` });
+    return back(`?ok=prunedbefore&n=${ids.length}`);
+  }
+
   // relocateSession — manageScheduling (§7). Notifies the team(s) of the new venue.
   if (op === "relocate") {
     if (!actor || !can(actor.role, "manageScheduling")) return back("?err=auth");
