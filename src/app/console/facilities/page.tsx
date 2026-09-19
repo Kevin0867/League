@@ -239,7 +239,7 @@ export default async function FacilitiesPage({
                       agreementStatus: f.agreementStatus, feeBasis: f.feeBasis,
                       weekdayRateCents: f.weekdayRateCents, weekendRateCents: f.weekendRateCents,
                       percentageRate: f.percentageRate,
-                      courtCostDayCents: f.courtCostDayCents, courtCostNightCents: f.courtCostNightCents, courtNightStartsAt: f.courtNightStartsAt,
+                      courtCostDayCents: f.courtCostDayCents, courtCostEveningCents: f.courtCostEveningCents, courtCostWeekendCents: f.courtCostWeekendCents, courtEveningStartsAt: f.courtEveningStartsAt,
                       primaryContact: f.primaryContact,
                       contactEmail: f.contactEmail, contactPhone: f.contactPhone, isPrivate: f.isPrivate,
                       generalArea: f.generalArea, exactAddress: f.exactAddress, crossStreets: f.crossStreets,

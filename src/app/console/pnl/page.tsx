@@ -130,7 +130,7 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="text-sm font-semibold text-amber-900">Court rent from facility rates <span className="font-normal text-amber-700">(computed)</span></div>
-          <div className="mt-0.5 text-[11px] text-amber-700">Delivered practices × courts × hours × each facility&apos;s day/night rate. Pull it in to get an editable line item per court that you can adjust.</div>
+          <div className="mt-0.5 text-[11px] text-amber-700">Delivered practices × courts × hours × each facility&apos;s day / evening / weekend rate. Pull it in to get an editable line item per court that you can adjust.</div>
         </div>
         <div className="text-sm font-semibold text-amber-900">{formatCents(total)}</div>
       </div>

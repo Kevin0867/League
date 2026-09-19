@@ -110,14 +110,14 @@ export async function revenueBetween(fromDay: string, toDay: string): Promise<{ 
   return { bookedCents: booked, forecastCents: forecast, forecastPlayers: players.size };
 }
 
-/** Day/night hour split for a session, using the facility's night-start time. */
-function dayNightHours(startTime: string, endTime: string, nightStart: string): { dayHours: number; nightHours: number } {
+/** Day/evening hour split for a session, using the facility's evening-start time. */
+function dayEveningHours(startTime: string, endTime: string, eveningStart: string): { dayHours: number; eveningHours: number } {
   const toMin = (t: string) => { const [h, m] = (t || "0:0").split(":").map((x) => parseInt(x, 10)); return (h || 0) * 60 + (m || 0); };
-  const s = toMin(startTime), e = toMin(endTime), n = toMin(nightStart || "17:00");
-  if (e <= s) return { dayHours: 0, nightHours: 0 };
+  const s = toMin(startTime), e = toMin(endTime), n = toMin(eveningStart || "17:00");
+  if (e <= s) return { dayHours: 0, eveningHours: 0 };
   const dayMins = Math.max(0, Math.min(e, n) - s);
-  const nightMins = Math.max(0, e - Math.max(s, n));
-  return { dayHours: dayMins / 60, nightHours: nightMins / 60 };
+  const eveningMins = Math.max(0, e - Math.max(s, n));
+  return { dayHours: dayMins / 60, eveningHours: eveningMins / 60 };
 }
 
 export type CourtCost = { facilityName: string; cents: number };
@@ -133,7 +133,7 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
     where: { type: "PRACTICE" },
     select: {
       date: true, startTime: true, endTime: true, status: true, courtCount: true,
-      facility: { select: { name: true, courtCostDayCents: true, courtCostNightCents: true, courtNightStartsAt: true } },
+      facility: { select: { name: true, courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true, courtEveningStartsAt: true } },
     },
   });
   const now = new Date();
@@ -143,12 +143,24 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
     const day = phoenixDateInput(s.date);
     if (day < fromDay || day > toDay) continue;
     const f = s.facility;
-    if (!f || (f.courtCostDayCents == null && f.courtCostNightCents == null)) continue;
-    const dayRate = f.courtCostDayCents ?? f.courtCostNightCents ?? 0;
-    const nightRate = f.courtCostNightCents ?? f.courtCostDayCents ?? 0;
-    const { dayHours, nightHours } = dayNightHours(s.startTime, s.endTime, f.courtNightStartsAt ?? "17:00");
+    if (!f || (f.courtCostDayCents == null && f.courtCostEveningCents == null && f.courtCostWeekendCents == null)) continue;
     const courts = Math.max(1, s.courtCount);
-    const cost = Math.round(courts * (dayHours * dayRate + nightHours * nightRate));
+    const { dayHours, eveningHours } = dayEveningHours(s.startTime, s.endTime, f.courtEveningStartsAt ?? "17:00");
+    // Sessions are stored at noon UTC (Phoenix anchor), so getUTCDay() gives the
+    // correct Phoenix weekday: 0 = Sun, 6 = Sat.
+    const dow = s.date.getUTCDay();
+    const isWeekend = dow === 0 || dow === 6;
+    let cost: number;
+    if (isWeekend && f.courtCostWeekendCents != null) {
+      // Weekend flat rate for the whole session.
+      cost = Math.round(courts * (dayHours + eveningHours) * f.courtCostWeekendCents);
+    } else {
+      // Weekday day/evening split (also the fallback for a weekend with no weekend
+      // rate set). Each tier falls back to whichever rate is set.
+      const dayRate = f.courtCostDayCents ?? f.courtCostEveningCents ?? 0;
+      const eveningRate = f.courtCostEveningCents ?? f.courtCostDayCents ?? 0;
+      cost = Math.round(courts * (dayHours * dayRate + eveningHours * eveningRate));
+    }
     if (cost <= 0) continue;
     byFacility.set(f.name, (byFacility.get(f.name) ?? 0) + cost);
   }
