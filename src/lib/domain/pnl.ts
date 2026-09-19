@@ -120,7 +120,15 @@ function dayEveningHours(startTime: string, endTime: string, eveningStart: strin
   return { dayHours: dayMins / 60, eveningHours: eveningMins / 60 };
 }
 
-export type CourtCost = { facilityName: string; cents: number };
+export type CourtCostLine = {
+  day: string;          // "YYYY-MM-DD" (Phoenix)
+  courts: number;
+  dayHours: number;
+  eveningHours: number;
+  weekend: boolean;
+  cents: number;        // this session's court cost
+};
+export type CourtCost = { facilityName: string; cents: number; lines: CourtCostLine[] };
 
 /**
  * Court rent per facility between two Phoenix days (inclusive) — the P&L expense
@@ -137,7 +145,7 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
     },
   });
   const now = new Date();
-  const byFacility = new Map<string, number>();
+  const byFacility = new Map<string, { cents: number; lines: CourtCostLine[] }>();
   for (const s of sessions) {
     if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
     const day = phoenixDateInput(s.date);
@@ -162,9 +170,14 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
       cost = Math.round(courts * (dayHours * dayRate + eveningHours * eveningRate));
     }
     if (cost <= 0) continue;
-    byFacility.set(f.name, (byFacility.get(f.name) ?? 0) + cost);
+    const agg = byFacility.get(f.name) ?? { cents: 0, lines: [] };
+    agg.cents += cost;
+    agg.lines.push({ day, courts, dayHours, eveningHours, weekend: isWeekend && f.courtCostWeekendCents != null, cents: cost });
+    byFacility.set(f.name, agg);
   }
-  return [...byFacility.entries()].map(([facilityName, cents]) => ({ facilityName, cents })).sort((a, b) => b.cents - a.cents);
+  return [...byFacility.entries()]
+    .map(([facilityName, v]) => ({ facilityName, cents: v.cents, lines: v.lines.sort((a, b) => a.day.localeCompare(b.day)) }))
+    .sort((a, b) => b.cents - a.cents);
 }
 
 /** Court rent per facility for a single Phoenix month ("YYYY-MM"). */

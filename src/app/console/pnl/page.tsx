@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
-import { pnlRange, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost } from "@/lib/domain/pnl";
+import { pnlRange, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost, type CourtCostLine } from "@/lib/domain/pnl";
 import { paymentsSince } from "@/lib/payments/reconcile";
 import { phoenixDateInput } from "@/lib/time";
 
@@ -121,6 +121,21 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
   );
 }
 
+// A session date "Mon, Sep 15" — rendered in UTC since session dates are noon-UTC
+// day anchors.
+function fmtDay(day: string): string {
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+// Total hours for a court line, noting the tier split so the math is checkable.
+function fmtHours(ln: CourtCostLine): string {
+  const total = ln.dayHours + ln.eveningHours;
+  const h = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  if (ln.weekend) return `${h(total)} (wknd)`;
+  if (ln.dayHours > 0 && ln.eveningHours > 0) return `${h(total)} (${h(ln.dayHours)} day + ${h(ln.eveningHours)} eve)`;
+  if (ln.eveningHours > 0) return `${h(total)} (eve)`;
+  return `${h(total)} (day)`;
+}
+
 // Court rent computed from facility rates — a preview + a button to pull it into
 // editable line items (one Court-rent expense per facility, per month in range).
 function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: string; returnTo: string; from: string; to: string; courtCosts: CourtCost[] }) {
@@ -134,11 +149,36 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
         </div>
         <div className="text-sm font-semibold text-amber-900">{formatCents(total)}</div>
       </div>
-      <ul className="mt-2 space-y-0.5 text-xs text-slate-600">
+      <div className="mt-2 space-y-2">
         {courtCosts.map((c) => (
-          <li key={c.facilityName} className="flex justify-between"><span>Court rent — {c.facilityName}</span><span className="font-medium text-slate-700">{formatCents(c.cents)}</span></li>
+          <details key={c.facilityName} className="rounded border border-amber-200 bg-white/70">
+            <summary className="flex cursor-pointer items-center justify-between px-2.5 py-1.5 text-xs">
+              <span className="font-medium text-slate-700">Court rent — {c.facilityName} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "day" : "days"})</span></span>
+              <span className="font-semibold text-slate-800">{formatCents(c.cents)}</span>
+            </summary>
+            <table className="w-full border-t border-amber-100 text-[11px] text-slate-600">
+              <thead className="text-slate-400">
+                <tr className="border-b border-amber-100">
+                  <th className="px-2.5 py-1 text-left font-medium">Day</th>
+                  <th className="px-2 py-1 text-right font-medium">Courts</th>
+                  <th className="px-2 py-1 text-right font-medium">Hours</th>
+                  <th className="px-2.5 py-1 text-right font-medium">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.lines.map((ln, i) => (
+                  <tr key={i} className="border-b border-amber-50 last:border-0">
+                    <td className="px-2.5 py-1">{fmtDay(ln.day)}</td>
+                    <td className="px-2 py-1 text-right">{ln.courts}</td>
+                    <td className="px-2 py-1 text-right">{fmtHours(ln)}</td>
+                    <td className="px-2.5 py-1 text-right font-medium text-slate-700">{formatCents(ln.cents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
         ))}
-      </ul>
+      </div>
       <form method="POST" action="/api/console/pnl" className="mt-2">
         <input type="hidden" name="ticket" value={ticket} />
         <input type="hidden" name="op" value="pullCourtCosts" />
