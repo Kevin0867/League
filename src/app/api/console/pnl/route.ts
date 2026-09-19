@@ -75,6 +75,15 @@ export async function POST(req: Request) {
     return back(`ok=courtpulled&n=${created + updated}`);
   }
 
+  // Set the Director's pay percentage (share of net income). Stored as a percent.
+  if (op === "setDirectorPct") {
+    const n = parseFloat(String(fd.get("pct") ?? "").replace(/[^0-9.]/g, ""));
+    if (!Number.isFinite(n) || n < 0 || n > 100) return back("err=fields");
+    await prisma.siteContent.upsert({ where: { key: "directorPayPct" }, create: { key: "directorPayPct", value: String(n) }, update: { value: String(n) } });
+    await audit({ actorId: actor.userId, entityType: "SiteContent", entityId: "directorPayPct", action: "pnl.setDirectorPct", summary: `Set Director's pay to ${n}%` });
+    return back("ok=saved");
+  }
+
   if (op === "delete") {
     const id = String(fd.get("id") ?? "").trim();
     const existing = id ? await prisma.pnlEntry.findUnique({ where: { id }, select: { id: true } }) : null;

@@ -359,18 +359,29 @@ export type PnlRange = {
   };
 };
 
-/** The Academy Director earns this share of monthly net income. */
+/** Default Director share of monthly net income when none is configured. */
 export const DIRECTOR_PCT = 0.15;
+const DIRECTOR_PCT_KEY = "directorPayPct";
+
+/** The configured Director share of net income (0–1). Editable; falls back to
+ *  DIRECTOR_PCT. Stored as a percent string (e.g. "15" or "12.5") in SiteContent. */
+export async function getDirectorPct(): Promise<number> {
+  const row = await prisma.siteContent.findUnique({ where: { key: DIRECTOR_PCT_KEY } }).catch(() => null);
+  const pct = row ? parseFloat(row.value) : NaN;
+  if (!Number.isFinite(pct) || pct < 0) return DIRECTOR_PCT;
+  return Math.min(pct, 100) / 100;
+}
 
 /** The full P&L for a chosen date range. */
 export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange> {
   const fromMonth = fromDay.slice(0, 7);
   const toMonth = toDay.slice(0, 7);
-  const [rev, coaches, courtCosts, entries] = await Promise.all([
+  const [rev, coaches, courtCosts, entries, directorPct] = await Promise.all([
     revenueBetween(fromDay, toDay),
     coachCostByCoachBetween(fromDay, toDay),
     courtCostByFacilityBetween(fromDay, toDay),
     entriesInMonthRange(fromMonth, toMonth),
+    getDirectorPct(),
   ]);
   const coach = coaches.reduce((s, c) => s + c.cents, 0);
   const months: string[] = [];
@@ -395,7 +406,7 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
   const revenueTotal = rev.bookedCents + rev.forecastCents + sumAll(revenue);
   const expenseTotal = coach + sumAll(expenses);
   const netIncome = revenueTotal - expenseTotal;
-  const directorPayCents = Math.max(0, Math.round(netIncome * DIRECTOR_PCT));
+  const directorPayCents = Math.max(0, Math.round(netIncome * directorPct));
   const netToPureCents = netIncome - directorPayCents;
 
   return {
@@ -411,7 +422,7 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
       netBooked: bookedRevenue - actualExpenses,
       netProjected: (bookedRevenue + forecastRevenue) - projectedExpenses,
       revenueTotal, expenseTotal, netIncome,
-      directorPayCents, netToPureCents, directorPct: DIRECTOR_PCT,
+      directorPayCents, netToPureCents, directorPct,
     },
   };
 }
