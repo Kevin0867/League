@@ -6,21 +6,20 @@ import { audit } from "@/lib/audit";
 import { ingestRegistration } from "@/lib/domain/intake";
 import { dispatchMessage } from "@/lib/messaging";
 import { sendEmail, sendSms } from "@/lib/notify";
-import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { customPaymentEmailContent } from "@/lib/payments/customPaymentEmail";
 import { personContacts, filterToContacts } from "@/lib/domain/contacts";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
-import { signWaiverToken, placementWaiverLink } from "@/lib/domain/waiverRenewal";
+import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
-import { accruePlayerSeasonFee, placementPayLink, splitFamilyFee, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
+import { accruePlayerSeasonFee, splitFamilyFee, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
 import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { feeStateOf } from "@/lib/domain/feeStatus";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
-import { describeTeamPractice } from "@/lib/domain/practiceInfo";
+import { notifyTeamAssignment } from "@/lib/domain/teamAssignmentNotify";
 import { decryptField } from "@/lib/crypto";
 import { sendResetLinkForPerson } from "@/lib/domain/passwordResetSend";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
@@ -74,37 +73,9 @@ async function placeOnTeam(personId: string, teamId: string, seasonId: string) {
   await ensureSeasonFeePayable(personId, seasonId);
 }
 
-async function notifyAssignment(teamId: string, personId: string, seasonId: string, opts?: { emailOnly?: boolean }) {
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    include: { facility: true, coach: { include: { person: true } }, members: { include: { person: true } } },
-  });
-  if (!team) return;
-  const person = team.members.find((m) => m.personId === personId)?.person;
-  const coachName = team.coach ? `${team.coach.person.firstName} ${team.coach.person.lastName}` : "your team contact";
-  const coachContact = [team.coach?.person.email, team.coach?.person.phone].filter(Boolean).join(" · ") || null;
-  const pay = await placementPayLink(personId, seasonId);
-  const waiver = await placementWaiverLink(personId);
-  const practiceWhen = await describeTeamPractice(team, seasonId);
-  const email = teamAssignmentEmail({
-    name: person?.firstName ?? "there",
-    teamId: team.id,
-    teamName: team.name,
-    coachName,
-    coachContact,
-    locationName: team.facility?.name ?? "To be confirmed",
-    locationAddress: team.facility?.exactAddress ?? team.facility?.generalArea ?? null,
-    practiceWhen,
-    payUrl: pay?.payUrl ?? null,
-    feeCents: pay?.feeCents ?? null,
-    waiverUrl: waiver.waiverUrl,
-  });
-  await dispatchMessage({
-    seasonId, audienceType: "SINGLE_PERSON", audienceRef: personId,
-    channels: opts?.emailOnly ? ["EMAIL"] : ["IN_APP", "EMAIL"], triggerType: "TEAM_ASSIGNMENT",
-    subject: email.subject, body: email.text, html: email.html,
-  });
-}
+// A player's team-assignment note (team, coach, location, practice time, pay +
+// waiver links) — shared so every placement path can send it. See the domain module.
+const notifyAssignment = notifyTeamAssignment;
 
 // Reminder-eligible categories: any inbound charge we'd nudge someone about.
 // (REFUND/COACH_PAYOUT are outbound and never reminded.)
@@ -580,8 +551,12 @@ export async function POST(req: Request) {
       // On FIRST placement, auto-send the full welcome (team details + pay the
       // fee + pick apparel + complete the waiver). A move between teams doesn't
       // re-send — the admin can opt in with notify=1 for the lighter placement note.
+      // First placement gets the full welcome; a MOVE sends the team-info note
+      // (team, coach, location, practice day/time, pay + waiver links) so the
+      // player always gets their new team details — unless the bulk board asks to
+      // stay silent while arranging (silent=1).
       if (firstPlacement) await sendTeamLaunch({ personId, seasonId: team.seasonId, senderId: actor.userId });
-      else if (String(fd.get("notify") ?? "") === "1") await notifyAssignment(teamId, personId, team.seasonId);
+      else if (String(fd.get("silent") ?? "") !== "1") await notifyAssignment(teamId, personId, team.seasonId);
       if (String(fd.get("from") ?? "") === "requests")
         return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
       return back("?ok=assign");
@@ -613,11 +588,12 @@ export async function POST(req: Request) {
       for (const pid of people) if (!(await wasPlacedInSeason(pid, team.seasonId))) firstTimers.add(pid);
       for (const pid of people) await placeOnTeam(pid, teamId, team.seasonId);
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Placed pair on team: ${people.join(" + ")}` });
-      // First placement → full welcome; a move → optional placement note on opt-in.
-      const notifyOptIn = String(fd.get("notify") ?? "") === "1";
+      // First placement → full welcome; a move → team-info note by default (so
+      // the player gets their new team details), unless told to stay silent.
+      const silentPair = String(fd.get("silent") ?? "") === "1";
       for (const pid of people) {
         if (firstTimers.has(pid)) await sendTeamLaunch({ personId: pid, seasonId: team.seasonId, senderId: actor.userId });
-        else if (notifyOptIn) await notifyAssignment(teamId, pid, team.seasonId);
+        else if (!silentPair) await notifyAssignment(teamId, pid, team.seasonId);
       }
       return NextResponse.redirect(new URL(`/console/requests?ok=${override ? "override" : "assign"}`, origin), 303);
     }

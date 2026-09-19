@@ -22,6 +22,7 @@ import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
 import { TEAM_CAP, TEAM_MAX } from "@/lib/enums";
 import { personEmails } from "@/lib/domain/audience";
 import { advanceWaitlist } from "@/lib/domain/teamWaitlist";
+import { notifyTeamAssignment } from "@/lib/domain/teamAssignmentNotify";
 
 /** Colors used by OTHER teams in the same gender+level group (divisionCode) —
  *  the set a new/edited team must avoid, since every team in a division (e.g.
@@ -650,9 +651,11 @@ export async function POST(req: Request) {
       // season-fee invoice exists so they can pay the fee + apparel right away.
       await ensureSeasonFeePayable(personId, team.seasonId);
       // On first placement, auto-send the welcome (team details + pay fee + pick
-      // apparel + complete waiver). A move onto a team they were already on this
-      // season doesn't re-send.
+      // apparel + complete waiver). A MOVE onto a different team sends the
+      // team-info note so the player gets their new team's day/time, location,
+      // and coach — just not the whole welcome again.
       if (firstPlacement) await sendTeamLaunch({ personId, seasonId: team.seasonId, senderId: actor.userId });
+      else await notifyTeamAssignment(teamId, personId, team.seasonId).catch(() => {});
 
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN", summary: `Added player ${personId} to roster${overMax ? ` (OVERRIDE — over max, now ${effective})` : overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
       return back(overMax ? "?ok=addPlayerForced" : overCap ? "?ok=addPlayerOver" : "?ok=addPlayer");
@@ -715,6 +718,7 @@ export async function POST(req: Request) {
       await prisma.registration.updateMany({ where: { personId, seasonId: team.seasonId }, data: { status: "ASSIGNED" } });
       await ensureSeasonFeePayable(personId, team.seasonId);
       if (firstPlacement) await sendTeamLaunch({ personId, seasonId: team.seasonId, senderId: actor.userId });
+      else await notifyTeamAssignment(teamId, personId, team.seasonId).catch(() => {});
 
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "waitlist.promote", summary: `Promoted ${personId} off waitlist to roster${overCap ? ` (over target — now ${effective}/${TEAM_CAP})` : ""}` });
       return back(overCap ? "?ok=promotedOver" : "?ok=promoted");
