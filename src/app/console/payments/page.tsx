@@ -13,6 +13,7 @@ import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
+import { assignedPlayerIds } from "@/lib/domain/pnl";
 import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
@@ -168,17 +169,29 @@ export default async function PaymentsPage({
   // clear — but the portion already paid IS collected money sitting in Stripe.
   // Count each plan's paid share as Collected, and leave only the remainder as
   // Requested, so the totals match what actually cleared.
-  const installmentPaidCents = outstanding.reduce((s, p) => {
+  const installmentPaidShare = (rows: typeof outstanding) => rows.reduce((s, p) => {
     if (!p.installmentPlan || !p.installmentsPaid) return s;
     const total = p.installmentsTotal ?? 3;
     return s + Math.round((p.amountCents / total) * Math.min(p.installmentsPaid, total));
   }, 0);
+  const installmentPaidCents = installmentPaidShare(outstanding);
 
   const collected = (collectedAgg._sum.amountCents ?? 0) + installmentPaidCents;
-  const requested = Math.max(0, outstanding.reduce((s, p) => s + p.amountCents, 0) - installmentPaidCents);
-  // Families to actually remind: exclude active 3-payment subscriptions (paying
-  // on schedule — not an unpaid fee), so we never dun someone mid-plan.
-  const remindable = outstanding.filter((p) => feeStateOf(p) !== "subscription");
+
+  // Expected (Requested/Pending) revenue is only counted for players actually
+  // placed on a team — a registrant we never seated won't pay/play. Collected
+  // above stays as-is (real money in). Filter outstanding to assigned players.
+  const assigned = await assignedPlayerIds();
+  const coversAssigned = (p: { coveredPersonIds: unknown; partyId: string | null }) => {
+    const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String) : [];
+    return ids.some((id) => assigned.has(id)) || (!!p.partyId && assigned.has(p.partyId));
+  };
+  const outstandingAssigned = outstanding.filter(coversAssigned);
+  const requested = Math.max(0, outstandingAssigned.reduce((s, p) => s + p.amountCents, 0) - installmentPaidShare(outstandingAssigned));
+  const unassignedOutstandingCount = outstanding.length - outstandingAssigned.length;
+  // Families to actually remind: assigned players only, excluding active
+  // 3-payment subscriptions (paying on schedule — not an unpaid fee).
+  const remindable = outstandingAssigned.filter((p) => feeStateOf(p) !== "subscription");
   const remindableDue = Math.max(0, remindable.reduce((s, p) => s + p.amountCents, 0) - remindable.reduce((s, p) => {
     if (!p.installmentPlan || !p.installmentsPaid) return s;
     const total = p.installmentsTotal ?? 3;
@@ -788,7 +801,14 @@ export default async function PaymentsPage({
             </p>
           )}
         </div>
-        <Stat label="Requested / pending" value={formatCents(requested)} tone="amber" />
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Requested / pending</div>
+          <div className="mt-1 text-2xl font-extrabold text-amber-600">{formatCents(requested)}</div>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Assigned players only — expected from families on a team.
+            {unassignedOutstandingCount > 0 ? ` ${unassignedOutstandingCount} unplaced registrant${unassignedOutstandingCount === 1 ? "" : "s"} excluded.` : ""}
+          </p>
+        </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-baseline justify-between">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Payouts (est.)</div>
