@@ -14,6 +14,7 @@ import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 import { assignedPlayerIds } from "@/lib/domain/pnl";
+import { placementPaymentPeople, type PersonPayRow } from "@/lib/domain/placementPayment";
 import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
@@ -208,6 +209,8 @@ export default async function PaymentsPage({
     const total = p.installmentsTotal ?? 3;
     return s + Math.round(p.amountCents / total) * Math.min(p.installmentsPaid ?? 1, total);
   }, 0);
+  // The people behind each bucket, with fee + apparel status and registration.
+  const placement = await placementPaymentPeople();
   const remindableDue = Math.max(0, remindable.reduce((s, p) => s + p.amountCents, 0) - remindable.reduce((s, p) => {
     if (!p.installmentPlan || !p.installmentsPaid) return s;
     const total = p.installmentsTotal ?? 3;
@@ -843,30 +846,16 @@ export default async function PaymentsPage({
       </div>
 
       {/* Placement × payment — money and families that the headline figures split
-          out: paid/paying families not yet on a team, and rostered players who owe. */}
+          out. Each row expands to the people, with links to their registration
+          and a resend-pay-link button. */}
       <div className="card">
         <h2 className="font-semibold text-slate-900">Placement &amp; payment</h2>
-        <p className="mt-0.5 text-xs text-slate-500">How money in and money owed break down by whether the player is on a team.</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {/* Unplaced but paying */}
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Unplaced but paying</div>
-            <div className="mt-1 text-xl font-extrabold text-slate-900">{formatCents(unassignedPaidCents + unassignedSubCollectedCents)}</div>
-            <p className="text-[11px] text-slate-400">Money in from families not yet on a team (not counted in season revenue projections).</p>
-            <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-600">
-              <div className="flex justify-between"><dt>Paid in full · {unassignedPaid.length}</dt><dd className="font-semibold text-slate-800">{formatCents(unassignedPaidCents)}</dd></div>
-              <div className="flex justify-between"><dt>On a plan (collected) · {unassignedSubs.length}</dt><dd className="font-semibold text-slate-800">{formatCents(unassignedSubCollectedCents)}</dd></div>
-            </dl>
-          </div>
-          {/* Assigned, not paid */}
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Assigned, not paid</div>
-            <div className="mt-1 text-xl font-extrabold text-amber-600">{formatCents(remindableDue)}</div>
-            <p className="text-[11px] text-slate-400">Players on a team who still owe — this is what fee reminders target.</p>
-            <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-600">
-              <div className="flex justify-between"><dt>Families</dt><dd className="font-semibold text-slate-800">{remindable.length}</dd></div>
-            </dl>
-          </div>
+        <p className="mt-0.5 text-xs text-slate-500">Click a row to see the people, jump to their registration, resend a pay link, and (for placed players) check apparel.</p>
+        <div className="mt-3 space-y-2">
+          <PeopleBucket label="Assigned &amp; paid" note="On a team, fee paid or paying on a plan — check who still needs to pick/pay apparel." rows={placement.assignedPaid} amountLabel={`${placement.assignedPaid.length} player${placement.assignedPaid.length === 1 ? "" : "s"}`} ticket={ticket} seasonId={placement.seasonId} showApparel />
+          <PeopleBucket label="Assigned, not paid" note="Players on a team who still owe — what fee reminders target." rows={placement.assignedUnpaid} amountLabel={formatCents(remindableDue)} tone="amber" ticket={ticket} seasonId={placement.seasonId} showApparel showOwed />
+          <PeopleBucket label="Unplaced but paying — paid in full" note="Paid but not yet on a team (not counted in season revenue projections)." rows={placement.unplacedPaidInFull} amountLabel={formatCents(unassignedPaidCents)} ticket={ticket} seasonId={placement.seasonId} showApparel />
+          <PeopleBucket label="Unplaced but paying — on a plan" note="On a payment plan but not yet on a team." rows={placement.unplacedOnPlan} amountLabel={formatCents(unassignedSubCollectedCents)} ticket={ticket} seasonId={placement.seasonId} showApparel />
         </div>
       </div>
 
@@ -1224,6 +1213,81 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "eme
       <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
       <div className={`mt-1 text-2xl font-extrabold ${c}`}>{value}</div>
     </div>
+  );
+}
+
+// An expandable placement×payment bucket: a header row that opens to the list of
+// people, each linking to their registration, showing fee + apparel status, and
+// with a resend-pay-link control.
+function PeopleBucket({
+  label, note, rows, amountLabel, tone = "slate", ticket, seasonId, showApparel, showOwed,
+}: {
+  label: string; note: string; rows: PersonPayRow[]; amountLabel: string;
+  tone?: "slate" | "amber"; ticket: string; seasonId: string | null; showApparel?: boolean; showOwed?: boolean;
+}) {
+  const apparelCell = (a: PersonPayRow["apparel"]) =>
+    !a.chosen ? <span className="text-rose-500">— none</span>
+    : a.paid ? <span className="text-emerald-600">✓ {a.items.join(", ")}</span>
+    : <span className="text-amber-600">⚠ chosen, unpaid: {a.items.join(", ")}</span>;
+  return (
+    <details className="rounded-lg border border-slate-200 bg-white">
+      <summary className="flex cursor-pointer items-center justify-between px-3 py-2">
+        <span>
+          <span className="text-sm font-semibold text-slate-800">{label}</span>
+          <span className="ml-2 text-xs text-slate-400">{rows.length} {rows.length === 1 ? "player" : "players"}</span>
+        </span>
+        <span className={`text-sm font-bold ${tone === "amber" ? "text-amber-600" : "text-slate-800"}`}>{amountLabel}</span>
+      </summary>
+      <div className="border-t border-slate-100 px-3 pb-3">
+        <p className="py-1.5 text-[11px] text-slate-400">{note}</p>
+        {rows.length === 0 ? (
+          <p className="py-2 text-xs text-slate-400">No one in this bucket.</p>
+        ) : (
+          <div className="max-h-96 overflow-auto rounded border border-slate-100">
+            <table className="w-full min-w-[560px] text-xs">
+              <thead className="sticky top-0 bg-slate-50 text-slate-400">
+                <tr className="border-b border-slate-100">
+                  <th className="px-2 py-1.5 text-left font-medium">Player</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Team</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Season fee</th>
+                  {showApparel && <th className="px-2 py-1.5 text-left font-medium">Apparel</th>}
+                  <th className="px-2 py-1.5 text-right font-medium">Resend pay link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.personId} className="border-b border-slate-50 last:border-0">
+                    <td className="px-2 py-1.5">
+                      <Link href={r.registrationId ? `/console/registrations/${r.registrationId}` : `/console/people/${r.personId}`} className="font-medium text-brand-700 hover:underline">{r.name}</Link>
+                    </td>
+                    <td className="px-2 py-1.5 text-slate-500">{r.teamName ?? "—"}</td>
+                    <td className="px-2 py-1.5">
+                      {r.feePaid ? <span className="text-emerald-600">✓ Paid</span>
+                        : r.onPlan ? <span className="text-brand-600">On plan{showOwed && r.owedCents ? ` · ${formatCents(r.owedCents)} left` : ""}</span>
+                        : r.owedCents ? <span className="text-amber-600">Owes {formatCents(r.owedCents)}</span>
+                        : <span className="text-rose-500">Not paid</span>}
+                    </td>
+                    {showApparel && <td className="px-2 py-1.5">{apparelCell(r.apparel)}</td>}
+                    <td className="px-2 py-1.5">
+                      <form method="POST" action="/api/console/registrations" className="flex justify-end gap-1">
+                        <input type="hidden" name="ticket" value={ticket} />
+                        <input type="hidden" name="op" value="requestPayment" />
+                        <input type="hidden" name="personId" value={r.personId} />
+                        {seasonId && <input type="hidden" name="seasonId" value={seasonId} />}
+                        <input type="hidden" name="returnTo" value="/console/payments" />
+                        <button name="channel" value="email" className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-100">Email</button>
+                        <button name="channel" value="text" className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-100">Text</button>
+                        <button name="channel" value="both" className="rounded bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-brand-700">Both</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
