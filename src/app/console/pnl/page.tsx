@@ -94,15 +94,27 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
 
       {/* Bottom line — the statement waterfall */}
       <div className="card">
-        <h2 className="mb-3 font-semibold text-slate-900">Bottom line</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-slate-900">Bottom line</h2>
+          {/* Editable Director's pay percentage. */}
+          <form method="POST" action="/api/console/pnl" className="flex items-center gap-1.5">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="setDirectorPct" />
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <label className="text-xs text-slate-500">Director&apos;s pay</label>
+            <input name="pct" type="number" step="0.1" min="0" max="100" defaultValue={+(t.directorPct * 100).toFixed(2)} className="input w-20 py-1 text-right text-sm" />
+            <span className="text-xs text-slate-500">% of net</span>
+            <button className="btn-chip-brand">Save</button>
+          </form>
+        </div>
         <dl className="divide-y divide-slate-100 text-sm">
           <WaterRow label="Total revenue" value={t.revenueTotal} strong />
           <WaterRow label="Total expenses" value={-t.expenseTotal} />
           <WaterRow label="Net income" value={t.netIncome} strong tone={t.netIncome >= 0 ? "emerald" : "rose"} />
-          <WaterRow label={`Director's pay (${Math.round(t.directorPct * 100)}% of net income)`} value={-t.directorPayCents} />
+          <WaterRow label={`Director's pay (${+(t.directorPct * 100).toFixed(2)}% of net income)`} value={-t.directorPayCents} />
           <WaterRow label="Net to PURE" value={t.netToPureCents} strong big tone={t.netToPureCents >= 0 ? "emerald" : "rose"} />
         </dl>
-        <p className="mt-2 text-[11px] text-slate-400">Net income = revenue − expenses. The Director earns {Math.round(t.directorPct * 100)}% of net income; Net to PURE is what&apos;s left. Totals include every line (set a court line to Forecast to project the whole month).</p>
+        <p className="mt-2 text-[11px] text-slate-400">Net income = revenue − expenses. The Director earns {+(t.directorPct * 100).toFixed(2)}% of net income; Net to PURE is what&apos;s left. Totals include every line (set a court line to Forecast to project the whole month).</p>
       </div>
 
       {/* Summary */}
@@ -112,7 +124,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
           <Stat label="Revenue" value={formatCents(t.revenueTotal)} tone="emerald" />
           <Stat label="Expenses" value={formatCents(t.expenseTotal)} tone="rose" />
           <Stat label="Net income" value={formatCents(t.netIncome)} tone={t.netIncome >= 0 ? "emerald" : "rose"} />
-          <Stat label={`Director's pay (${Math.round(t.directorPct * 100)}%)`} value={formatCents(t.directorPayCents)} />
+          <Stat label={`Director's pay (${+(t.directorPct * 100).toFixed(2)}%)`} value={formatCents(t.directorPayCents)} />
           <Stat label="Net to PURE" value={formatCents(t.netToPureCents)} tone={t.netToPureCents >= 0 ? "emerald" : "rose"} />
         </div>
       </div>
