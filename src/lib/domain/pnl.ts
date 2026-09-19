@@ -18,6 +18,18 @@ const SESSIONS_PER_SEASON = 12;
 // auto; everything else is editable) and manual revenue are line items the admin
 // adds; line items are tagged to a month.
 
+/** Person ids on a team in the active season — "assigned" players. Expected /
+ *  forecast revenue is only counted for these, since many families register but
+ *  are never placed (schedules don't line up) and won't actually pay/play. */
+export async function assignedPlayerIds(): Promise<Set<string>> {
+  const season =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
+  if (!season) return new Set();
+  const members = await prisma.teamMember.findMany({ where: { team: { seasonId: season.id } }, select: { personId: true } });
+  return new Set(members.map((m) => m.personId));
+}
+
 export const thisMonth = () => phoenixDateInput(new Date()).slice(0, 7);
 export const today = () => phoenixDateInput(new Date());
 const monthOf = (d: Date) => phoenixDateInput(d).slice(0, 7);
@@ -47,13 +59,14 @@ async function revenueContributions(): Promise<Contribution[]> {
   const day = (d: Date) => phoenixDateInput(d);
   const out: Contribution[] = [];
 
-  const [charges, pays, manual] = await Promise.all([
+  const [charges, pays, manual, assigned] = await Promise.all([
     stripeChargesSince(sinceUnix).catch(() => null),
     prisma.payment.findMany({
       where: { direction: "IN", status: { in: ["PAID", "PENDING", "REQUESTED"] }, category: { not: "REFUND" } },
       select: { amountCents: true, status: true, paidAt: true, createdAt: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },
     }),
     prisma.payment.findMany({ where: { direction: "IN", status: "PAID", method: "MANUAL", category: { not: "REFUND" } }, select: { amountCents: true, paidAt: true, createdAt: true } }),
+    assignedPlayerIds(),
   ]);
 
   if (charges) {
@@ -82,7 +95,14 @@ async function revenueContributions(): Promise<Contribution[]> {
     const c = Array.isArray(p.coveredPersonIds) ? p.coveredPersonIds : [];
     return (c.length ? String(c[0]) : p.partyId) ?? null;
   };
+  // Forecast (expected) revenue is only counted for players actually placed on a
+  // team — a registrant we never seated won't pay/play, so don't project them.
+  const coversAssigned = (p: { coveredPersonIds: unknown; partyId: string | null }) => {
+    const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String) : [];
+    return ids.some((id) => assigned.has(id)) || (!!p.partyId && assigned.has(p.partyId));
+  };
   for (const p of pays) {
+    if (!coversAssigned(p)) continue;
     const who = playerOf(p);
     if (p.installmentPlan) {
       const total = p.installmentsTotal ?? 3;
