@@ -666,12 +666,14 @@ model Facility {
   weekendRateCents Int       @default(0)
   percentageRate   Float?    // for PERCENTAGE basis (on On-Site Practice Revenue)
   /// Court RENT the Academy pays this facility, per court per hour — used to pull
-  /// this location's court cost into the P&L. Many venues charge more in the
-  /// evening under lights, so a separate night rate applies after courtNightStartsAt.
-  courtCostDayCents   Int?
-  courtCostNightCents Int?
-  /// "HH:MM" when the night court rate begins (default 17:00 = 5pm).
-  courtNightStartsAt  String?   @default("17:00")
+  /// this location's court cost into the P&L. Weekday rentals split into a day and
+  /// an evening rate at courtEveningStartsAt (many venues charge more under lights);
+  /// weekend rentals use a separate flat rate.
+  courtCostDayCents     Int?
+  courtCostEveningCents Int?
+  courtCostWeekendCents Int?
+  /// "HH:MM" when the evening court rate begins on weekdays (default 17:00 = 5pm).
+  courtEveningStartsAt  String?   @default("17:00")
   paymentTerms     String?
 
   primaryContact   String?

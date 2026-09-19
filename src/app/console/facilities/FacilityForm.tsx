@@ -21,8 +21,9 @@ export type FacilityInitial = {
   weekendRateCents: number;
   percentageRate: number | null;
   courtCostDayCents: number | null;
-  courtCostNightCents: number | null;
-  courtNightStartsAt: string | null;
+  courtCostEveningCents: number | null;
+  courtCostWeekendCents: number | null;
+  courtEveningStartsAt: string | null;
   primaryContact: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -259,22 +260,27 @@ export function FacilityForm({ ticket, facility }: { ticket: string; facility?: 
             </div>
 
             {/* Court rent for the P&L — what the Academy pays to rent courts here,
-                per court per hour, with a higher night rate after a cutoff. */}
+                per court per hour: a weekday day rate, a higher evening rate after
+                a cutoff, and a separate weekend flat rate. */}
             <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="text-sm font-semibold text-slate-700">Court rent (for the P&amp;L)</div>
-              <p className="mt-0.5 text-xs text-slate-500">What the Academy pays to rent courts here — per court, per hour. The night rate applies after the cutoff (many venues charge more under lights). This is pulled into the P&amp;L as this location&apos;s court cost, calculated from delivered practices.</p>
-              <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              <p className="mt-0.5 text-xs text-slate-500">What the Academy pays to rent courts here — per court, per hour. On weekdays the evening rate applies after the cutoff (many venues charge more under lights); weekends use their own flat rate. This is pulled into the P&amp;L as this location&apos;s court cost, calculated from delivered practices.</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <label className="label">Day rate ($/court/hr)</label>
                   <input name="courtCostDay" type="number" step="0.01" className="input" placeholder="10.00" defaultValue={facility?.courtCostDayCents != null ? dollars(facility.courtCostDayCents) : ""} />
                 </div>
                 <div>
-                  <label className="label">Night rate ($/court/hr)</label>
-                  <input name="courtCostNight" type="number" step="0.01" className="input" placeholder="13.00" defaultValue={facility?.courtCostNightCents != null ? dollars(facility.courtCostNightCents) : ""} />
+                  <label className="label">Evening rate ($/court/hr)</label>
+                  <input name="courtCostEvening" type="number" step="0.01" className="input" placeholder="13.00" defaultValue={facility?.courtCostEveningCents != null ? dollars(facility.courtCostEveningCents) : ""} />
                 </div>
                 <div>
-                  <label className="label">Night starts at</label>
-                  <input name="courtNightStartsAt" type="time" className="input" defaultValue={facility?.courtNightStartsAt ?? "17:00"} />
+                  <label className="label">Weekend rate ($/court/hr)</label>
+                  <input name="courtCostWeekend" type="number" step="0.01" className="input" placeholder="15.00" defaultValue={facility?.courtCostWeekendCents != null ? dollars(facility.courtCostWeekendCents) : ""} />
+                </div>
+                <div>
+                  <label className="label">Evening starts at</label>
+                  <input name="courtEveningStartsAt" type="time" className="input" defaultValue={facility?.courtEveningStartsAt ?? "17:00"} />
                 </div>
               </div>
             </div>
