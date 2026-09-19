@@ -141,15 +141,21 @@ export type CourtCost = {
   eveningStartsAt: string;
 };
 
+// "delivered" = practices already completed (the ACTUAL cost so far).
+// "scheduled" = every non-cancelled practice in range, delivered or upcoming
+// (the FORECAST cost for the whole period).
+export type CourtCostBasis = "delivered" | "scheduled";
+
 /**
  * Court rent per facility between two Phoenix days (inclusive) — the P&L expense
- * for renting courts. For each DELIVERED practice at a facility with court rates
- * set: courts × hours × rate, splitting hours into day vs night (after the
- * facility's night-start time, default 5pm) at their respective rates.
+ * for renting courts. For each qualifying practice at a facility with court rates
+ * set: courts × hours × rate, splitting hours into day vs evening (after the
+ * facility's evening-start time, default 5pm) at their respective rates, with a
+ * flat weekend rate. `basis` picks delivered-only vs the full scheduled period.
  */
-export async function courtCostByFacilityBetween(fromDay: string, toDay: string): Promise<CourtCost[]> {
+export async function courtCostByFacilityBetween(fromDay: string, toDay: string, basis: CourtCostBasis = "delivered"): Promise<CourtCost[]> {
   const sessions = await prisma.session.findMany({
-    where: { type: "PRACTICE" },
+    where: { type: "PRACTICE", ...(basis === "scheduled" ? { status: { not: "CANCELLED" } } : {}) },
     select: {
       date: true, startTime: true, endTime: true, status: true, courtCount: true,
       facility: { select: { id: true, name: true, courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true, courtEveningStartsAt: true } },
@@ -161,7 +167,8 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
   type Agg = { facilityName: string; cents: number; lines: CourtCostLine[]; dayRateCents: number | null; eveningRateCents: number | null; weekendRateCents: number | null; eveningStartsAt: string };
   const byFacility = new Map<string, Agg>();
   for (const s of sessions) {
-    if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
+    // delivered → only completed sessions; scheduled → every non-cancelled one.
+    if (basis === "delivered" ? !isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now) : s.status === "CANCELLED") continue;
     const day = phoenixDateInput(s.date);
     if (day < fromDay || day > toDay) continue;
     const f = s.facility;
@@ -199,8 +206,17 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
 }
 
 /** Court rent per facility for a single Phoenix month ("YYYY-MM"). */
-export async function courtCostByFacilityForMonth(month: string): Promise<CourtCost[]> {
-  return courtCostByFacilityBetween(`${month}-01`, `${month}-31`);
+export async function courtCostByFacilityForMonth(month: string, basis: CourtCostBasis = "delivered"): Promise<CourtCost[]> {
+  return courtCostByFacilityBetween(`${month}-01`, `${month}-31`, basis);
+}
+
+/** Total court rent by facility NAME for a month + basis (summing any records
+ *  that share a name), for recomputing a single "Court rent — <name>" line. */
+export async function courtCostByNameForMonth(month: string, basis: CourtCostBasis): Promise<Map<string, number>> {
+  const costs = await courtCostByFacilityForMonth(month, basis);
+  const byName = new Map<string, number>();
+  for (const c of costs) byName.set(c.facilityName, (byName.get(c.facilityName) ?? 0) + c.cents);
+  return byName;
 }
 
 /**
@@ -214,28 +230,31 @@ export async function seedCourtCostEntries(fromDay: string, toDay: string): Prom
   const toMonth = toDay.slice(0, 7);
   let created = 0, updated = 0, removed = 0;
   for (let m = fromMonth; m <= toMonth && created + updated < 1000; m = nextMonth(m)) {
-    const costs = await courtCostByFacilityForMonth(m);
-    // Sum by label so two facility records sharing a name merge into one correct
-    // line item (instead of the second overwriting the first).
-    const byLabel = new Map<string, number>();
-    for (const c of costs) {
-      const label = `Court rent — ${c.facilityName}`;
-      byLabel.set(label, (byLabel.get(label) ?? 0) + c.cents);
-    }
-    const wanted = new Set(byLabel.keys());
-    for (const [label, cents] of byLabel) {
+    // Delivered (ACTUAL) and full-scheduled (FORECAST) totals by facility name.
+    const [deliveredByName, scheduledByName] = await Promise.all([
+      courtCostByNameForMonth(m, "delivered"),
+      courtCostByNameForMonth(m, "scheduled"),
+    ]);
+    // Every facility that has any scheduled practice this month is "wanted"
+    // (scheduled ⊇ delivered), keyed by the line label.
+    const wanted = new Set([...scheduledByName.keys()].map((name) => `Court rent — ${name}`));
+    for (const name of scheduledByName.keys()) {
+      const label = `Court rent — ${name}`;
       const existing = await prisma.pnlEntry.findFirst({ where: { month: m, section: "EXPENSE", label } });
+      // A line keeps its own kind: Forecast reflects the whole scheduled month,
+      // Actual reflects delivered-so-far. New lines default to Actual/delivered.
+      const kind = existing?.kind === "FORECAST" ? "FORECAST" : "ACTUAL";
+      const cents = (kind === "FORECAST" ? scheduledByName.get(name) : deliveredByName.get(name)) ?? 0;
       if (existing) {
-        await prisma.pnlEntry.update({ where: { id: existing.id }, data: { amountCents: cents, kind: "ACTUAL" } });
+        await prisma.pnlEntry.update({ where: { id: existing.id }, data: { amountCents: cents } });
         updated++;
       } else {
-        await prisma.pnlEntry.create({ data: { month: m, section: "EXPENSE", label, kind: "ACTUAL", amountCents: cents, note: "Pulled from facility court rates — edit freely." } });
+        await prisma.pnlEntry.create({ data: { month: m, section: "EXPENSE", label, kind: "ACTUAL", amountCents: cents, note: "Pulled from facility court rates — set to Forecast for the whole month; edit freely." } });
         created++;
       }
     }
-    // Self-clean: remove any previously-pulled Court rent line for this month
-    // that no longer computes to a cost (e.g. the practices behind it were
-    // removed). Scoped to our "Court rent — " lines only.
+    // Self-clean: remove any previously-pulled Court rent line for a facility
+    // that no longer has scheduled practices this month. Scoped to our lines.
     const stale = await prisma.pnlEntry.findMany({ where: { month: m, section: "EXPENSE", label: { startsWith: "Court rent — " } }, select: { id: true, label: true } });
     const toDelete = stale.filter((e) => !wanted.has(e.label)).map((e) => e.id);
     if (toDelete.length) { await prisma.pnlEntry.deleteMany({ where: { id: { in: toDelete } } }); removed += toDelete.length; }

@@ -3,7 +3,9 @@ import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
-import { seedCourtCostEntries } from "@/lib/domain/pnl";
+import { seedCourtCostEntries, courtCostByNameForMonth } from "@/lib/domain/pnl";
+
+const COURT_PREFIX = "Court rent — ";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +43,22 @@ export async function POST(req: Request) {
 
   if (op === "update") {
     const id = String(fd.get("id") ?? "").trim();
-    const existing = id ? await prisma.pnlEntry.findUnique({ where: { id }, select: { id: true } }) : null;
+    const existing = id ? await prisma.pnlEntry.findUnique({ where: { id }, select: { id: true, kind: true, label: true, month: true } }) : null;
     if (!existing) return back("err=notfound");
     const label = String(fd.get("label") ?? "").trim().slice(0, 120);
     const month = String(fd.get("month") ?? "").trim();
     const kind = normKind(String(fd.get("kind") ?? ""));
-    const amountCents = dollarsToCents(String(fd.get("amount") ?? ""));
+    let amountCents = dollarsToCents(String(fd.get("amount") ?? ""));
+    const effLabel = label || existing.label;
+    const effMonth = /^\d{4}-\d{2}$/.test(month) ? month : existing.month;
+    // Court-rent lines recompute from the facility rates WHEN THEIR TYPE CHANGES:
+    // Forecast = the whole month's scheduled practices, Actual = delivered so far.
+    // (An amount edit without a type change is respected as a manual override.)
+    if (effLabel.startsWith(COURT_PREFIX) && kind !== existing.kind) {
+      const name = effLabel.slice(COURT_PREFIX.length);
+      const byName = await courtCostByNameForMonth(effMonth, kind === "FORECAST" ? "scheduled" : "delivered");
+      if (byName.has(name)) amountCents = byName.get(name)!;
+    }
     await prisma.pnlEntry.update({ where: { id }, data: { ...(label ? { label } : {}), ...(/^\d{4}-\d{2}$/.test(month) ? { month } : {}), kind, amountCents } });
     return back("ok=saved");
   }

@@ -207,6 +207,7 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
         ))}
       </div>
       <p className="mt-1 text-[11px] text-amber-700">$/ct/hr is the effective rate (cost ÷ courts ÷ hours). <span className="font-mono">*</span> = a blended day+evening session. If a facility should be one flat rate, set its Day / Evening / Weekend rates to match (or leave Evening &amp; Weekend blank to reuse the Day rate).</p>
+      <p className="mt-0.5 text-[11px] text-amber-700">These figures are <span className="font-medium">delivered so far</span>. Pulled lines start as <span className="font-medium">Actual</span> (delivered) — switch a line&apos;s type to <span className="font-medium">Forecast</span> to project the <span className="font-medium">entire month&apos;s</span> scheduled practices.</p>
       <form method="POST" action="/api/console/pnl" className="mt-2">
         <input type="hidden" name="ticket" value={ticket} />
         <input type="hidden" name="op" value="pullCourtCosts" />
