@@ -426,3 +426,49 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
     },
   };
 }
+
+export type MonthPnl = {
+  month: string;
+  bookedRevenueCents: number; actualExpenseCents: number; bookedNetCents: number; bookedDirectorCents: number; bookedNetToPureCents: number;
+  forecastRevenueCents: number; forecastExpenseCents: number; forecastNetCents: number; forecastDirectorCents: number; forecastNetToPureCents: number;
+};
+
+/** The 5 statement figures per month across a season — both bases. Revenue is
+ *  bucketed once (one Stripe read); coach pay and line items are summed per month. */
+export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
+  if (months.length === 0) return [];
+  const [contribs, directorPct, allEntries] = await Promise.all([
+    revenueContributions(),
+    getDirectorPct(),
+    entriesInMonthRange(months[0], months[months.length - 1]),
+  ]);
+  const sumKind = (rows: PnlEntryRow[], kind: string) => rows.filter((r) => r.kind === kind).reduce((s, r) => s + r.amountCents, 0);
+  const sumAll = (rows: PnlEntryRow[]) => rows.reduce((s, r) => s + r.amountCents, 0);
+  const out: MonthPnl[] = [];
+  for (const m of months) {
+    const mStart = `${m}-01`, mEnd = `${m}-31`;
+    let booked = 0, forecastRev = 0;
+    for (const c of contribs) {
+      if (c.day < mStart || c.day > mEnd) continue;
+      if (c.bucket === "booked") booked += c.cents;
+      forecastRev += c.cents; // forecast basis = booked + forecast
+    }
+    const revLines = allEntries.filter((e) => e.month === m && e.section === "REVENUE");
+    const expLines = allEntries.filter((e) => e.month === m && e.section === "EXPENSE");
+    const coach = await coachCostBetween(mStart, mEnd);
+    const bookedRevenue = booked + sumKind(revLines, "ACTUAL");
+    const forecastRevenue = forecastRev + sumAll(revLines);
+    const actualExpense = coach + sumKind(expLines, "ACTUAL");
+    const forecastExpense = coach + sumAll(expLines);
+    const bookedNet = bookedRevenue - actualExpense;
+    const forecastNet = forecastRevenue - forecastExpense;
+    const bookedDirector = Math.max(0, Math.round(bookedNet * directorPct));
+    const forecastDirector = Math.max(0, Math.round(forecastNet * directorPct));
+    out.push({
+      month: m,
+      bookedRevenueCents: bookedRevenue, actualExpenseCents: actualExpense, bookedNetCents: bookedNet, bookedDirectorCents: bookedDirector, bookedNetToPureCents: bookedNet - bookedDirector,
+      forecastRevenueCents: forecastRevenue, forecastExpenseCents: forecastExpense, forecastNetCents: forecastNet, forecastDirectorCents: forecastDirector, forecastNetToPureCents: forecastNet - forecastDirector,
+    });
+  }
+  return out;
+}
