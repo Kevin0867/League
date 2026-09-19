@@ -293,6 +293,44 @@ export async function coachCostBetween(fromDay: string, toDay: string): Promise<
   return cost;
 }
 
+export type CoachCostLine = { day: string; startTime: string; teamName: string | null; role: string; cents: number };
+export type CoachCost = { coachId: string; name: string; cents: number; lines: CoachCostLine[] };
+
+/** Coach session pay for delivered practices in range, broken out PER COACH with
+ *  the individual sessions (day, time, team, role, pay) behind each total. */
+export async function coachCostByCoachBetween(fromDay: string, toDay: string): Promise<CoachCost[]> {
+  const [rate, coaches, sessions] = await Promise.all([
+    prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
+    prisma.coach.findMany({ select: { id: true, seasonPayCents: true, person: { select: { firstName: true, lastName: true } } } }),
+    prisma.session.findMany({ where: { type: "PRACTICE" }, select: { date: true, startTime: true, endTime: true, status: true, teams: { select: { team: { select: { name: true } } } }, coaches: { select: { coachId: true, role: true, payable: true } } } }),
+  ]);
+  const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
+  const assistantPct = rate?.assistantPct ?? 0.5;
+  const proPer = rate?.proCoachPerSessionCents ?? null;
+  const seasonPayById = new Map(coaches.map((c) => [c.id, c.seasonPayCents]));
+  const nameById = new Map(coaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`.trim()]));
+  const baseFor = (id: string) => { const sp = seasonPayById.get(id); return sp && sp > 0 ? Math.round(sp / SESSIONS_PER_SEASON) : defaultPer; };
+  const now = new Date();
+  const byCoach = new Map<string, CoachCost>();
+  for (const s of sessions) {
+    if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
+    const day = phoenixDateInput(s.date);
+    if (day < fromDay || day > toDay) continue;
+    const teamName = s.teams[0]?.team.name ?? null;
+    for (const c of s.coaches) {
+      if (!c.payable) continue;
+      const cents = coachSessionPayCents(c.role, baseFor(c.coachId), assistantPct, proPer);
+      const cc = byCoach.get(c.coachId) ?? { coachId: c.coachId, name: nameById.get(c.coachId) ?? "Coach", cents: 0, lines: [] };
+      cc.cents += cents;
+      cc.lines.push({ day, startTime: s.startTime, teamName, role: c.role, cents });
+      byCoach.set(c.coachId, cc);
+    }
+  }
+  return [...byCoach.values()]
+    .map((c) => ({ ...c, lines: c.lines.sort((a, b) => a.day.localeCompare(b.day) || a.startTime.localeCompare(b.startTime)) }))
+    .sort((a, b) => b.cents - a.cents);
+}
+
 /** Manual line items whose month falls within [fromMonth, toMonth] (inclusive). */
 export async function entriesInMonthRange(fromMonth: string, toMonth: string): Promise<PnlEntryRow[]> {
   const rows = await prisma.pnlEntry.findMany({
@@ -306,26 +344,35 @@ export type PnlRange = {
   fromDay: string;
   toDay: string;
   months: string[];
-  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; coachCostCents: number; courtCosts: CourtCost[] };
+  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; coachCostCents: number; coaches: CoachCost[]; courtCosts: CourtCost[] };
   revenue: PnlEntryRow[];
   expenses: PnlEntryRow[];
   totals: {
     bookedRevenue: number; forecastRevenue: number; projectedRevenue: number;
     actualExpenses: number; projectedExpenses: number;
     netBooked: number; netProjected: number;
+    // The statement waterfall (all lines regardless of type, so a Forecast court
+    // line projects the whole month): Revenue − Expenses = Net income; the
+    // Director earns DIRECTOR_PCT of net income; Net to PURE is the remainder.
+    revenueTotal: number; expenseTotal: number; netIncome: number;
+    directorPayCents: number; netToPureCents: number; directorPct: number;
   };
 };
+
+/** The Academy Director earns this share of monthly net income. */
+export const DIRECTOR_PCT = 0.15;
 
 /** The full P&L for a chosen date range. */
 export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange> {
   const fromMonth = fromDay.slice(0, 7);
   const toMonth = toDay.slice(0, 7);
-  const [rev, coach, courtCosts, entries] = await Promise.all([
+  const [rev, coaches, courtCosts, entries] = await Promise.all([
     revenueBetween(fromDay, toDay),
-    coachCostBetween(fromDay, toDay),
+    coachCostByCoachBetween(fromDay, toDay),
     courtCostByFacilityBetween(fromDay, toDay),
     entriesInMonthRange(fromMonth, toMonth),
   ]);
+  const coach = coaches.reduce((s, c) => s + c.cents, 0);
   const months: string[] = [];
   for (let m = fromMonth; m <= toMonth && months.length < 120; m = nextMonth(m)) months.push(m);
   if (months.length === 0) months.push(fromMonth);
@@ -342,9 +389,18 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
   const actualExpenses = coach + sum(expenses, "ACTUAL");
   const projectedExpenses = actualExpenses + sum(expenses, "FORECAST");
 
+  // Statement waterfall: totals across ALL line types (so a Forecast court line
+  // projects the whole month), matching the section subtotals the admin sees.
+  const sumAll = (rows: PnlEntryRow[]) => rows.reduce((s, r) => s + r.amountCents, 0);
+  const revenueTotal = rev.bookedCents + rev.forecastCents + sumAll(revenue);
+  const expenseTotal = coach + sumAll(expenses);
+  const netIncome = revenueTotal - expenseTotal;
+  const directorPayCents = Math.max(0, Math.round(netIncome * DIRECTOR_PCT));
+  const netToPureCents = netIncome - directorPayCents;
+
   return {
     fromDay, toDay, months,
-    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, coachCostCents: coach, courtCosts },
+    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, coachCostCents: coach, coaches, courtCosts },
     revenue, expenses,
     totals: {
       bookedRevenue,
@@ -354,6 +410,8 @@ export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange
       projectedExpenses,
       netBooked: bookedRevenue - actualExpenses,
       netProjected: (bookedRevenue + forecastRevenue) - projectedExpenses,
+      revenueTotal, expenseTotal, netIncome,
+      directorPayCents, netToPureCents, directorPct: DIRECTOR_PCT,
     },
   };
 }

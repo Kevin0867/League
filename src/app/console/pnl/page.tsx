@@ -2,9 +2,9 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
-import { pnlRange, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost, type CourtCostLine } from "@/lib/domain/pnl";
+import { pnlRange, monthLabel, today, type PnlRange, type PnlEntryRow, type CourtCost, type CourtCostLine, type CoachCost } from "@/lib/domain/pnl";
 import { paymentsSince } from "@/lib/payments/reconcile";
-import { phoenixDateInput } from "@/lib/time";
+import { phoenixDateInput, formatTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "P&L" };
@@ -25,7 +25,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
 
   const pnl: PnlRange = valid
     ? await pnlRange(from, to)
-    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, coachCostCents: 0, courtCosts: [] }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0 } };
+    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, coachCostCents: 0, coaches: [], courtCosts: [] }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0, revenueTotal: 0, expenseTotal: 0, netIncome: 0, directorPayCents: 0, netToPureCents: 0, directorPct: 0.15 } };
   const t = pnl.totals;
   const returnTo = `${RT}?from=${from}&to=${to}`;
   const addMonth = pnl.months[pnl.months.length - 1] ?? to.slice(0, 7);
@@ -58,14 +58,6 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         {!valid && <p className="mt-3 text-sm text-rose-700">The “from” date needs to be on or before the “to” date.</p>}
       </div>
 
-      {/* Summary for the range */}
-      <div className="grid gap-4 sm:grid-cols-4">
-        <Stat label="Booked revenue" value={formatCents(t.bookedRevenue)} tone="emerald" sub="collected in range" />
-        <Stat label="Forecast revenue" value={formatCents(t.forecastRevenue)} sub="scheduled / outstanding" />
-        <Stat label="Expenses" value={formatCents(t.actualExpenses)} tone="rose" sub={t.projectedExpenses !== t.actualExpenses ? `${formatCents(t.projectedExpenses)} with forecast` : undefined} />
-        <Stat label="Net (booked)" value={formatCents(t.netBooked)} tone={t.netBooked >= 0 ? "emerald" : "rose"} sub={`${formatCents(t.netProjected)} projected`} />
-      </div>
-
       {/* Revenue */}
       <Section
         title="Revenue"
@@ -89,9 +81,9 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         returnTo={returnTo}
         months={pnl.months}
         addMonth={addMonth}
-        autoRows={[
-          ...(pnl.auto.coachCostCents > 0 ? [{ label: "Coach session pay (delivered)", value: pnl.auto.coachCostCents, note: "What coaches are owed for practices delivered in this range — per-coach rate, role-aware. Matches Payouts. Auto." }] : []),
-        ]}
+        autoRows={[]}
+        autoNode={pnl.auto.coaches.length > 0 ? <CoachBreakdown coaches={pnl.auto.coaches} /> : null}
+        extraTotalCents={pnl.auto.coachCostCents}
         rows={pnl.expenses}
         beforeAdd={
           pnl.auto.courtCosts.length > 0 ? (
@@ -100,15 +92,28 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         }
       />
 
-      {/* Net */}
-      <div className="card flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-semibold text-slate-900">Net for {from} → {to}</h2>
-          <p className="mt-0.5 text-sm text-slate-500">Booked revenue minus actual expenses. Projected adds forecast revenue and forecast expenses.</p>
-        </div>
-        <div className="text-right">
-          <div className={`text-2xl font-extrabold ${t.netBooked >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{formatCents(t.netBooked)}</div>
-          <div className="text-xs text-slate-400">{formatCents(t.netProjected)} projected (with forecast)</div>
+      {/* Bottom line — the statement waterfall */}
+      <div className="card">
+        <h2 className="mb-3 font-semibold text-slate-900">Bottom line</h2>
+        <dl className="divide-y divide-slate-100 text-sm">
+          <WaterRow label="Total revenue" value={t.revenueTotal} strong />
+          <WaterRow label="Total expenses" value={-t.expenseTotal} />
+          <WaterRow label="Net income" value={t.netIncome} strong tone={t.netIncome >= 0 ? "emerald" : "rose"} />
+          <WaterRow label={`Director's pay (${Math.round(t.directorPct * 100)}% of net income)`} value={-t.directorPayCents} />
+          <WaterRow label="Net to PURE" value={t.netToPureCents} strong big tone={t.netToPureCents >= 0 ? "emerald" : "rose"} />
+        </dl>
+        <p className="mt-2 text-[11px] text-slate-400">Net income = revenue − expenses. The Director earns {Math.round(t.directorPct * 100)}% of net income; Net to PURE is what&apos;s left. Totals include every line (set a court line to Forecast to project the whole month).</p>
+      </div>
+
+      {/* Summary */}
+      <div className="card bg-slate-50">
+        <h2 className="mb-3 font-semibold text-slate-900">Summary</h2>
+        <div className="grid gap-3 sm:grid-cols-5">
+          <Stat label="Revenue" value={formatCents(t.revenueTotal)} tone="emerald" />
+          <Stat label="Expenses" value={formatCents(t.expenseTotal)} tone="rose" />
+          <Stat label="Net income" value={formatCents(t.netIncome)} tone={t.netIncome >= 0 ? "emerald" : "rose"} />
+          <Stat label={`Director's pay (${Math.round(t.directorPct * 100)}%)`} value={formatCents(t.directorPayCents)} />
+          <Stat label="Net to PURE" value={formatCents(t.netToPureCents)} tone={t.netToPureCents >= 0 ? "emerald" : "rose"} />
         </div>
       </div>
 
@@ -144,6 +149,53 @@ function fmtRate(ln: CourtCostLine): string {
   const perCents = ln.cents / (ln.courts * totalHours);
   const blended = ln.dayHours > 0 && ln.eveningHours > 0 && !ln.weekend;
   return `${formatCents(Math.round(perCents))}${blended ? "*" : ""}`;
+}
+
+const COACH_ROLE_LABEL: Record<string, string> = { PRIMARY: "Primary", ASSISTANT: "Assistant", SUBSTITUTE: "Sub", BACKUP: "Backup" };
+
+// Coach session pay broken out per coach — each expands to the individual days,
+// times, teams, and per-session pay behind that coach's total.
+function CoachBreakdown({ coaches }: { coaches: CoachCost[] }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-slate-700">Coach session pay (delivered) <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">auto</span></span>
+        <span className="text-sm font-semibold text-slate-800">{formatCents(coaches.reduce((s, c) => s + c.cents, 0))}</span>
+      </div>
+      <div className="space-y-1.5">
+        {coaches.map((c) => (
+          <details key={c.coachId} className="rounded border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer items-center justify-between px-2.5 py-1.5 text-xs">
+              <span className="font-medium text-slate-700">{c.name} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "session" : "sessions"})</span></span>
+              <span className="font-semibold text-slate-800">{formatCents(c.cents)}</span>
+            </summary>
+            <table className="w-full border-t border-slate-100 text-[11px] text-slate-600">
+              <thead className="text-slate-400">
+                <tr className="border-b border-slate-100">
+                  <th className="px-2.5 py-1 text-left font-medium">Day</th>
+                  <th className="px-2 py-1 text-left font-medium">Time</th>
+                  <th className="px-2 py-1 text-left font-medium">Team</th>
+                  <th className="px-2 py-1 text-left font-medium">Role</th>
+                  <th className="px-2.5 py-1 text-right font-medium">Pay</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.lines.map((ln, i) => (
+                  <tr key={i} className="border-b border-slate-50 last:border-0">
+                    <td className="px-2.5 py-1">{fmtDay(ln.day)}</td>
+                    <td className="px-2 py-1">{formatTime12(ln.startTime)}</td>
+                    <td className="px-2 py-1">{ln.teamName ?? "—"}</td>
+                    <td className="px-2 py-1">{COACH_ROLE_LABEL[ln.role] ?? ln.role}</td>
+                    <td className="px-2.5 py-1 text-right font-medium text-slate-700">{formatCents(ln.cents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // Court rent computed from facility rates — a preview + a button to pull it into
@@ -232,21 +284,40 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub?:
   );
 }
 
+// A row in the bottom-line waterfall. A negative value renders as "− $X" (a
+// subtraction step); positive renders plainly.
+function WaterRow({ label, value, strong, big, tone }: { label: string; value: number; strong?: boolean; big?: boolean; tone?: "emerald" | "rose" }) {
+  const neg = value < 0;
+  const color = tone === "emerald" ? "text-emerald-700" : tone === "rose" ? "text-rose-700" : neg ? "text-slate-600" : "text-slate-900";
+  return (
+    <div className="flex items-center justify-between py-2">
+      <span className={`${strong ? "font-semibold text-slate-900" : "text-slate-600"} ${big ? "text-base" : "text-sm"}`}>{label}</span>
+      <span className={`tabular-nums ${strong ? "font-bold" : "font-medium"} ${big ? "text-xl" : "text-sm"} ${color}`}>
+        {neg ? `− ${formatCents(Math.abs(value))}` : formatCents(value)}
+      </span>
+    </div>
+  );
+}
+
 function Section({
-  title, section, ticket, returnTo, months, addMonth, autoRows, rows, beforeAdd,
+  title, section, ticket, returnTo, months, addMonth, autoRows, rows, beforeAdd, autoNode, extraTotalCents = 0,
 }: {
   title: string; section: "REVENUE" | "EXPENSE"; ticket: string; returnTo: string;
   months: string[]; addMonth: string;
   autoRows: { label: string; value: number; note?: string }[]; rows: PnlEntryRow[];
   beforeAdd?: React.ReactNode;
+  autoNode?: React.ReactNode;      // custom auto content (e.g. the per-coach breakdown)
+  extraTotalCents?: number;        // cents to add to the header total for autoNode content
 }) {
-  const total = autoRows.reduce((s, r) => s + r.value, 0) + rows.reduce((s, r) => s + r.amountCents, 0);
+  const total = autoRows.reduce((s, r) => s + r.value, 0) + rows.reduce((s, r) => s + r.amountCents, 0) + extraTotalCents;
   return (
     <div className="card">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="font-semibold text-slate-900">{title}</h2>
         <span className="text-sm font-semibold text-slate-700">{formatCents(total)}</span>
       </div>
+
+      {autoNode && <div className="mb-2 border-b border-slate-100 pb-2">{autoNode}</div>}
 
       {autoRows.map((a) => (
         <div key={a.label} className="flex items-start justify-between gap-3 border-b border-slate-100 py-2">
