@@ -101,6 +101,7 @@ async function revenueContributions(): Promise<Contribution[]> {
     const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String) : [];
     return ids.some((id) => assigned.has(id)) || (!!p.partyId && assigned.has(p.partyId));
   };
+  const todayStr = day(new Date());
   for (const p of pays) {
     if (!coversAssigned(p)) continue;
     const who = playerOf(p);
@@ -108,7 +109,16 @@ async function revenueContributions(): Promise<Contribution[]> {
       const total = p.installmentsTotal ?? 3;
       const per = Math.round(p.amountCents / total);
       const dates = installmentChargeDates(p.createdAt);
-      for (let i = p.installmentsPaid ?? 0; i < total; i++) out.push({ day: day(dates[i] ?? p.createdAt), bucket: "forecast", cents: per, personId: who, kind: "installment" });
+      for (let i = p.installmentsPaid ?? 0; i < total; i++) {
+        const d = day(dates[i] ?? p.createdAt);
+        // Only FUTURE installments are forecast. A due/past installment is either
+        // already collected (counted in booked from Stripe) or genuinely late —
+        // counting it here too would let the subscription forecast exceed the real
+        // remaining (e.g. > 2 payments left on a 3-pay plan). This also keeps the
+        // forecast correct even if installmentsPaid lags the webhook.
+        if (d < todayStr) continue;
+        out.push({ day: d, bucket: "forecast", cents: per, personId: who, kind: "installment" });
+      }
     } else if (p.status !== "PAID") {
       out.push({ day: day(p.createdAt), bucket: "forecast", cents: p.amountCents, personId: who, kind: "unpaidFee" });
     }
