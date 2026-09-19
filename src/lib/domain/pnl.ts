@@ -129,6 +129,7 @@ export type CourtCostLine = {
   cents: number;        // this session's court cost
 };
 export type CourtCost = {
+  facilityId: string;
   facilityName: string;
   cents: number;
   lines: CourtCostLine[];
@@ -151,11 +152,13 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
     where: { type: "PRACTICE" },
     select: {
       date: true, startTime: true, endTime: true, status: true, courtCount: true,
-      facility: { select: { name: true, courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true, courtEveningStartsAt: true } },
+      facility: { select: { id: true, name: true, courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true, courtEveningStartsAt: true } },
     },
   });
   const now = new Date();
-  type Agg = { cents: number; lines: CourtCostLine[]; dayRateCents: number | null; eveningRateCents: number | null; weekendRateCents: number | null; eveningStartsAt: string };
+  // Group by facility ID (not name) so two records that share a name — e.g. a
+  // duplicate with a stale rate — show separately instead of blending.
+  type Agg = { facilityName: string; cents: number; lines: CourtCostLine[]; dayRateCents: number | null; eveningRateCents: number | null; weekendRateCents: number | null; eveningStartsAt: string };
   const byFacility = new Map<string, Agg>();
   for (const s of sessions) {
     if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
@@ -181,17 +184,17 @@ export async function courtCostByFacilityBetween(fromDay: string, toDay: string)
       cost = Math.round(courts * (dayHours * dayRate + eveningHours * eveningRate));
     }
     if (cost <= 0) continue;
-    const agg = byFacility.get(f.name) ?? {
-      cents: 0, lines: [],
+    const agg = byFacility.get(f.id) ?? {
+      facilityName: f.name, cents: 0, lines: [],
       dayRateCents: f.courtCostDayCents, eveningRateCents: f.courtCostEveningCents,
       weekendRateCents: f.courtCostWeekendCents, eveningStartsAt: f.courtEveningStartsAt ?? "17:00",
     };
     agg.cents += cost;
     agg.lines.push({ day, courts, dayHours, eveningHours, weekend: isWeekend && f.courtCostWeekendCents != null, cents: cost });
-    byFacility.set(f.name, agg);
+    byFacility.set(f.id, agg);
   }
   return [...byFacility.entries()]
-    .map(([facilityName, v]) => ({ facilityName, cents: v.cents, lines: v.lines.sort((a, b) => a.day.localeCompare(b.day)), dayRateCents: v.dayRateCents, eveningRateCents: v.eveningRateCents, weekendRateCents: v.weekendRateCents, eveningStartsAt: v.eveningStartsAt }))
+    .map(([facilityId, v]) => ({ facilityId, facilityName: v.facilityName, cents: v.cents, lines: v.lines.sort((a, b) => a.day.localeCompare(b.day)), dayRateCents: v.dayRateCents, eveningRateCents: v.eveningRateCents, weekendRateCents: v.weekendRateCents, eveningStartsAt: v.eveningStartsAt }))
     .sort((a, b) => b.cents - a.cents);
 }
 
@@ -212,15 +215,21 @@ export async function seedCourtCostEntries(fromDay: string, toDay: string): Prom
   let created = 0, updated = 0, removed = 0;
   for (let m = fromMonth; m <= toMonth && created + updated < 1000; m = nextMonth(m)) {
     const costs = await courtCostByFacilityForMonth(m);
-    const wanted = new Set(costs.map((c) => `Court rent — ${c.facilityName}`));
+    // Sum by label so two facility records sharing a name merge into one correct
+    // line item (instead of the second overwriting the first).
+    const byLabel = new Map<string, number>();
     for (const c of costs) {
       const label = `Court rent — ${c.facilityName}`;
+      byLabel.set(label, (byLabel.get(label) ?? 0) + c.cents);
+    }
+    const wanted = new Set(byLabel.keys());
+    for (const [label, cents] of byLabel) {
       const existing = await prisma.pnlEntry.findFirst({ where: { month: m, section: "EXPENSE", label } });
       if (existing) {
-        await prisma.pnlEntry.update({ where: { id: existing.id }, data: { amountCents: c.cents, kind: "ACTUAL" } });
+        await prisma.pnlEntry.update({ where: { id: existing.id }, data: { amountCents: cents, kind: "ACTUAL" } });
         updated++;
       } else {
-        await prisma.pnlEntry.create({ data: { month: m, section: "EXPENSE", label, kind: "ACTUAL", amountCents: c.cents, note: "Pulled from facility court rates — edit freely." } });
+        await prisma.pnlEntry.create({ data: { month: m, section: "EXPENSE", label, kind: "ACTUAL", amountCents: cents, note: "Pulled from facility court rates — edit freely." } });
         created++;
       }
     }

@@ -150,6 +150,11 @@ function fmtRate(ln: CourtCostLine): string {
 // editable line items (one Court-rent expense per facility, per month in range).
 function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: string; returnTo: string; from: string; to: string; courtCosts: CourtCost[] }) {
   const total = courtCosts.reduce((s, c) => s + c.cents, 0);
+  // Names shared by more than one facility record — a common cause of "mixed"
+  // rates (an old duplicate with a stale rate still has practices on it).
+  const nameCounts = new Map<string, number>();
+  for (const c of courtCosts) nameCounts.set(c.facilityName, (nameCounts.get(c.facilityName) ?? 0) + 1);
+  const hasDupes = [...nameCounts.values()].some((n) => n > 1);
   return (
     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -159,12 +164,17 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
         </div>
         <div className="text-sm font-semibold text-amber-900">{formatCents(total)}</div>
       </div>
+      {hasDupes && (
+        <div className="mt-2 rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-700">
+          Heads up — a facility name appears more than once below. That means there are <span className="font-semibold">two facility records with the same name</span> and practices split across them (often an old duplicate with a stale rate). Check the saved rates on each, move the practices onto the correct one, or update its rate.
+        </div>
+      )}
       <div className="mt-2 space-y-2">
         {courtCosts.map((c) => (
-          <details key={c.facilityName} className="rounded border border-amber-200 bg-white/70">
+          <details key={c.facilityId} className="rounded border border-amber-200 bg-white/70">
             <summary className="cursor-pointer px-2.5 py-1.5 text-xs">
               <span className="flex items-center justify-between">
-                <span className="font-medium text-slate-700">Court rent — {c.facilityName} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "day" : "days"})</span></span>
+                <span className="font-medium text-slate-700">Court rent — {c.facilityName} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "day" : "days"})</span>{(nameCounts.get(c.facilityName) ?? 0) > 1 && <span className="ml-1.5 rounded bg-rose-100 px-1 py-0.5 text-[10px] font-semibold text-rose-700">duplicate name</span>}</span>
                 <span className="font-semibold text-slate-800">{formatCents(c.cents)}</span>
               </span>
               <span className="mt-0.5 block text-[11px] text-slate-500">
