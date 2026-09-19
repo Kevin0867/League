@@ -66,6 +66,7 @@ const ERR: Record<string, string> = {
   nonote: "Add a short note of how they paid (check, Class Wallet, cash…) before marking paid.",
   amount: "Enter a valid dollar amount they paid.",
   alreadypaid: "This player's season fee is already marked paid.",
+  cap: "That team is already full. Tick “Add even if the team is full” to place them anyway.",
 };
 
 const STATUSES = ["SUBMITTED", "ASSIGNED", "WAITLISTED", "WITHDRAWN", "DUPLICATE"];
@@ -487,17 +488,24 @@ export default async function RegistrationDetail({
                 <span className="ml-2 font-normal text-slate-500">· {teamDayTime(membership.team)}</span>
               ) : null}
             </p>
-            <form method="POST" action="/api/console/registrations" className="mt-2 flex gap-2">
+            <form method="POST" action="/api/console/registrations" className="mt-2">
               {hidden}
               <input type="hidden" name="op" value="assignToTeam" />
-              <select name="teamId" defaultValue={membership?.teamId ?? ""} className="input py-1 text-sm">
-                <option value="">— Select a team —</option>
-                {teams.map((t) => {
-                  const dt = teamDayTime(t);
-                  return <option key={t.id} value={t.id}>{t.name}{dt ? ` · ${dt}` : ""}</option>;
-                })}
-              </select>
-              <button className="btn-primary py-1 text-xs whitespace-nowrap">{membership ? "Move" : "Assign"}</button>
+              <div className="flex gap-2">
+                <select name="teamId" defaultValue={membership?.teamId ?? ""} className="input py-1 text-sm">
+                  <option value="">— Select a team —</option>
+                  {teams.map((t) => {
+                    const dt = teamDayTime(t);
+                    return <option key={t.id} value={t.id}>{t.name}{dt ? ` · ${dt}` : ""}</option>;
+                  })}
+                </select>
+                <button className="btn-primary py-1 text-xs whitespace-nowrap">{membership ? "Move" : "Assign"}</button>
+              </div>
+              {/* Cap is a soft limit for admins — tick to place onto a full team. */}
+              <label className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
+                <input type="checkbox" name="override" value="1" className="h-3.5 w-3.5" />
+                Add even if the team is full (override the cap)
+              </label>
             </form>
             {membership && (
               <div className="mt-2 flex gap-3">
