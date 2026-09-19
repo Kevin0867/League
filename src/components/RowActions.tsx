@@ -122,6 +122,10 @@ export function RowActions({
                     <option key={t.id} value={t.id}>{t.name}{t.dayTime ? ` · ${t.dayTime}` : ""}</option>
                   ))}
                 </select>
+                <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                  <input type="checkbox" name="override" value="1" className="h-3.5 w-3.5" />
+                  Add even if the team is full
+                </label>
                 <button className="btn-primary w-full py-1 text-xs">{assigned ? "Move" : "Assign"}</button>
               </form>
 
