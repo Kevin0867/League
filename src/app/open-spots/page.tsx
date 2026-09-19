@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/open-spots" },
 };
 
-export default async function OpenSpotsPage({ searchParams }: { searchParams: Promise<{ subok?: string; suberr?: string }> }) {
+export default async function OpenSpotsPage({ searchParams }: { searchParams: Promise<{ subok?: string; suberr?: string; wlok?: string; wlerr?: string }> }) {
   const sp = await searchParams;
   const season =
     (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true, calendar: true } })) ??
@@ -36,6 +36,13 @@ export default async function OpenSpotsPage({ searchParams }: { searchParams: Pr
     notfound: "That practice is no longer available.",
     fields: "Please add your name and an email or mobile number.",
   };
+  const WL_ERR: Record<string, string> = {
+    fields: "Please add your name and an email or mobile number.",
+    notfound: "That team isn't accepting signups right now.",
+    notfull: "Good news — a spot just opened on that team! Please use “Sign up for this team” to join.",
+    waitlistfull: "That team's waitlist is full right now. Please check back or join another team.",
+    already: "You're already on that team (or its waitlist).",
+  };
 
   return (
     <div>
@@ -54,6 +61,14 @@ export default async function OpenSpotsPage({ searchParams }: { searchParams: Pr
         )}
         {sp.suberr && (
           <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{SUB_ERR[sp.suberr] ?? "Something went wrong — please try again."}</div>
+        )}
+        {sp.wlok && (
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <span className="font-semibold">You&apos;re on the waitlist!</span> Thanks for joining the waitlist for {decodeURIComponent(sp.wlok)}. The team is full right now — we&apos;ll reach out as soon as a spot opens. No payment is due unless you&apos;re placed.
+          </div>
+        )}
+        {sp.wlerr && (
+          <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{WL_ERR[sp.wlerr] ?? "Something went wrong — please try again."}</div>
         )}
 
         <div className="mt-8 grid gap-8 lg:grid-cols-2">
@@ -78,9 +93,15 @@ export default async function OpenSpotsPage({ searchParams }: { searchParams: Pr
                   <div key={t.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-bold text-slate-900">{t.name}</h3>
-                      <span className="shrink-0 rounded-full bg-accent-100 px-2.5 py-1 text-xs font-bold text-brand-900">
-                        {t.spotsLeft} spot{t.spotsLeft === 1 ? "" : "s"} left
-                      </span>
+                      {t.full ? (
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${t.waitlistOpen ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-600"}`}>
+                          {t.waitlistOpen ? "Full · waitlist open" : "Full"}
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-accent-100 px-2.5 py-1 text-xs font-bold text-brand-900">
+                          {t.spotsLeft} spot{t.spotsLeft === 1 ? "" : "s"} left
+                        </span>
+                      )}
                     </div>
                     <dl className="mt-3 space-y-1 text-sm text-slate-600">
                       {t.category && <div><dt className="inline font-medium text-slate-500">Level: </dt><dd className="inline">{t.category}</dd></div>}
@@ -89,7 +110,28 @@ export default async function OpenSpotsPage({ searchParams }: { searchParams: Pr
                       <div><dt className="inline font-medium text-slate-500">Season fee: </dt><dd className="inline">{proration.prorated ? `${formatCents(proration.feeCents)} (prorated · ${proration.weeksRemaining} wks left)` : formatCents(feeCents)}</dd></div>
                     </dl>
                     <div className="mt-auto pt-4">
-                      <Link href={`/register?team=${t.id}`} className="btn-primary w-full justify-center text-sm">Sign up for this team →</Link>
+                      {!t.full ? (
+                        <Link href={`/register?team=${t.id}`} className="btn-primary w-full justify-center text-sm">Sign up for this team →</Link>
+                      ) : t.waitlistOpen ? (
+                        <details>
+                          <summary className="btn-secondary w-full cursor-pointer list-none justify-center text-sm [&::-webkit-details-marker]:hidden">Join the waitlist →</summary>
+                          <p className="mt-2 text-xs text-slate-500">This team is full. Join the waitlist ({t.waitlistCap - t.waitlistCount} of {t.waitlistCap} spots left) and we&apos;ll reach out if a spot opens — no payment unless you&apos;re placed.</p>
+                          <form method="POST" action="/api/open-spots/waitlist" className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <input type="hidden" name="teamId" value={t.id} />
+                            <input name="firstName" placeholder="First name" required className="input text-sm" />
+                            <input name="lastName" placeholder="Last name" required className="input text-sm" />
+                            <input name="email" type="email" placeholder="Email" className="input text-sm" />
+                            <input name="phone" type="tel" placeholder="Mobile" className="input text-sm" />
+                            <div className="sm:col-span-2">
+                              <label className="mb-1 block text-xs font-medium text-slate-500">Date of birth</label>
+                              <input name="dob" type="date" className="input text-sm" />
+                            </div>
+                            <div className="sm:col-span-2"><button className="btn-accent w-full justify-center text-sm">Join the waitlist</button></div>
+                          </form>
+                        </details>
+                      ) : (
+                        <p className="rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-500">This team and its waitlist are full. Check back soon.</p>
+                      )}
                     </div>
                   </div>
                 ))}

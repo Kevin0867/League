@@ -982,6 +982,13 @@ model TeamWaitlist {
   seasonId      String?
   note          String?
   addedByUserId String?
+  /// WAITING | OFFERED | EXPIRED | DECLINED. Accepted entries are deleted when
+  /// the player is placed on the roster.
+  status         String    @default("WAITING")
+  offeredAt      DateTime?
+  offerExpiresAt DateTime?
+  /// Random token for the public accept/decline link while status = OFFERED.
+  offerToken     String?   @unique
   createdAt     DateTime @default(now())
 
   @@unique([teamId, personId])

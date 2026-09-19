@@ -21,6 +21,7 @@ import { formatTime12 } from "@/lib/time";
 import { TEAM_COLOR_PALETTE, deriveDivisionCode } from "@/lib/domain/teamName";
 import { TEAM_CAP, TEAM_MAX } from "@/lib/enums";
 import { personEmails } from "@/lib/domain/audience";
+import { advanceWaitlist } from "@/lib/domain/teamWaitlist";
 
 /** Colors used by OTHER teams in the same gender+level group (divisionCode) —
  *  the set a new/edited team must avoid, since every team in a division (e.g.
@@ -600,6 +601,9 @@ export async function POST(req: Request) {
         action: "UNASSIGN",
         summary: `Removed player ${personId} back to pool`,
       });
+
+      // A spot just opened — offer it to the next person on the waitlist (if any).
+      await advanceWaitlist(teamId).catch(() => {});
 
       return back("?ok=removePlayer");
     }
