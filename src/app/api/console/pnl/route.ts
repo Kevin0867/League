@@ -58,8 +58,8 @@ export async function POST(req: Request) {
     const from = String(fd.get("from") ?? "").trim();
     const to = String(fd.get("to") ?? "").trim();
     if (!dayRe.test(from) || !dayRe.test(to) || from > to) return back("err=fields");
-    const { created, updated } = await seedCourtCostEntries(from, to);
-    await audit({ actorId: actor.userId, entityType: "PnlEntry", entityId: "court", action: "pnl.pullCourtCosts", summary: `Pulled court rent (${created} added, ${updated} updated)` });
+    const { created, updated, removed } = await seedCourtCostEntries(from, to);
+    await audit({ actorId: actor.userId, entityType: "PnlEntry", entityId: "court", action: "pnl.pullCourtCosts", summary: `Pulled court rent (${created} added, ${updated} updated, ${removed} removed)` });
     return back(`ok=courtpulled&n=${created + updated}`);
   }
 
