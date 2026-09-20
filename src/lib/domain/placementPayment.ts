@@ -33,13 +33,36 @@ const coversOf = (p: { coveredPersonIds: unknown; partyId: string | null }): str
   return ids.length ? ids : p.partyId ? [p.partyId] : [];
 };
 
+/**
+ * Every person tied to a TEST team in the season — players, coach-players, the
+ * head coach, and assistant coaches. Test teams are rehearsal data, so their
+ * people must be excluded from every payments figure (paying or owing).
+ */
+export async function testTeamPersonIds(seasonId: string): Promise<Set<string>> {
+  const teams = await prisma.team.findMany({
+    where: { seasonId, isTest: true },
+    select: {
+      members: { select: { personId: true } },
+      coach: { select: { personId: true } },
+      assistantCoaches: { select: { coach: { select: { personId: true } } } },
+    },
+  });
+  const ids = new Set<string>();
+  for (const t of teams) {
+    for (const m of t.members) ids.add(m.personId);
+    if (t.coach?.personId) ids.add(t.coach.personId);
+    for (const a of t.assistantCoaches) if (a.coach?.personId) ids.add(a.coach.personId);
+  }
+  return ids;
+}
+
 export async function placementPaymentPeople(): Promise<PlacementPeople> {
   const season =
     (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
     (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
   if (!season) return { seasonId: null, assignedPaid: [], assignedUnpaid: [], unplacedPaidInFull: [], unplacedOnPlan: [] };
 
-  const [assigned, regs, members, feePays, apparel] = await Promise.all([
+  const [assigned, regs, members, feePays, apparel, testPeople] = await Promise.all([
     assignedPlayerIds(),
     prisma.registration.findMany({ where: { seasonId: season.id }, select: { id: true, personId: true, feeWaived: true } }),
     prisma.teamMember.findMany({ where: { team: { seasonId: season.id, isTest: false } }, select: { personId: true, team: { select: { name: true } } } }),
@@ -48,6 +71,8 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
       select: { amountCents: true, status: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },
     }),
     prisma.apparelOrderItem.findMany({ select: { personId: true, garment: true, size: true, quantity: true, payment: { select: { status: true } } } }),
+    // Everyone tied to a TEST team — excluded from every bucket (see helper).
+    testTeamPersonIds(season.id),
   ]);
 
   const regByPerson = new Map(regs.map((r) => [r.personId, r.id]));
@@ -112,13 +137,14 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
   const assignedPaid: PersonPayRow[] = [];
   const assignedUnpaid: PersonPayRow[] = [];
   for (const pid of assigned) {
+    if (testPeople.has(pid)) continue;
     const r = row(pid);
     (r.feePaid || r.onPlan ? assignedPaid : assignedUnpaid).push(r);
   }
   const unplacedPaidInFull: PersonPayRow[] = [];
   const unplacedOnPlan: PersonPayRow[] = [];
   for (const [pid, fee] of feeByPerson) {
-    if (assigned.has(pid)) continue;
+    if (assigned.has(pid) || testPeople.has(pid)) continue;
     if (fee.paid) unplacedPaidInFull.push(row(pid));
     else if (fee.onPlan) unplacedOnPlan.push(row(pid));
   }
