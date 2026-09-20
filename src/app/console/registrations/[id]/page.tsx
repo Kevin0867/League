@@ -647,13 +647,13 @@ export default async function RegistrationDetail({
                   <p className="text-xs font-medium text-slate-700">✓ No charge — season fee waived ($0).</p>
                   <button className="btn-secondary mt-2 py-1 text-xs">Un-waive (charge normally)</button>
                 </form>
-              ) : !paid && !subscription ? (
+              ) : !paid ? (
                 <details className="w-full">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:underline">No charge / waive fee ($0)…</summary>
                   <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
                     {hidden}<input type="hidden" name="op" value="waiveFee" />
                     <p className="text-[11px] text-slate-600">
-                      Marks {p.firstName} as no charge for the season fee ($0) — e.g. a coach playing on their own team. Any outstanding fee request is settled at $0 (marked paid), and they won&apos;t be re-invoiced when placed on a team.
+                      Marks {p.firstName} as no charge for the season fee ($0) — e.g. a coach playing on their own team. Any outstanding fee is settled at $0 (marked paid){subscription ? ", and their active payment plan is cancelled so no further installments are charged" : ""}. They won&apos;t be re-invoiced when placed on a team.
                     </p>
                     <button className="btn-secondary py-1 text-xs">Waive fee — no charge</button>
                   </form>

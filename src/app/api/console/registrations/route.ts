@@ -848,6 +848,8 @@ export async function POST(req: Request) {
       // Flip the waiver flag on every registration this person has in the season.
       await prisma.registration.updateMany({ where: { personId, seasonId: reg.seasonId }, data: { feeWaived: waive } });
       if (waive) {
+        // Every not-yet-fully-paid fee covering this player — an outstanding
+        // request, a failed charge, OR an active payment plan (subscription).
         const covering = await prisma.payment.findMany({
           where: {
             seasonId: reg.seasonId,
@@ -862,6 +864,11 @@ export async function POST(req: Request) {
           // shared family invoice still owes for the others and must stand.
           const soleCover = covers.length ? covers.every((c) => c === personId) : p.partyId === personId;
           if (!soleCover) continue;
+          // If they were on a Stripe payment plan, cancel the subscription so no
+          // further installments are charged — waiving must actually stop the money.
+          if (p.stripeSubscriptionId && isStripeConfigured()) {
+            try { await stripe().subscriptions.cancel(p.stripeSubscriptionId); } catch (e) { console.error("waive: sub cancel failed", e); }
+          }
           await prisma.payment.update({
             where: { id: p.id },
             data: {

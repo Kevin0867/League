@@ -14,7 +14,7 @@ import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 import { assignedPlayerIds } from "@/lib/domain/pnl";
-import { placementPaymentPeople, type PersonPayRow } from "@/lib/domain/placementPayment";
+import { placementPaymentPeople, testTeamPersonIds, type PersonPayRow } from "@/lib/domain/placementPayment";
 import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
@@ -113,6 +113,19 @@ export default async function PaymentsPage({
     prisma.payment.aggregate({ where: { direction: "OUT", status: "PAID" }, _sum: { amountCents: true } }),
   ]);
 
+  // People on a TEST team (players, coach-players, coaches) are rehearsal data —
+  // exclude them from every payments figure so they never show as paying or
+  // owing. A fee is a "test fee" when EVERY person it covers is a test-team person.
+  const activeSeason =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
+  const testPeople = activeSeason ? await testTeamPersonIds(activeSeason.id) : new Set<string>();
+  const coversOnlyTest = (p: { coveredPersonIds: unknown; partyId: string | null }) => {
+    const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
+    const covered = ids.length ? ids : p.partyId ? [p.partyId] : [];
+    return covered.length > 0 && covered.every((id) => testPeople.has(id));
+  };
+
   // Active subscriptions (3-payment plans that have begun and are still paying),
   // shown in their own column. Honors the same name search as "Fees in".
   const subscriptions = await prisma.payment.findMany({
@@ -125,10 +138,10 @@ export default async function PaymentsPage({
   // Aggregate of ALL active plans (not just the shown page / current search), so
   // the Subscriptions header shows a real count that moves when plans are added —
   // whether they started via Stripe checkout or were marked as paying-by-plan.
-  const allActiveSubs = await prisma.payment.findMany({
+  const allActiveSubs = (await prisma.payment.findMany({
     where: { direction: "IN", installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 } },
     select: { amountCents: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },
-  });
+  })).filter((p) => !coversOnlyTest(p));
   const subsCount = allActiveSubs.length;
   const subsCollectedCents = allActiveSubs.reduce((s, p) => {
     const total = p.installmentsTotal ?? 3;
@@ -202,7 +215,7 @@ export default async function PaymentsPage({
     where: { direction: "IN", status: "PAID", category: "PLAYER_FEE" },
     select: { amountCents: true, partyId: true, coveredPersonIds: true },
   });
-  const unassignedPaid = paidFees.filter((p) => !coversAssigned(p));
+  const unassignedPaid = paidFees.filter((p) => !coversAssigned(p) && !coversOnlyTest(p));
   const unassignedPaidCents = unassignedPaid.reduce((s, p) => s + p.amountCents, 0);
   const unassignedSubs = allActiveSubs.filter((p) => !coversAssigned(p));
   const unassignedSubCollectedCents = unassignedSubs.reduce((s, p) => {
@@ -858,7 +871,7 @@ export default async function PaymentsPage({
         <h2 className="font-semibold text-slate-900">Placement &amp; payment</h2>
         <p className="mt-0.5 text-xs text-slate-500">Click a row to see the people, jump to their registration, resend a pay link, and (for placed players) check apparel.</p>
         <div className="mt-3 space-y-2">
-          <PeopleBucket label="Assigned &amp; paid" note="On a team, fee paid or paying on a plan — check who still needs to pick/pay apparel." rows={placement.assignedPaid} amountLabel={`${placement.assignedPaid.length} player${placement.assignedPaid.length === 1 ? "" : "s"}`} ticket={ticket} seasonId={placement.seasonId} showApparel />
+          <PeopleBucket label="Assigned &amp; paid" note="On a team, fee paid or paying on a plan — check who still needs to pick/pay apparel. Use “No charge” to comp someone on a plan (e.g. a coach on their own team) — it cancels their plan." rows={placement.assignedPaid} amountLabel={`${placement.assignedPaid.length} player${placement.assignedPaid.length === 1 ? "" : "s"}`} ticket={ticket} seasonId={placement.seasonId} showApparel showWaive />
           <PeopleBucket label="Assigned, not paid" note="Players on a team who still owe — what fee reminders target. Use “No charge” to comp a player at $0 (e.g. a coach playing on their own team)." rows={placement.assignedUnpaid} amountLabel={formatCents(remindableDue)} tone="amber" ticket={ticket} seasonId={placement.seasonId} showApparel showOwed showWaive />
           <PeopleBucket label="Unplaced but paying — paid in full" note="Paid but not yet on a team (not counted in season revenue projections)." rows={placement.unplacedPaidInFull} amountLabel={formatCents(unassignedPaidCents)} ticket={ticket} seasonId={placement.seasonId} showApparel />
           <PeopleBucket label="Unplaced but paying — on a plan" note="On a payment plan but not yet on a team." rows={placement.unplacedOnPlan} amountLabel={formatCents(unassignedSubCollectedCents)} ticket={ticket} seasonId={placement.seasonId} showApparel />
@@ -1288,7 +1301,7 @@ function PeopleBucket({
                       </form>
                       {/* Comp this player at $0 (e.g. a coach playing on their own
                           team) — settles the outstanding fee and stops reminders. */}
-                      {showWaive && !r.waived && r.registrationId && (
+                      {showWaive && !r.waived && !r.feePaid && r.registrationId && (
                         <form method="POST" action="/api/console/registrations" className="mt-1 flex justify-end">
                           <input type="hidden" name="ticket" value={ticket} />
                           <input type="hidden" name="op" value="waiveFee" />
