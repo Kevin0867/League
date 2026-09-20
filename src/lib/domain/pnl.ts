@@ -415,6 +415,133 @@ export async function coachCostByCoachBetween(fromDay: string, toDay: string, ba
     .sort((a, b) => b.cents - a.cents);
 }
 
+// ---------------------------------------------------------------------------
+// League & championship nights (court + coach cost for the forecast)
+// ---------------------------------------------------------------------------
+// League matches and championships are Fixtures (not practice Sessions), so they
+// carry no per-session court count, duration, or coach assignments — which is
+// why the practice-only court/coach queries above stop after the practice weeks
+// (late Oct) and league/championship costs never appeared in the P&L.
+//
+// We project each night from the real fixtures on the schedule, using the
+// league-night shape the academy runs to:
+//   • All matches run CONCURRENTLY at one host facility (e.g. Mesa), so a night
+//     is one facility+date, and the courts needed are the SUM of the courts each
+//     match uses at once (by match format).
+//   • Every night is ~2 hours in the evening (facility evening rate; weekend flat
+//     rate on Sat/Sun).
+//   • ALL coaches attend EVERY league match, so coach cost per night =
+//     (number of coaches) × the per-session pay rate.
+const LEAGUE_NIGHT_HOURS = 2;
+/** Courts one match occupies at once, by format (lines played simultaneously). */
+function courtsPerMatch(matchType: string | null): number {
+  switch (matchType) {
+    case "SINGLE_LINE": return 1;
+    case "TEAM_5": return 5;
+    case "TEAM_3":
+    default: return 4; // 3 counting lines + exhibition
+  }
+}
+
+export type LeagueNight = {
+  facilityId: string;
+  facilityName: string;
+  day: string;            // Phoenix "YYYY-MM-DD"
+  courts: number;         // total concurrent courts across the night's matches
+  weekend: boolean;
+  courtCents: number;     // 0 when the facility has no rates set
+  coachCents: number;     // all coaches × per-session pay
+  coachCount: number;
+  matchCount: number;
+  delivered: boolean;     // the night is in the past (for the booked basis)
+};
+
+/** The distinct coaches on the academy's real (non-test) teams this season —
+ *  "all our coaches", who attend every league night. */
+async function activeCoachIds(): Promise<Set<string>> {
+  const season =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
+  if (!season) return new Set();
+  const teams = await prisma.team.findMany({
+    where: { seasonId: season.id, isTest: false },
+    select: { coachId: true, assistantCoaches: { select: { coachId: true } } },
+  });
+  const ids = new Set<string>();
+  for (const t of teams) {
+    if (t.coachId) ids.add(t.coachId);
+    for (const a of t.assistantCoaches) ids.add(a.coachId);
+  }
+  return ids;
+}
+
+/**
+ * Every league/championship night derived from the fixtures on the schedule,
+ * with its projected court + coach cost. One entry per host facility + date
+ * (all that night's matches run at once). Test-only fixtures are excluded.
+ */
+export async function leagueNightsProjection(): Promise<LeagueNight[]> {
+  const [rate, coachIds, fixtures] = await Promise.all([
+    prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true } }),
+    activeCoachIds(),
+    prisma.fixture.findMany({
+      select: {
+        scheduledAt: true, matchType: true,
+        homeTeam: { select: { isTest: true } },
+        awayTeam: { select: { isTest: true } },
+        facility: { select: { id: true, name: true, courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true } },
+      },
+    }),
+  ]);
+  const perCoachCents = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
+  const coachCount = coachIds.size;
+  const now = new Date();
+
+  // Group concurrent matches into a night: same host facility + Phoenix date.
+  type Night = { facilityId: string; facilityName: string; rates: FacilityRates; day: string; courts: number; matchCount: number; scheduledAt: Date };
+  const byNight = new Map<string, Night>();
+  for (const f of fixtures) {
+    if (!f.facility) continue; // no host facility → can't price courts
+    // Skip a fixture only when BOTH sides are test teams (a rehearsal match).
+    if ((f.homeTeam?.isTest ?? false) && (f.awayTeam?.isTest ?? false)) continue;
+    const day = phoenixDateInput(f.scheduledAt);
+    const key = `${f.facility.id}::${day}`;
+    const cur = byNight.get(key) ?? {
+      facilityId: f.facility.id, facilityName: f.facility.name,
+      rates: { courtCostDayCents: f.facility.courtCostDayCents, courtCostEveningCents: f.facility.courtCostEveningCents, courtCostWeekendCents: f.facility.courtCostWeekendCents, courtEveningStartsAt: null },
+      day, courts: 0, matchCount: 0, scheduledAt: f.scheduledAt,
+    };
+    cur.courts += courtsPerMatch(f.matchType); // concurrent → courts add up
+    cur.matchCount += 1;
+    byNight.set(key, cur);
+  }
+
+  const out: LeagueNight[] = [];
+  for (const n of byNight.values()) {
+    const f = n.rates;
+    const hasRates = f.courtCostDayCents != null || f.courtCostEveningCents != null || f.courtCostWeekendCents != null;
+    const dow = new Date(`${n.day}T12:00:00Z`).getUTCDay();
+    const isWeekend = dow === 0 || dow === 6;
+    let courtCents = 0;
+    if (hasRates) {
+      if (isWeekend && f.courtCostWeekendCents != null) {
+        courtCents = Math.round(n.courts * LEAGUE_NIGHT_HOURS * f.courtCostWeekendCents);
+      } else {
+        // League nights are in the evening → evening rate (fall back to day rate).
+        const eve = f.courtCostEveningCents ?? f.courtCostDayCents ?? 0;
+        courtCents = Math.round(n.courts * LEAGUE_NIGHT_HOURS * eve);
+      }
+    }
+    out.push({
+      facilityId: n.facilityId, facilityName: n.facilityName, day: n.day,
+      courts: n.courts, weekend: isWeekend && f.courtCostWeekendCents != null,
+      courtCents, coachCents: coachCount * perCoachCents, coachCount, matchCount: n.matchCount,
+      delivered: n.scheduledAt.getTime() <= now.getTime(),
+    });
+  }
+  return out.sort((a, b) => a.day.localeCompare(b.day));
+}
+
 /** Manual line items whose month falls within [fromMonth, toMonth] (inclusive). */
 export async function entriesInMonthRange(fromMonth: string, toMonth: string): Promise<PnlEntryRow[]> {
   const rows = await prisma.pnlEntry.findMany({
@@ -471,13 +598,39 @@ export async function pnlRange(fromDay: string, toDay: string, basis: PnlBasis =
   const fromMonth = fromDay.slice(0, 7);
   const toMonth = toDay.slice(0, 7);
   const cb: CourtCostBasis = basis === "booked" ? "delivered" : "scheduled";
-  const [rev, coaches, courtCosts, entries, directorPct] = await Promise.all([
+  const [rev, coaches, courtCosts, entries, directorPct, leagueNights] = await Promise.all([
     revenueBetween(fromDay, toDay),
     coachCostByCoachBetween(fromDay, toDay, cb),
     courtCostByFacilityBetween(fromDay, toDay, cb),
     entriesInMonthRange(fromMonth, toMonth),
     getDirectorPct(),
+    leagueNightsProjection(),
   ]);
+
+  // Fold in league & championship nights (fixtures, not practices) for the range,
+  // basis-aware: booked = nights already played; forecast = every night on the
+  // schedule. Court cost merges into its host facility's line; coach cost (all
+  // coaches attend every night) is one "League & championship coaches" line.
+  const nightsInRange = leagueNights.filter((n) => n.day >= fromDay && n.day <= toDay && (cb === "delivered" ? n.delivered : true));
+  let leagueCoachCents = 0;
+  const leagueCoachLines: CoachCostLine[] = [];
+  for (const n of nightsInRange) {
+    if (n.courtCents > 0) {
+      const existing = courtCosts.find((c) => c.facilityId === n.facilityId);
+      const line: CourtCostLine = { day: n.day, courts: n.courts, dayHours: 0, eveningHours: LEAGUE_NIGHT_HOURS, weekend: n.weekend, cents: n.courtCents };
+      if (existing) { existing.cents += n.courtCents; existing.lines.push(line); existing.lines.sort((a, b) => a.day.localeCompare(b.day)); }
+      else courtCosts.push({ facilityId: n.facilityId, facilityName: n.facilityName, cents: n.courtCents, lines: [line], dayRateCents: null, eveningRateCents: null, weekendRateCents: null, eveningStartsAt: "17:00" });
+    }
+    if (n.coachCents > 0) {
+      leagueCoachCents += n.coachCents;
+      leagueCoachLines.push({ day: n.day, startTime: "—", teamName: `League night (${n.coachCount} coaches × ${n.matchCount} match${n.matchCount === 1 ? "" : "es"})`, role: "LEAGUE", cents: n.coachCents });
+    }
+  }
+  if (leagueCoachCents > 0) {
+    coaches.push({ coachId: "__league__", name: "League & championship coaches", cents: leagueCoachCents, lines: leagueCoachLines.sort((a, b) => a.day.localeCompare(b.day)) });
+    coaches.sort((a, b) => b.cents - a.cents);
+  }
+
   const coach = coaches.reduce((s, c) => s + c.cents, 0);
   const court = courtCosts.reduce((s, c) => s + c.cents, 0);
   const months: string[] = [];
@@ -528,7 +681,7 @@ export type MonthPnl = {
 export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
   if (months.length === 0) return [];
   const now = new Date();
-  const [contribs, directorPct, allEntries, rate, coachRows, sessions] = await Promise.all([
+  const [contribs, directorPct, allEntries, rate, coachRows, sessions, leagueNights] = await Promise.all([
     revenueContributions(),
     getDirectorPct(),
     entriesInMonthRange(months[0], months[months.length - 1]),
@@ -542,6 +695,7 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
         facility: { select: { courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true, courtEveningStartsAt: true } },
       },
     }),
+    leagueNightsProjection(),
   ]);
   const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
   const assistantPct = rate?.assistantPct ?? 0.5;
@@ -578,6 +732,13 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
       const { coach, court } = sessionCost(s);
       coachScheduled += coach; courtScheduled += court;
       if (isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) { coachDelivered += coach; courtDelivered += court; }
+    }
+    // League & championship nights (fixtures) in this month — same court + coach
+    // model as pnlRange, split delivered (played) vs scheduled (all on the books).
+    for (const n of leagueNights) {
+      if (n.day < mStart || n.day > mEnd) continue;
+      coachScheduled += n.coachCents; courtScheduled += n.courtCents;
+      if (n.delivered) { coachDelivered += n.coachCents; courtDelivered += n.courtCents; }
     }
     const revLines = allEntries.filter((e) => e.month === m && e.section === "REVENUE");
     // Court rent is auto-projected above, so drop pulled "Court rent —" lines to
