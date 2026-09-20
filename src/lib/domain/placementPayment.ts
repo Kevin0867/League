@@ -16,6 +16,8 @@ export type PersonPayRow = {
   feePaid: boolean;
   onPlan: boolean;
   owedCents: number;
+  /** Fee waived — comped / no charge ($0). Counts as settled, owes nothing. */
+  waived: boolean;
   apparel: ApparelInfo;
 };
 export type PlacementPeople = {
@@ -39,7 +41,7 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
 
   const [assigned, regs, members, feePays, apparel] = await Promise.all([
     assignedPlayerIds(),
-    prisma.registration.findMany({ where: { seasonId: season.id }, select: { id: true, personId: true } }),
+    prisma.registration.findMany({ where: { seasonId: season.id }, select: { id: true, personId: true, feeWaived: true } }),
     prisma.teamMember.findMany({ where: { team: { seasonId: season.id, isTest: false } }, select: { personId: true, team: { select: { name: true } } } }),
     prisma.payment.findMany({
       where: { direction: "IN", category: "PLAYER_FEE" },
@@ -49,6 +51,7 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
   ]);
 
   const regByPerson = new Map(regs.map((r) => [r.personId, r.id]));
+  const waivedPeople = new Set(regs.filter((r) => r.feeWaived).map((r) => r.personId));
   const teamByPerson = new Map(members.map((m) => [m.personId, m.team.name]));
 
   // Per-person season-fee status.
@@ -90,14 +93,17 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
 
   const row = (pid: string): PersonPayRow => {
     const fee = feeByPerson.get(pid) ?? { paid: false, onPlan: false, owedCents: 0 };
+    const waived = waivedPeople.has(pid);
     return {
       personId: pid,
       name: nameById.get(pid) ?? "Unknown",
       registrationId: regByPerson.get(pid) ?? null,
       teamName: teamByPerson.get(pid) ?? null,
-      feePaid: fee.paid,
+      // A waived (no-charge) player owes nothing and counts as settled.
+      feePaid: fee.paid || waived,
       onPlan: fee.onPlan,
-      owedCents: fee.owedCents,
+      owedCents: waived ? 0 : fee.owedCents,
+      waived,
       apparel: apparelByPerson.get(pid) ?? { chosen: false, paid: false, items: [] },
     };
   };

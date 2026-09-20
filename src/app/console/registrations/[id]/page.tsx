@@ -55,6 +55,8 @@ const OK: Record<string, string> = {
   itemedited: "Apparel choice updated.",
   paidoffline: "Marked paid. Recorded how it was paid.",
   subscription: "Marked as paying by plan — shows as an active subscription now.",
+  waived: "Season fee waived — no charge ($0). Any outstanding fee was settled and they won't be re-invoiced when placed.",
+  unwaived: "Fee waiver removed — this player will be charged the season fee normally.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -523,7 +525,9 @@ export default async function RegistrationDetail({
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">Season fee</p>
             <p className="text-sm font-medium text-slate-800">
-              {paid
+              {reg.feeWaived
+                ? "No charge — waived ($0)"
+                : paid
                 ? `Paid ${formatCents(paid.amountCents)}${paid.method === "MANUAL" ? " · offline" : ""}`
                 : subscription
                 ? `Subscription · ${subscription.installmentsPaid ?? 1} of ${subscription.installmentsTotal ?? 3} paid`
@@ -634,6 +638,27 @@ export default async function RegistrationDetail({
                   </form>
                 </details>
               )}
+              {/* Waive the season fee — comped / no charge ($0). For a coach who
+                  plays on their own team, a scholarship, etc. Settles any
+                  outstanding fee at $0 and stops re-invoicing on placement. */}
+              {reg.feeWaived ? (
+                <form method="POST" action="/api/console/registrations" className="w-full rounded-lg bg-slate-50 p-3">
+                  {hidden}<input type="hidden" name="op" value="unwaiveFee" />
+                  <p className="text-xs font-medium text-slate-700">✓ No charge — season fee waived ($0).</p>
+                  <button className="btn-secondary mt-2 py-1 text-xs">Un-waive (charge normally)</button>
+                </form>
+              ) : !paid && !subscription ? (
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:underline">No charge / waive fee ($0)…</summary>
+                  <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
+                    {hidden}<input type="hidden" name="op" value="waiveFee" />
+                    <p className="text-[11px] text-slate-600">
+                      Marks {p.firstName} as no charge for the season fee ($0) — e.g. a coach playing on their own team. Any outstanding fee request is settled at $0 (marked paid), and they won&apos;t be re-invoiced when placed on a team.
+                    </p>
+                    <button className="btn-secondary py-1 text-xs">Waive fee — no charge</button>
+                  </form>
+                </details>
+              ) : null}
               {paid && (
                 <form method="POST" action="/api/console/registrations">
                   {hidden}<input type="hidden" name="op" value="refund" />
