@@ -830,6 +830,61 @@ export async function POST(req: Request) {
       return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?ok=subscription`, origin), 303);
     }
 
+    // Waive the season fee — "no charge ($0)". For coaches who play on their own
+    // team (or anyone comped): set Registration.feeWaived so no future placement
+    // re-invoices them, and settle any outstanding season-fee invoice that covers
+    // ONLY this player at $0 so it reads "paid" everywhere and stops chasing them.
+    // A shared family invoice is never zeroed (it still covers real payers).
+    // "unwaiveFee" clears the flag; it does not un-settle a $0 invoice.
+    case "waiveFee":
+    case "unwaiveFee": {
+      const rawReturnWF = String(fd.get("returnTo") ?? "");
+      const rtWF = rawReturnWF.startsWith("/console/") ? rawReturnWF : null;
+      const backWF = (qs: string) => NextResponse.redirect(new URL(`${rtWF ?? (reg ? `/console/registrations/${reg.id}` : "/console/registrations")}${qs}`, origin), 303);
+      if (!reg) return backWF("?err=fields");
+      const waive = op === "waiveFee";
+      const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } });
+      if (!person) return backWF("?err=fields");
+      // Flip the waiver flag on every registration this person has in the season.
+      await prisma.registration.updateMany({ where: { personId, seasonId: reg.seasonId }, data: { feeWaived: waive } });
+      if (waive) {
+        const covering = await prisma.payment.findMany({
+          where: {
+            seasonId: reg.seasonId,
+            category: "PLAYER_FEE",
+            status: { in: ["REQUESTED", "PENDING", "FAILED"] },
+            OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+          },
+        });
+        for (const p of covering) {
+          const covers = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
+          // Only settle an invoice this player is the sole payer/coveree on — a
+          // shared family invoice still owes for the others and must stand.
+          const soleCover = covers.length ? covers.every((c) => c === personId) : p.partyId === personId;
+          if (!soleCover) continue;
+          await prisma.payment.update({
+            where: { id: p.id },
+            data: {
+              status: "PAID",
+              method: "MANUAL",
+              paidAt: new Date(),
+              amountCents: 0,
+              manualNote: "Waived — no charge ($0)",
+              ...(p.installmentPlan ? { installmentsPaid: p.installmentsTotal ?? 3 } : {}),
+            },
+          });
+        }
+      }
+      await audit({
+        actorId: actor.userId,
+        entityType: "Registration",
+        entityId: reg.id,
+        action: waive ? "FEE_WAIVE" : "FEE_UNWAIVE",
+        summary: `${waive ? "Waived" : "Un-waived"} season fee (no charge) for ${person.firstName} ${person.lastName}`.trim(),
+      });
+      return backWF(`?ok=${waive ? "waived" : "unwaived"}`);
+    }
+
     // Split a consolidated family fee (one invoice covering several players) into
     // a separate per-player invoice for each — e.g. a father and son on two
     // different teams. Only a not-yet-paid (REQUESTED) invoice can be split.

@@ -790,6 +790,12 @@ export default async function PaymentsPage({
         </div>
       )}
 
+      {sp.ok === "waived" && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Season fee waived — no charge ($0). Any outstanding fee was settled, and they won&apos;t be re-invoiced when placed.
+        </div>
+      )}
+
       {/* Request a custom card payment (any amount + optional discount) */}
       <div className="card">
         <h2 className="font-semibold text-slate-900">Request a payment</h2>
@@ -853,7 +859,7 @@ export default async function PaymentsPage({
         <p className="mt-0.5 text-xs text-slate-500">Click a row to see the people, jump to their registration, resend a pay link, and (for placed players) check apparel.</p>
         <div className="mt-3 space-y-2">
           <PeopleBucket label="Assigned &amp; paid" note="On a team, fee paid or paying on a plan — check who still needs to pick/pay apparel." rows={placement.assignedPaid} amountLabel={`${placement.assignedPaid.length} player${placement.assignedPaid.length === 1 ? "" : "s"}`} ticket={ticket} seasonId={placement.seasonId} showApparel />
-          <PeopleBucket label="Assigned, not paid" note="Players on a team who still owe — what fee reminders target." rows={placement.assignedUnpaid} amountLabel={formatCents(remindableDue)} tone="amber" ticket={ticket} seasonId={placement.seasonId} showApparel showOwed />
+          <PeopleBucket label="Assigned, not paid" note="Players on a team who still owe — what fee reminders target. Use “No charge” to comp a player at $0 (e.g. a coach playing on their own team)." rows={placement.assignedUnpaid} amountLabel={formatCents(remindableDue)} tone="amber" ticket={ticket} seasonId={placement.seasonId} showApparel showOwed showWaive />
           <PeopleBucket label="Unplaced but paying — paid in full" note="Paid but not yet on a team (not counted in season revenue projections)." rows={placement.unplacedPaidInFull} amountLabel={formatCents(unassignedPaidCents)} ticket={ticket} seasonId={placement.seasonId} showApparel />
           <PeopleBucket label="Unplaced but paying — on a plan" note="On a payment plan but not yet on a team." rows={placement.unplacedOnPlan} amountLabel={formatCents(unassignedSubCollectedCents)} ticket={ticket} seasonId={placement.seasonId} showApparel />
         </div>
@@ -1220,10 +1226,10 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "eme
 // people, each linking to their registration, showing fee + apparel status, and
 // with a resend-pay-link control.
 function PeopleBucket({
-  label, note, rows, amountLabel, tone = "slate", ticket, seasonId, showApparel, showOwed,
+  label, note, rows, amountLabel, tone = "slate", ticket, seasonId, showApparel, showOwed, showWaive,
 }: {
   label: string; note: string; rows: PersonPayRow[]; amountLabel: string;
-  tone?: "slate" | "amber"; ticket: string; seasonId: string | null; showApparel?: boolean; showOwed?: boolean;
+  tone?: "slate" | "amber"; ticket: string; seasonId: string | null; showApparel?: boolean; showOwed?: boolean; showWaive?: boolean;
 }) {
   const apparelCell = (a: PersonPayRow["apparel"]) =>
     !a.chosen ? <span className="text-rose-500">— none</span>
@@ -1262,7 +1268,8 @@ function PeopleBucket({
                     </td>
                     <td className="px-2 py-1.5 text-slate-500">{r.teamName ?? "—"}</td>
                     <td className="px-2 py-1.5">
-                      {r.feePaid ? <span className="text-emerald-600">✓ Paid</span>
+                      {r.waived ? <span className="text-slate-500">No charge ($0)</span>
+                        : r.feePaid ? <span className="text-emerald-600">✓ Paid</span>
                         : r.onPlan ? <span className="text-brand-600">On plan{showOwed && r.owedCents ? ` · ${formatCents(r.owedCents)} left` : ""}</span>
                         : r.owedCents ? <span className="text-amber-600">Owes {formatCents(r.owedCents)}</span>
                         : <span className="text-rose-500">Not paid</span>}
@@ -1279,6 +1286,18 @@ function PeopleBucket({
                         <button name="channel" value="text" className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700 hover:bg-brand-100">Text</button>
                         <button name="channel" value="both" className="rounded bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-brand-700">Both</button>
                       </form>
+                      {/* Comp this player at $0 (e.g. a coach playing on their own
+                          team) — settles the outstanding fee and stops reminders. */}
+                      {showWaive && !r.waived && r.registrationId && (
+                        <form method="POST" action="/api/console/registrations" className="mt-1 flex justify-end">
+                          <input type="hidden" name="ticket" value={ticket} />
+                          <input type="hidden" name="op" value="waiveFee" />
+                          <input type="hidden" name="personId" value={r.personId} />
+                          <input type="hidden" name="registrationId" value={r.registrationId} />
+                          <input type="hidden" name="returnTo" value="/console/payments" />
+                          <button className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-200">No charge ($0)</button>
+                        </form>
+                      )}
                     </td>
                   </tr>
                 ))}
