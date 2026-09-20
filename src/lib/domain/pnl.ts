@@ -5,7 +5,7 @@ import { phoenixDateInput } from "@/lib/time";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { isSessionComplete } from "@/lib/domain/coachPay";
 import { coachSessionPayCents } from "@/lib/domain/finance";
-import { stripeChargesSince, paymentsSince } from "@/lib/payments/reconcile";
+import { stripeChargesSince, paymentsSince, activeSubscriptionSchedules, addBillingIntervals, type SubSchedule } from "@/lib/payments/reconcile";
 
 const SESSIONS_PER_SEASON = 12;
 
@@ -60,14 +60,18 @@ async function revenueContributions(): Promise<Contribution[]> {
   const day = (d: Date) => phoenixDateInput(d);
   const out: Contribution[] = [];
 
-  const [charges, pays, manual, assigned] = await Promise.all([
+  const [charges, pays, manual, assigned, subSchedules] = await Promise.all([
     stripeChargesSince(sinceUnix).catch(() => null),
     prisma.payment.findMany({
       where: { direction: "IN", status: { in: ["PAID", "PENDING", "REQUESTED"] }, category: { not: "REFUND" } },
-      select: { amountCents: true, status: true, paidAt: true, createdAt: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },
+      select: { amountCents: true, status: true, paidAt: true, createdAt: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true, stripeSubscriptionId: true },
     }),
     prisma.payment.findMany({ where: { direction: "IN", status: "PAID", method: "MANUAL", category: { not: "REFUND" } }, select: { amountCents: true, paidAt: true, createdAt: true } }),
     assignedPlayerIds(),
+    // Real remaining charge dates per Stripe subscription (one paginated call,
+    // cached) — used to project each plan's installments onto the months they'll
+    // actually bill instead of the createdAt +30/+60 estimate.
+    activeSubscriptionSchedules().catch(() => new Map<string, SubSchedule>()),
   ]);
 
   if (charges) {
@@ -109,9 +113,22 @@ async function revenueContributions(): Promise<Contribution[]> {
     if (p.installmentPlan) {
       const total = p.installmentsTotal ?? 3;
       const per = Math.round(p.amountCents / total);
-      const dates = installmentChargeDates(p.createdAt);
-      for (let i = p.installmentsPaid ?? 0; i < total; i++) {
-        const d = day(dates[i] ?? p.createdAt);
+      const paid = p.installmentsPaid ?? 0;
+      const remaining = Math.max(0, total - paid);
+      // Prefer the REAL schedule from Stripe (this plan's next charge date + its
+      // billing interval), so each remaining installment lands in the month it
+      // will actually bill. Fall back to the createdAt +30/+60 estimate when the
+      // subscription isn't linked or Stripe is unavailable.
+      const sched = p.stripeSubscriptionId ? subSchedules.get(p.stripeSubscriptionId) : undefined;
+      const dueDates: Date[] = [];
+      if (sched) {
+        for (let k = 0; k < remaining; k++) dueDates.push(addBillingIntervals(sched.next, k, sched.interval, sched.intervalCount));
+      } else {
+        const est = installmentChargeDates(p.createdAt);
+        for (let i = paid; i < total; i++) dueDates.push(est[i] ?? p.createdAt);
+      }
+      for (const dd of dueDates) {
+        const d = day(dd);
         // Only FUTURE installments are forecast. A due/past installment is either
         // already collected (counted in booked from Stripe) or genuinely late —
         // counting it here too would let the subscription forecast exceed the real

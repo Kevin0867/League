@@ -142,7 +142,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         addMonth={addMonth}
         autoRows={[
           { label: "Booked revenue (collected)", value: pnl.auto.bookedCents, note: "Cash actually collected in this range — live from Stripe (net of refunds, includes apparel) + offline payments. Matches Payments. Auto." },
-          ...(basis === "forecast" && pnl.auto.installmentCents > 0 ? [{ label: "Subscription installments (scheduled)", value: pnl.auto.installmentCents, note: "Remaining future installments from active payment plans (assigned players). Auto." }] : []),
+          ...(basis === "forecast" && pnl.auto.installmentCents > 0 ? [{ label: "Subscription installments (scheduled)", value: pnl.auto.installmentCents, note: "Remaining future installments from active payment plans (assigned players), each dated to its real Stripe charge date. Auto." }] : []),
           ...(basis === "forecast" && pnl.auto.unpaidFeeCents > 0 ? [{ label: "Unpaid fees — assigned players", value: pnl.auto.unpaidFeeCents, note: "Placed players who owe and aren't on a plan. If they've actually paid, reconcile in Payments and this drops off. Auto." }] : []),
         ]}
         rows={revLines}
