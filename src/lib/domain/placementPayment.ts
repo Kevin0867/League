@@ -40,7 +40,7 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
   const [assigned, regs, members, feePays, apparel] = await Promise.all([
     assignedPlayerIds(),
     prisma.registration.findMany({ where: { seasonId: season.id }, select: { id: true, personId: true } }),
-    prisma.teamMember.findMany({ where: { team: { seasonId: season.id } }, select: { personId: true, team: { select: { name: true } } } }),
+    prisma.teamMember.findMany({ where: { team: { seasonId: season.id, isTest: false } }, select: { personId: true, team: { select: { name: true } } } }),
     prisma.payment.findMany({
       where: { direction: "IN", category: "PLAYER_FEE" },
       select: { amountCents: true, status: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },

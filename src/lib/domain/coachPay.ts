@@ -46,7 +46,8 @@ export async function payableCompletedRows(opts?: {
     where: {
       payable: true,
       ...(opts?.coachId ? { coachId: opts.coachId } : {}),
-      session: { ...dateWhere },
+      // Exclude test-team sessions — the test team never generates real pay.
+      session: { ...dateWhere, teams: { some: { team: { isTest: false } } } },
     },
     select: { coachId: true, role: true, paidIfCancelled: true, session: { select: { date: true, endTime: true, status: true } } },
   });

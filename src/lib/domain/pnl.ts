@@ -26,7 +26,8 @@ export async function assignedPlayerIds(): Promise<Set<string>> {
     (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
     (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
   if (!season) return new Set();
-  const members = await prisma.teamMember.findMany({ where: { team: { seasonId: season.id } }, select: { personId: true } });
+  // Exclude test teams — their players aren't real, so they never count.
+  const members = await prisma.teamMember.findMany({ where: { team: { seasonId: season.id, isTest: false } }, select: { personId: true } });
   return new Set(members.map((m) => m.personId));
 }
 
@@ -219,7 +220,8 @@ export type CourtCostBasis = "delivered" | "scheduled";
  */
 export async function courtCostByFacilityBetween(fromDay: string, toDay: string, basis: CourtCostBasis = "delivered"): Promise<CourtCost[]> {
   const sessions = await prisma.session.findMany({
-    where: { type: "PRACTICE", ...(basis === "scheduled" ? { status: { not: "CANCELLED" } } : {}) },
+    // Exclude test teams — their sessions/coaches/players are not real.
+    where: { type: "PRACTICE", teams: { some: { team: { isTest: false } } }, ...(basis === "scheduled" ? { status: { not: "CANCELLED" } } : {}) },
     select: {
       date: true, startTime: true, endTime: true, status: true, courtCount: true,
       facility: { select: { id: true, name: true, courtCostDayCents: true, courtCostEveningCents: true, courtCostWeekendCents: true, courtEveningStartsAt: true } },
@@ -336,7 +338,7 @@ export async function coachCostBetween(fromDay: string, toDay: string): Promise<
   const [rate, coaches, sessions] = await Promise.all([
     prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
     prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
-    prisma.session.findMany({ where: { type: "PRACTICE" }, select: { date: true, endTime: true, status: true, coaches: { select: { coachId: true, role: true, payable: true } } } }),
+    prisma.session.findMany({ where: { type: "PRACTICE", teams: { some: { team: { isTest: false } } } }, select: { date: true, endTime: true, status: true, coaches: { select: { coachId: true, role: true, payable: true } } } }),
   ]);
   const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
   const assistantPct = rate?.assistantPct ?? 0.5;
@@ -366,7 +368,7 @@ export async function coachCostByCoachBetween(fromDay: string, toDay: string, ba
   const [rate, coaches, sessions] = await Promise.all([
     prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
     prisma.coach.findMany({ select: { id: true, seasonPayCents: true, person: { select: { firstName: true, lastName: true } } } }),
-    prisma.session.findMany({ where: { type: "PRACTICE" }, select: { date: true, startTime: true, endTime: true, status: true, teams: { select: { team: { select: { name: true } } } }, coaches: { select: { coachId: true, role: true, payable: true } } } }),
+    prisma.session.findMany({ where: { type: "PRACTICE", teams: { some: { team: { isTest: false } } } }, select: { date: true, startTime: true, endTime: true, status: true, teams: { select: { team: { select: { name: true } } } }, coaches: { select: { coachId: true, role: true, payable: true } } } }),
   ]);
   const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
   const assistantPct = rate?.assistantPct ?? 0.5;
@@ -516,7 +518,7 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
     prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
     prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
     prisma.session.findMany({
-      where: { type: "PRACTICE" },
+      where: { type: "PRACTICE", teams: { some: { team: { isTest: false } } } },
       select: {
         date: true, startTime: true, endTime: true, status: true, courtCount: true,
         coaches: { select: { coachId: true, role: true, payable: true } },

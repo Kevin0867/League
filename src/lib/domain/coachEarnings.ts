@@ -73,7 +73,8 @@ export async function coachEarnings(opts?: { coachId?: string; now?: Date }): Pr
 
   // Payable rows for the coach(es) in scope, joined to their session.
   const rows = await prisma.sessionCoach.findMany({
-    where: { payable: true, ...(opts?.coachId ? { coachId: opts.coachId } : {}) },
+    // Exclude test-team sessions — no one earns real pay for the test team.
+    where: { payable: true, session: { teams: { some: { team: { isTest: false } } } }, ...(opts?.coachId ? { coachId: opts.coachId } : {}) },
     select: {
       coachId: true,
       role: true,
