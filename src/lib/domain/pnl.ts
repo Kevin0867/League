@@ -362,7 +362,7 @@ export type CoachCost = { coachId: string; name: string; cents: number; lines: C
 
 /** Coach session pay for delivered practices in range, broken out PER COACH with
  *  the individual sessions (day, time, team, role, pay) behind each total. */
-export async function coachCostByCoachBetween(fromDay: string, toDay: string): Promise<CoachCost[]> {
+export async function coachCostByCoachBetween(fromDay: string, toDay: string, basis: CourtCostBasis = "delivered"): Promise<CoachCost[]> {
   const [rate, coaches, sessions] = await Promise.all([
     prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
     prisma.coach.findMany({ select: { id: true, seasonPayCents: true, person: { select: { firstName: true, lastName: true } } } }),
@@ -377,7 +377,8 @@ export async function coachCostByCoachBetween(fromDay: string, toDay: string): P
   const now = new Date();
   const byCoach = new Map<string, CoachCost>();
   for (const s of sessions) {
-    if (!isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) continue;
+    // delivered → completed sessions only; scheduled → every non-cancelled one.
+    if (basis === "delivered" ? !isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now) : s.status === "CANCELLED") continue;
     const day = phoenixDateInput(s.date);
     if (day < fromDay || day > toDay) continue;
     const teamName = s.teams[0]?.team.name ?? null;
@@ -404,21 +405,26 @@ export async function entriesInMonthRange(fromMonth: string, toMonth: string): P
   return rows.map((e) => ({ id: e.id, section: e.section, label: e.label, amountCents: e.amountCents, kind: e.kind, note: e.note, month: e.month }));
 }
 
+// The P&L view basis: booked = actuals (collected + delivered), forecast = the
+// full projection for the range (maps to delivered/scheduled for coach & court).
+export type PnlBasis = "booked" | "forecast";
+
 export type PnlRange = {
   fromDay: string;
   toDay: string;
   months: string[];
-  auto: { bookedCents: number; forecastCents: number; forecastPlayers: number; installmentCents: number; unpaidFeeCents: number; forecastLines: ForecastLine[]; coachCostCents: number; coaches: CoachCost[]; courtCosts: CourtCost[] };
-  revenue: PnlEntryRow[];
-  expenses: PnlEntryRow[];
+  basis: PnlBasis;
+  auto: {
+    bookedCents: number; forecastPlayers: number; installmentCents: number; unpaidFeeCents: number; forecastLines: ForecastLine[];
+    coachCostCents: number; coaches: CoachCost[];
+    courtCostCents: number; courtCosts: CourtCost[];
+  };
+  revenue: PnlEntryRow[];   // manual revenue line items
+  expenses: PnlEntryRow[];  // manual expense line items (court is auto, excluded here)
   totals: {
-    bookedRevenue: number; forecastRevenue: number; projectedRevenue: number;
-    actualExpenses: number; projectedExpenses: number;
-    netBooked: number; netProjected: number;
-    // The statement waterfall (all lines regardless of type, so a Forecast court
-    // line projects the whole month): Revenue − Expenses = Net income; the
-    // Director earns DIRECTOR_PCT of net income; Net to PURE is the remainder.
-    revenueTotal: number; expenseTotal: number; netIncome: number;
+    // On the chosen basis: Revenue − Expenses = Net income; the Director earns
+    // directorPct of net income; Net to PURE is the remainder.
+    revenue: number; expenses: number; netIncome: number;
     directorPayCents: number; netToPureCents: number; directorPct: number;
   };
 };
@@ -436,58 +442,51 @@ export async function getDirectorPct(): Promise<number> {
   return Math.min(pct, 100) / 100;
 }
 
-/** The full P&L for a chosen date range. */
-export async function pnlRange(fromDay: string, toDay: string): Promise<PnlRange> {
+/**
+ * The full P&L for a date range on a chosen basis. Coach pay AND court fees are
+ * auto and basis-aware: BOOKED = delivered practices only; FORECAST = every
+ * scheduled practice in the range (from the schedule & facility rates). So a
+ * forecast over Aug 26–Sep 30 pulls in all coach + court through Sep 30.
+ */
+export async function pnlRange(fromDay: string, toDay: string, basis: PnlBasis = "forecast"): Promise<PnlRange> {
   const fromMonth = fromDay.slice(0, 7);
   const toMonth = toDay.slice(0, 7);
+  const cb: CourtCostBasis = basis === "booked" ? "delivered" : "scheduled";
   const [rev, coaches, courtCosts, entries, directorPct] = await Promise.all([
     revenueBetween(fromDay, toDay),
-    coachCostByCoachBetween(fromDay, toDay),
-    courtCostByFacilityBetween(fromDay, toDay),
+    coachCostByCoachBetween(fromDay, toDay, cb),
+    courtCostByFacilityBetween(fromDay, toDay, cb),
     entriesInMonthRange(fromMonth, toMonth),
     getDirectorPct(),
   ]);
   const coach = coaches.reduce((s, c) => s + c.cents, 0);
+  const court = courtCosts.reduce((s, c) => s + c.cents, 0);
   const months: string[] = [];
   for (let m = fromMonth; m <= toMonth && months.length < 120; m = nextMonth(m)) months.push(m);
   if (months.length === 0) months.push(fromMonth);
 
   const revenue = entries.filter((e) => e.section === "REVENUE");
-  const expenses = entries.filter((e) => e.section === "EXPENSE");
-  const sum = (rows: PnlEntryRow[], kind: string) => rows.filter((r) => r.kind === kind).reduce((s, r) => s + r.amountCents, 0);
+  // Court is auto — exclude any legacy pulled "Court rent —" lines to avoid
+  // double-counting; all other expense lines stay editable.
+  const expenses = entries.filter((e) => e.section === "EXPENSE" && !e.label.startsWith("Court rent — "));
+  const sumForBasis = (rows: PnlEntryRow[]) => (basis === "booked" ? rows.filter((r) => r.kind === "ACTUAL") : rows).reduce((s, r) => s + r.amountCents, 0);
 
-  const bookedRevenue = rev.bookedCents + sum(revenue, "ACTUAL");
-  const forecastRevenue = rev.forecastCents + sum(revenue, "FORECAST");
-  // Court rent is NOT auto-summed here — it's "pulled in" as editable line items
-  // (see seedCourtCostEntries), so it's counted via sum(expenses) once pulled.
-  // courtCosts stays in `auto` only as the computed preview to pull from.
-  const actualExpenses = coach + sum(expenses, "ACTUAL");
-  const projectedExpenses = actualExpenses + sum(expenses, "FORECAST");
-
-  // Statement waterfall: totals across ALL line types (so a Forecast court line
-  // projects the whole month), matching the section subtotals the admin sees.
-  const sumAll = (rows: PnlEntryRow[]) => rows.reduce((s, r) => s + r.amountCents, 0);
-  const revenueTotal = rev.bookedCents + rev.forecastCents + sumAll(revenue);
-  const expenseTotal = coach + sumAll(expenses);
+  const autoRevenue = basis === "booked" ? rev.bookedCents : rev.bookedCents + rev.forecastCents;
+  const revenueTotal = autoRevenue + sumForBasis(revenue);
+  const expenseTotal = coach + court + sumForBasis(expenses);
   const netIncome = revenueTotal - expenseTotal;
   const directorPayCents = Math.max(0, Math.round(netIncome * directorPct));
   const netToPureCents = netIncome - directorPayCents;
 
   return {
-    fromDay, toDay, months,
-    auto: { bookedCents: rev.bookedCents, forecastCents: rev.forecastCents, forecastPlayers: rev.forecastPlayers, installmentCents: rev.installmentCents, unpaidFeeCents: rev.unpaidFeeCents, forecastLines: rev.forecastLines, coachCostCents: coach, coaches, courtCosts },
-    revenue, expenses,
-    totals: {
-      bookedRevenue,
-      forecastRevenue,
-      projectedRevenue: bookedRevenue + forecastRevenue,
-      actualExpenses,
-      projectedExpenses,
-      netBooked: bookedRevenue - actualExpenses,
-      netProjected: (bookedRevenue + forecastRevenue) - projectedExpenses,
-      revenueTotal, expenseTotal, netIncome,
-      directorPayCents, netToPureCents, directorPct,
+    fromDay, toDay, months, basis,
+    auto: {
+      bookedCents: rev.bookedCents, forecastPlayers: rev.forecastPlayers,
+      installmentCents: rev.installmentCents, unpaidFeeCents: rev.unpaidFeeCents, forecastLines: rev.forecastLines,
+      coachCostCents: coach, coaches, courtCostCents: court, courtCosts,
     },
+    revenue, expenses,
+    totals: { revenue: revenueTotal, expenses: expenseTotal, netIncome, directorPayCents, netToPureCents, directorPct },
   };
 }
 
