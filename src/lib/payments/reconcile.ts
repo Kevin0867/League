@@ -748,3 +748,76 @@ export async function reconcileStripePayments(opts?: { sinceDays?: number; limit
 
   return res;
 }
+
+// ---------------------------------------------------------------------------
+// Subscription charge schedules (for the P&L forecast)
+// ---------------------------------------------------------------------------
+// The P&L forecast projects each active payment plan's remaining installments
+// onto the months they'll actually be charged. Rather than guess the dates from
+// our own createdAt (+30/+60 days), read the REAL schedule from Stripe: the
+// subscription's next charge (current_period_end) and its billing interval, so
+// a plan charged on the 5th every month lands on the 5th in each future month.
+//
+// One paginated list call covers every subscription (no per-plan retrieve), and
+// the result is cached briefly so a single page render (which computes the
+// forecast a few times) hits Stripe once.
+
+export type SubSchedule = { next: Date; interval: string; intervalCount: number };
+
+let _subSchedCache: { at: number; map: Map<string, SubSchedule> } | null = null;
+
+/**
+ * Every still-charging Stripe subscription's next charge date + billing interval,
+ * keyed by subscription id. Cancelled/incomplete subs are omitted (they won't
+ * charge again). Empty when Stripe isn't configured. Cached for 60s.
+ */
+export async function activeSubscriptionSchedules(opts?: { force?: boolean }): Promise<Map<string, SubSchedule>> {
+  if (!isStripeConfigured()) return new Map();
+  const now = Date.now();
+  if (!opts?.force && _subSchedCache && now - _subSchedCache.at < 60_000) return _subSchedCache.map;
+
+  const client = stripe();
+  const map = new Map<string, SubSchedule>();
+  // Subscriptions that will still generate a charge: active, past-due (retrying),
+  // trialing, or unpaid. Cancelled/incomplete never charge again, so skip them.
+  const CHARGING = new Set(["active", "past_due", "trialing", "unpaid"]);
+  try {
+    for await (const sub of client.subscriptions.list({ status: "all", limit: 100 })) {
+      const s = sub as unknown as {
+        id: string;
+        status: string;
+        current_period_end?: number | null;
+        items?: { data?: Array<{ price?: { recurring?: { interval?: string; interval_count?: number } } }> };
+      };
+      if (!CHARGING.has(s.status)) continue;
+      if (!s.current_period_end) continue;
+      const rec = s.items?.data?.[0]?.price?.recurring;
+      map.set(s.id, {
+        next: new Date(s.current_period_end * 1000),
+        interval: rec?.interval ?? "month",
+        intervalCount: rec?.interval_count ?? 1,
+      });
+    }
+  } catch (e) {
+    console.error("activeSubscriptionSchedules failed", e);
+    // On failure return whatever we cached before (may be empty) — the forecast
+    // falls back to the createdAt-based estimate for anything not in the map.
+    return _subSchedCache?.map ?? map;
+  }
+  _subSchedCache = { at: now, map };
+  return map;
+}
+
+/** Add N billing intervals to a date (month is the common plan cadence). */
+export function addBillingIntervals(from: Date, n: number, interval: string, intervalCount: number): Date {
+  const d = new Date(from);
+  const step = intervalCount * n;
+  switch (interval) {
+    case "day": d.setUTCDate(d.getUTCDate() + step); break;
+    case "week": d.setUTCDate(d.getUTCDate() + step * 7); break;
+    case "year": d.setUTCFullYear(d.getUTCFullYear() + step); break;
+    case "month":
+    default: d.setUTCMonth(d.getUTCMonth() + step); break;
+  }
+  return d;
+}
