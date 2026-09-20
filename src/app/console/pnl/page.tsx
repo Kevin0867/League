@@ -52,23 +52,24 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
   };
 
   const pnl: PnlRange = valid
-    ? await pnlRange(from, to)
-    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], auto: { bookedCents: 0, forecastCents: 0, forecastPlayers: 0, installmentCents: 0, unpaidFeeCents: 0, forecastLines: [], coachCostCents: 0, coaches: [], courtCosts: [] }, revenue: [], expenses: [], totals: { bookedRevenue: 0, forecastRevenue: 0, projectedRevenue: 0, actualExpenses: 0, projectedExpenses: 0, netBooked: 0, netProjected: 0, revenueTotal: 0, expenseTotal: 0, netIncome: 0, directorPayCents: 0, netToPureCents: 0, directorPct: 0.15 } };
+    ? await pnlRange(from, to, basis)
+    : { fromDay: from, toDay: to, months: [from.slice(0, 7)], basis, auto: { bookedCents: 0, forecastPlayers: 0, installmentCents: 0, unpaidFeeCents: 0, forecastLines: [], coachCostCents: 0, coaches: [], courtCostCents: 0, courtCosts: [] }, revenue: [], expenses: [], totals: { revenue: 0, expenses: 0, netIncome: 0, directorPayCents: 0, netToPureCents: 0, directorPct: 0.15 } };
   const t = pnl.totals;
   const returnTo = qp({});
   const addMonth = pnl.months[pnl.months.length - 1] ?? to.slice(0, 7);
 
-  // The statement figures on the chosen basis.
-  const stmt = basis === "booked"
-    ? (() => { const revenue = t.bookedRevenue, expenses = t.actualExpenses, net = t.netBooked, director = Math.max(0, Math.round(net * t.directorPct)); return { revenue, expenses, net, director, netToPure: net - director }; })()
-    : { revenue: t.revenueTotal, expenses: t.expenseTotal, net: t.netIncome, director: t.directorPayCents, netToPure: t.netToPureCents };
+  // The statement figures on the chosen basis (pnlRange already computed them).
+  const stmt = { revenue: t.revenue, expenses: t.expenses, net: t.netIncome, director: t.directorPayCents, netToPure: t.netToPureCents };
+  // Manual line items shown/counted for the basis: booked shows only ACTUAL.
+  const revLines = basis === "booked" ? pnl.revenue.filter((r) => r.kind === "ACTUAL") : pnl.revenue;
+  const expLines = basis === "booked" ? pnl.expenses.filter((r) => r.kind === "ACTUAL") : pnl.expenses;
 
   // Season-wide month-by-month breakdown (only computed when opened).
   const seasonRows: MonthPnl[] = showSeason && seasonMonths.length ? await pnlSeasonByMonth(seasonMonths) : [];
 
   return (
     <div className="space-y-6">
-      <PageHeader title="P&amp;L" subtitle="Choose a date range. Booked revenue is cash actually collected in that window — it matches the Payments “Collected” figure. Add and edit any expense or revenue line." />
+      <PageHeader title="P&amp;L" subtitle="Pick a date range and a basis. Booked = actuals (collected revenue, delivered coach pay & court). Forecast = the full projection for the range (scheduled revenue, and coach pay + court fees for every scheduled practice). Coach pay and court fees are automatic; add any other revenue or expense line." />
 
       {sp.ok === "added" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Line item added.</div>}
       {sp.ok === "saved" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
@@ -141,14 +142,16 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         addMonth={addMonth}
         autoRows={[
           { label: "Booked revenue (collected)", value: pnl.auto.bookedCents, note: "Cash actually collected in this range — live from Stripe (net of refunds, includes apparel) + offline payments. Matches Payments. Auto." },
-          ...(pnl.auto.installmentCents > 0 ? [{ label: "Subscription installments (scheduled)", value: pnl.auto.installmentCents, note: "Future installments from active payment plans (assigned players). Auto." }] : []),
-          ...(pnl.auto.unpaidFeeCents > 0 ? [{ label: "Unpaid fees — assigned players", value: pnl.auto.unpaidFeeCents, note: "Placed players who owe and aren't on a plan. If they've actually paid, reconcile in Payments and this drops off. Auto." }] : []),
+          ...(basis === "forecast" && pnl.auto.installmentCents > 0 ? [{ label: "Subscription installments (scheduled)", value: pnl.auto.installmentCents, note: "Remaining future installments from active payment plans (assigned players). Auto." }] : []),
+          ...(basis === "forecast" && pnl.auto.unpaidFeeCents > 0 ? [{ label: "Unpaid fees — assigned players", value: pnl.auto.unpaidFeeCents, note: "Placed players who owe and aren't on a plan. If they've actually paid, reconcile in Payments and this drops off. Auto." }] : []),
         ]}
-        rows={pnl.revenue}
-        beforeAdd={pnl.auto.forecastCents > 0 ? <ForecastBreakdown installmentCents={pnl.auto.installmentCents} unpaidFeeCents={pnl.auto.unpaidFeeCents} lines={pnl.auto.forecastLines} /> : null}
+        rows={revLines}
+        extraTotalCents={0}
+        beforeAdd={basis === "forecast" && pnl.auto.installmentCents + pnl.auto.unpaidFeeCents > 0 ? <ForecastBreakdown installmentCents={pnl.auto.installmentCents} unpaidFeeCents={pnl.auto.unpaidFeeCents} lines={pnl.auto.forecastLines} /> : null}
       />
 
-      {/* Expenses */}
+      {/* Expenses — coach pay + court fees are auto & basis-aware (booked =
+          delivered, forecast = every scheduled practice in range). */}
       <Section
         title="Expenses"
         section="EXPENSE"
@@ -157,14 +160,14 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         months={pnl.months}
         addMonth={addMonth}
         autoRows={[]}
-        autoNode={pnl.auto.coaches.length > 0 ? <CoachBreakdown coaches={pnl.auto.coaches} /> : null}
-        extraTotalCents={pnl.auto.coachCostCents}
-        rows={pnl.expenses}
-        beforeAdd={
-          pnl.auto.courtCosts.length > 0 ? (
-            <CourtRentPull ticket={ticket} returnTo={returnTo} from={from} to={to} courtCosts={pnl.auto.courtCosts} />
-          ) : null
+        autoNode={
+          <div className="space-y-3">
+            {pnl.auto.coaches.length > 0 && <CoachBreakdown coaches={pnl.auto.coaches} basis={basis} />}
+            {pnl.auto.courtCosts.length > 0 && <CourtBreakdown courtCosts={pnl.auto.courtCosts} totalCents={pnl.auto.courtCostCents} basis={basis} />}
+          </div>
         }
+        extraTotalCents={pnl.auto.coachCostCents + pnl.auto.courtCostCents}
+        rows={expLines}
       />
 
       {/* Bottom line — the statement waterfall */}
@@ -204,10 +207,10 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
               <span className="tabular-nums font-bold text-emerald-700">{formatCents(stmt.revenue)}</span>
             </summary>
             <div className="mt-1 space-y-1 pl-4 text-xs text-slate-600">
-              <SumLine label={basis === "booked" ? "Collected (booked)" : "Collected + scheduled/outstanding"} value={basis === "booked" ? pnl.auto.bookedCents : pnl.auto.bookedCents + pnl.auto.forecastCents} />
-              {pnl.revenue.filter((r) => basis === "forecast" || r.kind === "ACTUAL").map((r) => (
-                <SumLine key={r.id} label={`${r.label} (${r.kind === "FORECAST" ? "forecast" : "actual"})`} value={r.amountCents} />
-              ))}
+              <SumLine label="Collected" value={pnl.auto.bookedCents} />
+              {basis === "forecast" && pnl.auto.installmentCents > 0 && <SumLine label="Subscription installments" value={pnl.auto.installmentCents} />}
+              {basis === "forecast" && pnl.auto.unpaidFeeCents > 0 && <SumLine label="Unpaid — assigned players" value={pnl.auto.unpaidFeeCents} />}
+              {revLines.map((r) => <SumLine key={r.id} label={`${r.label} (${r.kind === "FORECAST" ? "forecast" : "actual"})`} value={r.amountCents} />)}
             </div>
           </details>
           {/* Expenses — expand to components */}
@@ -218,9 +221,8 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
             </summary>
             <div className="mt-1 space-y-1 pl-4 text-xs text-slate-600">
               {pnl.auto.coaches.map((c) => <SumLine key={c.coachId} label={`Coach — ${c.name}`} value={c.cents} />)}
-              {pnl.expenses.filter((r) => basis === "forecast" || r.kind === "ACTUAL").map((r) => (
-                <SumLine key={r.id} label={`${r.label} (${r.kind === "FORECAST" ? "forecast" : "actual"})`} value={r.amountCents} />
-              ))}
+              {pnl.auto.courtCosts.map((c) => <SumLine key={c.facilityId} label={`Court — ${c.facilityName}`} value={c.cents} />)}
+              {expLines.map((r) => <SumLine key={r.id} label={`${r.label} (${r.kind === "FORECAST" ? "forecast" : "actual"})`} value={r.amountCents} />)}
             </div>
           </details>
           <WaterRow label="Net income" value={stmt.net} strong tone={stmt.net >= 0 ? "emerald" : "rose"} />
@@ -307,9 +309,9 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
       )}
 
       <p className="text-xs text-slate-400">
-        Booked revenue and coach session pay are computed live from real payments and delivered practices. Everything else is yours to edit —
-        add rent, courts, marketing, supplies, extra revenue, and forecast rows. Line items are tagged to a month; the range includes every
-        line item in the months it covers.
+        Revenue, coach pay, and court fees are computed automatically from real payments, the schedule, and facility rates — basis-aware
+        (Booked = delivered/collected, Forecast = the whole range projected). Add any other revenue or expense line; line items are tagged to a
+        month and count toward the range&apos;s months.
       </p>
     </div>
   );
@@ -344,11 +346,11 @@ const COACH_ROLE_LABEL: Record<string, string> = { PRIMARY: "Primary", ASSISTANT
 
 // Coach session pay broken out per coach — each expands to the individual days,
 // times, teams, and per-session pay behind that coach's total.
-function CoachBreakdown({ coaches }: { coaches: CoachCost[] }) {
+function CoachBreakdown({ coaches, basis }: { coaches: CoachCost[]; basis: "booked" | "forecast" }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-700">Coach session pay (delivered) <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">auto</span></span>
+        <span className="text-sm font-medium text-slate-700">Coach session pay ({basis === "forecast" ? "all scheduled" : "delivered"}) <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">auto</span></span>
         <span className="text-sm font-semibold text-slate-800">{formatCents(coaches.reduce((s, c) => s + c.cents, 0))}</span>
       </div>
       <div className="space-y-1.5">
@@ -387,44 +389,39 @@ function CoachBreakdown({ coaches }: { coaches: CoachCost[] }) {
   );
 }
 
-// Court rent computed from facility rates — a preview + a button to pull it into
-// editable line items (one Court-rent expense per facility, per month in range).
-function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: string; returnTo: string; from: string; to: string; courtCosts: CourtCost[] }) {
-  const total = courtCosts.reduce((s, c) => s + c.cents, 0);
-  // Names shared by more than one facility record — a common cause of "mixed"
-  // rates (an old duplicate with a stale rate still has practices on it).
+// Court fees — auto from facility rates, per facility, each expandable to the
+// per-practice audit (day, courts, hours, effective rate, cost). Basis-aware:
+// delivered practices only vs every scheduled practice in range.
+function CourtBreakdown({ courtCosts, totalCents, basis }: { courtCosts: CourtCost[]; totalCents: number; basis: "booked" | "forecast" }) {
   const nameCounts = new Map<string, number>();
   for (const c of courtCosts) nameCounts.set(c.facilityName, (nameCounts.get(c.facilityName) ?? 0) + 1);
   const hasDupes = [...nameCounts.values()].some((n) => n > 1);
   return (
-    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold text-amber-900">Court rent from facility rates <span className="font-normal text-amber-700">(computed)</span></div>
-          <div className="mt-0.5 text-[11px] text-amber-700">Delivered practices × courts × hours × each facility&apos;s day / evening / weekend rate. Pull it in to get an editable line item per court that you can adjust.</div>
-        </div>
-        <div className="text-sm font-semibold text-amber-900">{formatCents(total)}</div>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-slate-700">Court fees ({basis === "forecast" ? "all scheduled" : "delivered"}) <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">auto</span></span>
+        <span className="text-sm font-semibold text-slate-800">{formatCents(totalCents)}</span>
       </div>
       {hasDupes && (
-        <div className="mt-2 rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-700">
-          Heads up — a facility name appears more than once below. That means there are <span className="font-semibold">two facility records with the same name</span> and practices split across them (often an old duplicate with a stale rate). Check the saved rates on each, move the practices onto the correct one, or update its rate.
+        <div className="rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-700">
+          A facility name appears more than once — two facility records share a name with practices split across them (often an old duplicate with a stale rate). Fix the rates or move the practices onto the correct record.
         </div>
       )}
-      <div className="mt-2 space-y-2">
+      <div className="space-y-1.5">
         {courtCosts.map((c) => (
-          <details key={c.facilityId} className="rounded border border-amber-200 bg-white/70">
+          <details key={c.facilityId} className="rounded border border-slate-200 bg-white">
             <summary className="cursor-pointer px-2.5 py-1.5 text-xs">
               <span className="flex items-center justify-between">
-                <span className="font-medium text-slate-700">Court rent — {c.facilityName} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "day" : "days"})</span>{(nameCounts.get(c.facilityName) ?? 0) > 1 && <span className="ml-1.5 rounded bg-rose-100 px-1 py-0.5 text-[10px] font-semibold text-rose-700">duplicate name</span>}</span>
+                <span className="font-medium text-slate-700">{c.facilityName} <span className="text-slate-400">({c.lines.length} {c.lines.length === 1 ? "day" : "days"})</span>{(nameCounts.get(c.facilityName) ?? 0) > 1 && <span className="ml-1.5 rounded bg-rose-100 px-1 py-0.5 text-[10px] font-semibold text-rose-700">duplicate name</span>}</span>
                 <span className="font-semibold text-slate-800">{formatCents(c.cents)}</span>
               </span>
               <span className="mt-0.5 block text-[11px] text-slate-500">
                 Saved rates — Day {c.dayRateCents != null ? formatCents(c.dayRateCents) : "—"} · Evening {c.eveningRateCents != null ? formatCents(c.eveningRateCents) : "(uses day)"} · Weekend {c.weekendRateCents != null ? formatCents(c.weekendRateCents) : "(uses day/eve)"} · eve after {c.eveningStartsAt}
               </span>
             </summary>
-            <table className="w-full border-t border-amber-100 text-[11px] text-slate-600">
+            <table className="w-full border-t border-slate-100 text-[11px] text-slate-600">
               <thead className="text-slate-400">
-                <tr className="border-b border-amber-100">
+                <tr className="border-b border-slate-100">
                   <th className="px-2.5 py-1 text-left font-medium">Day</th>
                   <th className="px-2 py-1 text-right font-medium">Courts</th>
                   <th className="px-2 py-1 text-right font-medium">Hours</th>
@@ -434,7 +431,7 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
               </thead>
               <tbody>
                 {c.lines.map((ln, i) => (
-                  <tr key={i} className="border-b border-amber-50 last:border-0">
+                  <tr key={i} className="border-b border-slate-50 last:border-0">
                     <td className="px-2.5 py-1">{fmtDay(ln.day)}</td>
                     <td className="px-2 py-1 text-right">{ln.courts}</td>
                     <td className="px-2 py-1 text-right">{fmtHours(ln)}</td>
@@ -447,17 +444,7 @@ function CourtRentPull({ ticket, returnTo, from, to, courtCosts }: { ticket: str
           </details>
         ))}
       </div>
-      <p className="mt-1 text-[11px] text-amber-700">$/ct/hr is the effective rate (cost ÷ courts ÷ hours). <span className="font-mono">*</span> = a blended day+evening session. If a facility should be one flat rate, set its Day / Evening / Weekend rates to match (or leave Evening &amp; Weekend blank to reuse the Day rate).</p>
-      <p className="mt-0.5 text-[11px] text-amber-700">These figures are <span className="font-medium">delivered so far</span>. Pulled lines start as <span className="font-medium">Actual</span> (delivered) — switch a line&apos;s type to <span className="font-medium">Forecast</span> to project the <span className="font-medium">entire month&apos;s</span> scheduled practices.</p>
-      <form method="POST" action="/api/console/pnl" className="mt-2">
-        <input type="hidden" name="ticket" value={ticket} />
-        <input type="hidden" name="op" value="pullCourtCosts" />
-        <input type="hidden" name="from" value={from} />
-        <input type="hidden" name="to" value={to} />
-        <input type="hidden" name="returnTo" value={returnTo} />
-        <button className="btn-secondary text-sm">Pull into editable line items ↓</button>
-        <span className="ml-2 text-[11px] text-slate-500">Creates/refreshes a Court rent line per facility for each month in range. Re-pull to recompute.</span>
-      </form>
+      <p className="text-[11px] text-slate-400">$/ct/hr = cost ÷ courts ÷ hours (<span className="font-mono">*</span> = blended day+evening). Set court rates on each facility. {basis === "forecast" ? "Forecast counts every scheduled practice in range." : "Booked counts delivered practices only."}</p>
     </div>
   );
 }
