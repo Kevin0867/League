@@ -69,7 +69,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="space-y-6">
-      <PageHeader title="P&amp;L" subtitle="Pick a date range and a basis. Booked = actuals (collected revenue, delivered coach pay & court). Forecast = the full projection for the range (scheduled revenue, and coach pay + court fees for every scheduled practice). Coach pay and court fees are automatic; add any other revenue or expense line." />
+      <PageHeader title="P&amp;L" subtitle="Pick a date range and a basis. Booked = actuals (collected revenue, delivered coach pay & court). Forecast = the full projection for the range (scheduled revenue, and coach pay + court fees for every scheduled practice AND league/championship night). Coach pay and court fees are automatic; add any other revenue or expense line." />
 
       {sp.ok === "added" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Line item added.</div>}
       {sp.ok === "saved" && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
@@ -127,7 +127,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         <p className="text-xs text-slate-400">
           {basis === "booked"
             ? "Booked: revenue actually collected and delivered/committed expenses only."
-            : "Forecast: full projection — scheduled/outstanding revenue and every expense line (incl. Forecast court rent)."}
+            : "Forecast: full projection — scheduled/outstanding revenue and every expense line, incl. court + coach pay for practices AND league/championship nights (all coaches attend every league match)."}
         </p>
         {!valid && <p className="text-sm text-rose-700">The “from” date needs to be on or before the “to” date.</p>}
       </div>
