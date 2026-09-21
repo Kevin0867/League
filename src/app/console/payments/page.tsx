@@ -415,6 +415,48 @@ export default async function PaymentsPage({
         </div>
       </div>
 
+      {/* Find a person's payment fast — searches the payer AND any player the fee
+          covers, by name, email, or phone (a minor billed under a parent still
+          turns up by the child's name). */}
+      <div className="card">
+        <h2 className="mb-1 font-semibold text-slate-900">Find a payment</h2>
+        <p className="mb-3 text-sm text-slate-500">Search a person by name, email, or phone to see their season-fee payment status.</p>
+        <form method="GET" action="/console/payments" className="flex flex-wrap gap-2">
+          <input type="search" name="q" defaultValue={qRaw} placeholder="e.g. Colin St.Hilaire, parent@email.com, 480-555-1234…" className="input min-w-[16rem] flex-1 py-1.5 text-sm" />
+          <button className="btn-primary py-1.5 text-sm">Search</button>
+          {qRaw && <Link href="/console/payments" className="btn-secondary py-1.5 text-sm">Clear</Link>}
+        </form>
+        {qRaw && (
+          <div className="mt-3">
+            {[...inbound, ...subscriptions].length === 0 ? (
+              <p className="text-sm text-slate-400">No payment found for &ldquo;{qRaw}&rdquo;. Try a different name, email, or phone — or they may not have a payment on file.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 text-sm">
+                {[...inbound, ...subscriptions].map((p) => {
+                  const st = payStatusLabel(p);
+                  return (
+                    <li key={p.id} className="flex items-center justify-between gap-3 py-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-slate-800">
+                          {p.partyId ? (
+                            <Link href={`/console/people/${p.partyId}`} className="text-brand-700 hover:underline">{p.party?.firstName} {p.party?.lastName}</Link>
+                          ) : (
+                            `${p.party?.firstName ?? "—"} ${p.party?.lastName ?? ""}`
+                          )}
+                        </div>
+                        <div className="truncate text-xs text-slate-400">{p.description ?? p.category} · {formatCents(p.amountCents)}{p.paidAt ? ` · paid ${formatDate(p.paidAt)}` : ""}</div>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${st.cls}`}>{st.text}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="mt-2 text-[11px] text-slate-400">Click a name to open their record, where you can resend the pay link, mark paid/refunded, or manage their plan.</p>
+          </div>
+        )}
+      </div>
+
       {/* Why families haven't paid — replies captured from the pay page. Kept up
           top so these never get missed; each is someone to call back. */}
       {(payerResponses.length > 0 || payerResponsesResolved.length > 0) && (
@@ -1330,19 +1372,28 @@ function PeopleBucket({
   );
 }
 
+/** Compact payment-status badge for the top search results. */
+function payStatusLabel(p: { status: string; installmentPlan?: boolean | null; installmentsPaid?: number | null; installmentsTotal?: number | null }): { text: string; cls: string } {
+  if (p.status === "PAID") return { text: "Paid", cls: "bg-emerald-100 text-emerald-700" };
+  if (p.status === "REFUNDED") return { text: "Refunded", cls: "bg-slate-100 text-slate-500" };
+  if (p.installmentPlan && p.status === "PENDING") return { text: `On plan · ${p.installmentsPaid ?? 1}/${p.installmentsTotal ?? 3}`, cls: "bg-brand-100 text-brand-700" };
+  if (p.status === "FAILED") return { text: "Failed", cls: "bg-rose-100 text-rose-700" };
+  return { text: "Requested", cls: "bg-amber-100 text-amber-700" };
+}
+
 function MonthForm({ op, ticket, label, now }: { op: string; ticket: string; label: string; now: Date }) {
   const y = now.getUTCFullYear();
   return (
     <form method="POST" action="/api/console/payments" className="flex items-end gap-2">
       <input type="hidden" name="ticket" value={ticket} />
       <input type="hidden" name="op" value={op} />
-      <div>
+      <div className="shrink-0">
         <label className="sr-only">Month</label>
-        <select name="month" defaultValue={now.getUTCMonth() + 1} className="input py-1.5 text-sm">
+        <select name="month" defaultValue={now.getUTCMonth() + 1} className="input w-36 min-w-[9rem] shrink-0 py-1.5 text-sm">
           {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
         </select>
       </div>
-      <select name="year" defaultValue={y} className="input py-1.5 text-sm">
+      <select name="year" defaultValue={y} className="input w-24 min-w-[6rem] shrink-0 py-1.5 text-sm">
         {[y - 1, y, y + 1].map((yr) => <option key={yr} value={yr}>{yr}</option>)}
       </select>
       <button className="btn-secondary whitespace-nowrap text-sm">{label}</button>
