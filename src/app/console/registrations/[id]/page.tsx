@@ -58,6 +58,7 @@ const OK: Record<string, string> = {
   waived: "Season fee waived — no charge ($0). Any outstanding fee was settled and they won't be re-invoiced when placed.",
   unwaived: "Fee waiver removed — this player will be charged the season fee normally.",
   refundstop: "Refund issued and payment plan cancelled — no further installments will be charged.",
+  markrefunded: "Marked refunded in the portal (reflecting the Stripe refund) — no second refund was issued. They'll stop showing as paying.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -676,6 +677,20 @@ export default async function RegistrationDetail({
                   {hidden}<input type="hidden" name="op" value="refundStopPlan" />
                   <button className="btn-chip-danger">Refund &amp; stop plan</button>
                 </form>
+              )}
+              {/* Already refunded directly in Stripe — just reflect it here (no
+                  second refund, no plan change), so they stop showing as paying. */}
+              {(paid || subscription || outstanding) && (
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:underline">Already refunded in Stripe?</summary>
+                  <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
+                    {hidden}<input type="hidden" name="op" value="markRefundedExternal" />
+                    <p className="text-[11px] text-slate-600">
+                      Use this only if {p.firstName} was <strong>already refunded directly in Stripe</strong>. It marks the fee refunded in the portal so they stop showing as paying — it does <strong>not</strong> issue another refund or touch Stripe.
+                    </p>
+                    <button className="btn-secondary py-1 text-xs">Mark refunded (already done in Stripe)</button>
+                  </form>
+                </details>
               )}
             </div>
           </div>
