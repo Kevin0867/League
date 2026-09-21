@@ -1276,6 +1276,79 @@ export async function POST(req: Request) {
       return back("?ok=refund");
     }
 
+    // Refund a player who's no longer participating AND stop any active payment
+    // plan: refund every charge collected (one-time OR each paid subscription
+    // installment), cancel the Stripe subscription so nothing bills again, and
+    // mark the fee refunded. One button for "they're done, give the money back".
+    case "refundStopPlan": {
+      if (!reg) return back("?err=fields");
+      // The fee covering this player — a settled one-time fee OR an active plan
+      // (PENDING with installments). A minor's fee is billed to the guardian.
+      const pay = await prisma.payment.findFirst({
+        where: {
+          seasonId: reg.seasonId,
+          category: "PLAYER_FEE",
+          status: { in: ["PAID", "PENDING"] },
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      });
+      if (!pay) return back("?err=norefund");
+      const original = { id: pay.id, partyId: pay.partyId, seasonId: pay.seasonId, amountCents: pay.amountCents, status: pay.status, description: pay.description };
+
+      let refundedCents = 0;
+      if (isStripeConfigured() && (pay.stripeSubscriptionId || pay.stripePaymentIntentId)) {
+        try {
+          if (pay.stripeSubscriptionId) {
+            // Stop future installments first, then refund every paid invoice.
+            try { await stripe().subscriptions.cancel(pay.stripeSubscriptionId); } catch (e) { console.error("refundStopPlan: sub cancel failed", e); }
+            const invoices = await stripe().invoices.list({ subscription: pay.stripeSubscriptionId, limit: 100 });
+            for (const inv of invoices.data) {
+              const chargeRef = (inv as unknown as { charge?: string | { id?: string } | null }).charge;
+              const chargeId = typeof chargeRef === "string" ? chargeRef : chargeRef?.id ?? null;
+              if (!chargeId) continue;
+              const charge = await stripe().charges.retrieve(chargeId);
+              if ((charge.amount_refunded ?? 0) < charge.amount) {
+                await stripe().refunds.create({ charge: chargeId }).catch((e) => console.error("refund create failed", e));
+              }
+              const fresh = await stripe().charges.retrieve(chargeId);
+              const res = await syncRefundsForCharge(original, fresh.id, fresh.amount, fresh.amount_refunded);
+              refundedCents += res.createdCents;
+            }
+          } else if (pay.stripePaymentIntentId) {
+            const refund = await stripe().refunds.create({ payment_intent: pay.stripePaymentIntentId });
+            const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id ?? null;
+            if (chargeId) {
+              const charge = await stripe().charges.retrieve(chargeId);
+              const res = await syncRefundsForCharge(original, charge.id, charge.amount, charge.amount_refunded);
+              refundedCents += res.createdCents;
+            }
+          }
+        } catch {
+          return back(`/${reg.id}?err=refundfail`);
+        }
+      } else {
+        // No Stripe linkage / not configured — book a simulated refund so the
+        // ledger balances, and (below) mark the fee refunded.
+        await prisma.payment.create({
+          data: {
+            direction: "OUT", partyId: pay.partyId ?? personId, amountCents: pay.amountCents, method: "STRIPE",
+            status: "PAID", category: "REFUND", seasonId: reg.seasonId, paidAt: new Date(),
+            description: `Refund — ${pay.description ?? "season fee"} [simulated]`,
+          },
+        });
+        refundedCents = pay.amountCents;
+      }
+
+      // The fee is settled as refunded and the plan (if any) is cancelled.
+      await prisma.payment.update({ where: { id: pay.id }, data: { status: "REFUNDED" } });
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "REFUNDED",
+        summary: `Refund & stop plan — refunded $${(refundedCents / 100).toFixed(2)}${pay.stripeSubscriptionId ? " and cancelled the payment plan" : ""}`,
+      });
+      return back(`/${reg.id}?ok=refundstop`);
+    }
+
     default:
       return back("?err=op");
   }
