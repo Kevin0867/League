@@ -28,6 +28,7 @@ const OK: Record<string, string> = {
   refund: "Refund started.",
   resent: "Fee request resent.",
   regDeleted: "Registration removed — the player was pulled from any team in that season.",
+  playerRemoved: "Player removed entirely — refunded, plan cancelled, and their registration, payments, and apparel for the season were deleted.",
   merged: "Records merged into one.",
   bulkWaiver: "Waiver sent to the selected players.",
   bulkFee: "Season fee requested for the selected players.",

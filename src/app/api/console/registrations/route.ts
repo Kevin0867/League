@@ -1349,6 +1349,59 @@ export async function POST(req: Request) {
       return back(`/${reg.id}?ok=refundstop`);
     }
 
+    // Remove a withdrawn player ENTIRELY for the season: refund + cancel any plan
+    // (money back), then delete their registration(s), team placement, season-fee
+    // + refund + apparel payments, and apparel orders — so they disappear from
+    // every list. The bare Person record is kept (it's referenced widely and is
+    // harmless with nothing attached), so this never orphans other data.
+    case "removePlayerEntirely": {
+      if (!reg) return back("?err=fields");
+      const seasonId = reg.seasonId;
+      // Fees covering this player (a minor's is billed through a guardian).
+      const feePays = await prisma.payment.findMany({
+        where: {
+          seasonId, direction: "IN", category: "PLAYER_FEE",
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
+      });
+      // 1) Return the money: cancel each plan and refund every collected charge.
+      if (isStripeConfigured()) {
+        for (const pay of feePays) {
+          try {
+            if (pay.stripeSubscriptionId) {
+              try { await stripe().subscriptions.cancel(pay.stripeSubscriptionId); } catch (e) { console.error("removePlayer: sub cancel failed", e); }
+              const invoices = await stripe().invoices.list({ subscription: pay.stripeSubscriptionId, limit: 100 });
+              for (const inv of invoices.data) {
+                const chargeRef = (inv as unknown as { charge?: string | { id?: string } | null }).charge;
+                const chargeId = typeof chargeRef === "string" ? chargeRef : chargeRef?.id ?? null;
+                if (chargeId) await stripe().refunds.create({ charge: chargeId }).catch((e) => console.error("refund failed", e));
+              }
+            } else if (pay.stripePaymentIntentId) {
+              await stripe().refunds.create({ payment_intent: pay.stripePaymentIntentId }).catch((e) => console.error("refund failed", e));
+            }
+          } catch (e) { console.error("removePlayer: refund step failed", e); }
+        }
+      }
+      // 2) Delete the rows that make them appear anywhere. Apparel items reference
+      //    payments, so clear them first; then payments, placement, registrations.
+      const payIds = feePays.map((p) => p.id);
+      await prisma.apparelOrderItem.deleteMany({ where: { OR: [{ personId }, ...(payIds.length ? [{ paymentId: { in: payIds } }] : [])] } });
+      await prisma.payment.deleteMany({
+        where: {
+          seasonId,
+          OR: [
+            { partyId: personId, category: { in: ["PLAYER_FEE", "REFUND", "APPAREL"] } },
+            { coveredPersonIds: { array_contains: personId }, category: { in: ["PLAYER_FEE", "APPAREL"] } },
+          ],
+        },
+      });
+      const seasonTeams = await seasonTeamIds(seasonId);
+      if (seasonTeams.length) await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: seasonTeams } } });
+      await prisma.registration.deleteMany({ where: { personId, seasonId } });
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "PLAYER_REMOVED", summary: `Removed player entirely for the season — refunded, plan cancelled, registration/payments/apparel deleted` });
+      return NextResponse.redirect(new URL(`/console/registrations?ok=playerRemoved`, origin), 303);
+    }
+
     default:
       return back("?err=op");
   }
