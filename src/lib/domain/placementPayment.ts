@@ -77,20 +77,25 @@ export async function makeCoveredPlayersResolver(seasonId: string): Promise<(p: 
 
   return (p) => {
     const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
-    if (ids.length) return ids;
-    if (!p.partyId) return [];
+    // Trust an explicit coverage list ONLY if at least one covered person is still
+    // registered this season. If it names only UNregistered records — e.g. a
+    // duplicate whose registration was deleted — fall through so the fee re-maps
+    // to the real player instead of clinging to the removed duplicate.
+    if (ids.length && ids.some((id) => registered.has(id))) return ids;
+    if (!p.partyId) return ids;
     // 1) Guardian-linked registered child(ren).
     const deps = kidsByGuardian.get(p.partyId);
     if (deps && deps.length) return deps;
     // 2) The payer is themselves a registered player.
     if (registered.has(p.partyId)) return [p.partyId];
-    // 3) Unregistered payer (a parent with no guardian link) → registered
-    //    player(s) sharing their surname (e.g. Bridgette St.Hilaire → Colin).
+    // 3) Payer/coveree not registered (a parent with no guardian link, or a
+    //    deleted duplicate) → registered player(s) sharing the surname
+    //    (e.g. Bridgette St.Hilaire → Colin, or a duplicate Colin → the real one).
     const ln = lastNameById.get(p.partyId);
     const byName = ln ? registeredByLastName.get(ln) : undefined;
     if (byName && byName.length) return byName;
-    // 4) Nothing better — attribute to the payer.
-    return [p.partyId];
+    // 4) Nothing better — keep the explicit coverage if any, else the payer.
+    return ids.length ? ids : [p.partyId];
   };
 }
 
