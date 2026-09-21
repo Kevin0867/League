@@ -458,7 +458,7 @@ export type LeagueNight = {
 
 /** The distinct coaches on the academy's real (non-test) teams this season —
  *  "all our coaches", who attend every league night. */
-async function activeCoachIds(): Promise<Set<string>> {
+export async function activeCoachIds(): Promise<Set<string>> {
   const season =
     (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
     (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
@@ -473,6 +473,37 @@ async function activeCoachIds(): Promise<Set<string>> {
     for (const a of t.assistantCoaches) ids.add(a.coachId);
   }
   return ids;
+}
+
+export type LeagueCoachDay = { date: Date; day: string; delivered: boolean };
+
+/**
+ * The distinct LEAGUE / CHAMPIONSHIP days on the schedule (from fixtures), one
+ * per calendar day (all that day's matches run at once at the host facility).
+ * `delivered` = the day has passed. Every coach attends every league day, so
+ * coach pay accrues one session per coach per day. Test-only fixtures excluded.
+ * Optional date window (by Phoenix day) for a payout period.
+ */
+export async function leagueChampionshipDays(opts?: { now?: Date; fromDay?: string; toDay?: string }): Promise<LeagueCoachDay[]> {
+  const now = opts?.now ?? new Date();
+  const fixtures = await prisma.fixture.findMany({
+    select: { scheduledAt: true, homeTeam: { select: { isTest: true } }, awayTeam: { select: { isTest: true } } },
+  });
+  const byDay = new Map<string, { date: Date; delivered: boolean }>();
+  for (const f of fixtures) {
+    if ((f.homeTeam?.isTest ?? false) && (f.awayTeam?.isTest ?? false)) continue;
+    const day = phoenixDateInput(f.scheduledAt);
+    if (opts?.fromDay && day < opts.fromDay) continue;
+    if (opts?.toDay && day > opts.toDay) continue;
+    const delivered = f.scheduledAt.getTime() <= now.getTime();
+    const cur = byDay.get(day);
+    if (!cur) byDay.set(day, { date: f.scheduledAt, delivered });
+    else {
+      if (f.scheduledAt < cur.date) cur.date = f.scheduledAt;
+      cur.delivered = cur.delivered || delivered;
+    }
+  }
+  return [...byDay.entries()].map(([day, v]) => ({ date: v.date, day, delivered: v.delivered })).sort((a, b) => a.day.localeCompare(b.day));
 }
 
 /**
