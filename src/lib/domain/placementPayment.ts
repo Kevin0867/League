@@ -38,8 +38,13 @@ export type PlacementPeople = {
  * function that pre-loads the season's parent→child map once.
  */
 export async function makeCoveredPlayersResolver(seasonId: string): Promise<(p: { coveredPersonIds: unknown; partyId: string | null }) => string[]> {
-  const regs = await prisma.registration.findMany({ where: { seasonId }, select: { personId: true } });
+  const [regs, feePayers] = await Promise.all([
+    prisma.registration.findMany({ where: { seasonId }, select: { personId: true } }),
+    prisma.payment.findMany({ where: { direction: "IN", category: "PLAYER_FEE" }, select: { partyId: true } }),
+  ]);
   const registered = new Set(regs.map((r) => r.personId));
+  const payerIds = new Set(feePayers.map((r) => r.partyId).filter((x): x is string => !!x));
+
   // Registered players who are billed through a guardian → parent's dependents.
   const kids = registered.size
     ? await prisma.person.findMany({ where: { id: { in: [...registered] }, guardianId: { not: null } }, select: { id: true, guardianId: true } })
@@ -51,16 +56,41 @@ export async function makeCoveredPlayersResolver(seasonId: string): Promise<(p: 
     arr.push(k.id);
     kidsByGuardian.set(k.guardianId, arr);
   }
+
+  // Last-name map so a payer with NO guardian link still resolves to their
+  // registered child (many kids never had the guardian link set). Only registered
+  // players go in the map; only unregistered payers use the fallback — so an adult
+  // who registered themselves is never mis-mapped to a same-surname child.
+  const idsForNames = new Set<string>([...registered, ...payerIds]);
+  const persons = idsForNames.size
+    ? await prisma.person.findMany({ where: { id: { in: [...idsForNames] } }, select: { id: true, lastName: true } })
+    : [];
+  const lastNameById = new Map(persons.map((p) => [p.id, (p.lastName ?? "").trim().toLowerCase()]));
+  const registeredByLastName = new Map<string, string[]>();
+  for (const pid of registered) {
+    const ln = lastNameById.get(pid);
+    if (!ln) continue;
+    const arr = registeredByLastName.get(ln) ?? [];
+    arr.push(pid);
+    registeredByLastName.set(ln, arr);
+  }
+
   return (p) => {
     const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
     if (ids.length) return ids;
-    if (p.partyId) {
-      // No covered ids: attribute to the payer's registered child(ren); if the
-      // payer has none, they're the player themselves (an adult registrant).
-      const deps = kidsByGuardian.get(p.partyId);
-      return deps && deps.length ? deps : [p.partyId];
-    }
-    return [];
+    if (!p.partyId) return [];
+    // 1) Guardian-linked registered child(ren).
+    const deps = kidsByGuardian.get(p.partyId);
+    if (deps && deps.length) return deps;
+    // 2) The payer is themselves a registered player.
+    if (registered.has(p.partyId)) return [p.partyId];
+    // 3) Unregistered payer (a parent with no guardian link) → registered
+    //    player(s) sharing their surname (e.g. Bridgette St.Hilaire → Colin).
+    const ln = lastNameById.get(p.partyId);
+    const byName = ln ? registeredByLastName.get(ln) : undefined;
+    if (byName && byName.length) return byName;
+    // 4) Nothing better — attribute to the payer.
+    return [p.partyId];
   };
 }
 
@@ -98,7 +128,9 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
     prisma.registration.findMany({ where: { seasonId: season.id }, select: { id: true, personId: true, feeWaived: true } }),
     prisma.teamMember.findMany({ where: { team: { seasonId: season.id, isTest: false } }, select: { personId: true, team: { select: { name: true } } } }),
     prisma.payment.findMany({
-      where: { direction: "IN", category: "PLAYER_FEE" },
+      // Exclude refunded/cancelled fees — a refunded plan is no longer "on a
+      // plan", so a withdrawn player drops out of the buckets once refunded.
+      where: { direction: "IN", category: "PLAYER_FEE", status: { notIn: ["REFUNDED", "CANCELLED"] } },
       select: { amountCents: true, status: true, installmentPlan: true, installmentsPaid: true, installmentsTotal: true, partyId: true, coveredPersonIds: true },
     }),
     prisma.apparelOrderItem.findMany({ select: { personId: true, garment: true, size: true, quantity: true, payment: { select: { status: true } } } }),

@@ -919,6 +919,26 @@ export default async function RegistrationDetail({
                 className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700"
               />
             </div>
+            {/* Full removal for a withdrawn player: refund + cancel any plan, then
+                delete their registration, placement, payments, and apparel so they
+                disappear from every list. Keeps only an empty account record. */}
+            <div className="mt-4 border-t border-rose-100 pt-4">
+              <p className="text-sm font-medium text-rose-700">No longer participating — remove everything</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Refunds anything collected, cancels any payment plan, and <strong>deletes</strong> {p.firstName}&apos;s
+                registration, team spot, season-fee &amp; apparel payments, and apparel orders for {reg.season?.name ?? "this season"}.
+                They&apos;ll drop off every roster and payment list. This can&apos;t be undone.
+              </p>
+              <div className="mt-3">
+                <ConfirmSubmit
+                  action="/api/console/registrations"
+                  fields={{ ticket, op: "removePlayerEntirely", registrationId: reg.id, personId: p.id }}
+                  confirm={`Remove ${p.firstName} ${p.lastName} ENTIRELY? This refunds & cancels any plan and deletes their registration, payments, and apparel for ${reg.season?.name ?? "this season"}. This can't be undone.`}
+                  label="Refund & remove player entirely"
+                  className="rounded-lg bg-rose-700 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-800"
+                />
+              </div>
+            </div>
           </div>
         );
       })()}
