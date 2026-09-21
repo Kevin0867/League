@@ -57,6 +57,7 @@ const OK: Record<string, string> = {
   subscription: "Marked as paying by plan — shows as an active subscription now.",
   waived: "Season fee waived — no charge ($0). Any outstanding fee was settled and they won't be re-invoiced when placed.",
   unwaived: "Fee waiver removed — this player will be charged the season fee normally.",
+  refundstop: "Refund issued and payment plan cancelled — no further installments will be charged.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -69,6 +70,8 @@ const ERR: Record<string, string> = {
   amount: "Enter a valid dollar amount they paid.",
   alreadypaid: "This player's season fee is already marked paid.",
   cap: "That team is already full. Tick “Add even if the team is full” to place them anyway.",
+  norefund: "No collected fee or active plan found to refund for this player.",
+  refundfail: "The refund didn't go through at Stripe — check the payment in Stripe and try again.",
 };
 
 const STATUSES = ["SUBMITTED", "ASSIGNED", "WAITLISTED", "WITHDRAWN", "DUPLICATE"];
@@ -663,6 +666,15 @@ export default async function RegistrationDetail({
                 <form method="POST" action="/api/console/registrations">
                   {hidden}<input type="hidden" name="op" value="refund" />
                   <button className="btn-chip-danger">Start refund</button>
+                </form>
+              )}
+              {/* No longer participating: refund everything collected AND cancel
+                  the payment plan (so no further installments bill). Available for
+                  a paid fee or an active subscription. */}
+              {(paid || subscription) && (
+                <form method="POST" action="/api/console/registrations">
+                  {hidden}<input type="hidden" name="op" value="refundStopPlan" />
+                  <button className="btn-chip-danger">Refund &amp; stop plan</button>
                 </form>
               )}
             </div>
