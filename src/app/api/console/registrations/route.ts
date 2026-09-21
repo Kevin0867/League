@@ -1402,6 +1402,37 @@ export async function POST(req: Request) {
       return NextResponse.redirect(new URL(`/console/registrations?ok=playerRemoved`, origin), 303);
     }
 
+    // Reflect a refund that was ALREADY issued directly in Stripe: mark the
+    // covering fee REFUNDED in the portal WITHOUT calling Stripe (no second
+    // refund, no plan change), so a player refunded outside the app stops showing
+    // as paying. The real refund already lowers the live Stripe "Collected"
+    // figure, and the nightly reconcile books the OUT row idempotently — so we
+    // only flip the status here and never book a duplicate ledger row.
+    case "markRefundedExternal": {
+      const rawReturnME = String(fd.get("returnTo") ?? "");
+      const rtME = rawReturnME.startsWith("/console/") ? rawReturnME : null;
+      const backME = (qs: string) => NextResponse.redirect(new URL(`${rtME ?? (reg ? `/console/registrations/${reg.id}` : `/console/people/${personId}`)}${qs}`, origin), 303);
+      let seasonId = reg?.seasonId ?? String(fd.get("seasonId") ?? "");
+      if (!seasonId) {
+        const active =
+          (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+          (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
+        seasonId = active?.id ?? "";
+      }
+      const covering = await prisma.payment.findMany({
+        where: {
+          direction: "IN", category: "PLAYER_FEE", status: { in: ["PAID", "PENDING", "REQUESTED", "FAILED"] },
+          ...(seasonId ? { seasonId } : {}),
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
+        select: { id: true },
+      });
+      if (!covering.length) return backME("?err=norefund");
+      await prisma.payment.updateMany({ where: { id: { in: covering.map((c) => c.id) } }, data: { status: "REFUNDED" } });
+      await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "REFUNDED", summary: `Marked ${covering.length} fee(s) refunded — reflecting a refund already issued in Stripe (no portal-side charge)` });
+      return backME("?ok=markrefunded");
+    }
+
     default:
       return back("?err=op");
   }

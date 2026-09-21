@@ -54,6 +54,19 @@ export default async function PersonDetail({
   // registration (guardians, staff-only records) stay on this lighter view.
   if (primaryReg) redirect(`/console/registrations/${primaryReg.id}`);
 
+  // Season fees tied to this account (as payer or coveree). A person with no
+  // registration can still be a payer — e.g. refunded directly in Stripe — so
+  // surface a way to reflect that here (this page has no registration to key off).
+  const feePayments = await prisma.payment.findMany({
+    where: {
+      direction: "IN", category: "PLAYER_FEE",
+      OR: [{ partyId: person.id }, { coveredPersonIds: { array_contains: person.id } }],
+    },
+    select: { id: true, status: true, amountCents: true, installmentPlan: true, seasonId: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const activeFee = feePayments.find((p) => ["PAID", "PENDING", "REQUESTED", "FAILED"].includes(p.status));
+
   // Decrypt sensitive fields for this authorized view only.
   const emergencyName = decryptField(person.emergencyName);
   const emergencyPhone = decryptField(person.emergencyPhone);
@@ -81,6 +94,7 @@ export default async function PersonDetail({
       {sp.ok === "personedit" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Saved.</div>}
       {sp.ok === "fee" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Season fee requested — a secure pay link was emailed/texted to the family.</div>}
       {sp.ok === "paidoffline" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Marked paid. It now shows paid across the roster, reports and reminders.</div>}
+      {sp.ok === "markrefunded" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Marked refunded in the portal (reflecting the Stripe refund). No second refund was issued; they&apos;ll stop showing as paying.</div>}
       {sp.err && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">
           {sp.err === "fields" ? "First and last name are required."
@@ -201,6 +215,40 @@ export default async function PersonDetail({
             </ul>
           )}
         </div>
+      </div>
+
+      {/* Season fee tied to this account. This lighter view is for people with no
+          registration of their own (often a payer), so the only fee action here
+          is reflecting a refund that was already issued directly in Stripe. */}
+      <div className="card">
+        <h2 className="mb-2 font-semibold text-slate-900">Season fee</h2>
+        {feePayments.length === 0 ? (
+          <p className="text-sm text-slate-400">No season-fee payment on this account.</p>
+        ) : (
+          <>
+            <p className="text-sm text-slate-700">
+              {activeFee
+                ? `${activeFee.installmentPlan ? "On a payment plan" : "Paid / outstanding"} — ${(activeFee.amountCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} (${activeFee.status.toLowerCase()}).`
+                : "This account's fee is settled (refunded or fully paid) — nothing showing as paying."}
+            </p>
+            {activeFee && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:underline">Already refunded in Stripe?</summary>
+                <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
+                  <input type="hidden" name="ticket" value={ticket} />
+                  <input type="hidden" name="op" value="markRefundedExternal" />
+                  <input type="hidden" name="personId" value={person.id} />
+                  {activeFee.seasonId && <input type="hidden" name="seasonId" value={activeFee.seasonId} />}
+                  <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
+                  <p className="text-[11px] text-slate-600">
+                    Use this only if {person.firstName} was <strong>already refunded directly in Stripe</strong>. It marks the fee refunded in the portal so they stop showing as paying — it does <strong>not</strong> issue another refund or touch Stripe.
+                  </p>
+                  <button className="btn-secondary py-1 text-xs">Mark refunded (already done in Stripe)</button>
+                </form>
+              </details>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
