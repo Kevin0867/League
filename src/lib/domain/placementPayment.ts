@@ -28,10 +28,41 @@ export type PlacementPeople = {
   unplacedOnPlan: PersonPayRow[];    // not on a team, on a plan
 };
 
-const coversOf = (p: { coveredPersonIds: unknown; partyId: string | null }): string[] => {
-  const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
-  return ids.length ? ids : p.partyId ? [p.partyId] : [];
-};
+/**
+ * Which PLAYER(S) a season-fee payment is really for. A minor is billed through
+ * a parent, so `partyId` is the parent and the player is in `coveredPersonIds`.
+ * But some fees were created without `coveredPersonIds`, so the fee looks like it
+ * belongs to the parent — who is not on any team, hence "unplaced but paying".
+ * This resolves the payer to their REGISTERED child(ren) in the season so the fee
+ * follows the placed player, not the parent. Returns a `(payment) => playerIds`
+ * function that pre-loads the season's parent→child map once.
+ */
+export async function makeCoveredPlayersResolver(seasonId: string): Promise<(p: { coveredPersonIds: unknown; partyId: string | null }) => string[]> {
+  const regs = await prisma.registration.findMany({ where: { seasonId }, select: { personId: true } });
+  const registered = new Set(regs.map((r) => r.personId));
+  // Registered players who are billed through a guardian → parent's dependents.
+  const kids = registered.size
+    ? await prisma.person.findMany({ where: { id: { in: [...registered] }, guardianId: { not: null } }, select: { id: true, guardianId: true } })
+    : [];
+  const kidsByGuardian = new Map<string, string[]>();
+  for (const k of kids) {
+    if (!k.guardianId) continue;
+    const arr = kidsByGuardian.get(k.guardianId) ?? [];
+    arr.push(k.id);
+    kidsByGuardian.set(k.guardianId, arr);
+  }
+  return (p) => {
+    const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
+    if (ids.length) return ids;
+    if (p.partyId) {
+      // No covered ids: attribute to the payer's registered child(ren); if the
+      // payer has none, they're the player themselves (an adult registrant).
+      const deps = kidsByGuardian.get(p.partyId);
+      return deps && deps.length ? deps : [p.partyId];
+    }
+    return [];
+  };
+}
 
 /**
  * Every person tied to a TEST team in the season — players, coach-players, the
@@ -62,7 +93,7 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
     (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
   if (!season) return { seasonId: null, assignedPaid: [], assignedUnpaid: [], unplacedPaidInFull: [], unplacedOnPlan: [] };
 
-  const [assigned, regs, members, feePays, apparel, testPeople] = await Promise.all([
+  const [assigned, regs, members, feePays, apparel, testPeople, resolveCovered] = await Promise.all([
     assignedPlayerIds(),
     prisma.registration.findMany({ where: { seasonId: season.id }, select: { id: true, personId: true, feeWaived: true } }),
     prisma.teamMember.findMany({ where: { team: { seasonId: season.id, isTest: false } }, select: { personId: true, team: { select: { name: true } } } }),
@@ -73,6 +104,8 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
     prisma.apparelOrderItem.findMany({ select: { personId: true, garment: true, size: true, quantity: true, payment: { select: { status: true } } } }),
     // Everyone tied to a TEST team — excluded from every bucket (see helper).
     testTeamPersonIds(season.id),
+    // Resolve each fee to the actual player (a parent's fee → their placed child).
+    makeCoveredPlayersResolver(season.id),
   ]);
 
   const regByPerson = new Map(regs.map((r) => [r.personId, r.id]));
@@ -83,7 +116,7 @@ export async function placementPaymentPeople(): Promise<PlacementPeople> {
   type Fee = { paid: boolean; onPlan: boolean; owedCents: number };
   const feeByPerson = new Map<string, Fee>();
   for (const p of feePays) {
-    for (const pid of coversOf(p)) {
+    for (const pid of resolveCovered(p)) {
       const cur = feeByPerson.get(pid) ?? { paid: false, onPlan: false, owedCents: 0 };
       if (p.status === "PAID") cur.paid = true;
       else if (p.installmentPlan && (p.installmentsPaid ?? 0) >= 1) {

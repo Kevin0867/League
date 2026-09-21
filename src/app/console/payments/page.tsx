@@ -14,7 +14,7 @@ import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 import { assignedPlayerIds } from "@/lib/domain/pnl";
-import { placementPaymentPeople, testTeamPersonIds, type PersonPayRow } from "@/lib/domain/placementPayment";
+import { placementPaymentPeople, testTeamPersonIds, makeCoveredPlayersResolver, type PersonPayRow } from "@/lib/domain/placementPayment";
 import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
@@ -120,9 +120,18 @@ export default async function PaymentsPage({
     (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
     (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
   const testPeople = activeSeason ? await testTeamPersonIds(activeSeason.id) : new Set<string>();
+  // Resolve each fee to the actual PLAYER(s): a minor's fee is billed to a parent,
+  // so a fee with no coveredPersonIds is attributed to the parent unless we map it
+  // to their registered child. Used for both the test-team and assigned checks so a
+  // parent's payment follows their placed child instead of showing the parent.
+  const resolveCovered = activeSeason
+    ? await makeCoveredPlayersResolver(activeSeason.id)
+    : (p: { coveredPersonIds: unknown; partyId: string | null }) => {
+        const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
+        return ids.length ? ids : p.partyId ? [p.partyId] : [];
+      };
   const coversOnlyTest = (p: { coveredPersonIds: unknown; partyId: string | null }) => {
-    const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
-    const covered = ids.length ? ids : p.partyId ? [p.partyId] : [];
+    const covered = resolveCovered(p);
     return covered.length > 0 && covered.every((id) => testPeople.has(id));
   };
 
@@ -196,10 +205,8 @@ export default async function PaymentsPage({
   // placed on a team — a registrant we never seated won't pay/play. Collected
   // above stays as-is (real money in). Filter outstanding to assigned players.
   const assigned = await assignedPlayerIds();
-  const coversAssigned = (p: { coveredPersonIds: unknown; partyId: string | null }) => {
-    const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as unknown[]).map(String) : [];
-    return ids.some((id) => assigned.has(id)) || (!!p.partyId && assigned.has(p.partyId));
-  };
+  const coversAssigned = (p: { coveredPersonIds: unknown; partyId: string | null }) =>
+    resolveCovered(p).some((id) => assigned.has(id));
   const outstandingAssigned = outstanding.filter(coversAssigned);
   const requested = Math.max(0, outstandingAssigned.reduce((s, p) => s + p.amountCents, 0) - installmentPaidShare(outstandingAssigned));
   const unassignedOutstandingCount = outstanding.length - outstandingAssigned.length;
