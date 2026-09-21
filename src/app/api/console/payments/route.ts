@@ -13,6 +13,7 @@ import {
   type DeliveredSession,
 } from "@/lib/domain/finance";
 import { payableCompletedRows, alaCarteEarnedCents } from "@/lib/domain/coachPay";
+import { activeCoachIds, leagueChampionshipDays } from "@/lib/domain/pnl";
 
 // Payments mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -296,6 +297,17 @@ async function generatePayoutRun(
     rowsByCoach.set(r.coachId, list);
   }
 
+  // League nights & championships pay every coach a session too (all coaches
+  // attend). They're Fixtures, not practice sessions, so add one session of pay
+  // per delivered league/championship day in the period for each active coach.
+  const mm = String(month).padStart(2, "0");
+  const [activeCoaches, leagueDays] = await Promise.all([
+    activeCoachIds(),
+    leagueChampionshipDays({ fromDay: `${year}-${mm}-01`, toDay: `${year}-${mm}-31` }),
+  ]);
+  const deliveredLeagueCount = leagueDays.filter((d) => d.delivered).length;
+  const leaguePayPerCoach = deliveredLeagueCount * coachSessionPayCents("PRIMARY", perSession, assistantPct, proPerSession);
+
   for (const coach of coaches) {
     const sessionCoachRows = (rowsByCoach.get(coach.id) ?? []).map((role) => ({ role }));
 
@@ -304,16 +316,21 @@ async function generatePayoutRun(
       sessionPayCents += coachSessionPayCents(sc.role, perSession, assistantPct, proPerSession);
     }
 
+    // League/championship days (this coach attends every one, if active staff).
+    const leagueCount = activeCoaches.has(coach.id) ? deliveredLeagueCount : 0;
+    if (leagueCount) sessionPayCents += leaguePayPerCoach;
+
     // À la carte earnings that are over (accepted/delivered, time passed) in the period.
     const alaCarteCents = await alaCarteEarnedCents({ coachId: coach.id, periodStart: start, periodEnd: end });
 
-    if (sessionCoachRows.length === 0 && alaCarteCents === 0) continue;
+    const totalSessions = sessionCoachRows.length + leagueCount;
+    if (totalSessions === 0 && alaCarteCents === 0) continue;
 
     await prisma.coachPayoutLine.create({
       data: {
         payoutRunId: run.id,
         coachId: coach.id,
-        sessionsDelivered: sessionCoachRows.length,
+        sessionsDelivered: totalSessions,
         sessionPayCents,
         alaCarteCents,
         totalCents: sessionPayCents + alaCarteCents,
