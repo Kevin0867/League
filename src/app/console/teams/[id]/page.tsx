@@ -112,7 +112,7 @@ export default async function TeamDetailPage({
   if (!(await canViewTeamNotes(id))) redirect("/console");
   const viewer = await getSession();
   const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
-  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia, tp, nomsg, acct, why } = await searchParams;
+  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia, tp, nomsg, acct, why, moved } = await searchParams;
   const whyMsg = why;
   const VIA_LABEL: Record<string, string> = { email: "email", text: "text", both: "email and text" };
   const ticket = await mintConsoleTicket();
@@ -362,6 +362,16 @@ export default async function TeamDetailPage({
           {reqfail
             ? `Couldn't send the fee & apparel request to ${who ?? "the player"} via ${VIA_LABEL[String(via)] ?? "the chosen channel"} — no email/phone on file, or delivery failed.`
             : `Fee & apparel request sent to ${who ?? "the player"} via ${VIA_LABEL[String(via)] ?? "the chosen channel"}.${reqsim ? " (Delivery isn't configured yet, so it was simulated — check the Payments page connection status.)" : ""}`}
+        </div>
+      ) : ok === "realigned" ? (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          {Number(moved) > 0
+            ? `Realigned ${moved} upcoming practice${moved === "1" ? "" : "s"} onto this team's day/time. Coach reminders will now fire on the right day.`
+            : "Practices are already on this team's day/time — nothing to move."}
+        </div>
+      ) : ok === "updateTeam" && Number(moved) > 0 ? (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Team fields saved — and {moved} upcoming practice{moved === "1" ? "" : "s"} moved onto the new day/time.
         </div>
       ) : ok && OK_MSG[ok] ? (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{OK_MSG[ok]}</div>
@@ -681,7 +691,18 @@ export default async function TeamDetailPage({
                 : "Set this team's day, time, and facility in Team fields below, then generate the season."}
             </p>
           </div>
-          <Link href={`/console/schedule?view=calendar&team=${team.id}`} className="btn-secondary text-sm">Open full calendar →</Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {teamPractices.length > 0 && hasDayTime && (
+              <ConfirmSubmit
+                action="/api/console/teams"
+                fields={{ ticket, op: "realignPractices", teamId: team.id }}
+                confirm={`Move this team's upcoming practices onto ${team.dayOfWeek} ${formatTime12(team.startTime)}? Use this if the day/time was changed but old practices are still on the wrong day.`}
+                label="Realign to day/time"
+                className="btn-secondary text-sm"
+              />
+            )}
+            <Link href={`/console/schedule?view=calendar&team=${team.id}`} className="btn-secondary text-sm">Open full calendar →</Link>
+          </div>
         </div>
 
         {/* Generate the whole season's practices in one click (when none yet). */}
