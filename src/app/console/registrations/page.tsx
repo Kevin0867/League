@@ -214,6 +214,11 @@ export default async function RegistrationsPage({
   const payStatusOf = (personId: string, seasonId: string): FeeState =>
     payByPersonSeason.get(`${personId}:${seasonId}`) ?? "none";
 
+  // People with more than one registration in the SAME season — a duplicate
+  // signup. Offer to remove the extra from the row (keeps person/payment/team).
+  const regCounts = await prisma.registration.groupBy({ by: ["personId", "seasonId"], _count: { _all: true } });
+  const duplicateKeys = new Set(regCounts.filter((g) => g._count._all > 1).map((g) => `${g.personId}:${g.seasonId}`));
+
   const people = registrations.map((r) => ({
     id: r.person.id,
     firstName: r.person.firstName,
@@ -481,6 +486,7 @@ export default async function RegistrationsPage({
                     payStatus={payStatusOf(r.person.id, r.seasonId)}
                     waiverSigned={!!r.person.waiverSignedAt}
                     sharedInvoice={sharedCoveredIds.has(r.person.id)}
+                    duplicateInSeason={duplicateKeys.has(`${r.person.id}:${r.seasonId}`)}
                   />
                 </td>
               </tr>

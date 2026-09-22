@@ -15,6 +15,7 @@ export function RowActions({
   payStatus,
   waiverSigned,
   sharedInvoice = false,
+  duplicateInSeason = false,
 }: {
   ticket: string;
   personId: string;
@@ -27,6 +28,10 @@ export function RowActions({
   /** This player shares one not-yet-paid invoice with others (a consolidated
    *  family fee) — offer to split them onto their own per-player invoice. */
   sharedInvoice?: boolean;
+  /** This person has more than one registration this season (a duplicate signup)
+   *  — offer to remove THIS one; the duplicate-aware delete keeps their team
+   *  spot, payments, and waiver (those live on the person, not the registration). */
+  duplicateInSeason?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -155,6 +160,20 @@ export function RowActions({
                     <Hidden op="refund" />
                     <button className="w-full rounded-md border border-rose-200 py-1 text-xs text-rose-600 hover:bg-rose-50">
                       Start refund
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Duplicate signup — remove THIS registration; the person keeps
+                  their team spot, payments (incl. an active plan), and waiver. */}
+              {duplicateInSeason && (
+                <div className="border-t border-slate-100 pt-2">
+                  <p className="mb-1 text-[11px] text-slate-400">This player has a duplicate registration this season.</p>
+                  <form method="POST" action="/api/console/registrations" onSubmit={confirmSend("Remove this DUPLICATE registration? The player keeps their team spot, payments (including any active plan), and waiver — only the extra signup is removed. This can't be undone.")}>
+                    <Hidden op="deleteRegistration" />
+                    <button className="w-full rounded-md border border-rose-300 bg-rose-50 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100">
+                      Remove duplicate registration
                     </button>
                   </form>
                 </div>
