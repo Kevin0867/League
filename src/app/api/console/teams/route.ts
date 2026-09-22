@@ -11,6 +11,7 @@ import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
 import { addTeamAssistantToSessions, removeTeamAssistantFromSessions } from "@/lib/domain/teamCoachSessions";
 import { isBookable } from "@/lib/domain/facilityWindows";
+import { DAY_INDEX } from "@/lib/domain/schedule";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
 import { teamLaunchEmail } from "@/lib/domain/launchEmail";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
@@ -33,6 +34,50 @@ async function divisionColorsUsed(divisionCode: string, excludeTeamId?: string):
     select: { color: true },
   });
   return rows.map((r) => r.color).filter(Boolean) as string[];
+}
+
+const toMinOfDay = (t: string) => { const [h, m] = (t || "0:0").split(":").map((x) => parseInt(x, 10)); return (h || 0) * 60 + (m || 0); };
+const fromMinOfDay = (mins: number) => `${String(Math.floor(mins / 60) % 24).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+
+/**
+ * Move a team's UPCOMING practices onto the team's CURRENT day/time. When a
+ * team's practice day or time is changed, the already-generated Session rows keep
+ * their old dates — so a coach's dashboard can say "practice today" on the old
+ * day even though the team page shows the new one. This realigns every future
+ * SCHEDULED practice to the team's weekday (same week, shifted by the weekday
+ * delta) and its start time (preserving each session's length). Past practices
+ * and one-off reschedules/cancellations are left as-is. Returns how many moved.
+ */
+async function realignTeamPractices(teamId: string): Promise<number> {
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { dayOfWeek: true, startTime: true } });
+  if (!team?.dayOfWeek || !team.startTime) return 0;
+  const targetDow = DAY_INDEX[team.dayOfWeek];
+  if (targetDow == null) return 0;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const sessions = await prisma.session.findMany({
+    where: { type: "PRACTICE", status: "SCHEDULED", teams: { some: { teamId } }, date: { gte: startOfToday } },
+    select: { id: true, date: true, startTime: true, endTime: true },
+  });
+  const newStartMin = toMinOfDay(team.startTime);
+  let moved = 0;
+  for (const s of sessions) {
+    // Sessions are anchored at noon UTC, so getUTCDay() is the Phoenix weekday.
+    const deltaDays = targetDow - s.date.getUTCDay();
+    const durMin = Math.max(0, toMinOfDay(s.endTime) - toMinOfDay(s.startTime)) || 60;
+    const newEnd = fromMinOfDay(newStartMin + durMin);
+    if (deltaDays === 0 && s.startTime === team.startTime && s.endTime === newEnd) continue;
+    const newDate = new Date(s.date);
+    newDate.setUTCDate(newDate.getUTCDate() + deltaDays);
+    // A reminder may have been stamped against the old date/time — clear it so the
+    // check-in / 2-hour reminders re-evaluate against the corrected schedule.
+    await prisma.session.update({
+      where: { id: s.id },
+      data: { date: newDate, startTime: team.startTime, endTime: newEnd, checkinReminderSentAt: null, reminder2hSentAt: null },
+    });
+    moved++;
+  }
+  return moved;
 }
 
 /** Every email on file for a rostered player's family — the player's own
@@ -287,9 +332,9 @@ export async function POST(req: Request) {
       const codeSource = [divisionNameVal, nameVal, levelBandVal].filter(Boolean).join(" ");
       const recomputedCode = deriveDivisionCode(codeSource, genderHint);
 
-      // Capture the team's current home facility so we can propagate a change to
-      // upcoming practices (each practice stores its own facility snapshot).
-      const prevTeam = await prisma.team.findUnique({ where: { id: teamId }, select: { facilityId: true } });
+      // Capture the team's current home facility + day/time so we can propagate a
+      // change to upcoming practices (each practice stores its own snapshot).
+      const prevTeam = await prisma.team.findUnique({ where: { id: teamId }, select: { facilityId: true, dayOfWeek: true, startTime: true } });
       const newFacilityId = g("facilityId");
 
       await prisma.team.update({
@@ -337,15 +382,36 @@ export async function POST(req: Request) {
         }
       }
 
+      // Propagate a DAY or TIME change to this team's upcoming practices, so the
+      // schedule (and the coach's "practice today" reminders) match the team page
+      // instead of firing on the old day. Only when the day/time actually changed.
+      let practicesMoved = 0;
+      const newDay = g("dayOfWeek");
+      const newTime = g("startTime");
+      if ((prevTeam?.dayOfWeek ?? null) !== (newDay ?? null) || (prevTeam?.startTime ?? null) !== (newTime ?? null)) {
+        practicesMoved = await realignTeamPractices(teamId);
+      }
+
       await audit({
         actorId: actor.userId,
         entityType: "Team",
         entityId: teamId,
         action: "UPDATE",
-        summary: "Updated team fields",
+        summary: `Updated team fields${practicesMoved ? ` — realigned ${practicesMoved} upcoming practice(s) to the new day/time` : ""}`,
       });
 
-      return back("?ok=updateTeam");
+      return back(practicesMoved ? `?ok=updateTeam&moved=${practicesMoved}` : "?ok=updateTeam");
+    }
+
+    // Realign a team's upcoming practices to its CURRENT day/time — the repair for
+    // a team whose day was changed before this propagation existed, so its old
+    // sessions still sit on the wrong weekday (and a coach sees "practice today"
+    // on the old day). Moves every future scheduled practice onto the team's day.
+    case "realignPractices": {
+      if (!teamId) return back("?err=team");
+      const moved = await realignTeamPractices(teamId);
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "REALIGN_PRACTICES", summary: `Realigned ${moved} upcoming practice(s) to the team's day/time` });
+      return back(`?ok=realigned&moved=${moved}`);
     }
 
     // Bulk-set practice day / start time / home facility across many teams from
