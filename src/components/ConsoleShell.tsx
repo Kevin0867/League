@@ -78,6 +78,7 @@ const SECTIONS: NavSection[] = [
       { href: "/console/acp", label: "ACP Entries", roles: ["COO", "DIRECTOR"] },
       { href: "/console/alacarte", label: "Private Lessons", roles: ["COO", "DIRECTOR"] },
       { href: "/console/open-spots", label: "Open Spots", roles: ["COO", "DIRECTOR"] },
+      { href: "/console/subs", label: "Session Subs", roles: ["COO", "DIRECTOR"], match: ["/console/subs"] },
     ],
   },
   {
