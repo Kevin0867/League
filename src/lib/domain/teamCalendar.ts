@@ -308,6 +308,30 @@ export async function notifySubMoved(toSessionId: string, teamId: string, person
   await notifySubJoined(toSessionId, teamId, subName).catch(() => {});
 }
 
+/** Tell the coach (+ admins) that a sub was REMOVED from a specific date, so the
+ *  spot is open again. The removed sub themselves is told separately
+ *  (notifySubReleased); this keeps the coach in the loop that their roster changed. */
+export async function notifySubRemoved(sessionId: string, teamId: string, personId: string): Promise<void> {
+  const [ctx, person] = await Promise.all([
+    sessionContext(sessionId),
+    prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } }),
+  ]);
+  if (!ctx?.team) return;
+  const { session, team } = ctx;
+  const subName = person ? `${person.firstName} ${person.lastName}`.trim() : "A sub";
+  const when = `${formatSessionDay(session.date, "long")} at ${formatTime12(session.startTime)}`;
+  const subject = `Sub removed — ${team.name}`;
+  const body = `Heads up — ${subName} is no longer subbing for the ${when} practice, so that spot is open again (it's back on the open-spots page for someone else to claim).`;
+  try {
+    if (team.coach?.personId) {
+      await dispatchMessage({ senderId: null, audienceType: "SINGLE_PERSON", audienceRef: team.coach.personId, channels: ["IN_APP", "EMAIL", "SMS"], triggerType: "SUB_JOINED", subject, body });
+    }
+    await dispatchMessage({ senderId: null, audienceType: "ALL_ADMINS", channels: ["IN_APP", "EMAIL"], triggerType: "SUB_JOINED", subject, body });
+  } catch (e) {
+    console.error("notifySubRemoved failed", e);
+  }
+}
+
 /** Tell the coach + the team that a sub is joining them for a specific date. */
 export async function notifySubJoined(sessionId: string, teamId: string, subName: string): Promise<void> {
   const ctx = await sessionContext(sessionId);

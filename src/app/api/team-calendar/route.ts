@@ -4,13 +4,14 @@ import { actorFromForm } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { isAdmin } from "@/lib/rbac";
 import { coachedTeamIdsForUser } from "@/lib/domain/coachingAccess";
-import { notifySubNeeded, notifySubSuggested, notifyEventAdded, notifySubReleased, notifySubMoved } from "@/lib/domain/teamCalendar";
+import { notifySubNeeded, notifySubSuggested, notifyEventAdded, notifySubReleased, notifySubMoved, notifySubJoined, notifySubRemoved } from "@/lib/domain/teamCalendar";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { waiverRequestEmail } from "@/lib/email/waiverRequestEmail";
 import { sendResetLinkForPerson } from "@/lib/domain/passwordResetSend";
 import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
 import { ageFromDob } from "@/lib/domain/messaging-acl";
+import { formatSessionDay, formatTime12 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -151,15 +152,22 @@ export async function POST(req: Request) {
       return back(`?err=subaddfailed#s-${sessionId}`);
     }
 
-    // Welcome + waiver so the sub is cleared to play. Best-effort.
+    // Welcome + waiver so the sub is cleared to play. Best-effort. Include the
+    // practice day/time/place so the sub knows exactly when they're subbing.
+    const subSession = await prisma.session.findUnique({ where: { id: sessionId }, select: { date: true, startTime: true, teams: { select: { team: { select: { name: true } } } }, facility: { select: { name: true, isPrivate: true } } } });
+    const subWhen = subSession ? `${formatSessionDay(subSession.date, "long")} at ${formatTime12(subSession.startTime)}` : "the upcoming practice";
+    const subTeamName = subSession?.teams[0]?.team.name ?? "the team";
+    const subWhere = subSession?.facility?.name && !subSession.facility.isPrivate ? ` at ${subSession.facility.name}` : "";
     try {
       const token = await signWaiverToken(personId);
       const link = `${appUrl()}/waiver/sign?token=${encodeURIComponent(token)}`;
       const em = waiverRequestEmail({ name: first, link, isMinor: age !== null ? age < 18 : false });
       if (email) await sendEmail(email, em.subject, em.text, em.html).catch(() => {});
-      if (phone) await sendSms(phone, `PURE Academy — you're subbing in! Please complete this quick participation waiver so you're cleared to play: ${link}`).catch(() => {});
+      if (phone) await sendSms(phone, `PURE Academy — you're subbing in for ${subTeamName} on ${subWhen}${subWhere}! Please complete this quick participation waiver so you're cleared to play: ${link} You'll also get the normal practice reminders.`).catch(() => {});
     } catch { /* best-effort */ }
     await sendResetLinkForPerson(personId).catch(() => {});
+    // Notify the coach + team that a sub is joining them for this date.
+    await notifySubJoined(sessionId, teamId, `${first} ${last}`.trim()).catch(() => {});
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "calendar.addSub", summary: `Added sub ${first} ${last}` });
     return back("?ok=subadded#s-" + sessionId);
   }
@@ -175,7 +183,9 @@ export async function POST(req: Request) {
     const removed = await prisma.sessionSub.deleteMany({ where: { sessionId, personId, teamId } });
     if (removed.count > 0) {
       await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "calendar.removeSub", summary: `Removed sub ${personId}` });
+      // Tell the sub their spot was released, AND tell the coach their roster changed.
       await notifySubReleased(sessionId, teamId, personId).catch(() => {});
+      await notifySubRemoved(sessionId, teamId, personId).catch(() => {});
     }
     return back("?ok=subremoved#s-" + sessionId);
   }
@@ -205,7 +215,10 @@ export async function POST(req: Request) {
     }
     const p = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } });
     await audit({ actorId: actor.userId, entityType: "Session", entityId: sessionId, action: "calendar.moveSub", summary: `Moved sub ${personId} to ${toSessionId}` });
+    // Sub + the NEW date's coach/team are notified by notifySubMoved; also tell the
+    // OLD date's coach the sub left that practice.
     await notifySubMoved(toSessionId, teamId, personId, p ? `${p.firstName} ${p.lastName}`.trim() : "A sub").catch(() => {});
+    await notifySubRemoved(sessionId, teamId, personId).catch(() => {});
     return back("?ok=submoved#s-" + sessionId);
   }
 

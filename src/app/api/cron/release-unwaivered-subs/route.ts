@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
-import { notifySubAutoReleased } from "@/lib/domain/teamCalendar";
+import { notifySubAutoReleased, notifySubRemoved } from "@/lib/domain/teamCalendar";
 
 // Auto-release sub spots that were claimed on the public open-spots page but
 // never had their participation waiver completed. When someone claims a spot we
@@ -55,7 +55,9 @@ export async function GET(req: Request) {
     const removed = await prisma.sessionSub.deleteMany({ where: { id: c.id, addedByUserId: null } });
     if (removed.count > 0) {
       released++;
+      // Tell the sub (auto-released) AND the coach the spot reopened.
       await notifySubAutoReleased(c.sessionId, c.teamId, c.personId).catch(() => {});
+      await notifySubRemoved(c.sessionId, c.teamId, c.personId).catch(() => {});
     }
   }
 
