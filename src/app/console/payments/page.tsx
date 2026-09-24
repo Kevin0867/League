@@ -5,7 +5,7 @@ import { FeeReminderList } from "./FeeReminderList";
 import { PrintButton } from "@/components/PrintButton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatCents } from "@/lib/money";
-import { formatDate } from "@/lib/time";
+import { formatDate, formatDateTime12 } from "@/lib/time";
 import { mintConsoleTicket } from "@/lib/auth";
 import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
@@ -378,14 +378,14 @@ export default async function PaymentsPage({
     : [];
   const respPartyById = new Map(respParties.map((p) => [p.id, p]));
   const resolvedRows = payerResponsesRaw.length
-    ? await prisma.payerResponseResolution.findMany({ where: { auditLogId: { in: payerResponsesRaw.map((r) => r.id) } }, select: { auditLogId: true } })
+    ? await prisma.payerResponseResolution.findMany({ where: { auditLogId: { in: payerResponsesRaw.map((r) => r.id) } }, select: { auditLogId: true, resolvedAt: true } })
     : [];
-  const resolvedSet = new Set(resolvedRows.map((r) => r.auditLogId));
+  const resolvedAtById = new Map(resolvedRows.map((r) => [r.auditLogId, r.resolvedAt]));
   const payerResponsesAll = payerResponsesRaw.map((r) => {
     let note = ""; let partyId: string | null = null;
     try { const m = JSON.parse(r.metadata ?? "{}") as { note?: string; partyId?: string }; note = m.note ?? ""; partyId = m.partyId ?? null; } catch { /* ignore */ }
     const party = partyId ? respPartyById.get(partyId) : null;
-    return { id: r.id, summary: r.summary ?? "", createdAt: r.createdAt, note, paymentId: r.entityId, email: party?.email ?? null, phone: party?.phone ?? null, resolved: resolvedSet.has(r.id) };
+    return { id: r.id, summary: r.summary ?? "", createdAt: r.createdAt, note, paymentId: r.entityId, email: party?.email ?? null, phone: party?.phone ?? null, resolved: resolvedAtById.has(r.id), resolvedAt: resolvedAtById.get(r.id) ?? null };
   });
   const payerResponses = payerResponsesAll.filter((r) => !r.resolved);
   const payerResponsesResolved = payerResponsesAll.filter((r) => r.resolved);
@@ -473,7 +473,7 @@ export default async function PaymentsPage({
                 <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                   <div className="flex items-start justify-between gap-3">
                     <span className="font-medium text-slate-800">{r.summary}</span>
-                    <span className="shrink-0 text-xs text-slate-400">{formatDate(r.createdAt)}</span>
+                    <span className="shrink-0 text-xs text-slate-400" title="When this reply came in">Came in {formatDateTime12(r.createdAt)}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                     {r.email && <a href={`mailto:${r.email}`} className="text-brand-700 hover:underline">✉ {r.email}</a>}
@@ -496,7 +496,10 @@ export default async function PaymentsPage({
               <ul className="mt-2 space-y-1">
                 {payerResponsesResolved.map((r) => (
                   <li key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-1.5 text-xs">
-                    <span className="text-slate-500 line-through">{r.summary}</span>
+                    <span className="min-w-0">
+                      <span className="text-slate-500 line-through">{r.summary}</span>
+                      <span className="ml-2 text-[11px] text-slate-400">Came in {formatDateTime12(r.createdAt)}{r.resolvedAt ? ` · responded ${formatDateTime12(r.resolvedAt)}` : ""}</span>
+                    </span>
                     <form method="POST" action="/api/console/payer-response" className="inline">
                       <input type="hidden" name="ticket" value={ticket} />
                       <input type="hidden" name="op" value="reopen" />
