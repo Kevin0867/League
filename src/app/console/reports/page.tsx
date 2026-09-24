@@ -223,7 +223,7 @@ export default async function ReportsPage() {
       </div>
 
       {/* Player team assignments — every placed player and their team */}
-      <div className="card overflow-x-auto">
+      <div id="team-assignments" className="card overflow-x-auto scroll-mt-20">
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold text-slate-900">Team assignments</h2>
           <span className="text-xs text-slate-400">
@@ -262,7 +262,7 @@ export default async function ReportsPage() {
       </div>
 
       {/* Waitlist — everyone waiting for a full team, in order */}
-      <div className="card overflow-x-auto">
+      <div id="waitlist" className="card overflow-x-auto scroll-mt-20">
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold text-slate-900">Waitlist</h2>
           <span className="text-xs text-slate-400">

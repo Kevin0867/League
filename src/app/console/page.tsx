@@ -267,6 +267,37 @@ export default async function ConsoleDashboard({
         </div>
       )}
 
+      {/* Reports — quick access to the player rosters + waitlist */}
+      {admin && (
+        <div className="card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">Reports</h2>
+              <p className="mt-0.5 text-sm text-slate-500">Player rosters and the waitlist — view them or download a CSV.</p>
+            </div>
+            <Link href="/console/reports" className="btn-secondary whitespace-nowrap text-sm">All reports →</Link>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 p-3">
+              <h3 className="font-medium text-slate-800">Team assignments</h3>
+              <p className="mt-0.5 text-xs text-slate-500">Every placed player with their team &amp; coach, day/time, waiver, and fee status.</p>
+              <div className="mt-2 flex gap-2">
+                <Link href="/console/reports#team-assignments" className="btn-secondary text-xs">View</Link>
+                <a href="/console/export/assignments" className="btn-secondary text-xs">↓ CSV</a>
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <h3 className="font-medium text-slate-800">Waitlist</h3>
+              <p className="mt-0.5 text-xs text-slate-500">Everyone waiting on a full team, in order, with their offer status.</p>
+              <div className="mt-2 flex gap-2">
+                <Link href="/console/reports#waitlist" className="btn-secondary text-xs">View</Link>
+                <a href="/console/export/waitlist" className="btn-secondary text-xs">↓ CSV</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Team build board preview */}
         <div className="card lg:col-span-2">
