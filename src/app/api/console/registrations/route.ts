@@ -15,6 +15,7 @@ import { appUrl } from "@/lib/stripe";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { TEAM_CAP } from "@/lib/enums";
 import { accruePlayerSeasonFee, splitFamilyFee, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
+import { proratedSeasonFee } from "@/lib/payments/proration";
 import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { feeStateOf } from "@/lib/domain/feeStatus";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
@@ -715,6 +716,35 @@ export async function POST(req: Request) {
         return back(`/${reg.id}?ok=feesetsent`);
       }
       return back(`/${reg.id}?ok=feeset`);
+    }
+
+    // Re-price an UNPAID season-fee invoice to the current mid-season proration —
+    // the fix for a player who joined after the season started but whose invoice
+    // was created at (or reused from) the full price. Only a REQUESTED invoice
+    // covering ONLY this player is repriced; a paid fee, an active plan, or a
+    // shared family invoice is left alone.
+    case "prorateFee": {
+      if (!reg) return back("?err=fields");
+      const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } });
+      const covering = await prisma.payment.findMany({
+        where: { seasonId: reg.seasonId, category: "PLAYER_FEE", OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }] },
+        orderBy: { createdAt: "desc" },
+      });
+      const target = covering.find((x) => x.status === "REQUESTED");
+      if (!target) return back(`/${reg.id}?err=noprorate`);
+      const covers = Array.isArray(target.coveredPersonIds) ? (target.coveredPersonIds as unknown[]).map(String).filter(Boolean) : [];
+      if (covers.length > 1) return back(`/${reg.id}?err=prorateshared`);
+
+      const [rate, season] = await Promise.all([
+        prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { seasonFeeCents: true } }),
+        prisma.season.findUnique({ where: { id: reg.seasonId }, select: { calendar: true } }),
+      ]);
+      const fullCents = rate?.seasonFeeCents ?? 49500;
+      const pro = proratedSeasonFee(fullCents, season?.calendar, new Date());
+      if (target.amountCents === pro.feeCents) return back(`/${reg.id}?ok=proratedsame&wks=${pro.weeksRemaining}`);
+      await prisma.payment.update({ where: { id: target.id }, data: { amountCents: pro.feeCents } });
+      await audit({ actorId: actor.userId, entityType: "Payment", entityId: target.id, action: "REQUESTED", summary: `Prorated season fee to ${pro.weeksRemaining}/${pro.totalWeeks} weeks — $${(pro.feeCents / 100).toFixed(2)} for ${person?.firstName ?? ""} ${person?.lastName ?? ""}`.trim() });
+      return back(`/${reg.id}?ok=prorated&amt=${pro.feeCents}&wks=${pro.weeksRemaining}`);
     }
 
     // Mark a fee PAID outside Stripe — a check, Class Wallet, cash, or an in-kind

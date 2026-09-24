@@ -12,6 +12,7 @@ import { CustomPaymentForm } from "@/components/CustomPaymentForm";
 import { ApparelRequestForm } from "@/components/ApparelRequestForm";
 import { ApparelItemEditor } from "@/components/ApparelItemEditor";
 import { feeStateOf } from "@/lib/domain/feeStatus";
+import { proratedSeasonFee } from "@/lib/payments/proration";
 
 // Short day + start time for a team, e.g. "Wed 5:00 PM", so staff can pick a
 // team whose schedule works for the player when assigning/moving them.
@@ -59,6 +60,8 @@ const OK: Record<string, string> = {
   unwaived: "Fee waiver removed — this player will be charged the season fee normally.",
   refundstop: "Refund issued and payment plan cancelled — no further installments will be charged.",
   markrefunded: "Marked refunded in the portal (reflecting the Stripe refund) — no second refund was issued. They'll stop showing as paying.",
+  prorated: "Season fee prorated to the weeks remaining. The pay page and reminders now show the reduced amount.",
+  proratedsame: "Already prorated — the invoice already matches the weeks remaining.",
 };
 const ERR: Record<string, string> = {
   notassigned: "This player isn't on a team yet — assign them first.",
@@ -73,6 +76,8 @@ const ERR: Record<string, string> = {
   cap: "That team is already full. Tick “Add even if the team is full” to place them anyway.",
   norefund: "No collected fee or active plan found to refund for this player.",
   refundfail: "The refund didn't go through at Stripe — check the payment in Stripe and try again.",
+  noprorate: "No unpaid season-fee invoice to prorate — it may already be paid or on a plan.",
+  prorateshared: "That invoice covers more than one player. Split it into per-player invoices first, then prorate.",
 };
 
 const STATUSES = ["SUBMITTED", "ASSIGNED", "WAITLISTED", "WITHDRAWN", "DUPLICATE"];
@@ -148,6 +153,15 @@ export default async function RegistrationDetail({
   // A season fee that was refunded (e.g. in Stripe) — the player no longer counts
   // as paid, and we say so explicitly instead of showing a bare "not requested".
   const refunded = !paid && !subscription && !outstanding ? payments.find((x) => x.status === "REFUNDED") : undefined;
+
+  // Mid-season proration: what this player SHOULD owe if invoiced today. Surfaced
+  // so an unpaid invoice created at (or reused from) the full price can be
+  // repriced to the weeks remaining. Only meaningful for a single-player REQUESTED
+  // invoice that's currently priced above the prorated amount.
+  const prorateRate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { seasonFeeCents: true } });
+  const proration = proratedSeasonFee(prorateRate?.seasonFeeCents ?? 49500, reg.season?.calendar ?? null, new Date());
+  const outstandingCovers = outstanding && Array.isArray(outstanding.coveredPersonIds) ? (outstanding.coveredPersonIds as unknown[]).length : 1;
+  const canProrate = !!outstanding && outstanding.status === "REQUESTED" && outstandingCovers <= 1 && proration.prorated && outstanding.amountCents > proration.feeCents;
 
   // Apparel this player ordered (tagged to them, or paid on their behalf) — so a
   // wrong size/garment can be corrected right here.
@@ -559,6 +573,18 @@ export default async function RegistrationDetail({
                   </form>
                 </details>
               )}
+              {/* Prorate a mid-season join — reprice an unpaid full-price invoice
+                  down to the weeks remaining. Shows only when it would lower it. */}
+              {canProrate && (
+                <form method="POST" action="/api/console/registrations" className="w-full rounded-lg bg-brand-50 p-3">
+                  {hidden}<input type="hidden" name="op" value="prorateFee" />
+                  <p className="text-xs font-medium text-brand-900">
+                    Joined mid-season — currently invoiced {formatCents(outstanding!.amountCents)}, but only {proration.weeksRemaining} of {proration.totalWeeks} weeks remain.
+                  </p>
+                  <button className="btn-primary mt-2 py-1 text-xs">Prorate to {formatCents(proration.feeCents)} ({proration.weeksRemaining} wks left)</button>
+                </form>
+              )}
+
               {/* Set a custom / discounted season fee — reprices this player's
                   actual season-fee invoice, so paying it (online or offline)
                   shows the season fully paid at what they really owe. */}
