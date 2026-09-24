@@ -5,6 +5,7 @@ import { toCsv, csvResponse } from "@/lib/csv";
 import { formatCents } from "@/lib/money";
 import { garmentLabel, sizeLabel } from "@/lib/domain/apparel";
 import { computeEnrollmentBreakdown } from "@/lib/domain/enrollmentBreakdown";
+import { teamAssignmentReport, waitlistReport } from "@/lib/domain/rosterReports";
 
 // CSV export for the key registers (§18). Staff only.
 export async function GET(_req: Request, { params }: { params: Promise<{ dataset: string }> }) {
@@ -112,6 +113,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ dataset
         ...b.byProgram.map((r) => ({ category: "Program / skill level", label: r.label, active: r.active, waitlist: r.waitlist, total: r.total })),
       ];
       return csvResponse("enrollment-breakdown.csv", toCsv(rows, ["category", "label", "active", "waitlist", "total"]));
+    }
+    case "assignments": {
+      const rows = await teamAssignmentReport();
+      return csvResponse("team-assignments.csv", toCsv(rows.map((r) => ({
+        player: r.player, team: r.team, division: r.division, coach: r.coach,
+        location: r.location, dayTime: r.dayTime, waiver: r.waiver, fee: r.fee,
+        email: r.email, phone: r.phone,
+      })), ["player", "team", "division", "coach", "location", "dayTime", "waiver", "fee", "email", "phone"]));
+    }
+    case "waitlist": {
+      const rows = await waitlistReport();
+      return csvResponse("waitlist.csv", toCsv(rows.map((r) => ({
+        team: r.team, position: r.position, player: r.player, status: r.status,
+        addedAt: r.addedAt, note: r.note ?? "", email: r.email, phone: r.phone,
+      })), ["team", "position", "player", "status", "addedAt", "note", "email", "phone"]));
     }
     default:
       return new Response("Unknown dataset", { status: 404 });

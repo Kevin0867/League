@@ -5,8 +5,9 @@ import { formatCents } from "@/lib/money";
 import { teamContribution, completionRate, type TeamPnL } from "@/lib/domain/reporting";
 import type { FacilityRates, DeliveredSession } from "@/lib/domain/finance";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
-import { formatTime12 } from "@/lib/time";
+import { formatTime12, formatDate } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
+import { teamAssignmentReport, waitlistReport } from "@/lib/domain/rosterReports";
 
 export const dynamic = "force-dynamic";
 
@@ -139,7 +140,19 @@ export default async function ReportsPage() {
     { revenue: 0, coach: 0, court: 0, contribution: 0 }
   );
 
+  // ---- Player rosters: team assignments + waitlist ----
+  const [assignments, waitlist] = await Promise.all([teamAssignmentReport(), waitlistReport()]);
+  const feeBadge: Record<string, string> = {
+    paid: "bg-emerald-100 text-emerald-700",
+    subscription: "bg-emerald-100 text-emerald-700",
+    owes: "bg-amber-100 text-amber-700",
+    "no charge": "bg-slate-100 text-slate-500",
+    "—": "bg-slate-100 text-slate-400",
+  };
+
   const EXPORTS = [
+    ["assignments", "Team assignments"],
+    ["waitlist", "Waitlist"],
     ["registrations", "Registrations"],
     ["teams", "Teams"],
     ["payments", "Payments"],
@@ -205,6 +218,75 @@ export default async function ReportsPage() {
             {coachingRows.length === 0 && (
               <tr><td colSpan={6} className="py-6 text-center text-slate-400">No coaches assigned to teams yet.</td></tr>
             )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Player team assignments — every placed player and their team */}
+      <div className="card overflow-x-auto">
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-slate-900">Team assignments</h2>
+          <span className="text-xs text-slate-400">
+            {assignments.length} player{assignments.length === 1 ? "" : "s"} placed
+            <> · <a href="/console/export/assignments" className="font-medium text-brand-700 hover:underline">↓ CSV</a></>
+          </span>
+        </div>
+        <p className="mb-3 text-sm text-slate-500">Every player on a team this season — with their team, coach, when &amp; where they practice, waiver, and fee status.</p>
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th className="py-2">Player</th><th>Team</th><th>Division</th><th>Coach</th><th>Location</th><th>Day &amp; time</th><th>Waiver</th><th>Fee</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {assignments.map((r, i) => {
+              const firstOfTeam = i === 0 || assignments[i - 1].team !== r.team;
+              return (
+                <tr key={`${r.teamId}-${r.personId}`}>
+                  <td className="py-2 font-medium text-slate-800">
+                    <Link href={`/console/people/${r.personId}`} className="hover:text-brand-700 hover:underline">{r.player}</Link>
+                  </td>
+                  <td className="text-slate-700">{firstOfTeam ? <Link href={`/console/teams/${r.teamId}`} className="hover:text-brand-700 hover:underline">{r.team}</Link> : <span className="text-slate-400">↳ {r.team}</span>}</td>
+                  <td className="text-slate-500">{r.division}</td>
+                  <td className="text-slate-500">{r.coach || "—"}</td>
+                  <td className="text-slate-500">{r.location}</td>
+                  <td className="text-slate-600">{r.dayTime}</td>
+                  <td><span className={`badge ${r.waiver === "signed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{r.waiver}</span></td>
+                  <td><span className={`badge ${feeBadge[r.fee] ?? "bg-slate-100 text-slate-400"}`}>{r.fee === "subscription" ? "on plan" : r.fee}</span></td>
+                </tr>
+              );
+            })}
+            {assignments.length === 0 && <tr><td colSpan={8} className="py-6 text-center text-slate-400">No players placed on teams yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Waitlist — everyone waiting for a full team, in order */}
+      <div className="card overflow-x-auto">
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-slate-900">Waitlist</h2>
+          <span className="text-xs text-slate-400">
+            {waitlist.length} waiting
+            <> · <a href="/console/export/waitlist" className="font-medium text-brand-700 hover:underline">↓ CSV</a></>
+          </span>
+        </div>
+        <p className="mb-3 text-sm text-slate-500">Players waiting on a full team, in order — with where they are in line and their offer status.</p>
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+            <tr><th className="py-2">Team</th><th>#</th><th>Player</th><th>Status</th><th>Added</th><th>Contact</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {waitlist.map((r) => (
+              <tr key={`${r.teamId}-${r.personId}`}>
+                <td className="py-2 text-slate-700"><Link href={`/console/teams/${r.teamId}`} className="hover:text-brand-700 hover:underline">{r.team}</Link></td>
+                <td className="text-slate-500">{r.position}</td>
+                <td className="font-medium text-slate-800"><Link href={`/console/people/${r.personId}`} className="hover:text-brand-700 hover:underline">{r.player}</Link></td>
+                <td><span className={`badge ${r.status === "OFFERED" ? "bg-brand-100 text-brand-800" : r.status === "WAITING" ? "bg-slate-100 text-slate-600" : "bg-slate-100 text-slate-400"}`}>{r.status.toLowerCase()}</span></td>
+                <td className="text-slate-500">{formatDate(r.addedAt)}</td>
+                <td className="text-slate-500">{[r.email, r.phone].filter(Boolean).join(" · ") || "—"}</td>
+              </tr>
+            ))}
+            {waitlist.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-slate-400">No one on any team waitlist right now.</td></tr>}
           </tbody>
         </table>
       </div>
