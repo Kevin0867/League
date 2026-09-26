@@ -106,8 +106,8 @@ export default async function PayPage({
         )}
 
         <p className="mt-2 text-xs text-slate-500">
-          Secure checkout is hosted by Stripe — we never see your card details. The fee reserves a place on a
-          team, not a session count.
+          Secure checkout is hosted by Stripe — we never see your card details. This is your season fee for
+          playing on your team this season.
         </p>
 
         {needsApparel ? (

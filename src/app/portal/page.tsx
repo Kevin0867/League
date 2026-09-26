@@ -392,7 +392,7 @@ export default async function PortalHome({
                 </div>
                 <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
                   <p>
-                    The season fee reserves a place on a team, not a session count. Choose{" "}
+                    This is your season fee for playing on your team this season. Choose{" "}
                     <span className="font-medium">pay in full</span>, or the{" "}
                     <span className="font-medium">3-payment plan</span>. Secure checkout is hosted by Stripe —
                     we never see your card details.

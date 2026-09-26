@@ -22,7 +22,7 @@ export default function SeasonTermsPage() {
             location, day, and time — not at registration.
           </Item>
           <Item>
-            The season fee reserves a place on a team, not a fixed number of sessions.
+            The season fee is for playing on your team for the season — it is a season fee, not a per-session charge.
           </Item>
           <Item>
             <strong>Practices cancelled by PURE for weather, heat, or facility closure are not rescheduled and are
