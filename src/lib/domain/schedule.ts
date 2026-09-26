@@ -82,7 +82,7 @@ export function cancellationOutcome(sessionType: string): CancellationOutcome {
     reschedule: false,
     refund: false,
     courtFeePayable: false,
-    note: "Practice cancellation: no reschedule, no refund or credit, and no court fee at hourly sites. The fee reserves a place on a team, not a session.",
+    note: "Practice cancellation: no reschedule, no refund or credit, and no court fee at hourly sites. The season fee is for the season on the team, not per session.",
   };
 }
 

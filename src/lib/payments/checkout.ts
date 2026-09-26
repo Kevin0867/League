@@ -48,7 +48,7 @@ export async function createCheckoutRedirect(opts: {
     ? "Reserves your spot for this session. Your place is confirmed once payment clears."
     : isCustom
     ? "Payment to PURE Academy / Arizona Club Pickleball."
-    : "Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.";
+    : "Your PURE Academy season fee — you're on the team for the season. Individual practices PURE cancels are not refunded or credited.";
 
   // Dev / unconfigured Stripe, or an explicit admin test — simulate a successful
   // charge, clearly flagged, with no money moved.
@@ -109,7 +109,7 @@ export async function createCheckoutRedirect(opts: {
           metadata: { paymentId: payment.id },
           description: isAlaCarte || isCustom
             ? productBlurb
-            : `One of your 3 season-fee payments (billed every 30 days). Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.`,
+            : `One of your 3 season-fee payments (billed every 30 days) — you're on the team for the season. Individual practices PURE cancels are not refunded or credited.`,
         },
         metadata: { paymentId: payment.id },
         success_url: success,

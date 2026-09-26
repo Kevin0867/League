@@ -42,7 +42,7 @@ export function paymentRequestEmail(opts: {
     emailButton(payInstall, `Prefer 3 payments?`, {
       sub: `Season fee as ${per}/mo × 3; apparel with the first payment`,
     }) +
-    `<p style="margin:14px 0 0;font-size:12px;color:#94a3b8">The fee reserves a place on a team, not a session count. ` +
+    `<p style="margin:14px 0 0;font-size:12px;color:#94a3b8">This is your season fee — you're on the team for the season. ` +
     `The 3-payment plan charges the first payment today and the next two automatically 30 and 60 days later. ` +
     `Secure checkout is hosted by Stripe — we never see your card details.</p>`;
 
@@ -55,7 +55,7 @@ export function paymentRequestEmail(opts: {
     `Choose apparel & pay in full: ${payFull}`,
     `Prefer 3 payments? Season fee as ${per}/mo × 3 (apparel with the first): ${payInstall}`,
     ``,
-    `The fee reserves a place on a team, not a session count.`,
+    `This is your season fee — you're on the team for the season.`,
     `Any issues, contact us at ${SUPPORT_ADDRESS}.`,
   ].join("\n");
 
