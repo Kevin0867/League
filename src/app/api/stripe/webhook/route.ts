@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { audit } from "@/lib/audit";
-import { sendPaymentConfirmation } from "@/lib/payments/receipt";
+import { sendPaymentConfirmation, sendInstallmentReceipt } from "@/lib/payments/receipt";
 import { notifyAdminsPaymentFailed } from "@/lib/payments/adminAlert";
 import { syncRefundsForCharge, paymentForIntent } from "@/lib/payments/refunds";
 import { matchFeeByEmailAndAmount } from "@/lib/payments/match";
@@ -133,6 +133,14 @@ export async function POST(req: Request) {
             },
           });
           await audit({ entityType: "Payment", entityId: payment.id, action: "INSTALLMENT_PAID", summary: `Installment ${paidCount}/${total} paid` });
+          // The 1st payment already sent the full enrollment receipt at checkout.
+          // For the 2nd/3rd, send our own installment-aware confirmation so the
+          // message reflects "payment N of 3" and when the next one charges —
+          // instead of the generic "reserves a place on a team" first-payment copy.
+          if (paidCount >= 2) {
+            const nextChargeAt = done ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            await sendInstallmentReceipt(payment.id, { number: paidCount, total, nextChargeAt }).catch((e) => console.error("installment receipt failed", e));
+          }
           if (done) {
             try { await stripe().subscriptions.cancel(inv.subscription); } catch (e) { console.error("sub cancel failed", e); }
           }

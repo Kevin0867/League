@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/stripe";
 import { formatCents } from "@/lib/money";
-import { sendEmail } from "@/lib/notify";
+import { sendEmail, sendSms } from "@/lib/notify";
 import { coveredIds } from "@/lib/payments/familyFee";
 import { garmentLabel as apparelGarmentLabel, sizeLabel as apparelSizeLabel, apparelTaxCents } from "@/lib/domain/apparel";
 
@@ -242,4 +242,66 @@ export async function sendPaymentConfirmation(paymentId: string) {
     receiptEmailText(receipt),
     receiptEmailHtml(receipt)
   );
+}
+
+/**
+ * Confirmation for a LATER installment (payment 2 or 3 of a 3-payment plan).
+ * The first payment already sent the full enrollment receipt, and the player is
+ * on their team — so these say plainly "this is your Nth of 3 payments," when the
+ * next one charges (~30 days out), and that the last one clears them for the
+ * season. Emails + texts the payer; best-effort.
+ */
+export async function sendInstallmentReceipt(
+  paymentId: string,
+  opts: { number: number; total: number; nextChargeAt: Date | null },
+): Promise<void> {
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    include: { party: true, season: { select: { name: true } } },
+  });
+  if (!payment) return;
+  const email = payment.party?.email ?? null;
+  const phone = payment.party?.phone ?? null;
+  if (!email && !phone) return;
+
+  const name = payment.party?.firstName ?? "there";
+  const { number, total } = opts;
+  const per = formatCents(Math.round(payment.amountCents / (total || 3)));
+  const ordinal = number === 1 ? "1st" : number === 2 ? "2nd" : number === 3 ? "3rd" : `${number}th`;
+  const isFinal = number >= total;
+  const seasonName = payment.season?.name ?? "PURE Academy";
+  const nextLine = isFinal
+    ? "This was your final payment — you're all paid up for the season. 🎉"
+    : `Your next payment (${per}) will be charged automatically about 30 days from now${opts.nextChargeAt ? `, on ${fmtDate(opts.nextChargeAt)}` : ""}.`;
+
+  const subject = isFinal
+    ? `Final payment received — you're paid in full (${number} of ${total}) · PURE Academy`
+    : `Payment ${number} of ${total} received · PURE Academy`;
+  const intro = `Hi ${name}, we received your ${ordinal} of ${total} season-fee payments (${per}) for ${seasonName}.`;
+  const footer = `You're already on your team — the 3-payment plan just spreads the season fee across 3 charges. Individual practices PURE cancels are not refunded or credited. Questions? ${SUPPORT_ADDRESS}${SUPPORT_PHONE ? ` or ${SUPPORT_PHONE}` : ""}.`;
+  const text = `${intro} ${nextLine}\n\n${footer}`;
+
+  const base = appUrl();
+  const html = `<!doctype html><html><body style="margin:0;background:#f1f5f9;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+  <table style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0">
+    <tr><td style="padding:16px 22px;border-bottom:1px solid #e2e8f0">
+      <img src="${base}${ACADEMY_LOGO}" alt="PURE Academy" height="38" style="height:38px;border-radius:6px">
+    </td></tr>
+    <tr><td style="padding:24px 22px 6px">
+      <h1 style="margin:0 0 6px;font-size:21px;color:#0f172a">Payment ${number} of ${total} received</h1>
+      <p style="margin:0;color:#475569;font-size:15px">${intro}</p>
+    </td></tr>
+    <tr><td style="padding:10px 22px">
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">
+        <p style="margin:0;font-size:15px;color:#0f172a"><strong>${per}</strong> — payment ${number} of ${total}</p>
+        <p style="margin:8px 0 0;font-size:14px;color:${isFinal ? "#047857" : "#475569"}">${nextLine}</p>
+      </div>
+    </td></tr>
+    <tr><td style="padding:8px 22px 26px">
+      <p style="margin:0;color:#64748b;font-size:13px">${footer.replace(SUPPORT_ADDRESS, `<a href="mailto:${SUPPORT_ADDRESS}" style="color:#4338ca">${SUPPORT_ADDRESS}</a>`)}</p>
+    </td></tr>
+  </table></body></html>`;
+
+  if (email) await sendEmail(email, subject, text, html).catch(() => {});
+  if (phone) await sendSms(phone, `${intro} ${nextLine}`).catch(() => {});
 }

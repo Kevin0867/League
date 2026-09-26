@@ -101,7 +101,16 @@ export async function createCheckoutRedirect(opts: {
           },
           ...apparel,
         ],
-        subscription_data: { metadata: { paymentId: payment.id }, description: productBlurb },
+        // Installment-plan wording (not the one-time "reserves a place" copy), so
+        // every recurring charge reads as one of the 3 season-fee payments rather
+        // than a brand-new reservation. Per-installment "N of 3" detail is sent in
+        // our own confirmation email/text on each charge.
+        subscription_data: {
+          metadata: { paymentId: payment.id },
+          description: isAlaCarte || isCustom
+            ? productBlurb
+            : `One of your 3 season-fee payments (billed every 30 days). Reserves a place on a team, not a session count. Individual practices PURE cancels are not refunded or credited.`,
+        },
         metadata: { paymentId: payment.id },
         success_url: success,
         cancel_url: cancel,
