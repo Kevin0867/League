@@ -832,40 +832,30 @@ export function addBillingIntervals(from: Date, n: number, interval: string, int
  * the 2nd/3rd charges read correctly. Only our plans (they carry a paymentId in
  * metadata) are touched; idempotent. Returns how many were scanned/updated.
  */
-// The clean product name behind a season-fee plan's recurring price. Stripe's
-// merchant "you received a payment" email and the customer receipt render the
-// invoice LINE-ITEM text, which comes from the price's PRODUCT name — not from
-// the subscription's description. So the old "reserves a place" wording that
-// survives on 2nd/3rd charges lives on the product, and both fields must be
-// brought in line for the emails to read correctly.
-const SEASON_PLAN_PRODUCT_NAME = "PURE Academy season fee — 3-payment plan";
-
 export async function updateSubscriptionDescriptions(): Promise<{
   scanned: number;
   updated: number;
   alreadyOk: number;
   failed: number;
-  productsUpdated: number;
   firstError?: string;
   sample?: string;
   productSample?: string;
 }> {
-  if (!isStripeConfigured()) return { scanned: 0, updated: 0, alreadyOk: 0, failed: 0, productsUpdated: 0, firstError: "Stripe not configured" };
+  if (!isStripeConfigured()) return { scanned: 0, updated: 0, alreadyOk: 0, failed: 0, firstError: "Stripe not configured" };
   const client = stripe();
   const CHARGING = new Set(["active", "past_due", "trialing", "unpaid"]);
-  let scanned = 0, updated = 0, alreadyOk = 0, failed = 0, productsUpdated = 0;
+  let scanned = 0, updated = 0, alreadyOk = 0, failed = 0;
   let firstError: string | undefined;
   let sample: string | undefined;
   let productSample: string | undefined;
-  const seenProducts = new Set<string>();
   try {
-    for await (const sub of client.subscriptions.list({ status: "all", limit: 100, expand: ["data.items.data.price"] })) {
+    for await (const sub of client.subscriptions.list({ status: "all", limit: 100, expand: ["data.items.data.price.product"] })) {
       const s = sub as unknown as {
         id: string;
         status: string;
         description?: string | null;
         metadata?: Record<string, string> | null;
-        items?: { data?: Array<{ price?: { product?: string | { id?: string } | null } | null }> } | null;
+        items?: { data?: Array<{ price?: { product?: string | { name?: string | null } | null } | null }> } | null;
       };
       if (!CHARGING.has(s.status)) continue;
       if (!s.metadata?.paymentId) continue; // only our season-fee plans
@@ -873,46 +863,32 @@ export async function updateSubscriptionDescriptions(): Promise<{
       // Capture the first plan's current description so we can see WHERE the shown
       // text lives if nothing appears to need changing.
       if (sample === undefined) sample = (s.description ?? "(none)").slice(0, 120);
-
-      // 1) Subscription description (shown in the Dashboard / some receipts).
-      if ((s.description ?? "") === SEASON_SUBSCRIPTION_DESCRIPTION) {
-        alreadyOk++;
-      } else {
-        try {
-          await client.subscriptions.update(s.id, { description: SEASON_SUBSCRIPTION_DESCRIPTION });
-          updated++;
-        } catch (e) {
-          failed++;
-          if (!firstError) firstError = (e instanceof Error ? e.message : String(e)).slice(0, 200);
-          console.error("subscription description update failed", s.id, e);
-        }
+      // Also surface the charge LABEL (the price's product name) Stripe renders on
+      // the "payment received" email + receipt — read-only. These are auto-created
+      // products Stripe only lets us edit metadata on, and they already carry a
+      // clean, personalized season-fee label (player + team + 3-payment plan), so
+      // there's nothing to rewrite there.
+      if (productSample === undefined) {
+        const prod = s.items?.data?.[0]?.price?.product;
+        if (prod && typeof prod !== "string" && prod.name) productSample = prod.name.slice(0, 120);
       }
 
-      // 2) The price's PRODUCT name — this is the line-item text Stripe renders on
-      // the "payment received" merchant email and the customer receipt. Each plan
-      // was created with its own inline (ad-hoc) product, so renaming one never
-      // touches another plan. Dedupe by product id in case any are shared.
-      for (const item of s.items?.data ?? []) {
-        const prod = item.price?.product;
-        const productId = typeof prod === "string" ? prod : prod?.id;
-        if (!productId || seenProducts.has(productId)) continue;
-        seenProducts.add(productId);
-        try {
-          const product = (await client.products.retrieve(productId)) as unknown as { id: string; name?: string | null };
-          if (productSample === undefined) productSample = (product.name ?? "(none)").slice(0, 120);
-          if ((product.name ?? "") !== SEASON_PLAN_PRODUCT_NAME) {
-            await client.products.update(productId, { name: SEASON_PLAN_PRODUCT_NAME });
-            productsUpdated++;
-          }
-        } catch (e) {
-          if (!firstError) firstError = (e instanceof Error ? e.message : String(e)).slice(0, 200);
-          console.error("product name update failed", productId, e);
-        }
+      if ((s.description ?? "") === SEASON_SUBSCRIPTION_DESCRIPTION) {
+        alreadyOk++;
+        continue;
+      }
+      try {
+        await client.subscriptions.update(s.id, { description: SEASON_SUBSCRIPTION_DESCRIPTION });
+        updated++;
+      } catch (e) {
+        failed++;
+        if (!firstError) firstError = (e instanceof Error ? e.message : String(e)).slice(0, 200);
+        console.error("subscription description update failed", s.id, e);
       }
     }
   } catch (e) {
     if (!firstError) firstError = (e instanceof Error ? e.message : String(e)).slice(0, 200);
     console.error("updateSubscriptionDescriptions failed", e);
   }
-  return { scanned, updated, alreadyOk, failed, productsUpdated, firstError, sample, productSample };
+  return { scanned, updated, alreadyOk, failed, firstError, sample, productSample };
 }

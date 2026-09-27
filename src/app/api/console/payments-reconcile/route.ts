@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       const r = await updateSubscriptionDescriptions();
       await audit({
         actorId: actor.userId, entityType: "Payment", entityId: "reconcile", action: "SUBS_DESCRIPTION_FIX",
-        summary: `Updated ${r.updated} of ${r.scanned} plan description(s) + ${r.productsUpdated} product name(s) to current fee copy${r.failed ? ` — ${r.failed} failed${r.firstError ? `: ${r.firstError}` : ""}` : ""}`,
+        summary: `Updated ${r.updated} of ${r.scanned} active plan description(s) to current fee copy${r.failed ? ` — ${r.failed} failed${r.firstError ? `: ${r.firstError}` : ""}` : ""}`,
       });
       const params = new URLSearchParams({
         subdescok: "1",
@@ -75,7 +75,6 @@ export async function POST(req: Request) {
         scanned: String(r.scanned),
         alreadyok: String(r.alreadyOk),
         failed: String(r.failed),
-        prodsupd: String(r.productsUpdated),
       });
       if (r.firstError) params.set("subdescwhy", r.firstError.slice(0, 200));
       if (r.sample) params.set("subdescsample", r.sample.slice(0, 200));
