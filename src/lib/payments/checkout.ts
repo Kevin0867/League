@@ -5,6 +5,7 @@ import { INSTALLMENT_COUNT, INSTALLMENT_INTERVAL_DAYS, sendPaymentConfirmation }
 import { apparelLineItems } from "@/lib/payments/apparel";
 import { audit } from "@/lib/audit";
 import { placeTeamRecruitForPayment } from "@/lib/domain/openSpots";
+import { SEASON_SUBSCRIPTION_DESCRIPTION } from "@/lib/payments/feeCopy";
 
 // Shared season-fee checkout. Used by both the authenticated portal (which adds
 // a household authorization check before calling this) and the PUBLIC pay page
@@ -107,9 +108,7 @@ export async function createCheckoutRedirect(opts: {
         // our own confirmation email/text on each charge.
         subscription_data: {
           metadata: { paymentId: payment.id },
-          description: isAlaCarte || isCustom
-            ? productBlurb
-            : `One of your 3 season-fee payments (billed every 30 days) — you're on the team for the season. Individual practices PURE cancels are not refunded or credited.`,
+          description: isAlaCarte || isCustom ? productBlurb : SEASON_SUBSCRIPTION_DESCRIPTION,
         },
         metadata: { paymentId: payment.id },
         success_url: success,

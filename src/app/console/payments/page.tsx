@@ -411,6 +411,16 @@ export default async function PaymentsPage({
               Undo pre-today import
             </button>
           </form>
+          <form method="POST" action="/api/console/payments-reconcile">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="fix-sub-descriptions" />
+            <button
+              className="btn-secondary text-sm"
+              title="Update existing 3-payment-plan subscriptions in Stripe to the current fee wording, so their 2nd/3rd charges no longer show the old 'reserves a place' text."
+            >
+              Fix plan descriptions
+            </button>
+          </form>
           <PrintButton label="Print" />
         </div>
       </div>
@@ -686,6 +696,12 @@ export default async function PaymentsPage({
       {sp.zeroremoved && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Removed <strong>{sp.zeroremoved} zero-dollar imported charge{Number(sp.zeroremoved) === 1 ? "" : "s"}</strong> (Stripe card verifications — no revenue).
+        </div>
+      )}
+
+      {sp.subdescok && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Updated <strong>{sp.updated ?? "0"}</strong> of {sp.scanned ?? "0"} active plan subscription{Number(sp.scanned) === 1 ? "" : "s"} to the current fee wording — their remaining charges (and Stripe receipts) will now read correctly.
         </div>
       )}
 

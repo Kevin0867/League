@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { matchFeeByEmailAndAmount, matchFeeByPlayerName, playerNameFromText } from "@/lib/payments/match";
 import { placeTeamRecruitForPayment, placePaidUnplacedRecruits } from "@/lib/domain/openSpots";
+import { SEASON_SUBSCRIPTION_DESCRIPTION } from "@/lib/payments/feeCopy";
 
 // Reconcile local Payment rows against Stripe — the safety net for payments that
 // were completed in Stripe but never marked PAID here (a missed / mis-signed
@@ -820,4 +821,39 @@ export function addBillingIntervals(from: Date, n: number, interval: string, int
     default: d.setUTCMonth(d.getUTCMonth() + step); break;
   }
   return d;
+}
+
+/**
+ * Bring EXISTING 3-payment-plan subscriptions in line with the current fee copy.
+ * A subscription's description is fixed at sign-up, so plans created before the
+ * wording changed still show the old "reserves a place" text on their remaining
+ * charges (and on Stripe's receipts / merchant notifications). This updates every
+ * still-charging season-fee subscription's description to the current wording, so
+ * the 2nd/3rd charges read correctly. Only our plans (they carry a paymentId in
+ * metadata) are touched; idempotent. Returns how many were scanned/updated.
+ */
+export async function updateSubscriptionDescriptions(): Promise<{ scanned: number; updated: number }> {
+  if (!isStripeConfigured()) return { scanned: 0, updated: 0 };
+  const client = stripe();
+  const CHARGING = new Set(["active", "past_due", "trialing", "unpaid"]);
+  let scanned = 0;
+  let updated = 0;
+  try {
+    for await (const sub of client.subscriptions.list({ status: "all", limit: 100 })) {
+      const s = sub as unknown as { id: string; status: string; description?: string | null; metadata?: Record<string, string> | null };
+      if (!CHARGING.has(s.status)) continue;
+      if (!s.metadata?.paymentId) continue; // only our season-fee plans
+      scanned++;
+      if ((s.description ?? "") === SEASON_SUBSCRIPTION_DESCRIPTION) continue;
+      try {
+        await client.subscriptions.update(s.id, { description: SEASON_SUBSCRIPTION_DESCRIPTION });
+        updated++;
+      } catch (e) {
+        console.error("subscription description update failed", s.id, e);
+      }
+    }
+  } catch (e) {
+    console.error("updateSubscriptionDescriptions failed", e);
+  }
+  return { scanned, updated };
 }
