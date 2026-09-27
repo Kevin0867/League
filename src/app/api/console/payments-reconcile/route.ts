@@ -4,7 +4,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { isStripeConfigured } from "@/lib/stripe";
-import { reconcileStripePayments, undoStripeImport } from "@/lib/payments/reconcile";
+import { reconcileStripePayments, undoStripeImport, updateSubscriptionDescriptions } from "@/lib/payments/reconcile";
 
 // Reconcile local payments against Stripe: find any payment completed in Stripe
 // but not yet recorded PAID here, and record it. Idempotent — safe to re-run.
@@ -56,6 +56,23 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error("undo import failed", e);
       return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "undo failed")}`);
+    }
+  }
+
+  // Bring existing 3-payment-plan subscriptions in line with the current fee copy
+  // (plans created before the wording change still show the old "reserves a place"
+  // text on their remaining charges + Stripe receipts). Idempotent.
+  if (String(fd.get("op") ?? "") === "fix-sub-descriptions") {
+    try {
+      const r = await updateSubscriptionDescriptions();
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: "reconcile", action: "SUBS_DESCRIPTION_FIX",
+        summary: `Updated ${r.updated} of ${r.scanned} active plan subscription description(s) to current fee copy`,
+      });
+      return back(`?subdescok=1&updated=${r.updated}&scanned=${r.scanned}`);
+    } catch (e) {
+      console.error("fix sub descriptions failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "update failed")}`);
     }
   }
 
