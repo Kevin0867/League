@@ -700,8 +700,25 @@ export default async function PaymentsPage({
       )}
 
       {sp.subdescok && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Updated <strong>{sp.updated ?? "0"}</strong> of {sp.scanned ?? "0"} active plan subscription{Number(sp.scanned) === 1 ? "" : "s"} to the current fee wording — their remaining charges (and Stripe receipts) will now read correctly.
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 space-y-1">
+          <div>
+            Updated <strong>{sp.updated ?? "0"}</strong> of {sp.scanned ?? "0"} active plan{Number(sp.scanned) === 1 ? "" : "s"} plus <strong>{sp.prodsupd ?? "0"}</strong> charge label{Number(sp.prodsupd) === 1 ? "" : "s"} to the current fee wording — their remaining charges (and Stripe receipts) will now read correctly.
+          </div>
+          {(Number(sp.alreadyok ?? 0) > 0 || Number(sp.failed ?? 0) > 0) && (
+            <div className="text-xs text-emerald-700">
+              {Number(sp.alreadyok ?? 0) > 0 && <>Already up to date: <strong>{sp.alreadyok}</strong>. </>}
+              {Number(sp.failed ?? 0) > 0 && <>Failed: <strong>{sp.failed}</strong>. </>}
+            </div>
+          )}
+          {sp.subdescwhy && (
+            <div className="text-xs text-rose-700">Stripe error: {sp.subdescwhy}</div>
+          )}
+          {sp.subdescsample && (
+            <div className="text-xs text-emerald-700">Sample plan description before fix: <em>&ldquo;{sp.subdescsample}&rdquo;</em></div>
+          )}
+          {sp.subdescprod && (
+            <div className="text-xs text-emerald-700">Sample charge label before fix: <em>&ldquo;{sp.subdescprod}&rdquo;</em></div>
+          )}
         </div>
       )}
 
