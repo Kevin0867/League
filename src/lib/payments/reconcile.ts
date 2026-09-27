@@ -823,14 +823,23 @@ export function addBillingIntervals(from: Date, n: number, interval: string, int
   return d;
 }
 
+// A subscription is unmistakably one of ours if its description carries our
+// old season-fee wording. The very first plans were created before we stamped
+// `metadata.paymentId`, so they can't be matched by metadata — but their
+// description still says "Reserves a place on a team" / "not a session count",
+// phrases that only ever appeared in PURE's fee copy. Matching on those lets us
+// fix those stragglers without ever touching an unrelated subscription.
+const OLD_FEE_WORDING = /Reserves a place on a team|not a session count|season-fee payments/i;
+
 /**
  * Bring EXISTING 3-payment-plan subscriptions in line with the current fee copy.
  * A subscription's description is fixed at sign-up, so plans created before the
  * wording changed still show the old "reserves a place" text on their remaining
  * charges (and on Stripe's receipts / merchant notifications). This updates every
  * still-charging season-fee subscription's description to the current wording, so
- * the 2nd/3rd charges read correctly. Only our plans (they carry a paymentId in
- * metadata) are touched; idempotent. Returns how many were scanned/updated.
+ * the 2nd/3rd charges read correctly. We match our plans either by the paymentId
+ * we stamp in metadata OR — for the oldest plans created before that stamp — by
+ * their tell-tale old fee wording, so no PURE plan is missed. Idempotent.
  */
 export async function updateSubscriptionDescriptions(): Promise<{
   scanned: number;
@@ -858,7 +867,11 @@ export async function updateSubscriptionDescriptions(): Promise<{
         items?: { data?: Array<{ price?: { product?: string | { name?: string | null } | null } | null }> } | null;
       };
       if (!CHARGING.has(s.status)) continue;
-      if (!s.metadata?.paymentId) continue; // only our season-fee plans
+      // Ours by the paymentId we stamp, or — for the oldest plans that predate
+      // that stamp — by our unmistakable old fee wording. Never touch anything
+      // that is neither.
+      const isOurs = !!s.metadata?.paymentId || OLD_FEE_WORDING.test(s.description ?? "");
+      if (!isOurs) continue;
       scanned++;
       // Capture the first plan's current description so we can see WHERE the shown
       // text lives if nothing appears to need changing.
