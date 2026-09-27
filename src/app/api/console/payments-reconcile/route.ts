@@ -67,9 +67,20 @@ export async function POST(req: Request) {
       const r = await updateSubscriptionDescriptions();
       await audit({
         actorId: actor.userId, entityType: "Payment", entityId: "reconcile", action: "SUBS_DESCRIPTION_FIX",
-        summary: `Updated ${r.updated} of ${r.scanned} active plan subscription description(s) to current fee copy`,
+        summary: `Updated ${r.updated} of ${r.scanned} plan description(s) + ${r.productsUpdated} product name(s) to current fee copy${r.failed ? ` — ${r.failed} failed${r.firstError ? `: ${r.firstError}` : ""}` : ""}`,
       });
-      return back(`?subdescok=1&updated=${r.updated}&scanned=${r.scanned}`);
+      const params = new URLSearchParams({
+        subdescok: "1",
+        updated: String(r.updated),
+        scanned: String(r.scanned),
+        alreadyok: String(r.alreadyOk),
+        failed: String(r.failed),
+        prodsupd: String(r.productsUpdated),
+      });
+      if (r.firstError) params.set("subdescwhy", r.firstError.slice(0, 200));
+      if (r.sample) params.set("subdescsample", r.sample.slice(0, 200));
+      if (r.productSample) params.set("subdescprod", r.productSample.slice(0, 200));
+      return back(`?${params.toString()}`);
     } catch (e) {
       console.error("fix sub descriptions failed", e);
       return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "update failed")}`);
