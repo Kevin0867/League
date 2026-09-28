@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { isSessionComplete, alaCarteEarnedCents } from "@/lib/domain/coachPay";
 import { coachSessionPayCents } from "@/lib/domain/finance";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
-import { leagueChampionshipCoachSessions } from "@/lib/domain/pnl";
+import { leagueChampionshipCoachSessions, teamPracticeCoachSessions } from "@/lib/domain/pnl";
 
 // Per-coach earned-fee breakdown, derived from the same source of truth as the
 // payout register: a coach earns on every session they were the PAYABLE coach
@@ -72,47 +72,29 @@ export async function coachEarnings(opts?: { coachId?: string; now?: Date }): Pr
     : coaches;
   const nameByCoachId = new Map(allCoachNames.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`.trim()]));
 
-  // Payable rows for the coach(es) in scope, joined to their session.
-  const rows = await prisma.sessionCoach.findMany({
-    // Exclude test-team sessions — no one earns real pay for the test team.
-    where: { payable: true, session: { teams: { some: { team: { isTest: false } } } }, ...(opts?.coachId ? { coachId: opts.coachId } : {}) },
-    select: {
-      coachId: true,
-      role: true,
-      paidIfCancelled: true,
-      session: { select: { id: true, date: true, startTime: true, endTime: true, status: true, type: true, teams: { select: { team: { select: { name: true } } } } } },
-    },
-  });
-  const earnedRows = rows.filter((r) => r.paidIfCancelled || isSessionComplete(r.session, now));
-
-  // Resolve who each substitute covered: the PRIMARY coach on that session.
-  const subSessionIds = [...new Set(earnedRows.filter((r) => r.role === "SUBSTITUTE").map((r) => r.session.id))];
-  const primaryBySession = new Map<string, string>();
-  if (subSessionIds.length) {
-    const primaries = await prisma.sessionCoach.findMany({
-      where: { sessionId: { in: subSessionIds }, role: "PRIMARY" },
-      select: { sessionId: true, coachId: true },
-    });
-    for (const p of primaries) primaryBySession.set(p.sessionId, nameByCoachId.get(p.coachId) ?? "another coach");
-  }
-
+  // Practice earnings: capped at six sessions per team (make-ups / extra practices
+  // never push a team past its six weeks), credited to the payable coach of that
+  // week — a covering substitute, not the regular coach. Counted once delivered
+  // (class over, or a paid cancellation). League/championship added below.
+  const practiceSlots = await teamPracticeCoachSessions();
   const byCoach = new Map<string, EarnedSession[]>();
-  for (const r of earnedRows) {
-    const base = baseFor(coaches.find((c) => c.id === r.coachId)?.seasonPayCents ?? null);
-    const teamName = r.session.teams.map((t) => t.team.name).join(", ") || null;
+  for (const s of practiceSlots) {
+    if (opts?.coachId && s.coachId !== opts.coachId) continue;
+    if (!(s.paidIfCancelled || isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now))) continue;
+    const base = baseFor(coaches.find((c) => c.id === s.coachId)?.seasonPayCents ?? null);
     const es: EarnedSession = {
-      sessionId: r.session.id,
-      date: r.session.date,
-      startTime: r.session.startTime,
-      endTime: r.session.endTime,
-      teamName,
-      role: r.role,
-      coveringForName: r.role === "SUBSTITUTE" ? primaryBySession.get(r.session.id) ?? null : null,
-      payCents: coachSessionPayCents(r.role, base, assistantPct, proPerSession),
+      sessionId: s.sessionId,
+      date: s.date,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      teamName: s.teamName,
+      role: s.role,
+      coveringForName: s.role === "SUBSTITUTE" && s.coveringForCoachId ? nameByCoachId.get(s.coveringForCoachId) ?? "another coach" : null,
+      payCents: coachSessionPayCents(s.role, base, assistantPct, proPerSession),
     };
-    const list = byCoach.get(r.coachId) ?? [];
+    const list = byCoach.get(s.coachId) ?? [];
     list.push(es);
-    byCoach.set(r.coachId, list);
+    byCoach.set(s.coachId, list);
   }
 
   // League nights (weeks 7–11) & championship (week 12) pay each team's coach a

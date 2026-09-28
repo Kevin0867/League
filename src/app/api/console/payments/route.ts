@@ -12,8 +12,8 @@ import {
   type FacilityRates,
   type DeliveredSession,
 } from "@/lib/domain/finance";
-import { payableCompletedRows, alaCarteEarnedCents } from "@/lib/domain/coachPay";
-import { leagueChampionshipCoachSessions } from "@/lib/domain/pnl";
+import { alaCarteEarnedCents, isSessionComplete } from "@/lib/domain/coachPay";
+import { leagueChampionshipCoachSessions, teamPracticeCoachSessions } from "@/lib/domain/pnl";
 
 // Payments mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -286,15 +286,22 @@ async function generatePayoutRun(
   const coaches = await prisma.coach.findMany({ include: { person: true } });
   let lines = 0;
 
-  // Sessions that are COMPLETE (end time passed, not cancelled) and PAYABLE for
-  // this coach — pay follows whoever actually covered the class, credited on
-  // completion, no check-out required. Fetched once for the whole run.
-  const paidRows = await payableCompletedRows({ periodStart: start, periodEnd: end });
+  const mm = String(month).padStart(2, "0");
+  const monthStart = `${year}-${mm}-01`, monthEnd = `${year}-${mm}-31`;
+  const now = new Date();
+
+  // Practice sessions that are COMPLETE (or a paid cancellation) and PAYABLE, in
+  // this period. Pay follows whoever actually covered the class — a covering sub,
+  // not the regular coach. CAPPED at six per team, so make-ups / extra practices
+  // never pay a team past its six weeks. Fetched once for the whole run.
+  const practiceSlots = await teamPracticeCoachSessions();
   const rowsByCoach = new Map<string, string[]>();
-  for (const r of paidRows) {
-    const list = rowsByCoach.get(r.coachId) ?? [];
-    list.push(r.role);
-    rowsByCoach.set(r.coachId, list);
+  for (const s of practiceSlots) {
+    if (s.date < start || s.date > end) continue;
+    if (!(s.paidIfCancelled || isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now))) continue;
+    const list = rowsByCoach.get(s.coachId) ?? [];
+    list.push(s.role);
+    rowsByCoach.set(s.coachId, list);
   }
 
   // League nights (weeks 7–11) & championship (week 12) pay each team's coach one
@@ -302,9 +309,6 @@ async function generatePayoutRun(
   // season. They're not practice sessions, so they come from the per-team calendar
   // helper; counted here once the week has arrived (delivered) and it falls in this
   // payout period.
-  const mm = String(month).padStart(2, "0");
-  const monthStart = `${year}-${mm}-01`, monthEnd = `${year}-${mm}-31`;
-  const now = new Date();
   const leagueSessions = await leagueChampionshipCoachSessions();
   const leagueCountByCoach = new Map<string, number>();
   const leaguePayByCoach = new Map<string, number>();

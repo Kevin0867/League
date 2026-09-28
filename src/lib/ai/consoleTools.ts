@@ -6,8 +6,8 @@ import { formatTime12 } from "@/lib/time";
 import { getSeasonStats, DEAD_REG_STATUS, UNASSIGNED_STATUS } from "@/lib/domain/seasonStats";
 import { personSearchOR } from "@/lib/domain/personSearch";
 import { audit } from "@/lib/audit";
-import { TEAM_CAP, TEAM_MAX, COACH_PER_SESSION_CENTS } from "@/lib/enums";
-import { payableCompletedRows } from "@/lib/domain/coachPay";
+import { TEAM_CAP, TEAM_MAX } from "@/lib/enums";
+import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
 
 /** Context passed to tool execution — identifies the actor and whether they may
@@ -345,21 +345,15 @@ async function revenueSummary(): Promise<ToolResult> {
   // payable coach on, at their profile rate (season pay ÷ 12, else the default),
   // plus facility amounts due. This replaces the misleading all-time "paid out"
   // sum of OUT rows (which includes historical/test disbursements).
-  const SESSIONS_PER_SEASON = 12;
-  const [coachPayoutAgg, facilityDueAgg, paidRows, coachRates] = await Promise.all([
+  const [coachPayoutAgg, facilityDueAgg, coachEarn] = await Promise.all([
     prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
     prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
-    payableCompletedRows(),
-    prisma.coach.findMany({ select: { id: true, seasonPayCents: true } }),
+    // Same source of truth as the Payments page & payouts drill-down: capped-per-
+    // team practice pay (make-ups / extras never exceed a team's six weeks) plus
+    // delivered league/championship sessions and à la carte, so figures reconcile.
+    coachEarnings(),
   ]);
-  const completedByCoach = new Map<string, number>();
-  for (const r of paidRows) completedByCoach.set(r.coachId, (completedByCoach.get(r.coachId) ?? 0) + 1);
-  const rateMap = new Map(coachRates.map((c) => [c.id, c.seasonPayCents]));
-  const perSessionFor = (coachId: string) => {
-    const sp = rateMap.get(coachId);
-    return sp && sp > 0 ? Math.round(sp / SESSIONS_PER_SEASON) : COACH_PER_SESSION_CENTS;
-  };
-  const accruedCoachCents = [...completedByCoach.entries()].reduce((s, [coachId, count]) => s + perSessionFor(coachId) * count, 0);
+  const accruedCoachCents = coachEarn.reduce((s, c) => s + c.totalCents, 0);
   const coachPayoutCents = coachPayoutAgg._sum.totalCents ?? 0;
   const coachEstCents = coachPayoutCents > 0 ? coachPayoutCents : accruedCoachCents;
   const facilityEstCents = facilityDueAgg._sum.amountDueCents ?? 0;

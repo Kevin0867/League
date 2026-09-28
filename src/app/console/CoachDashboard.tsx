@@ -5,8 +5,7 @@ import { formatTime12, formatDate, formatSessionDay } from "@/lib/time";
 import { mintConsoleTicket } from "@/lib/auth";
 import { formatCents } from "@/lib/money";
 import { coachAssignmentGate } from "@/lib/domain/teams";
-import { payableCompletedRows, alaCarteEarnedCents } from "@/lib/domain/coachPay";
-import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
+import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { ensureCoachCalendarToken } from "@/lib/domain/coachCalendar";
 import { signWaiverToken } from "@/lib/domain/waiverRenewal";
 import { CopyLink } from "@/components/CopyLink";
@@ -52,7 +51,7 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
   const pendingWhere = coach
     ? { coaches: { some: { coachId: coach.id } }, status: "SCHEDULED", date: { lt: startOfTomorrow() }, teams: { some: {} } }
     : undefined;
-  const [headTeams, upcoming, pendingAttendance, pendingCount, myCompletedRows, alaEarnedCents] = coach
+  const [headTeams, upcoming, pendingAttendance, pendingCount, myEarn] = coach
     ? await Promise.all([
         prisma.team.findMany({
           where: { OR: [{ coachId: coach.id }, { assistantCoaches: { some: { coachId: coach.id } } }] },
@@ -72,20 +71,15 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           take: 8,
         }),
         prisma.session.count({ where: pendingWhere }),
-        // Sessions you were the payable coach on that are now COMPLETE (end time
-        // passed) — pay accrues here automatically, no check-out needed.
-        payableCompletedRows({ coachId: coach.id }),
-        alaCarteEarnedCents({ coachId: coach.id }),
+        // Same source of truth as the admin payouts view: capped-per-team practice
+        // pay (make-ups / extras never push a team past its six weeks), delivered
+        // league/championship sessions, plus private lessons/clinics.
+        coachEarnings({ coachId: coach.id }),
       ])
-    : [[], [], [], 0, [] as { coachId: string; role: string }[], 0];
+    : [[], [], [], 0, [] as Awaited<ReturnType<typeof coachEarnings>>];
 
-  // Live earned-to-date: completed sessions × the coach's per-session rate
-  // (season pay ÷ 12, else the default) + private-lesson/clinic earnings that are
-  // over (accepted/delivered and the scheduled time has passed).
-  const perSessionCents = coach && coach.seasonPayCents && coach.seasonPayCents > 0
-    ? Math.round(coach.seasonPayCents / 12)
-    : COACH_PER_SESSION_CENTS;
-  const earnedCents = myCompletedRows.length * perSessionCents + alaEarnedCents;
+  // Live earned-to-date — matches what the admin sees on the payouts page.
+  const earnedCents = (Array.isArray(myEarn) ? myEarn[0]?.totalCents : undefined) ?? 0;
 
   // Open sub requests this coach could cover (not their own), + a ticket to act.
   const [openSubs, subTicket] = coach
