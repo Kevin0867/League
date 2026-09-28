@@ -5,6 +5,7 @@ import { phoenixDateInput } from "@/lib/time";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { isSessionComplete } from "@/lib/domain/coachPay";
 import { coachSessionPayCents } from "@/lib/domain/finance";
+import { getSeasonWeeks } from "@/lib/domain/seasonCalendar";
 import { stripeChargesSince, paymentsSince, activeSubscriptionSchedules, addBillingIntervals, type SubSchedule } from "@/lib/payments/reconcile";
 
 const SESSIONS_PER_SEASON = 12;
@@ -410,6 +411,21 @@ export async function coachCostByCoachBetween(fromDay: string, toDay: string, ba
       byCoach.set(c.coachId, cc);
     }
   }
+
+  // League nights (weeks 7–11) + championship (week 12), one coaching session per
+  // team for its coach(es), so every team totals 12 sessions ($1,200) across the
+  // season. Basis-aware: delivered = the week has arrived; scheduled = all of them.
+  const leagueSessions = await leagueChampionshipCoachSessions();
+  for (const ls of leagueSessions) {
+    if (ls.day < fromDay || ls.day > toDay) continue;
+    if (basis === "delivered" && ls.date.getTime() > now.getTime()) continue;
+    const cents = coachSessionPayCents(ls.role, baseFor(ls.coachId), assistantPct, proPer);
+    const cc = byCoach.get(ls.coachId) ?? { coachId: ls.coachId, name: nameById.get(ls.coachId) ?? "Coach", cents: 0, lines: [] };
+    cc.cents += cents;
+    cc.lines.push({ day: ls.day, startTime: ls.startTime, teamName: ls.teamName, role: ls.role, cents });
+    byCoach.set(ls.coachId, cc);
+  }
+
   return [...byCoach.values()]
     .map((c) => ({ ...c, lines: c.lines.sort((a, b) => a.day.localeCompare(b.day) || a.startTime.localeCompare(b.startTime)) }))
     .sort((a, b) => b.cents - a.cents);
@@ -504,6 +520,59 @@ export async function leagueChampionshipDays(opts?: { now?: Date; fromDay?: stri
     }
   }
   return [...byDay.entries()].map(([day, v]) => ({ date: v.date, day, delivered: v.delivered })).sort((a, b) => a.day.localeCompare(b.day));
+}
+
+export type LeagueChampCoachSession = {
+  coachId: string;
+  date: Date;
+  day: string;                 // Phoenix "YYYY-MM-DD" (the league/championship week)
+  startTime: string;           // representative start (evening league / morning champ)
+  teamName: string;            // "<team> — ACP league night N" / "… — ACP Championship"
+  role: "PRIMARY" | "ASSISTANT";
+  weekNumber: number | null;
+  kind: "league" | "championship";
+};
+
+/**
+ * League & championship coaching sessions, attributed PER TEAM to that team's
+ * coach(es) — the source of truth for "$1,200 per team for the season". Each
+ * non-test team contributes, on top of its 6 practice weeks, one coaching
+ * session for every league week (7–11) and the championship week (12) from the
+ * season's 12-week calendar — so a team's head coach earns 12 sessions total.
+ * Head coach earns PRIMARY; assistants earn ASSISTANT (priced by the caller).
+ * Dates come from the season's edited calendar (falls back to the template), so
+ * these land in the right P&L month/range. Not tied to Fixture rows, so every
+ * team is covered whether or not its individual match is on the schedule yet.
+ */
+export async function leagueChampionshipCoachSessions(): Promise<LeagueChampCoachSession[]> {
+  const season =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true, calendar: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { id: true, calendar: true } }));
+  if (!season) return [];
+  const weeks = getSeasonWeeks(season.calendar).filter((w) => w.kind === "league" || w.kind === "championship");
+  if (!weeks.length) return [];
+  const teams = await prisma.team.findMany({
+    where: { seasonId: season.id, isTest: false },
+    select: { name: true, coachId: true, assistantCoaches: { select: { coachId: true } } },
+  });
+  const out: LeagueChampCoachSession[] = [];
+  let leagueIdx = 0;
+  for (const w of weeks) {
+    const isChamp = w.kind === "championship";
+    if (!isChamp) leagueIdx += 1;
+    const date = new Date(`${w.startISO}T12:00:00Z`);
+    const startTime = isChamp ? "09:00" : "18:00";
+    const label = isChamp ? "ACP Championship" : `ACP league night ${leagueIdx}`;
+    for (const t of teams) {
+      const teamName = `${t.name} — ${label}`;
+      const kind: "league" | "championship" = isChamp ? "championship" : "league";
+      if (t.coachId) out.push({ coachId: t.coachId, date, day: w.startISO, startTime, teamName, role: "PRIMARY", weekNumber: w.week, kind });
+      for (const a of t.assistantCoaches) {
+        out.push({ coachId: a.coachId, date, day: w.startISO, startTime, teamName, role: "ASSISTANT", weekNumber: w.week, kind });
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -638,13 +707,13 @@ export async function pnlRange(fromDay: string, toDay: string, basis: PnlBasis =
     leagueNightsProjection(),
   ]);
 
-  // Fold in league & championship nights (fixtures, not practices) for the range,
-  // basis-aware: booked = nights already played; forecast = every night on the
-  // schedule. Court cost merges into its host facility's line; coach cost (all
-  // coaches attend every night) is one "League & championship coaches" line.
+  // Fold in league & championship COURT cost (fixtures, not practices) for the
+  // range, basis-aware: booked = nights already played; forecast = every night on
+  // the schedule. Court cost merges into its host facility's line. Coach pay for
+  // league/championship is NOT added here — it's attributed per team to each
+  // coach inside coachCostByCoachBetween above (12 sessions / $1,200 per team), so
+  // adding it again here would double-count it.
   const nightsInRange = leagueNights.filter((n) => n.day >= fromDay && n.day <= toDay && (cb === "delivered" ? n.delivered : true));
-  let leagueCoachCents = 0;
-  const leagueCoachLines: CoachCostLine[] = [];
   for (const n of nightsInRange) {
     if (n.courtCents > 0) {
       const existing = courtCosts.find((c) => c.facilityId === n.facilityId);
@@ -652,14 +721,6 @@ export async function pnlRange(fromDay: string, toDay: string, basis: PnlBasis =
       if (existing) { existing.cents += n.courtCents; existing.lines.push(line); existing.lines.sort((a, b) => a.day.localeCompare(b.day)); }
       else courtCosts.push({ facilityId: n.facilityId, facilityName: n.facilityName, cents: n.courtCents, lines: [line], dayRateCents: null, eveningRateCents: null, weekendRateCents: null, eveningStartsAt: "17:00" });
     }
-    if (n.coachCents > 0) {
-      leagueCoachCents += n.coachCents;
-      leagueCoachLines.push({ day: n.day, startTime: "—", teamName: `League night (${n.coachCount} coaches × ${n.matchCount} match${n.matchCount === 1 ? "" : "es"})`, role: "LEAGUE", cents: n.coachCents });
-    }
-  }
-  if (leagueCoachCents > 0) {
-    coaches.push({ coachId: "__league__", name: "League & championship coaches", cents: leagueCoachCents, lines: leagueCoachLines.sort((a, b) => a.day.localeCompare(b.day)) });
-    coaches.sort((a, b) => b.cents - a.cents);
   }
 
   const coach = coaches.reduce((s, c) => s + c.cents, 0);
@@ -712,7 +773,7 @@ export type MonthPnl = {
 export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
   if (months.length === 0) return [];
   const now = new Date();
-  const [contribs, directorPct, allEntries, rate, coachRows, sessions, leagueNights] = await Promise.all([
+  const [contribs, directorPct, allEntries, rate, coachRows, sessions, leagueNights, leagueCoachSessions] = await Promise.all([
     revenueContributions(),
     getDirectorPct(),
     entriesInMonthRange(months[0], months[months.length - 1]),
@@ -727,6 +788,7 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
       },
     }),
     leagueNightsProjection(),
+    leagueChampionshipCoachSessions(),
   ]);
   const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
   const assistantPct = rate?.assistantPct ?? 0.5;
@@ -764,12 +826,21 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
       coachScheduled += coach; courtScheduled += court;
       if (isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) { coachDelivered += coach; courtDelivered += court; }
     }
-    // League & championship nights (fixtures) in this month — same court + coach
-    // model as pnlRange, split delivered (played) vs scheduled (all on the books).
+    // League & championship COURT cost (fixtures) in this month, split delivered
+    // (played) vs scheduled (all on the books). Coach pay is handled per team just
+    // below — not from n.coachCents — so it isn't double-counted.
     for (const n of leagueNights) {
       if (n.day < mStart || n.day > mEnd) continue;
-      coachScheduled += n.coachCents; courtScheduled += n.courtCents;
-      if (n.delivered) { coachDelivered += n.coachCents; courtDelivered += n.courtCents; }
+      courtScheduled += n.courtCents;
+      if (n.delivered) courtDelivered += n.courtCents;
+    }
+    // League & championship COACH pay, one session per team for its coach(es), so
+    // each team totals 12 sessions ($1,200) for the season. Priced by role.
+    for (const ls of leagueCoachSessions) {
+      if (ls.day < mStart || ls.day > mEnd) continue;
+      const cents = coachSessionPayCents(ls.role, baseFor(ls.coachId), assistantPct, proPer);
+      coachScheduled += cents;
+      if (ls.date.getTime() <= now.getTime()) coachDelivered += cents;
     }
     const revLines = allEntries.filter((e) => e.month === m && e.section === "REVENUE");
     // Court rent is auto-projected above, so drop pulled "Court rent —" lines to

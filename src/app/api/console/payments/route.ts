@@ -13,7 +13,7 @@ import {
   type DeliveredSession,
 } from "@/lib/domain/finance";
 import { payableCompletedRows, alaCarteEarnedCents } from "@/lib/domain/coachPay";
-import { activeCoachIds, leagueChampionshipDays } from "@/lib/domain/pnl";
+import { leagueChampionshipCoachSessions } from "@/lib/domain/pnl";
 
 // Payments mutations as native-form-POST route handlers with ticket auth. Route
 // handlers 303-redirect to a fresh GET (which carries the session cookie), so
@@ -297,16 +297,23 @@ async function generatePayoutRun(
     rowsByCoach.set(r.coachId, list);
   }
 
-  // League nights & championships pay every coach a session too (all coaches
-  // attend). They're Fixtures, not practice sessions, so add one session of pay
-  // per delivered league/championship day in the period for each active coach.
+  // League nights (weeks 7–11) & championship (week 12) pay each team's coach one
+  // session PER TEAM they coach, so every team totals 12 sessions ($1,200) for the
+  // season. They're not practice sessions, so they come from the per-team calendar
+  // helper; counted here once the week has arrived (delivered) and it falls in this
+  // payout period.
   const mm = String(month).padStart(2, "0");
-  const [activeCoaches, leagueDays] = await Promise.all([
-    activeCoachIds(),
-    leagueChampionshipDays({ fromDay: `${year}-${mm}-01`, toDay: `${year}-${mm}-31` }),
-  ]);
-  const deliveredLeagueCount = leagueDays.filter((d) => d.delivered).length;
-  const leaguePayPerCoach = deliveredLeagueCount * coachSessionPayCents("PRIMARY", perSession, assistantPct, proPerSession);
+  const monthStart = `${year}-${mm}-01`, monthEnd = `${year}-${mm}-31`;
+  const now = new Date();
+  const leagueSessions = await leagueChampionshipCoachSessions();
+  const leagueCountByCoach = new Map<string, number>();
+  const leaguePayByCoach = new Map<string, number>();
+  for (const ls of leagueSessions) {
+    if (ls.day < monthStart || ls.day > monthEnd) continue;
+    if (ls.date.getTime() > now.getTime()) continue; // delivered only
+    leagueCountByCoach.set(ls.coachId, (leagueCountByCoach.get(ls.coachId) ?? 0) + 1);
+    leaguePayByCoach.set(ls.coachId, (leaguePayByCoach.get(ls.coachId) ?? 0) + coachSessionPayCents(ls.role, perSession, assistantPct, proPerSession));
+  }
 
   for (const coach of coaches) {
     const sessionCoachRows = (rowsByCoach.get(coach.id) ?? []).map((role) => ({ role }));
@@ -316,9 +323,9 @@ async function generatePayoutRun(
       sessionPayCents += coachSessionPayCents(sc.role, perSession, assistantPct, proPerSession);
     }
 
-    // League/championship days (this coach attends every one, if active staff).
-    const leagueCount = activeCoaches.has(coach.id) ? deliveredLeagueCount : 0;
-    if (leagueCount) sessionPayCents += leaguePayPerCoach;
+    // League/championship sessions this coach earned in the period (one per team).
+    const leagueCount = leagueCountByCoach.get(coach.id) ?? 0;
+    if (leagueCount) sessionPayCents += leaguePayByCoach.get(coach.id) ?? 0;
 
     // À la carte earnings that are over (accepted/delivered, time passed) in the period.
     const alaCarteCents = await alaCarteEarnedCents({ coachId: coach.id, periodStart: start, periodEnd: end });

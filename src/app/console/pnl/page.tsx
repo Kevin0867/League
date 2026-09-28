@@ -127,7 +127,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         <p className="text-xs text-slate-400">
           {basis === "booked"
             ? "Booked: revenue actually collected and delivered/committed expenses only."
-            : "Forecast: full projection — scheduled/outstanding revenue and every expense line, incl. court + coach pay for practices AND league/championship nights (all coaches attend every league match)."}
+            : "Forecast: full projection — scheduled/outstanding revenue and every expense line, incl. court + coach pay for practices AND league/championship nights. Each team's coach earns 12 sessions for the season ($1,200/team): 6 practices, 5 league nights, and the championship."}
         </p>
         {!valid && <p className="text-sm text-rose-700">The “from” date needs to be on or before the “to” date.</p>}
       </div>
