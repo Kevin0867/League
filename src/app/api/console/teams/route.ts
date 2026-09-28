@@ -540,6 +540,12 @@ export async function POST(req: Request) {
       }
       const prevAssign = await prisma.team.findUnique({ where: { id: teamId }, select: { coachId: true } });
       await prisma.team.update({ where: { id: teamId }, data: { coachId } });
+      if (coachId) {
+        // Promoting a coach to head: drop any stale ASSISTANT record + assistant pay
+        // rows for them on this team, so they're never shown or paid as both.
+        await prisma.teamCoach.deleteMany({ where: { teamId, coachId } });
+        await removeTeamAssistantFromSessions(teamId, coachId);
+      }
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: (coachId ? `Assigned coach ${coachId}` : "Cleared coach") + overrideNote });
       // Notify the incoming coach they're on, and the outgoing coach they're off.
       if (prevAssign?.coachId && prevAssign.coachId !== coachId) {
@@ -589,6 +595,11 @@ export async function POST(req: Request) {
           }
         }
         await prisma.team.update({ where: { id: ch.teamId }, data: { coachId: ch.coachId } });
+        if (ch.coachId) {
+          // Promoting to head: clear any stale assistant record + assistant pay rows.
+          await prisma.teamCoach.deleteMany({ where: { teamId: ch.teamId, coachId: ch.coachId } });
+          await removeTeamAssistantFromSessions(ch.teamId, ch.coachId);
+        }
         await audit({ actorId: actor.userId, entityType: "Team", entityId: ch.teamId, action: "ASSIGN_COACH", summary: (ch.coachId ? `Assigned coach ${ch.coachId} (bulk)` : "Cleared coach (bulk)") + bulkOverride });
         if (prevCoachId && prevCoachId !== ch.coachId) {
           await notifyCoachTeamChange({ actorUserId: actor.userId, coachId: prevCoachId, teamId: ch.teamId, added: false, role: "head" });

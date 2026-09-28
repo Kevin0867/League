@@ -59,8 +59,9 @@ export async function teamAssignmentReport(): Promise<AssignmentRow[]> {
             id: true, name: true, dayOfWeek: true, startTime: true,
             division: { select: { name: true } }, divisionCode: true,
             facility: { select: { name: true } },
+            coachId: true,
             coach: { select: { person: { select: { firstName: true, lastName: true } } } },
-            assistantCoaches: { select: { coach: { select: { person: { select: { firstName: true, lastName: true } } } } } },
+            assistantCoaches: { select: { coachId: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } } },
           },
         },
       },
@@ -88,8 +89,13 @@ export async function teamAssignmentReport(): Promise<AssignmentRow[]> {
   const rows: AssignmentRow[] = members.map((m) => {
     const t = m.team;
     // Head coach first, then any assistants — the full coaching staff on the team.
+    // A coach who is the team's HEAD is never also listed as an assistant of the
+    // same team (a stale assistant record left over from a promotion to head).
     const head = t.coach ? `${t.coach.person.firstName} ${t.coach.person.lastName}`.trim() : "";
-    const assistants = t.assistantCoaches.map((a) => `${a.coach.person.firstName} ${a.coach.person.lastName}`.trim()).filter(Boolean);
+    const assistants = t.assistantCoaches
+      .filter((a) => a.coachId !== t.coachId)
+      .map((a) => `${a.coach.person.firstName} ${a.coach.person.lastName}`.trim())
+      .filter(Boolean);
     const coach = [head, ...assistants].filter(Boolean).join(", ");
     const fee: AssignmentRow["fee"] = waived.has(m.personId) ? "no charge" : feeByPerson.get(m.personId) ?? "—";
     return {
