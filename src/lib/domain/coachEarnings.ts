@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { isSessionComplete, alaCarteEarnedCents } from "@/lib/domain/coachPay";
 import { coachSessionPayCents } from "@/lib/domain/finance";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
-import { activeCoachIds, leagueChampionshipDays } from "@/lib/domain/pnl";
+import { leagueChampionshipCoachSessions } from "@/lib/domain/pnl";
 
 // Per-coach earned-fee breakdown, derived from the same source of truth as the
 // payout register: a coach earns on every session they were the PAYABLE coach
@@ -115,26 +115,33 @@ export async function coachEarnings(opts?: { coachId?: string; now?: Date }): Pr
     byCoach.set(r.coachId, list);
   }
 
-  // League nights & championships pay every coach a session, mirroring practices.
-  // They're Fixtures (not practice SessionCoach rows), so add them here: one
-  // earned session per delivered league/championship day for every active coach.
-  const [activeCoaches, leagueDays] = await Promise.all([activeCoachIds(), leagueChampionshipDays({ now })]);
-  const deliveredLeagueDays = leagueDays.filter((d) => d.delivered);
-  const leagueSessionsFor = (seasonPayCents: number | null): EarnedSession[] =>
-    deliveredLeagueDays.map((d) => ({
-      sessionId: `league-${d.day}`,
-      date: d.date,
-      startTime: "",
-      endTime: "",
-      teamName: "ACP League / Championship",
-      role: "PRIMARY",
-      coveringForName: null,
-      payCents: coachSessionPayCents("PRIMARY", baseFor(seasonPayCents), assistantPct, proPerSession),
-    }));
+  // League nights (weeks 7–11) & championship (week 12) pay each team's coach a
+  // session — one per team, mirroring practices — so every team a coach holds
+  // totals 12 sessions ($1,200) for the season. They're not practice SessionCoach
+  // rows, so they come from the per-team calendar helper; counted here once the
+  // week has arrived (delivered), same as a completed practice.
+  const leagueRaw = await leagueChampionshipCoachSessions();
+  const leagueDeliveredByCoach = new Map<string, typeof leagueRaw>();
+  for (const ls of leagueRaw) {
+    if (ls.date.getTime() > now.getTime()) continue; // delivered only
+    const arr = leagueDeliveredByCoach.get(ls.coachId) ?? [];
+    arr.push(ls);
+    leagueDeliveredByCoach.set(ls.coachId, arr);
+  }
 
   const result: CoachEarnings[] = [];
   for (const c of coaches) {
-    const league = activeCoaches.has(c.id) ? leagueSessionsFor(c.seasonPayCents) : [];
+    const base = baseFor(c.seasonPayCents);
+    const league: EarnedSession[] = (leagueDeliveredByCoach.get(c.id) ?? []).map((ls) => ({
+      sessionId: `lc-${c.id}-${ls.day}-${ls.role}-${ls.teamName}`,
+      date: ls.date,
+      startTime: ls.startTime,
+      endTime: "",
+      teamName: ls.teamName,
+      role: ls.role,
+      coveringForName: null,
+      payCents: coachSessionPayCents(ls.role, base, assistantPct, proPerSession),
+    }));
     const sessions = [...(byCoach.get(c.id) ?? []), ...league].sort((a, b) => b.date.getTime() - a.date.getTime());
     const sessionPayCents = sessions.reduce((s, e) => s + e.payCents, 0);
     const alaCarteCents = await alaCarteEarnedCents({ coachId: c.id, now });
