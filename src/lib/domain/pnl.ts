@@ -5,7 +5,7 @@ import { phoenixDateInput } from "@/lib/time";
 import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
 import { isSessionComplete } from "@/lib/domain/coachPay";
 import { coachSessionPayCents } from "@/lib/domain/finance";
-import { getSeasonWeeks } from "@/lib/domain/seasonCalendar";
+import { getSeasonWeeks, PRACTICE_WEEKS } from "@/lib/domain/seasonCalendar";
 import { stripeChargesSince, paymentsSince, activeSubscriptionSchedules, addBillingIntervals, type SubSchedule } from "@/lib/payments/reconcile";
 
 const SESSIONS_PER_SEASON = 12;
@@ -383,10 +383,10 @@ export type CoachCost = { coachId: string; name: string; cents: number; lines: C
 /** Coach session pay for delivered practices in range, broken out PER COACH with
  *  the individual sessions (day, time, team, role, pay) behind each total. */
 export async function coachCostByCoachBetween(fromDay: string, toDay: string, basis: CourtCostBasis = "delivered"): Promise<CoachCost[]> {
-  const [rate, coaches, sessions] = await Promise.all([
+  const [rate, coaches, practiceSlots] = await Promise.all([
     prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { coachPerSessionCents: true, assistantPct: true, proCoachPerSessionCents: true } }),
     prisma.coach.findMany({ select: { id: true, seasonPayCents: true, person: { select: { firstName: true, lastName: true } } } }),
-    prisma.session.findMany({ where: { type: "PRACTICE", teams: { some: { team: { isTest: false } } } }, select: { date: true, startTime: true, endTime: true, status: true, teams: { select: { team: { select: { name: true } } } }, coaches: { select: { coachId: true, role: true, payable: true } } } }),
+    teamPracticeCoachSessions(),
   ]);
   const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
   const assistantPct = rate?.assistantPct ?? 0.5;
@@ -396,20 +396,20 @@ export async function coachCostByCoachBetween(fromDay: string, toDay: string, ba
   const baseFor = (id: string) => { const sp = seasonPayById.get(id); return sp && sp > 0 ? Math.round(sp / SESSIONS_PER_SEASON) : defaultPer; };
   const now = new Date();
   const byCoach = new Map<string, CoachCost>();
-  for (const s of sessions) {
-    // delivered → completed sessions only; scheduled → every non-cancelled one.
-    if (basis === "delivered" ? !isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now) : s.status === "CANCELLED") continue;
+  // Practices are capped at six per team (make-ups / extras never inflate a team
+  // beyond its six weeks) and the payable coach is the one who worked the week —
+  // a covering sub, not the regular coach. Basis: delivered = the class is over
+  // (or a paid cancellation); scheduled = everything not cancelled.
+  for (const s of practiceSlots) {
+    const complete = s.paidIfCancelled || isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now);
+    if (basis === "delivered" ? !complete : (s.status === "CANCELLED" && !s.paidIfCancelled)) continue;
     const day = phoenixDateInput(s.date);
     if (day < fromDay || day > toDay) continue;
-    const teamName = s.teams[0]?.team.name ?? null;
-    for (const c of s.coaches) {
-      if (!c.payable) continue;
-      const cents = coachSessionPayCents(c.role, baseFor(c.coachId), assistantPct, proPer);
-      const cc = byCoach.get(c.coachId) ?? { coachId: c.coachId, name: nameById.get(c.coachId) ?? "Coach", cents: 0, lines: [] };
-      cc.cents += cents;
-      cc.lines.push({ day, startTime: s.startTime, teamName, role: c.role, cents });
-      byCoach.set(c.coachId, cc);
-    }
+    const cents = coachSessionPayCents(s.role, baseFor(s.coachId), assistantPct, proPer);
+    const cc = byCoach.get(s.coachId) ?? { coachId: s.coachId, name: nameById.get(s.coachId) ?? "Coach", cents: 0, lines: [] };
+    cc.cents += cents;
+    cc.lines.push({ day, startTime: s.startTime, teamName: s.teamName, role: s.role, cents });
+    byCoach.set(s.coachId, cc);
   }
 
   // League nights (weeks 7–11) + championship (week 12), one coaching session per
@@ -520,6 +520,92 @@ export async function leagueChampionshipDays(opts?: { now?: Date; fromDay?: stri
     }
   }
   return [...byDay.entries()].map(([day, v]) => ({ date: v.date, day, delivered: v.delivered })).sort((a, b) => a.day.localeCompare(b.day));
+}
+
+export type PracticeCoachSession = {
+  coachId: string;
+  sessionId: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  status: string;
+  teamId: string;
+  teamName: string | null;
+  role: string;                       // payable role: PRIMARY | ASSISTANT | SUBSTITUTE | BACKUP
+  weekNumber: number | null;
+  paidIfCancelled: boolean;
+  coveringForCoachId: string | null;  // for a SUBSTITUTE row, that session's PRIMARY coach
+};
+
+// Practice week ordering: the six planned weeks (weekNumber 1–6) come first, then
+// any make-up / added practice (no weekNumber) — so the per-team cap keeps the
+// real six weeks and only spends a leftover slot on a make-up when a planned week
+// is missing (e.g. it was cancelled).
+function practiceWeekKey(weekNumber: number | null): number {
+  return weekNumber != null && weekNumber >= 1 && weekNumber <= PRACTICE_WEEKS ? weekNumber : 999;
+}
+
+/**
+ * Every team's PAYABLE practice sessions, CAPPED at the six practice weeks per
+ * team — so a team never pays for more than its six practices no matter how many
+ * make-up or extra practice rows exist (that's what kept a coach's total above
+ * the flat $1,200/team). Sub-aware: only payable SessionCoach rows are returned,
+ * so a covering substitute earns that week's session and the regular coach does
+ * not. Each row also carries the session's status/endTime/paidIfCancelled so the
+ * caller can apply its delivered-vs-scheduled rule. Test teams excluded.
+ */
+export async function teamPracticeCoachSessions(): Promise<PracticeCoachSession[]> {
+  const season =
+    (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+    (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
+  if (!season) return [];
+  const sessions = await prisma.session.findMany({
+    where: { seasonId: season.id, type: "PRACTICE", teams: { some: { team: { isTest: false } } } },
+    select: {
+      id: true, date: true, startTime: true, endTime: true, status: true, weekNumber: true,
+      teams: { select: { teamId: true, team: { select: { name: true, isTest: true } } } },
+      coaches: { select: { coachId: true, role: true, payable: true, paidIfCancelled: true } },
+    },
+  });
+  // Group by the session's (non-test) team.
+  const byTeam = new Map<string, typeof sessions>();
+  for (const s of sessions) {
+    const tt = s.teams.find((t) => !t.team.isTest) ?? s.teams[0];
+    if (!tt) continue;
+    const arr = byTeam.get(tt.teamId) ?? [];
+    arr.push(s);
+    byTeam.set(tt.teamId, arr);
+  }
+  const out: PracticeCoachSession[] = [];
+  for (const [teamId, list] of byTeam) {
+    // Only sessions that will actually pay someone occupy a slot, so a make-up can
+    // take the slot of the practice it replaces. A cancelled/rescheduled practice
+    // counts ONLY when a coach is paid despite the cancellation (paidIfCancelled);
+    // otherwise it's skipped and its make-up fills the week instead.
+    const eligible = list.filter((s) => {
+      const cancelled = s.status === "CANCELLED" || s.status === "RESCHEDULED";
+      return cancelled
+        ? s.coaches.some((c) => c.payable && c.paidIfCancelled)
+        : s.coaches.some((c) => c.payable);
+    });
+    eligible.sort((a, b) => practiceWeekKey(a.weekNumber) - practiceWeekKey(b.weekNumber) || a.date.getTime() - b.date.getTime());
+    const capped = eligible.slice(0, PRACTICE_WEEKS); // never more than six practices per team
+    for (const s of capped) {
+      const tt = s.teams.find((t) => t.teamId === teamId);
+      const teamName = tt?.team.name ?? null;
+      const primaryCoachId = s.coaches.find((c) => c.role === "PRIMARY")?.coachId ?? null;
+      for (const c of s.coaches) {
+        if (!c.payable) continue;
+        out.push({
+          coachId: c.coachId, sessionId: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime,
+          status: s.status, teamId, teamName, role: c.role, weekNumber: s.weekNumber,
+          paidIfCancelled: c.paidIfCancelled,
+          coveringForCoachId: c.role === "SUBSTITUTE" ? primaryCoachId : null,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 export type LeagueChampCoachSession = {
@@ -773,7 +859,7 @@ export type MonthPnl = {
 export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
   if (months.length === 0) return [];
   const now = new Date();
-  const [contribs, directorPct, allEntries, rate, coachRows, sessions, leagueNights, leagueCoachSessions] = await Promise.all([
+  const [contribs, directorPct, allEntries, rate, coachRows, sessions, leagueNights, leagueCoachSessions, practiceSlots] = await Promise.all([
     revenueContributions(),
     getDirectorPct(),
     entriesInMonthRange(months[0], months[months.length - 1]),
@@ -789,6 +875,7 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
     }),
     leagueNightsProjection(),
     leagueChampionshipCoachSessions(),
+    teamPracticeCoachSessions(),
   ]);
   const defaultPer = rate?.coachPerSessionCents ?? COACH_PER_SESSION_CENTS;
   const assistantPct = rate?.assistantPct ?? 0.5;
@@ -796,12 +883,10 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
   const seasonPayById = new Map(coachRows.map((c) => [c.id, c.seasonPayCents]));
   const baseFor = (id: string) => { const sp = seasonPayById.get(id); return sp && sp > 0 ? Math.round(sp / SESSIONS_PER_SEASON) : defaultPer; };
 
-  // Coach pay + court cost each session contributes, tagged by month + basis.
-  const sessionCost = (s: (typeof sessions)[number]) => {
-    const coach = s.coaches.reduce((sum, c) => (c.payable ? sum + coachSessionPayCents(c.role, baseFor(c.coachId), assistantPct, proPer) : sum), 0);
-    const court = s.facility ? courtCostOfSession(s, s.facility) : 0;
-    return { coach, court };
-  };
+  // COURT cost each practice contributes (every scheduled practice uses a court,
+  // so court is not capped). COACH pay is taken from the capped per-team practice
+  // slots below, so make-ups / extra practices don't inflate a team past its six.
+  const sessionCourt = (s: (typeof sessions)[number]) => (s.facility ? courtCostOfSession(s, s.facility) : 0);
 
   const sumKind = (rows: PnlEntryRow[], kind: string) => rows.filter((r) => r.kind === kind).reduce((s, r) => s + r.amountCents, 0);
   const sumAll = (rows: PnlEntryRow[]) => rows.reduce((s, r) => s + r.amountCents, 0);
@@ -816,15 +901,27 @@ export async function pnlSeasonByMonth(months: string[]): Promise<MonthPnl[]> {
       else unpaid += c.cents;
       forecastRev += c.cents;
     }
-    // Coach + court for this month, split delivered (booked) vs scheduled (forecast).
+    // Court for this month, split delivered (booked) vs scheduled (forecast).
     let coachDelivered = 0, coachScheduled = 0, courtDelivered = 0, courtScheduled = 0;
     for (const s of sessions) {
       const day = phoenixDateInput(s.date);
       if (day < mStart || day > mEnd) continue;
       if (s.status === "CANCELLED") continue;
-      const { coach, court } = sessionCost(s);
-      coachScheduled += coach; courtScheduled += court;
-      if (isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) { coachDelivered += coach; courtDelivered += court; }
+      const court = sessionCourt(s);
+      courtScheduled += court;
+      if (isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now)) courtDelivered += court;
+    }
+    // Practice COACH pay, capped at six sessions per team (make-ups / extras don't
+    // add), credited to the payable coach of the week (a covering sub, not the
+    // regular coach). Split delivered vs scheduled the same way.
+    for (const s of practiceSlots) {
+      const day = phoenixDateInput(s.date);
+      if (day < mStart || day > mEnd) continue;
+      const complete = s.paidIfCancelled || isSessionComplete({ date: s.date, endTime: s.endTime, status: s.status }, now);
+      if (s.status === "CANCELLED" && !s.paidIfCancelled) continue;
+      const cents = coachSessionPayCents(s.role, baseFor(s.coachId), assistantPct, proPer);
+      coachScheduled += cents;
+      if (complete) coachDelivered += cents;
     }
     // League & championship COURT cost (fixtures) in this month, split delivered
     // (played) vs scheduled (all on the books). Coach pay is handled per team just
