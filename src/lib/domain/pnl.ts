@@ -563,7 +563,7 @@ export async function teamPracticeCoachSessions(): Promise<PracticeCoachSession[
     where: { seasonId: season.id, type: "PRACTICE", teams: { some: { team: { isTest: false } } } },
     select: {
       id: true, date: true, startTime: true, endTime: true, status: true, weekNumber: true,
-      teams: { select: { teamId: true, team: { select: { name: true, isTest: true } } } },
+      teams: { select: { teamId: true, team: { select: { name: true, isTest: true, coachId: true } } } },
       coaches: { select: { coachId: true, role: true, payable: true, paidIfCancelled: true } },
     },
   });
@@ -593,14 +593,28 @@ export async function teamPracticeCoachSessions(): Promise<PracticeCoachSession[
     for (const s of capped) {
       const tt = s.teams.find((t) => t.teamId === teamId);
       const teamName = tt?.team.name ?? null;
-      const primaryCoachId = s.coaches.find((c) => c.role === "PRIMARY")?.coachId ?? null;
+      const headCoachId = tt?.team.coachId ?? null;
+      const coveredId = s.coaches.find((c) => c.role === "PRIMARY")?.coachId ?? headCoachId;
+      // One payable row per coach on this session, keeping the best-paying role.
+      // The team's head coach is always counted PRIMARY, never as a stale ASSISTANT
+      // row left over from a promotion to head — so a head coach is never paid (or
+      // shown) as an assistant on their own team.
+      const rolePriority = (r: string) => (r === "PRIMARY" ? 3 : r === "SUBSTITUTE" ? 2 : r === "BACKUP" ? 1 : 0);
+      const bestByCoach = new Map<string, { role: string; paidIfCancelled: boolean }>();
       for (const c of s.coaches) {
         if (!c.payable) continue;
+        const role = c.coachId === headCoachId ? "PRIMARY" : c.role;
+        const prev = bestByCoach.get(c.coachId);
+        const paidIfCancelled = (prev?.paidIfCancelled ?? false) || c.paidIfCancelled;
+        if (!prev || rolePriority(role) > rolePriority(prev.role)) bestByCoach.set(c.coachId, { role, paidIfCancelled });
+        else prev.paidIfCancelled = paidIfCancelled;
+      }
+      for (const [coachId, v] of bestByCoach) {
         out.push({
-          coachId: c.coachId, sessionId: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime,
-          status: s.status, teamId, teamName, role: c.role, weekNumber: s.weekNumber,
-          paidIfCancelled: c.paidIfCancelled,
-          coveringForCoachId: c.role === "SUBSTITUTE" ? primaryCoachId : null,
+          coachId, sessionId: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime,
+          status: s.status, teamId, teamName, role: v.role, weekNumber: s.weekNumber,
+          paidIfCancelled: v.paidIfCancelled,
+          coveringForCoachId: v.role === "SUBSTITUTE" ? coveredId : null,
         });
       }
     }
@@ -654,6 +668,9 @@ export async function leagueChampionshipCoachSessions(): Promise<LeagueChampCoac
       const kind: "league" | "championship" = isChamp ? "championship" : "league";
       if (t.coachId) out.push({ coachId: t.coachId, date, day: w.startISO, startTime, teamName, role: "PRIMARY", weekNumber: w.week, kind });
       for (const a of t.assistantCoaches) {
+        // A coach who heads this team is never also paid as its assistant (a stale
+        // assistant record left from a promotion to head).
+        if (a.coachId === t.coachId) continue;
         out.push({ coachId: a.coachId, date, day: w.startISO, startTime, teamName, role: "ASSISTANT", weekNumber: w.week, kind });
       }
     }
