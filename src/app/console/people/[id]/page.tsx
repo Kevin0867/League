@@ -95,6 +95,7 @@ export default async function PersonDetail({
       {sp.ok === "fee" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Season fee requested — a secure pay link was emailed/texted to the family.</div>}
       {sp.ok === "paidoffline" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Marked paid. It now shows paid across the roster, reports and reminders.</div>}
       {sp.ok === "markrefunded" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Marked refunded in the portal (reflecting the Stripe refund). No second refund was issued; they&apos;ll stop showing as paying.</div>}
+      {sp.ok === "refundedOffTeam" && <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Marked refunded and pulled from their team + waitlist — the fee left the revenue total and they&apos;re off the roster. No second refund was issued.</div>}
       {sp.err && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">
           {sp.err === "fields" ? "First and last name are required."
@@ -234,17 +235,30 @@ export default async function PersonDetail({
             {activeFee && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:underline">Already refunded in Stripe?</summary>
-                <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
-                  <input type="hidden" name="ticket" value={ticket} />
-                  <input type="hidden" name="op" value="markRefundedExternal" />
-                  <input type="hidden" name="personId" value={person.id} />
-                  {activeFee.seasonId && <input type="hidden" name="seasonId" value={activeFee.seasonId} />}
-                  <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
+                <div className="mt-2 space-y-3 rounded-lg bg-slate-50 p-3">
                   <p className="text-[11px] text-slate-600">
-                    Use this only if {person.firstName} was <strong>already refunded directly in Stripe</strong>. It marks the fee refunded in the portal so they stop showing as paying — it does <strong>not</strong> issue another refund or touch Stripe.
+                    Use these only if {person.firstName} was <strong>already refunded directly in Stripe</strong>. They mark the fee refunded in the portal so they stop showing as paying and leave the revenue total — neither issues another refund or touches Stripe.
                   </p>
-                  <button className="btn-secondary py-1 text-xs">Mark refunded (already done in Stripe)</button>
-                </form>
+                  <form method="POST" action="/api/console/registrations" className="space-y-1">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="markRefundedExternal" />
+                    <input type="hidden" name="personId" value={person.id} />
+                    {activeFee.seasonId && <input type="hidden" name="seasonId" value={activeFee.seasonId} />}
+                    <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
+                    <button className="btn-secondary py-1 text-xs">Mark refunded (stays on team)</button>
+                  </form>
+                  <form method="POST" action="/api/console/registrations" className="space-y-1 border-t border-slate-200 pt-3">
+                    <input type="hidden" name="ticket" value={ticket} />
+                    <input type="hidden" name="op" value="refundedRemoveFromTeam" />
+                    <input type="hidden" name="personId" value={person.id} />
+                    {activeFee.seasonId && <input type="hidden" name="seasonId" value={activeFee.seasonId} />}
+                    <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
+                    <p className="text-[11px] text-slate-600">
+                      Also take {person.firstName} off their team and any waitlist for the season. Keeps their registration + the refunded payment as a record.
+                    </p>
+                    <button className="btn-secondary py-1 text-xs">Mark refunded &amp; remove from team</button>
+                  </form>
+                </div>
               </details>
             )}
           </>
