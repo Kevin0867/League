@@ -38,13 +38,21 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
     (await prisma.season.findFirst({ where: { active: true }, select: { name: true, startDate: true, endDate: true } }));
   const seasonMonths = season ? monthsFromTo(season.startDate, season.endDate) : [];
 
-  // Default range = since we started collecting (matches the Payments total) → today.
-  const startDefault = phoenixDateInput(paymentsSince().date);
-  const from = sp.from && dayRe.test(sp.from) ? sp.from : startDefault;
-  const to = sp.to && dayRe.test(sp.to) ? sp.to : today();
-  const valid = from <= to;
   // Statement basis: booked (collected / committed) vs forecast (full projection).
   const basis: "booked" | "forecast" = sp.basis === "booked" ? "booked" : "forecast";
+  // Default range. Booked = since we started collecting (matches Payments) → today.
+  // Forecast is the WHOLE-SEASON projection, so it defaults to the full season
+  // (season start → season end) — this is what pulls in every coach's full 12
+  // sessions per team, incl. the league nights & championship that fall after
+  // today. An explicit ?from/?to always wins.
+  const collectStart = phoenixDateInput(paymentsSince().date);
+  const seasonStartDay = season?.startDate ? phoenixDateInput(season.startDate) : null;
+  const seasonEndDay = season?.endDate ? phoenixDateInput(season.endDate) : null;
+  const startDefault = basis === "forecast" && seasonStartDay && seasonStartDay < collectStart ? seasonStartDay : collectStart;
+  const toDefault = basis === "forecast" && seasonEndDay && seasonEndDay > today() ? seasonEndDay : today();
+  const from = sp.from && dayRe.test(sp.from) ? sp.from : startDefault;
+  const to = sp.to && dayRe.test(sp.to) ? sp.to : toDefault;
+  const valid = from <= to;
   const showSeason = sp.season === "1";
   const qp = (extra: Record<string, string>) => {
     const p = new URLSearchParams({ from, to, basis, ...(showSeason ? { season: "1" } : {}), ...extra });
