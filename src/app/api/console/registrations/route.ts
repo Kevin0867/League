@@ -1463,6 +1463,53 @@ export async function POST(req: Request) {
       return backME("?ok=markrefunded");
     }
 
+    // Already refunded in Stripe AND leaving the team: the one-click case for a
+    // player refunded outside the app who should also come off their roster.
+    // Combines markRefundedExternal (flip fees REFUNDED so they leave the revenue
+    // total — no second Stripe refund, reconcile-safe) with pulling them off every
+    // team + waitlist for the season. Keeps the registration + the now-REFUNDED
+    // payment rows as the financial record (use "Remove registration" as well to
+    // clear the signup entirely).
+    case "refundedRemoveFromTeam": {
+      const rawRt = String(fd.get("returnTo") ?? "");
+      const rt = rawRt.startsWith("/console/") ? rawRt : null;
+      const backRT = (qs: string) => NextResponse.redirect(new URL(`${rt ?? (reg ? `/console/registrations/${reg.id}` : `/console/people/${personId}`)}${qs}`, origin), 303);
+      let seasonId = reg?.seasonId ?? String(fd.get("seasonId") ?? "");
+      if (!seasonId) {
+        const active =
+          (await prisma.season.findFirst({ where: { active: true, program: "PURE_ACADEMY" }, select: { id: true } })) ??
+          (await prisma.season.findFirst({ where: { active: true }, select: { id: true } }));
+        seasonId = active?.id ?? "";
+      }
+      // 1) Take the money out of the revenue total (already refunded in Stripe).
+      const covering = await prisma.payment.findMany({
+        where: {
+          direction: "IN", category: "PLAYER_FEE", status: { in: ["PAID", "PENDING", "REQUESTED", "FAILED"] },
+          ...(seasonId ? { seasonId } : {}),
+          OR: [{ partyId: personId }, { coveredPersonIds: { array_contains: personId } }],
+        },
+        select: { id: true },
+      });
+      if (covering.length) {
+        await prisma.payment.updateMany({ where: { id: { in: covering.map((c) => c.id) } }, data: { status: "REFUNDED" } });
+      }
+      // 2) Pull them off every team + waitlist for the season.
+      let pulledTeams = 0;
+      if (seasonId) {
+        const seasonTeams = await seasonTeamIds(seasonId);
+        if (seasonTeams.length) {
+          const delTeam = await prisma.teamMember.deleteMany({ where: { personId, teamId: { in: seasonTeams } } });
+          pulledTeams = delTeam.count;
+          await prisma.teamWaitlist.deleteMany({ where: { personId, teamId: { in: seasonTeams } } });
+        }
+      }
+      await audit({
+        actorId: actor.userId, entityType: "Person", entityId: personId, action: "REFUNDED",
+        summary: `Refunded (already in Stripe) & removed from team — marked ${covering.length} fee(s) refunded, pulled from ${pulledTeams} team(s)`,
+      });
+      return backRT("?ok=refundedOffTeam");
+    }
+
     default:
       return back("?err=op");
   }

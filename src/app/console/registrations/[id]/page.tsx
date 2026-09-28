@@ -60,6 +60,7 @@ const OK: Record<string, string> = {
   unwaived: "Fee waiver removed — this player will be charged the season fee normally.",
   refundstop: "Refund issued and payment plan cancelled — no further installments will be charged.",
   markrefunded: "Marked refunded in the portal (reflecting the Stripe refund) — no second refund was issued. They'll stop showing as paying.",
+  refundedOffTeam: "Marked refunded and pulled from their team + waitlist — the fee left the revenue total and they're off the roster. No second refund was issued.",
   prorated: "Season fee prorated to the weeks remaining. The pay page and reminders now show the reduced amount.",
   proratedsame: "Already prorated — the invoice already matches the weeks remaining.",
 };
@@ -709,13 +710,22 @@ export default async function RegistrationDetail({
               {(paid || subscription || outstanding) && (
                 <details className="w-full">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:underline">Already refunded in Stripe?</summary>
-                  <form method="POST" action="/api/console/registrations" className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
-                    {hidden}<input type="hidden" name="op" value="markRefundedExternal" />
+                  <div className="mt-2 space-y-3 rounded-lg bg-slate-50 p-3">
                     <p className="text-[11px] text-slate-600">
-                      Use this only if {p.firstName} was <strong>already refunded directly in Stripe</strong>. It marks the fee refunded in the portal so they stop showing as paying — it does <strong>not</strong> issue another refund or touch Stripe.
+                      Use these only if {p.firstName} was <strong>already refunded directly in Stripe</strong>. They mark the fee refunded in the portal so they stop showing as paying and leave the revenue total — neither issues another refund or touches Stripe.
                     </p>
-                    <button className="btn-secondary py-1 text-xs">Mark refunded (already done in Stripe)</button>
-                  </form>
+                    <form method="POST" action="/api/console/registrations" className="space-y-1">
+                      {hidden}<input type="hidden" name="op" value="markRefundedExternal" />
+                      <button className="btn-secondary py-1 text-xs">Mark refunded (stays on team)</button>
+                    </form>
+                    <form method="POST" action="/api/console/registrations" className="space-y-1 border-t border-slate-200 pt-3">
+                      {hidden}<input type="hidden" name="op" value="refundedRemoveFromTeam" />
+                      <p className="text-[11px] text-slate-600">
+                        Also take {p.firstName} off {membership?.team ? `“${membership.team.name}”` : "their team"} and any waitlist for {reg.season?.name ?? "this season"}. Keeps their registration + the refunded payment as a record.
+                      </p>
+                      <button className="btn-secondary py-1 text-xs">Mark refunded &amp; remove from team</button>
+                    </form>
+                  </div>
                 </details>
               )}
             </div>
