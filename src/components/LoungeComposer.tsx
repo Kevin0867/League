@@ -8,7 +8,6 @@ import { MediaAttach } from "@/components/MediaAttach";
 // channel spelled out. Plain in-app posts send with no interruption.
 export function LoungeComposer({ ticket, admin }: { ticket: string; admin: boolean }) {
   const [notify, setNotify] = useState("INAPP");
-  const broadcast = notify === "EMAIL" || notify === "TEXT";
   return (
     <form
       method="POST"
@@ -20,12 +19,9 @@ export function LoungeComposer({ ticket, admin }: { ticket: string; admin: boole
           e.preventDefault();
           return;
         }
-        if (broadcast) {
-          const how = notify === "TEXT" ? "text every coach and admin" : "email every coach and admin";
-          if (!window.confirm(`This will ${how}. Post and notify?`)) {
-            e.preventDefault();
-          }
-        }
+        // No window.confirm() gate: on mobile / in-app browsers it can return false
+        // with no dialog, which silently blocked the post. The channel is shown on
+        // the button, and server-side handling is idempotent.
       }}
     >
       <input type="hidden" name="ticket" value={ticket} />

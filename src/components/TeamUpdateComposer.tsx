@@ -32,10 +32,10 @@ export function TeamUpdateComposer({
           e.preventDefault();
           return;
         }
-        if (!window.confirm(`Post this to the ${teamName} team thread? Everyone on the team (players + parents) is notified and can reply.`)) {
-          e.preventDefault();
-          return;
-        }
+        // No window.confirm() gate here: on mobile / in-app browsers it can return
+        // false with no dialog (and Chrome suppresses repeat dialogs), which
+        // silently blocked the send. The team text is short and reversible, and a
+        // 30s server-side dedupe stops accidental double-sends.
         setPending(true);
       }}
     >

@@ -47,14 +47,9 @@ export function CoachBroadcastComposer({
             e.preventDefault();
             return;
           }
-          const sms = (form.elements.namedItem("channel_SMS") as HTMLInputElement | null)?.checked;
-          const email = (form.elements.namedItem("channel_EMAIL") as HTMLInputElement | null)?.checked;
-          const how = [sms ? "text" : null, email ? "email" : null, "the app"].filter(Boolean).join(" + ");
-          const who = selected ? selected.reachNote : "this group";
-          if (!window.confirm(`Send this to ${who} via ${how}?`)) {
-            e.preventDefault();
-            return;
-          }
+          // No window.confirm() gate: on mobile / in-app browsers it can return
+          // false with no dialog (and Chrome suppresses repeat dialogs), which
+          // silently blocked the send. Server-side dedupe stops double-sends.
           setPending(true);
         }}
       >
