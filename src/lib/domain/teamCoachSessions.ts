@@ -30,3 +30,43 @@ export async function removeTeamAssistantFromSessions(teamId: string, coachId: s
     await prisma.sessionCoach.deleteMany({ where: { sessionId: { in: ids }, coachId, role: "ASSISTANT" } });
   }
 }
+
+/**
+ * Move a team's head-coach slot from the OUTGOING head to the INCOMING head on
+ * every PRACTICE session: the new head becomes the PRIMARY coach (paid, unless a
+ * substitute already covers that session — then the sub keeps the pay and the new
+ * head is just the coach-of-record), and the outgoing head's rows are removed. So
+ * when a team's coach is reassigned, the practice pay follows the new coach
+ * instead of lingering on the previous one. Individual sessions a different coach
+ * actually worked can then be marked with that coach as a substitute.
+ *
+ * Only sessions the outgoing head was assigned to are touched. On a first-time
+ * assignment (no outgoing head) a session that already has a paid PRIMARY is left
+ * alone, so this never steals a session someone is already the coach of.
+ */
+export async function reassignTeamHeadOnSessions(teamId: string, oldCoachId: string | null, newCoachId: string): Promise<void> {
+  if (!newCoachId || oldCoachId === newCoachId) return;
+  const sessions = await prisma.session.findMany({
+    where: { type: "PRACTICE", teams: { some: { teamId } } },
+    select: { id: true, coaches: { select: { coachId: true, role: true, payable: true } } },
+  });
+  for (const s of sessions) {
+    if (oldCoachId) {
+      if (!s.coaches.some((c) => c.coachId === oldCoachId)) continue; // outgoing head not here
+    } else if (s.coaches.some((c) => c.payable && c.role === "PRIMARY" && c.coachId !== newCoachId)) {
+      continue; // someone else is already the paid coach — don't override
+    }
+    // A substitute (not either head) already being paid keeps that session.
+    const hasPayableSub = s.coaches.some(
+      (c) => c.payable && c.role === "SUBSTITUTE" && c.coachId !== oldCoachId && c.coachId !== newCoachId,
+    );
+    if (oldCoachId) {
+      await prisma.sessionCoach.deleteMany({ where: { sessionId: s.id, coachId: oldCoachId } });
+    }
+    await prisma.sessionCoach.upsert({
+      where: { sessionId_coachId: { sessionId: s.id, coachId: newCoachId } },
+      create: { sessionId: s.id, coachId: newCoachId, role: "PRIMARY", payable: !hasPayableSub },
+      update: { role: "PRIMARY", payable: !hasPayableSub },
+    });
+  }
+}
