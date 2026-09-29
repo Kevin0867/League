@@ -594,19 +594,29 @@ export async function teamPracticeCoachSessions(): Promise<PracticeCoachSession[
       const tt = s.teams.find((t) => t.teamId === teamId);
       const teamName = tt?.team.name ?? null;
       const headCoachId = tt?.team.coachId ?? null;
-      const coveredId = s.coaches.find((c) => c.role === "PRIMARY")?.coachId ?? headCoachId;
-      // One payable row per coach on this session, keeping the best-paying role.
-      // The team's head coach is always counted PRIMARY, never as a stale ASSISTANT
-      // row left over from a promotion to head — so a head coach is never paid (or
-      // shown) as an assistant on their own team.
+      const coveredId = headCoachId ?? s.coaches.find((c) => c.role === "PRIMARY")?.coachId ?? null;
+      // The PRIMARY (paid) coaching slot on a practice belongs to the team's HEAD
+      // coach. So any payable PRIMARY row — including a stale one left behind for a
+      // coach who was replaced — is re-attributed to the CURRENT head, and pay
+      // follows the team's real coach without hunting down old rows. If a substitute
+      // covered the class, the sub is paid for it and the head is not. Assistants
+      // keep their own coach + rate.
       const rolePriority = (r: string) => (r === "PRIMARY" ? 3 : r === "SUBSTITUTE" ? 2 : r === "BACKUP" ? 1 : 0);
+      const hasPayableSub = s.coaches.some((c) => c.payable && c.role === "SUBSTITUTE");
       const bestByCoach = new Map<string, { role: string; paidIfCancelled: boolean }>();
       for (const c of s.coaches) {
         if (!c.payable) continue;
-        const role = c.coachId === headCoachId ? "PRIMARY" : c.role;
-        const prev = bestByCoach.get(c.coachId);
+        const takesPrimarySlot = c.role === "PRIMARY" || c.coachId === headCoachId;
+        let coachId = c.coachId;
+        let role = c.role;
+        if (takesPrimarySlot) {
+          if (hasPayableSub) continue; // a sub covers the head's slot — don't double-pay
+          role = "PRIMARY";
+          if (headCoachId) coachId = headCoachId; // re-attribute the primary slot to the head
+        }
+        const prev = bestByCoach.get(coachId);
         const paidIfCancelled = (prev?.paidIfCancelled ?? false) || c.paidIfCancelled;
-        if (!prev || rolePriority(role) > rolePriority(prev.role)) bestByCoach.set(c.coachId, { role, paidIfCancelled });
+        if (!prev || rolePriority(role) > rolePriority(prev.role)) bestByCoach.set(coachId, { role, paidIfCancelled });
         else prev.paidIfCancelled = paidIfCancelled;
       }
       for (const [coachId, v] of bestByCoach) {
