@@ -9,7 +9,7 @@ import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { accruePlayerSeasonFee, placementPayLink, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
 import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
-import { addTeamAssistantToSessions, removeTeamAssistantFromSessions } from "@/lib/domain/teamCoachSessions";
+import { addTeamAssistantToSessions, removeTeamAssistantFromSessions, reassignTeamHeadOnSessions } from "@/lib/domain/teamCoachSessions";
 import { isBookable } from "@/lib/domain/facilityWindows";
 import { DAY_INDEX } from "@/lib/domain/schedule";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
@@ -545,6 +545,9 @@ export async function POST(req: Request) {
         // rows for them on this team, so they're never shown or paid as both.
         await prisma.teamCoach.deleteMany({ where: { teamId, coachId } });
         await removeTeamAssistantFromSessions(teamId, coachId);
+        // Move the practice coaching + pay off the previous head onto the new one,
+        // so a replaced coach isn't still paid for the team's practices.
+        await reassignTeamHeadOnSessions(teamId, prevAssign?.coachId ?? null, coachId);
       }
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "ASSIGN_COACH", summary: (coachId ? `Assigned coach ${coachId}` : "Cleared coach") + overrideNote });
       // Notify the incoming coach they're on, and the outgoing coach they're off.
@@ -596,9 +599,11 @@ export async function POST(req: Request) {
         }
         await prisma.team.update({ where: { id: ch.teamId }, data: { coachId: ch.coachId } });
         if (ch.coachId) {
-          // Promoting to head: clear any stale assistant record + assistant pay rows.
+          // Promoting to head: clear any stale assistant record + assistant pay rows,
+          // and move the practice coaching + pay off the previous head onto the new one.
           await prisma.teamCoach.deleteMany({ where: { teamId: ch.teamId, coachId: ch.coachId } });
           await removeTeamAssistantFromSessions(ch.teamId, ch.coachId);
+          await reassignTeamHeadOnSessions(ch.teamId, prevCoachId ?? null, ch.coachId);
         }
         await audit({ actorId: actor.userId, entityType: "Team", entityId: ch.teamId, action: "ASSIGN_COACH", summary: (ch.coachId ? `Assigned coach ${ch.coachId} (bulk)` : "Cleared coach (bulk)") + bulkOverride });
         if (prevCoachId && prevCoachId !== ch.coachId) {
