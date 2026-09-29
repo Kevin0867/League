@@ -369,6 +369,12 @@ export default async function TeamDetailPage({
             ? `Realigned ${moved} upcoming practice${moved === "1" ? "" : "s"} onto this team's day/time. Coach reminders will now fire on the right day.`
             : "Practices are already on this team's day/time — nothing to move."}
         </div>
+      ) : ok === "syncCoaches" ? (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          {Number(n) > 0
+            ? `Synced ${n} practice${n === "1" ? "" : "s"} to the head coach — the schedule now shows and pays them. Any practice a substitute covered was left as-is.`
+            : "Practices already show the current head coach — nothing to change."}
+        </div>
       ) : ok === "updateTeam" && Number(moved) > 0 ? (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
           Team fields saved — and {moved} upcoming practice{moved === "1" ? "" : "s"} moved onto the new day/time.
@@ -1158,6 +1164,20 @@ export default async function TeamDetailPage({
                 </div>
               ))}
             </div>
+
+            {team.coach && (
+              <form method="POST" action="/api/console/teams" className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="syncPracticeCoaches" />
+                <input type="hidden" name="teamId" value={team.id} />
+                <p className="mb-2 text-[11px] text-slate-600">
+                  Changed the head coach but the practices still show the old one? Set every practice&apos;s coach to
+                  <strong> {team.coach.person.firstName} {team.coach.person.lastName}</strong> (the current head coach). Any
+                  practice a substitute covered is left as-is.
+                </p>
+                <button className="btn-secondary py-1 text-xs">Sync practices to head coach</button>
+              </form>
+            )}
 
             <form method="POST" action="/api/console/teams" className="grid gap-2 sm:grid-cols-6 sm:items-end">
               <input type="hidden" name="ticket" value={ticket} />
