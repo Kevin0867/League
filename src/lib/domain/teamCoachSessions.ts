@@ -44,6 +44,42 @@ export async function removeTeamAssistantFromSessions(teamId: string, coachId: s
  * assignment (no outgoing head) a session that already has a paid PRIMARY is left
  * alone, so this never steals a session someone is already the coach of.
  */
+/**
+ * Make the team's CURRENT head coach the PRIMARY coach on every practice session,
+ * removing any leftover PRIMARY row for a replaced coach. A session covered by a
+ * substitute keeps the sub (and the head is unpaid there). Use to clean up a team
+ * whose head coach was changed before reassignment learned to move the sessions —
+ * so the practices show (and pay) the real coach without adding subs by hand.
+ * Returns the number of sessions whose primary coach changed.
+ */
+export async function syncTeamPracticeCoachesToHead(teamId: string): Promise<number> {
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { coachId: true } });
+  if (!team?.coachId) return 0;
+  const headId = team.coachId;
+  const sessions = await prisma.session.findMany({
+    where: { type: "PRACTICE", teams: { some: { teamId } } },
+    select: { id: true, coaches: { select: { coachId: true, role: true, payable: true } } },
+  });
+  let changed = 0;
+  for (const s of sessions) {
+    const hasPayableSub = s.coaches.some((c) => c.payable && c.role === "SUBSTITUTE");
+    const stalePrimaries = s.coaches.filter((c) => c.role === "PRIMARY" && c.coachId !== headId);
+    const headRow = s.coaches.find((c) => c.coachId === headId);
+    const headNeedsFix = !headRow || headRow.role !== "PRIMARY" || headRow.payable === hasPayableSub; // payable should be !hasPayableSub
+    if (!stalePrimaries.length && !headNeedsFix) continue;
+    if (stalePrimaries.length) {
+      await prisma.sessionCoach.deleteMany({ where: { sessionId: s.id, coachId: { in: stalePrimaries.map((c) => c.coachId) }, role: "PRIMARY" } });
+    }
+    await prisma.sessionCoach.upsert({
+      where: { sessionId_coachId: { sessionId: s.id, coachId: headId } },
+      create: { sessionId: s.id, coachId: headId, role: "PRIMARY", payable: !hasPayableSub },
+      update: { role: "PRIMARY", payable: !hasPayableSub },
+    });
+    changed++;
+  }
+  return changed;
+}
+
 export async function reassignTeamHeadOnSessions(teamId: string, oldCoachId: string | null, newCoachId: string): Promise<void> {
   if (!newCoachId || oldCoachId === newCoachId) return;
   const sessions = await prisma.session.findMany({

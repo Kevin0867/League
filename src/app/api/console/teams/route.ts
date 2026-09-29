@@ -9,7 +9,7 @@ import { paymentRequestEmail } from "@/lib/payments/paymentRequestEmail";
 import { accruePlayerSeasonFee, placementPayLink, ensureSeasonFeePayable } from "@/lib/payments/familyFee";
 import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { coachTeamConflicts } from "@/lib/domain/coachSchedule";
-import { addTeamAssistantToSessions, removeTeamAssistantFromSessions, reassignTeamHeadOnSessions } from "@/lib/domain/teamCoachSessions";
+import { addTeamAssistantToSessions, removeTeamAssistantFromSessions, reassignTeamHeadOnSessions, syncTeamPracticeCoachesToHead } from "@/lib/domain/teamCoachSessions";
 import { isBookable } from "@/lib/domain/facilityWindows";
 import { DAY_INDEX } from "@/lib/domain/schedule";
 import { teamAssignmentEmail } from "@/lib/domain/assignmentEmail";
@@ -660,6 +660,19 @@ export async function POST(req: Request) {
       await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "REMOVE_COACH", summary: `Removed additional coach ${coachId}` });
       await notifyCoachTeamChange({ actorUserId: actor.userId, coachId, teamId, added: false, role: "assistant" });
       return back("?ok=removeTeamCoach");
+    }
+
+    // Move every practice's primary coach to the team's CURRENT head coach,
+    // clearing any leftover rows for a coach who was replaced — so the schedule
+    // shows the real coach and pays them, without adding subs by hand. A session
+    // a substitute covered is left as-is.
+    case "syncPracticeCoaches": {
+      if (!teamId) return back("?err=team");
+      const team = await prisma.team.findUnique({ where: { id: teamId }, select: { coachId: true } });
+      if (!team?.coachId) return back("?err=nohead");
+      const changed = await syncTeamPracticeCoachesToHead(teamId);
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "SYNC_COACHES", summary: `Synced ${changed} practice(s) to the head coach` });
+      return back(`?ok=syncCoaches&n=${changed}`);
     }
 
     case "removePlayer": {
