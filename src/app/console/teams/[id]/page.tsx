@@ -13,7 +13,8 @@ import { feeStateOf, feeStateRank, feeStateDisplay, type FeeState } from "@/lib/
 import { TeamColorDot } from "@/components/TeamColorDot";
 import { TeamScheduleFields } from "./TeamScheduleFields";
 import { getSession, mintConsoleTicket } from "@/lib/auth";
-import { isAdmin } from "@/lib/rbac";
+import { isAdmin, can } from "@/lib/rbac";
+import { formatCents } from "@/lib/money";
 import { TeamPhotos } from "@/components/TeamPhotos";
 import { listTeamPhotos } from "@/lib/domain/teamPhotos";
 import { canViewTeamNotes } from "@/lib/domain/coachingAccess";
@@ -26,6 +27,7 @@ import { TeamPhotoUploadForm } from "@/components/TeamPhotoUploadForm";
 import { ImageUploadForm } from "@/components/ImageUploadForm";
 import { TextResetLinkButton } from "@/components/TextResetLinkButton";
 import { RESET_STATUS } from "@/lib/domain/resetStatus";
+import { planTeamRefund } from "@/lib/payments/teamRefund";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Team" };
@@ -112,7 +114,9 @@ export default async function TeamDetailPage({
   if (!(await canViewTeamNotes(id))) redirect("/console");
   const viewer = await getSession();
   const admin = isAdmin(viewer ? (viewer.roles ?? [viewer.role]) : []);
-  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia, tp, nomsg, acct, why, moved } = await searchParams;
+  // Refunds move real money — ADMIN only (matches the team-refund route's gate).
+  const canRefund = !!viewer && can(viewer.roles ?? [viewer.role], "runPayouts");
+  const { ok, err, imgok, imgerr, n, failed, failedNames, via, who, reqsim, reqfail, reset, resetVia, tp, nomsg, acct, why, moved, rfplan, rfreason, rfdone, rfdid, rfcents, rfskip, rffail, rferr } = await searchParams;
   const whyMsg = why;
   const VIA_LABEL: Record<string, string> = { email: "email", text: "text", both: "email and text" };
   const ticket = await mintConsoleTicket();
@@ -128,6 +132,11 @@ export default async function TeamDetailPage({
     },
   });
   if (!team) notFound();
+
+  // Preview a "refund each member $X" run (local only — no money moves until the
+  // admin confirms). Parsed from the ?rfplan dollar amount the admin entered.
+  const rfAmountCents = canRefund && rfplan ? Math.round(parseFloat(rfplan) * 100) : 0;
+  const refundPreview = rfAmountCents > 0 ? await planTeamRefund(team.id, rfAmountCents) : null;
 
   const teamPhotos = await listTeamPhotos(team.id);
 
@@ -1215,6 +1224,81 @@ export default async function TeamDetailPage({
               </label>
             </form>
           </div>
+
+          {/* Refund each member a fixed amount — e.g. crediting back cancelled
+              practices. Preview first (no money moves), then confirm. ADMIN only. */}
+          {canRefund && (
+            <div className="card mt-4 space-y-3">
+              <div>
+                <h2 className="font-semibold text-slate-900">Refund each member</h2>
+                <p className="text-sm text-slate-500">
+                  Issue the same refund to every player on this team — e.g. crediting back cancelled practices. The money
+                  goes back to the card that paid each season fee. You&apos;ll see a preview before anything is refunded.
+                </p>
+              </div>
+
+              {rfdone && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+                  Refunded <strong>{rfdid}</strong> member{rfdid === "1" ? "" : "s"} ({formatCents(Number(rfcents ?? 0))}){Number(rfskip ?? 0) > 0 ? ` · ${rfskip} skipped` : ""}{Number(rffail ?? 0) > 0 ? ` · ${rffail} failed` : ""}. Refunds go back to the original card and take a few days to appear.
+                </div>
+              )}
+              {rferr && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-800">
+                  Couldn&apos;t run the refund: {rferr === "auth" ? "you don't have permission." : rferr === "amount" ? "enter a dollar amount." : rferr}
+                </div>
+              )}
+
+              {!refundPreview ? (
+                <form method="GET" className="grid gap-2 sm:grid-cols-6 sm:items-end">
+                  <div className="sm:col-span-2">
+                    <label className="label">Amount per member ($)</label>
+                    <input name="rfplan" type="number" step="0.01" min="0" placeholder="123.75" className="input" required />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="label">Reason (shown on the refund)</label>
+                    <input name="rfreason" placeholder="Refund for 3 cancelled practices" className="input" />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <button className="btn-secondary w-full">Preview</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-sm text-slate-700">
+                    About to refund <strong>{formatCents(rfAmountCents)}</strong> to each of <strong>{refundPreview.eligibleCount}</strong> eligible member{refundPreview.eligibleCount === 1 ? "" : "s"} — total <strong>{formatCents(refundPreview.totalCents)}</strong>.
+                    {refundPreview.rows.length - refundPreview.eligibleCount > 0 ? ` ${refundPreview.rows.length - refundPreview.eligibleCount} will be skipped.` : ""}
+                  </p>
+                  <ul className="divide-y divide-slate-200 text-sm">
+                    {refundPreview.rows.map((r) => (
+                      <li key={r.personId} className="flex items-center justify-between gap-3 py-1.5">
+                        <span className="text-slate-700">
+                          {r.name}
+                          {r.payerName && r.payerName !== r.name ? <span className="text-slate-400"> (paid by {r.payerName})</span> : null}
+                          <span className="ml-2 text-xs text-slate-400">{r.payNote}</span>
+                        </span>
+                        {r.eligible
+                          ? <span className="badge bg-emerald-100 text-emerald-800 whitespace-nowrap">{formatCents(rfAmountCents)}</span>
+                          : <span className="text-right text-xs text-amber-700">skip — {r.reason}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <form method="POST" action="/api/console/team-refund">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="teamId" value={team.id} />
+                      <input type="hidden" name="amount" value={(rfAmountCents / 100).toFixed(2)} />
+                      <input type="hidden" name="reason" value={rfreason ?? ""} />
+                      <button disabled={refundPreview.eligibleCount === 0} className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        Confirm &amp; issue {formatCents(refundPreview.totalCents)} in refunds
+                      </button>
+                    </form>
+                    <Link href={`/console/teams/${team.id}`} className="text-sm text-slate-500 hover:underline">Cancel</Link>
+                  </div>
+                  <p className="text-[11px] text-slate-400">Re-running the same amount won&apos;t double-refund (each charge is refunded once).</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Danger zone */}
           <div className="mt-4 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50/50 px-5 py-4">
