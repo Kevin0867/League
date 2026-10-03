@@ -601,6 +601,30 @@ model Coach {
   alaCarteBookings    AlaCarteBooking[] @relation("AlaCarteCoach")
   lessonSeries        LessonSeries[]    @relation("LessonSeriesCoach")
   coachingAgreements  CoachingAgreement[]
+  busyBlocks          CoachBusyBlock[]
+}
+
+/// A busy interval imported from a coach's external phone/work calendar
+/// (Coach.externalCalendarUrl). A cron fetches each coach's feed on a schedule
+/// and rewrites these rows; the open-slot engine subtracts them so a lesson is
+/// never offered when the coach is already committed elsewhere. One row per
+/// (expanded) VEVENT occurrence. Times are UTC instants.
+model CoachBusyBlock {
+  id         String   @id @default(cuid())
+  coachId    String
+  coach      Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  startAt    DateTime
+  endAt      DateTime
+  /// All-day event — blocks the whole Phoenix day(s) it spans.
+  allDay     Boolean  @default(false)
+  summary    String?
+  /// The VEVENT UID (+ occurrence suffix), for dedupe within a sync.
+  uid        String?
+  /// Which feed this came from + when it was last refreshed.
+  sourceUrl  String?
+  fetchedAt  DateTime @default(now())
+
+  @@index([coachId, startAt])
 }
 
 /// A digital coaching agreement for a season: the coach reviews their

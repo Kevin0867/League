@@ -5,7 +5,7 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { PageHeader } from "@/components/RoadmapNote";
 import { formatCents } from "@/lib/money";
-import { formatDate, formatTime12, phoenixDateInput } from "@/lib/time";
+import { formatDate, formatTime12, formatDateTime12, phoenixDateInput } from "@/lib/time";
 import { LessonAvailabilityForm } from "@/components/LessonAvailabilityForm";
 import { openLessonSlots } from "@/lib/domain/lessonSlots";
 
@@ -48,6 +48,11 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
 
   const offerings = coach?.alaCarteOfferings ?? [];
   const exceptions = coach?.availabilityExceptions ?? [];
+
+  // Phone-calendar busy-import status, so the coach can see it's working.
+  const calSync = coach?.externalCalendarUrl
+    ? await prisma.coachBusyBlock.aggregate({ where: { coachId: coach.id }, _count: { _all: true }, _max: { fetchedAt: true } })
+    : null;
 
   // Preview the next bookable times for a chosen offering + location — this is the
   // exact engine the public booking page will use, so it's a live check that the
@@ -173,6 +178,13 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           initialBlocks={(coach?.availabilityBlocks ?? []).map((b) => ({ dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime }))}
           initialCalendarUrl={coach?.externalCalendarUrl ?? ""}
         />
+        {coach?.externalCalendarUrl && (
+          <p className="text-xs text-slate-400">
+            {calSync?._max.fetchedAt
+              ? `Calendar last synced ${formatDateTime12(calSync._max.fetchedAt)} — ${calSync._count._all} busy time${calSync._count._all === 1 ? "" : "s"} imported and blocked from booking.`
+              : "Your calendar link is saved — PURE refreshes it automatically every couple of hours to block your busy times."}
+          </p>
+        )}
       </div>
 
       {/* 3 · Time off / one-off availability */}

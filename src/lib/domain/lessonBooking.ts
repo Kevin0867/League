@@ -40,9 +40,11 @@ export async function coachBusyAt(coachId: string, day: string, start: string, e
   win.start.setUTCDate(win.start.getUTCDate() - 1);
   win.end.setUTCDate(win.end.getUTCDate() + 2);
   const s0 = toMin(start), s1 = toMin(end);
-  const [lessons, sessions] = await Promise.all([
+  const [lessons, sessions, busyBlocks] = await Promise.all([
     prisma.alaCarteBooking.findMany({ where: { coachId, status: { notIn: ["CANCELLED", "DECLINED"] }, scheduledAt: { gte: win.start, lt: win.end }, ...(ignoreBookingId ? { id: { not: ignoreBookingId } } : {}) }, select: { scheduledAt: true, lessonLengthMin: true, offering: { select: { lengthMin: true } } } }),
     prisma.session.findMany({ where: { coaches: { some: { coachId } }, status: { notIn: ["CANCELLED", "RESCHEDULED"] }, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true } }),
+    // Imported phone-calendar busy times (Phase 6).
+    prisma.coachBusyBlock.findMany({ where: { coachId, endAt: { gte: win.start }, startAt: { lt: win.end } }, select: { startAt: true, endAt: true } }),
   ]);
   for (const l of lessons) {
     if (!l.scheduledAt || phoenixDateInput(l.scheduledAt) !== day) continue;
@@ -53,6 +55,15 @@ export async function coachBusyAt(coachId: string, day: string, start: string, e
   for (const se of sessions) {
     if (phoenixDateInput(se.date) !== day) continue;
     if (overlaps(s0, s1, toMin(se.startTime), toMin(se.endTime))) return true;
+  }
+  // An imported busy block, clipped to this Phoenix day, that overlaps the slot.
+  for (const bb of busyBlocks) {
+    const startDay = phoenixDateInput(bb.startAt);
+    const endDay = phoenixDateInput(bb.endAt);
+    if (day < startDay || day > endDay) continue;
+    const bs = day === startDay ? toMin(phoenixHHMM(bb.startAt)) : 0;
+    const be = day === endDay ? toMin(phoenixHHMM(bb.endAt)) : 1440;
+    if (be > bs && overlaps(s0, s1, bs, be)) return true;
   }
   return false;
 }
