@@ -18,6 +18,12 @@ export const addMinutesHHMM = (hhmm: string, add: number): string => {
   const h = Math.floor(t / 60), m = t % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
+// Phoenix is UTC-7 year-round (no DST) — derive a UTC datetime's wall-clock HH:MM.
+export const phoenixHHMM = (d: Date): string => {
+  const utcMin = d.getUTCHours() * 60 + d.getUTCMinutes();
+  const local = (utcMin - 7 * 60 + 1440) % 1440;
+  return `${String(Math.floor(local / 60)).padStart(2, "0")}:${String(local % 60).padStart(2, "0")}`;
+};
 const overlaps = (a0: number, a1: number, b0: number, b1: number) => a0 < b1 && b0 < a1;
 
 // A league/championship match occupies its host facility for the evening — treat

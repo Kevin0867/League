@@ -256,6 +256,7 @@ model Person {
   conversationParts    ConversationParticipant[]
   chatMessages         ChatMessage[]             @relation("ChatMessageSender")
   alaCarteBookings   AlaCarteBooking[] @relation("AlaCarteClient")
+  lessonSeriesAsClient LessonSeries[]  @relation("LessonSeriesClient")
   coachingNotes      CoachingNote[]
   recruitedByCoachId String?
   recruitedByCoach   Coach?           @relation("CoachRecruits", fields: [recruitedByCoachId], references: [id])
@@ -598,6 +599,7 @@ model Coach {
   payouts             CoachPayoutLine[]
   alaCarteOfferings   AlaCarteOffering[]
   alaCarteBookings    AlaCarteBooking[] @relation("AlaCarteCoach")
+  lessonSeries        LessonSeries[]    @relation("LessonSeriesCoach")
   coachingAgreements  CoachingAgreement[]
 }
 
@@ -1685,6 +1687,7 @@ model AlaCarteOffering {
   createdAt   DateTime @default(now())
 
   bookings    AlaCarteBooking[]
+  lessonSeries LessonSeries[]
 
   @@index([facilityId])
   @@index([coachId])
@@ -1719,10 +1722,54 @@ model AlaCarteBooking {
   appliedPurePct     Float?
 
   scheduledAt   DateTime?
+  /// For a player-booked lesson: where it's held + its length (so a court can be
+  /// held and reminders/display know the venue), the recurring series it belongs
+  /// to (null = a one-off), and the per-lesson Payment that charges it.
+  facilityId    String?
+  lessonLengthMin Int?
+  seriesId      String?
+  series        LessonSeries? @relation(fields: [seriesId], references: [id])
+  paymentId     String?
   /// When the post-lesson thank-you + review request was sent (so the cron never
   /// double-sends).
   feedbackSentAt DateTime?
   createdAt     DateTime @default(now())
+
+  @@index([clientId])
+  @@index([coachId])
+  @@index([seriesId])
+}
+
+/// A player-booked recurring lesson plan with a coach: the header that ties its
+/// individual lessons (AlaCarteBooking rows) together, carries the cadence/end
+/// rule, and holds the saved card used to auto-charge each lesson (per-lesson
+/// billing). A one-off lesson has a series of cadence ONCE too, for uniformity.
+model LessonSeries {
+  id            String   @id @default(cuid())
+  offeringId    String
+  offering      AlaCarteOffering @relation(fields: [offeringId], references: [id])
+  coachId       String?
+  coach         Coach?   @relation("LessonSeriesCoach", fields: [coachId], references: [id])
+  clientId      String
+  client        Person   @relation("LessonSeriesClient", fields: [clientId], references: [id])
+  facilityId    String?
+  /// ONCE | WEEKLY | MONTHLY
+  cadence       String   @default("ONCE")
+  intervalN     Int      @default(1)
+  /// ONCE | COUNT | UNTIL_DATE
+  endType       String   @default("ONCE")
+  endDate       DateTime?
+  count         Int?
+  people        Int      @default(1)
+  priceCents    Int      @default(0)
+  /// Saved card for per-lesson auto-charge (Phase 4).
+  stripeCustomerId       String?
+  defaultPaymentMethodId String?
+  /// ACTIVE | COMPLETED | CANCELLED
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+
+  bookings      AlaCarteBooking[]
 
   @@index([clientId])
   @@index([coachId])
