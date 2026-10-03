@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/teams", label: "Teams" },
   { href: "/gallery", label: "Gallery" },
   { href: "/clinics", label: "Clinics and lessons" },
+  { href: "/lessons", label: "Book a Lesson" },
   { href: "/locations", label: "Locations" },
   { href: "/standings", label: "Standings" },
   { href: "/championship", label: "Championship" },

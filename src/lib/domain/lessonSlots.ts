@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { DOW, isBookable } from "@/lib/domain/facilityWindows";
 import { phoenixDateInput } from "@/lib/time";
-import { toMin, addMinutesHHMM } from "@/lib/domain/courtHold";
+import { toMin, addMinutesHHMM, phoenixHHMM } from "@/lib/domain/courtHold";
 
 // The open-slot engine: given a coach, a facility, and a lesson length, return the
 // times a player can book — the coach's availability MINUS everything already on
@@ -153,11 +153,4 @@ export async function openLessonSlots(opts: {
     }
   }
   return slots;
-}
-
-// Phoenix is UTC-7 year-round (no DST). Derive the wall-clock HH:MM of a UTC date.
-function phoenixHHMM(d: Date): string {
-  const utcMin = d.getUTCHours() * 60 + d.getUTCMinutes();
-  const local = (utcMin - 7 * 60 + 1440) % 1440;
-  return toHHMM(local);
 }
