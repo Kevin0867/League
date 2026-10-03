@@ -56,7 +56,7 @@ export async function listPublicClinics(): Promise<PublicClinic[]> {
         priceCents: o.priceCents,
         capacity,
         scheduledAt: o.scheduledAt,
-        facilityName: o.facility.name,
+        facilityName: o.facility?.name ?? "",
         coachName: o.coach ? `${o.coach.person.firstName} ${o.coach.person.lastName}` : null,
         taken,
         spotsLeft,

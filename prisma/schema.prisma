@@ -569,6 +569,11 @@ model Coach {
   /// their practices, matches, and lessons stay in sync automatically.
   calendarToken       String?   @unique
 
+  /// The coach's OWN phone/work calendar subscribe link (Google/Apple/Outlook
+  /// "secret iCal URL"). PURE reads it on a schedule and blocks those busy times
+  /// so lessons are never offered when the coach is already booked elsewhere.
+  externalCalendarUrl String?
+
   /// Compensation (§9) — admin-only. A rate and/or a percentage per work type:
   /// regular-season coaching, private/semi-private lessons, and clinics. Rates
   /// stored in cents; percentages as whole numbers (e.g. 60 = 60%). payNotes
@@ -587,6 +592,7 @@ model Coach {
   teams               Team[]         @relation("TeamCoach")
   assistantTeams      TeamCoach[]    @relation("TeamAssistantCoach")
   availabilityBlocks  AvailabilityBlock[]
+  availabilityExceptions AvailabilityException[]
   recruits            Person[]       @relation("CoachRecruits")
   recruitedRegs       Registration[]
   payouts             CoachPayoutLine[]
@@ -642,6 +648,23 @@ model AvailabilityBlock {
   endTime   String
 
   @@index([coachId])
+}
+
+/// A dated override to a coach's recurring weekly availability: BLOCK = they're
+/// unavailable that day/time (vacation, an appointment), OPEN = extra one-off
+/// availability beyond their usual blocks. startTime/endTime null = the whole day.
+model AvailabilityException {
+  id        String   @id @default(cuid())
+  coachId   String
+  coach     Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  date      DateTime
+  startTime String?  // "HH:MM"; null = whole day
+  endTime   String?
+  kind      String   @default("BLOCK") // BLOCK | OPEN
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([coachId, date])
 }
 
 /// Facility & court inventory (§6).
@@ -1608,18 +1631,33 @@ model DuprSubmission {
 /// set their own prices. Venue eligibility gated on Facility.alaCarteAllowed.
 model AlaCarteOffering {
   id          String   @id @default(cuid())
-  /// PRIVATE | SEMI_PRIVATE | CLINIC
+  /// PRIVATE | SEMI_PRIVATE | GROUP | CLINIC
   type        String
   title       String
   description String?
-  facilityId  String
-  facility    Facility @relation(fields: [facilityId], references: [id])
+  /// Optional: a COACH-set offering (coachSet=true) isn't pinned to one venue —
+  /// the location is chosen at booking from preferredFacilityIds / the coach's
+  /// markets. The admin clinic catalog still pins a facility.
+  facilityId  String?
+  facility    Facility? @relation(fields: [facilityId], references: [id])
   coachId     String?
   coach       Coach?   @relation(fields: [coachId], references: [id])
+  /// The player-facing price (what a lesson costs). Coaches set this on their own
+  /// offerings; adminLockedPriceCents (admin override) wins when set.
   priceCents  Int
+  adminLockedPriceCents Int?
   /// Max participants (per-person price). null = uncapped.
   capacity    Int?
-  /// When the class/clinic runs.
+  /// A coach-managed "Private/Group lesson pricing" entry (self-service in the
+  /// coach portal), vs an admin-set clinic. Drives the lesson shape below.
+  coachSet    Boolean  @default(false)
+  lengthMin   Int?     // lesson length in minutes
+  minPeople   Int?     // group-size range (PRIVATE = 1..1, SEMI = 2..3, GROUP = n)
+  maxPeople   Int?
+  preferredFacilityIds Json?   // facility ids the coach prefers to teach this at
+  recurrenceAllowed Boolean @default(true)
+  /// When the class/clinic runs (admin catalog); coach offerings are scheduled
+  /// per booking, not here.
   scheduledAt DateTime?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -1627,6 +1665,7 @@ model AlaCarteOffering {
   bookings    AlaCarteBooking[]
 
   @@index([facilityId])
+  @@index([coachId])
 }
 
 /// A booking. Court cost comes off the top, then the split is applied to net;

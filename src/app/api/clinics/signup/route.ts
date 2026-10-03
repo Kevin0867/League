@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     : await prisma.person.create({ data: { firstName, lastName, email, phone: phone || null } });
 
   const when = formatClinicWhen(offering.scheduledAt);
-  const description = `${offering.title} — ${offering.facility.name}${offering.scheduledAt ? `, ${when}` : ""}`;
+  const description = `${offering.title}${offering.facility ? ` — ${offering.facility.name}` : ""}${offering.scheduledAt ? `, ${when}` : ""}`;
 
   // Booking holds the spot; grossCents lets the split be computed on delivery.
   const booking = await prisma.alaCarteBooking.create({
