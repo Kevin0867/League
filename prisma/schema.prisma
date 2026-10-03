@@ -1704,6 +1704,10 @@ model AlaCarteOffering {
   maxPeople   Int?
   preferredFacilityIds Json?   // facility ids the coach prefers to teach this at
   recurrenceAllowed Boolean @default(true)
+  /// Optional discount (whole-number %) applied to EACH lesson's per-person price
+  /// when the player books this as a recurring series (weekly/monthly). 0/null =
+  /// no recurring discount. priceCents is always per person.
+  recurringDiscountPct Int?
   /// When the class/clinic runs (admin catalog); coach offerings are scheduled
   /// per booking, not here.
   scheduledAt DateTime?

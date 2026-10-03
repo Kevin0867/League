@@ -42,7 +42,7 @@ export default async function LessonsHomePage() {
                   <h2 className="font-bold text-slate-900">{c.person.firstName} {c.person.lastName}</h2>
                   <p className="text-sm text-slate-500">{types.join(" · ")}</p>
                   {c.bio && <p className="mt-1 line-clamp-2 text-sm text-slate-600">{c.bio}</p>}
-                  <p className="mt-2 text-sm font-semibold text-brand-700">From {formatCents(from)} · Book →</p>
+                  <p className="mt-2 text-sm font-semibold text-brand-700">From {formatCents(from)}/person · Book →</p>
                 </div>
               </Link>
             );

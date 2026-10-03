@@ -31,7 +31,15 @@ export async function POST(req: Request) {
     return NextResponse.redirect(new URL("/console/coaches?err=auth", origin), 303);
   }
   const personId = editingOther ? targetPersonId : me?.personId ?? "";
-  if (!personId) return NextResponse.redirect(new URL("/console/profile?err=noperson", origin), 303);
+  if (!personId) {
+    // No coach resolved. An admin whose own login isn't a coach must pick which
+    // coach's setup they're editing — send them to the picker, not the generic
+    // "your login isn't linked to a person" profile error.
+    if (can(actor.role, "manageCoaches")) {
+      return NextResponse.redirect(new URL("/console/profile/lessons?err=pickcoach", origin), 303);
+    }
+    return NextResponse.redirect(new URL("/console/profile?err=noperson", origin), 303);
+  }
   const returnBase = editingOther ? `/console/profile/lessons?coach=${personId}` : "/console/profile/lessons";
   const back = (qs: string) => NextResponse.redirect(new URL(`${returnBase}${qs}`, origin), 303);
 
@@ -68,11 +76,15 @@ export async function POST(req: Request) {
     const maxPeople = type === "PRIVATE" ? 1 : Math.max(minPeople, int("maxPeople") ?? minPeople);
     const title = g("title") || `${type === "PRIVATE" ? "Private" : type === "SEMI_PRIVATE" ? "Semi-private" : "Group"} lesson — ${lengthMin} min`;
     const preferred = list("facility");
+    // Recurring discount: whole-number %, clamped 0–90. Blank/0 = none.
+    const discRaw = parseInt(g("recurringDiscountPct") || "0", 10);
+    const recurringDiscountPct = Number.isFinite(discRaw) && discRaw > 0 ? Math.min(90, discRaw) : null;
     const data = {
       type, title, description: g("description") || null,
       priceCents, lengthMin, minPeople, maxPeople,
       preferredFacilityIds: preferred.length ? preferred : undefined,
       recurrenceAllowed: g("recurrenceAllowed") === "on",
+      recurringDiscountPct,
       coachSet: true, coachId: coach.id,
       active: g("active") !== "off",
     };

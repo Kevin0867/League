@@ -5,9 +5,8 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { PageHeader } from "@/components/RoadmapNote";
 import { formatCents } from "@/lib/money";
-import { formatDate, formatTime12, formatDateTime12, phoenixDateInput } from "@/lib/time";
+import { formatDate, formatTime12, formatDateTime12 } from "@/lib/time";
 import { LessonAvailabilityForm } from "@/components/LessonAvailabilityForm";
-import { openLessonSlots } from "@/lib/domain/lessonSlots";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Private/Group lesson pricing" };
@@ -38,6 +37,7 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
     return (
       <div className="space-y-6">
         <PageHeader title="Private/Group lesson pricing" subtitle="Pick a coach to set up their lesson offerings, pricing, and availability." />
+        {sp.err === "pickcoach" && <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">Pick a coach first, then add their lesson — your admin login isn&apos;t itself a coach, so lessons attach to the coach you choose below.</p>}
         <div className="card">
           <h2 className="font-semibold text-slate-900">Choose a coach</h2>
           <p className="mt-0.5 text-sm text-slate-500">You&apos;re an admin, so pick whose lesson setup you want to manage. Coaches edit their own from their dashboard.</p>
@@ -85,19 +85,6 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
     ? await prisma.coachBusyBlock.aggregate({ where: { coachId: coach.id }, _count: { _all: true }, _max: { fetchedAt: true } })
     : null;
 
-  // Preview the next bookable times for a chosen offering + location — this is the
-  // exact engine the public booking page will use, so it's a live check that the
-  // availability + court conflicts resolve correctly.
-  const pvOffering = sp.pv ? offerings.find((o) => o.id === sp.pv) : null;
-  const pvLoc = sp.pvloc || "";
-  let pvSlots: { day: string; startTime: string; endTime: string }[] | null = null;
-  if (coach && pvOffering?.lengthMin && pvLoc) {
-    const from = phoenixDateInput(new Date());
-    const toD = new Date(); toD.setUTCDate(toD.getUTCDate() + 21);
-    pvSlots = await openLessonSlots({ coachId: coach.id, facilityId: pvLoc, lengthMin: pvOffering.lengthMin, fromDay: from, toDay: phoenixDateInput(toD), maxSlots: 40 });
-  }
-  const pvByDay = new Map<string, string[]>();
-  for (const s of pvSlots ?? []) { const a = pvByDay.get(s.day) ?? []; a.push(s.startTime); pvByDay.set(s.day, a); }
   const whose = viewingOther ? `${person.firstName} ${person.lastName}`.trim() : "your";
   const hidden = viewingOther ? <input type="hidden" name="personId" value={personId} /> : null;
 
@@ -152,50 +139,6 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           </div>
         </details>
       </div>
-
-      {/* 1b · Preview bookable times (uses the real slot engine) */}
-      {offerings.length > 0 && facilities.length > 0 && (
-        <div className="card space-y-3">
-          <div>
-            <h2 className="font-semibold text-slate-900">Preview bookable times</h2>
-            <p className="mt-0.5 text-sm text-slate-500">See the open slots a player would be offered over the next 3 weeks — your availability minus anything already booked, and only where a court is free.</p>
-          </div>
-          <form method="GET" className="grid gap-2 sm:grid-cols-6 sm:items-end">
-            {viewingOther && <input type="hidden" name="coach" value={personId} />}
-            <div className="sm:col-span-3">
-              <label className="label">Offering</label>
-              <select name="pv" defaultValue={sp.pv ?? ""} className="input py-1">
-                <option value="">—</option>
-                {offerings.map((o) => <option key={o.id} value={o.id}>{TYPE_LABEL[o.type] ?? o.type} · {o.lengthMin ?? 60} min · {formatCents(o.priceCents)}</option>)}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label">Location</label>
-              <select name="pvloc" defaultValue={pvLoc} className="input py-1">
-                <option value="">—</option>
-                {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </div>
-            <div className="sm:col-span-1"><button className="btn-secondary w-full">Preview</button></div>
-          </form>
-          {pvSlots && (
-            pvSlots.length === 0 ? (
-              <p className="text-sm text-amber-700">No open slots in the next 3 weeks for this offering + location. Check your availability windows and that the venue has open court hours.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {[...pvByDay.entries()].map(([day, times]) => (
-                  <div key={day} className="flex flex-wrap items-baseline gap-2 text-sm">
-                    <span className="w-40 shrink-0 font-medium text-slate-700">{formatDate(new Date(`${day}T12:00:00Z`))}</span>
-                    <span className="flex flex-wrap gap-1.5">
-                      {times.map((t) => <span key={t} className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{formatTime12(t)}</span>)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )
-          )}
-        </div>
-      )}
 
       {/* 2 · Availability + phone calendar */}
       <div className="card space-y-3">
@@ -278,7 +221,7 @@ function OfferingForm({
 }: {
   ticket: string;
   hidden: React.ReactNode;
-  offering?: { id: string; type: string; title: string; description: string | null; priceCents: number; lengthMin: number | null; minPeople: number | null; maxPeople: number | null; preferredFacilityIds: unknown; recurrenceAllowed: boolean; active: boolean };
+  offering?: { id: string; type: string; title: string; description: string | null; priceCents: number; lengthMin: number | null; minPeople: number | null; maxPeople: number | null; preferredFacilityIds: unknown; recurrenceAllowed: boolean; recurringDiscountPct: number | null; active: boolean };
   facilities: { id: string; name: string }[];
   facName: Map<string, string>;
 }) {
@@ -300,7 +243,7 @@ function OfferingForm({
           <input name="lengthMin" type="number" min="15" step="15" defaultValue={offering?.lengthMin ?? 60} className="input py-1" />
         </div>
         <div className="sm:col-span-1">
-          <label className="label">Price ($)</label>
+          <label className="label">Price / person ($)</label>
           <input name="price" type="number" min="0" step="0.01" defaultValue={offering ? (offering.priceCents / 100).toFixed(2) : ""} placeholder="80.00" className="input py-1" required />
         </div>
         <div className="sm:col-span-1">
@@ -327,13 +270,24 @@ function OfferingForm({
             </div>
           </div>
         )}
+        <p className="sm:col-span-6 -mt-1 text-xs text-slate-500">
+          <strong>Price is per person.</strong> For a semi-private or group lesson, each player pays this amount (e.g. $40/person × 3 players = $120 for the lesson).
+        </p>
         <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="recurrenceAllowed" defaultChecked={offering ? offering.recurrenceAllowed : true} /> Allow recurring bookings (weekly/monthly series)
         </label>
-        <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-700">
+        <div className="sm:col-span-2">
+          <label className="label">Recurring discount (%)</label>
+          <input name="recurringDiscountPct" type="number" min="0" max="90" step="1" defaultValue={offering?.recurringDiscountPct ?? ""} placeholder="0" className="input py-1" />
+        </div>
+        <div className="sm:col-span-1" />
+        <p className="sm:col-span-6 -mt-1 text-xs text-slate-500">
+          Optional: take this % off each lesson&apos;s per-person price when a player commits to a recurring series — a built-in incentive to book a block. Leave blank or 0 for no discount.
+        </p>
+        <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="active" defaultChecked={offering ? offering.active : true} /> Bookable
         </label>
-        <div className="sm:col-span-1 flex items-end justify-end">
+        <div className="sm:col-span-3 flex items-end justify-end">
           <button className="btn-primary py-1 text-sm">{offering ? "Save" : "Add offering"}</button>
         </div>
       </form>
