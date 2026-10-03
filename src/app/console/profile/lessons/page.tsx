@@ -5,8 +5,9 @@ import { getSession, mintConsoleTicket } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { PageHeader } from "@/components/RoadmapNote";
 import { formatCents } from "@/lib/money";
-import { formatDate, formatTime12 } from "@/lib/time";
+import { formatDate, formatTime12, phoenixDateInput } from "@/lib/time";
 import { LessonAvailabilityForm } from "@/components/LessonAvailabilityForm";
+import { openLessonSlots } from "@/lib/domain/lessonSlots";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Private/Group lesson pricing" };
@@ -47,6 +48,20 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
 
   const offerings = coach?.alaCarteOfferings ?? [];
   const exceptions = coach?.availabilityExceptions ?? [];
+
+  // Preview the next bookable times for a chosen offering + location — this is the
+  // exact engine the public booking page will use, so it's a live check that the
+  // availability + court conflicts resolve correctly.
+  const pvOffering = sp.pv ? offerings.find((o) => o.id === sp.pv) : null;
+  const pvLoc = sp.pvloc || "";
+  let pvSlots: { day: string; startTime: string; endTime: string }[] | null = null;
+  if (coach && pvOffering?.lengthMin && pvLoc) {
+    const from = phoenixDateInput(new Date());
+    const toD = new Date(); toD.setUTCDate(toD.getUTCDate() + 21);
+    pvSlots = await openLessonSlots({ coachId: coach.id, facilityId: pvLoc, lengthMin: pvOffering.lengthMin, fromDay: from, toDay: phoenixDateInput(toD), maxSlots: 40 });
+  }
+  const pvByDay = new Map<string, string[]>();
+  for (const s of pvSlots ?? []) { const a = pvByDay.get(s.day) ?? []; a.push(s.startTime); pvByDay.set(s.day, a); }
   const whose = viewingOther ? `${person.firstName} ${person.lastName}`.trim() : "your";
   const hidden = viewingOther ? <input type="hidden" name="personId" value={personId} /> : null;
 
@@ -95,6 +110,50 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           </div>
         </details>
       </div>
+
+      {/* 1b · Preview bookable times (uses the real slot engine) */}
+      {offerings.length > 0 && facilities.length > 0 && (
+        <div className="card space-y-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Preview bookable times</h2>
+            <p className="mt-0.5 text-sm text-slate-500">See the open slots a player would be offered over the next 3 weeks — your availability minus anything already booked, and only where a court is free.</p>
+          </div>
+          <form method="GET" className="grid gap-2 sm:grid-cols-6 sm:items-end">
+            {viewingOther && <input type="hidden" name="coach" value={personId} />}
+            <div className="sm:col-span-3">
+              <label className="label">Offering</label>
+              <select name="pv" defaultValue={sp.pv ?? ""} className="input py-1">
+                <option value="">—</option>
+                {offerings.map((o) => <option key={o.id} value={o.id}>{TYPE_LABEL[o.type] ?? o.type} · {o.lengthMin ?? 60} min · {formatCents(o.priceCents)}</option>)}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Location</label>
+              <select name="pvloc" defaultValue={pvLoc} className="input py-1">
+                <option value="">—</option>
+                {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
+            <div className="sm:col-span-1"><button className="btn-secondary w-full">Preview</button></div>
+          </form>
+          {pvSlots && (
+            pvSlots.length === 0 ? (
+              <p className="text-sm text-amber-700">No open slots in the next 3 weeks for this offering + location. Check your availability windows and that the venue has open court hours.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {[...pvByDay.entries()].map(([day, times]) => (
+                  <div key={day} className="flex flex-wrap items-baseline gap-2 text-sm">
+                    <span className="w-40 shrink-0 font-medium text-slate-700">{formatDate(new Date(`${day}T12:00:00Z`))}</span>
+                    <span className="flex flex-wrap gap-1.5">
+                      {times.map((t) => <span key={t} className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{formatTime12(t)}</span>)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {/* 2 · Availability + phone calendar */}
       <div className="card space-y-3">
