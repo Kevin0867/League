@@ -51,6 +51,9 @@ const SECTIONS: NavSection[] = [
       { href: "/console/users", label: "Access", roles: ["COO", "DIRECTOR"] },
       { href: "/console/portal-access", label: "Portal access", roles: ["COO", "DIRECTOR"], match: ["/console/portal-access"] },
       { href: "/console/profile", label: "My Profile", roles: ["COACH"] },
+      // Lesson setup/pricing — coaches edit their own; admins pick a coach. One
+      // entry point for both so it's never buried.
+      { href: "/console/profile/lessons", label: "Lesson pricing", roles: ["COO", "DIRECTOR", "COACH"], match: ["/console/profile/lessons"] },
       { href: "/console/writeups/mine", label: "My write-ups", roles: ["COACH"] },
     ],
   },
