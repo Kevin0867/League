@@ -71,7 +71,7 @@ export async function openLessonSlots(opts: {
   win.start.setUTCDate(win.start.getUTCDate() - 1);
   win.end.setUTCDate(win.end.getUTCDate() + 2);
 
-  const [avail, exceptions, holds, facSessions, facFixtures, coachLessons, coachSessions] = await Promise.all([
+  const [avail, exceptions, holds, facSessions, facFixtures, coachLessons, coachSessions, busyBlocks] = await Promise.all([
     prisma.availabilityBlock.findMany({ where: { coachId: opts.coachId }, select: { dayOfWeek: true, startTime: true, endTime: true } }),
     prisma.availabilityException.findMany({ where: { coachId: opts.coachId, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true, kind: true } }),
     prisma.courtHold.findMany({ where: { facilityId: opts.facilityId, releasedAt: null, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true, courtCount: true } }),
@@ -79,6 +79,8 @@ export async function openLessonSlots(opts: {
     prisma.fixture.findMany({ where: { facilityId: opts.facilityId, status: { not: "CANCELLED" }, scheduledAt: { gte: win.start, lt: win.end } }, select: { scheduledAt: true } }),
     prisma.alaCarteBooking.findMany({ where: { coachId: opts.coachId, status: { notIn: ["CANCELLED", "DECLINED"] }, scheduledAt: { gte: win.start, lt: win.end } }, select: { scheduledAt: true, offering: { select: { lengthMin: true } } } }),
     prisma.session.findMany({ where: { coaches: { some: { coachId: opts.coachId } }, status: { notIn: ["CANCELLED", "RESCHEDULED"] }, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true } }),
+    // Phone-calendar busy-import (Phase 6): times the coach is committed elsewhere.
+    prisma.coachBusyBlock.findMany({ where: { coachId: opts.coachId, endAt: { gte: win.start }, startAt: { lt: win.end } }, select: { startAt: true, endAt: true, allDay: true } }),
   ]);
 
   // Recurring availability by weekday.
@@ -119,6 +121,20 @@ export async function openLessonSlots(opts: {
     pushBusy(day, { s: toMin(hhmm), e: toMin(hhmm) + len });
   }
   for (const se of coachSessions) pushBusy(phoenixDateInput(se.date), { s: toMin(se.startTime), e: toMin(se.endTime) });
+  // Imported phone-calendar busy times: a UTC interval, possibly spanning days —
+  // split it into each Phoenix day it touches so the day-based engine subtracts it.
+  for (const bb of busyBlocks) {
+    const startDay = phoenixDateInput(bb.startAt);
+    const endDay = phoenixDateInput(bb.endAt);
+    const cursor = new Date(`${startDay}T12:00:00Z`);
+    const lastDay = new Date(`${endDay}T12:00:00Z`);
+    for (let guard = 0; cursor <= lastDay && guard < 90; cursor.setUTCDate(cursor.getUTCDate() + 1), guard++) {
+      const day = phoenixDateInput(cursor);
+      const s = day === startDay ? toMin(phoenixHHMM(bb.startAt)) : 0;
+      const e = day === endDay ? toMin(phoenixHHMM(bb.endAt)) : 1440;
+      if (e > s) pushBusy(day, { s, e });
+    }
+  }
 
   const facCourts = facility.courtCount || 1;
   const slots: LessonSlot[] = [];
