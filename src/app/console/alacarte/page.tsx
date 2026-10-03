@@ -6,6 +6,7 @@ import { COACH_TEACHES, DIRECTOR_TEACHES } from "@/lib/domain/splits";
 import { mintConsoleTicket } from "@/lib/auth";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { LessonSetupForm } from "@/components/LessonSetupForm";
+import { LessonManageControls, type ManageBooking } from "@/components/LessonManageControls";
 import Link from "next/link";
 import { formatDateTime12 } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
@@ -65,6 +66,9 @@ export default async function AlaCartePage({
       {sp.err && (
         <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{ERRORS[sp.err] ?? "Action failed."}</p>
       )}
+      {sp.lok === "moved" && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Lesson moved — the player and coach were notified.</p>}
+      {sp.lok === "cancelled" && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Lesson cancelled{sp.rc ? ` — refunded ${formatCents(parseInt(sp.rc, 10) || 0)}` : ""}.</p>}
+      {sp.lerr && <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{decodeURIComponent(sp.lerr)}</p>}
 
       {/* Split reference */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -244,6 +248,22 @@ export default async function AlaCartePage({
                     director {formatCents(b.directorCents)}, PURE {formatCents(b.pureCents)}
                     {b.directorTaught ? " (director rates)" : ""}
                   </div>
+                )}
+
+                {/* A player-booked lesson (has a series) can be moved or cancelled
+                    here — reschedule/relocate re-checks the court, cancel can refund. */}
+                {b.seriesId && b.status !== "CANCELLED" && b.status !== "DECLINED" && (
+                  <LessonManageControls
+                    booking={{
+                      id: b.id, scheduledAt: b.scheduledAt, facilityId: b.facilityId,
+                      offeringTitle: b.offering.title, clientName: `${b.client.firstName} ${b.client.lastName}`.trim(),
+                      coachName: b.coach ? `${b.coach.person.firstName} ${b.coach.person.lastName}` : null, status: b.status,
+                    } as ManageBooking}
+                    facilities={alaFacilities.map((f) => ({ id: f.id, name: f.name }))}
+                    ticket={ticket}
+                    returnTo="/console/alacarte"
+                    isAdmin
+                  />
                 )}
               </div>
             ))}

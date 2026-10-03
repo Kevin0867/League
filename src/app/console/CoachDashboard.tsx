@@ -325,7 +325,10 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
           Set up every kind of lesson you offer — private, semi-private, group — with your price, length, group size, preferred
           locations, and the times you&apos;re available. Players book and pay through PURE and your court is reserved automatically.
         </p>
-        <Link href="/console/profile/lessons" className="btn-primary mt-3 inline-flex">Set up my lessons →</Link>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href="/console/profile/lessons" className="btn-primary inline-flex">Set up my lessons →</Link>
+          <Link href="/console/profile/lessons/schedule" className="btn-ghost inline-flex">My upcoming lessons</Link>
+        </div>
       </div>
 
       {/* Calendar subscription — keeps their phone in sync automatically */}
