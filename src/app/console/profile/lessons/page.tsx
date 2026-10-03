@@ -26,6 +26,37 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
   const viewingOther = admin && !!sp.coach && sp.coach !== session.personId;
   if (sp.coach && sp.coach !== session.personId && !admin) redirect("/console/profile");
   const personId = viewingOther ? sp.coach! : session.personId ?? "";
+
+  // Lesson setup is per-coach. An admin manages a COACH's setup, so when one lands
+  // here without having picked a coach (e.g. their own admin login isn't a coach,
+  // or isn't linked to a person at all), show a coach picker instead of erroring.
+  if (admin && !viewingOther && !personId) {
+    const coaches = await prisma.coach.findMany({
+      select: { personId: true, person: { select: { firstName: true, lastName: true } } },
+      orderBy: { person: { lastName: "asc" } },
+    });
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Private/Group lesson pricing" subtitle="Pick a coach to set up their lesson offerings, pricing, and availability." />
+        <div className="card">
+          <h2 className="font-semibold text-slate-900">Choose a coach</h2>
+          <p className="mt-0.5 text-sm text-slate-500">You&apos;re an admin, so pick whose lesson setup you want to manage. Coaches edit their own from their dashboard.</p>
+          {coaches.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">No coaches yet. Add coaches first, then set up their lessons.</p>
+          ) : (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {coaches.map((c) => (
+                <Link key={c.personId} href={`/console/profile/lessons?coach=${c.personId}`} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-brand-300 hover:bg-brand-50">
+                  <span className="font-medium text-slate-800">{c.person.firstName} {c.person.lastName}</span>
+                  <span className="text-brand-700">Set up →</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (!personId) redirect("/console/profile?err=noperson");
 
   const person = await prisma.person.findUnique({
