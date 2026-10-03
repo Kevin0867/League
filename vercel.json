@@ -9,6 +9,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/lesson-charges",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/release-unwaivered-subs",
       "schedule": "*/15 * * * *"
     },

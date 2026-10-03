@@ -1733,6 +1733,12 @@ model AlaCarteBooking {
   /// When the post-lesson thank-you + review request was sent (so the cron never
   /// double-sends).
   feedbackSentAt DateTime?
+  /// Phase 4 (per-lesson billing) cron markers. reminderSentAt: the "your lesson
+  /// is today" heads-up has gone out. payLinkSentAt: we've emailed a pay link for
+  /// this lesson (a saved-card charge declined, or there was no saved card to
+  /// charge) — so the next cron run doesn't re-send it.
+  reminderSentAt DateTime?
+  payLinkSentAt  DateTime?
   createdAt     DateTime @default(now())
 
   @@index([clientId])
