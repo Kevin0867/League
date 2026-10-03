@@ -201,6 +201,19 @@ export default async function TodayPage() {
         </section>
       )}
 
+      {/* Private/Group lessons: set up what you teach + manage booked lessons. */}
+      <div className="card border-l-4 border-brand-500">
+        <h2 className="font-semibold text-slate-900">Private/Group lesson pricing</h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Set up every kind of lesson you offer — private, semi-private, group — with your per-person price, length, group size, preferred
+          locations, recurring discount, and the times you&apos;re available. Players book and pay through PURE and your court is reserved automatically.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href="/console/profile/lessons" className="btn-primary inline-flex">Set up my lessons →</Link>
+          <Link href="/console/profile/lessons/schedule" className="btn-ghost inline-flex">My upcoming lessons</Link>
+        </div>
+      </div>
+
       {/* Calendar subscription — keeps the coach's phone in sync automatically. */}
       {calFeedUrl && (
         <div className="card">
