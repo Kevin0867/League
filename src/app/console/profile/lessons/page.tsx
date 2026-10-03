@@ -122,14 +122,42 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           </p>
         </div>
 
-        {offerings.length > 0 && (
-          <ul className="space-y-3">
-            {offerings.map((o) => (
-              <li key={o.id} className="rounded-xl border border-slate-200 p-3">
-                <OfferingForm ticket={ticket} hidden={hidden} offering={o} facilities={facilities} facName={facName} />
-              </li>
-            ))}
-          </ul>
+        {offerings.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-500">No lesson offerings saved yet. Add your first one below — it&apos;ll appear here, and players can book it.</p>
+        ) : (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Saved offerings ({offerings.length})</p>
+            <ul className="space-y-2">
+              {offerings.map((o) => {
+                const perPerson = o.adminLockedPriceCents ?? o.priceCents;
+                const people = o.type === "PRIVATE" ? "1 player" : `${o.minPeople ?? 1}–${o.maxPeople ?? o.minPeople ?? 1} players`;
+                const locIds = asIds(o.preferredFacilityIds);
+                const locs = locIds.length ? locIds.map((fid) => facName.get(fid)).filter(Boolean).join(", ") : "any lesson venue";
+                return (
+                  <li key={o.id} className={`rounded-xl border ${o.active ? "border-slate-200" : "border-slate-200 bg-slate-50"}`}>
+                    <div className="px-3 pt-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-900">{o.title || TYPE_LABEL[o.type]}</span>
+                        <span className="font-bold text-brand-700">{formatCents(perPerson)}<span className="text-xs font-normal text-slate-400">/person</span></span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {TYPE_LABEL[o.type]} · {o.lengthMin ?? 60} min · {people}
+                        {o.recurrenceAllowed ? (o.recurringDiscountPct ? ` · recurring (−${o.recurringDiscountPct}%)` : " · recurring OK") : " · single only"}
+                        {!o.active && " · not bookable"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-400">Locations: {locs}</p>
+                    </div>
+                    <details className="mt-2 border-t border-slate-100">
+                      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-brand-700">Edit</summary>
+                      <div className="p-3 pt-0">
+                        <OfferingForm ticket={ticket} hidden={hidden} offering={o} facilities={facilities} facName={facName} />
+                      </div>
+                    </details>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         <details className="rounded-xl border border-dashed border-slate-300 p-3">
