@@ -7,6 +7,7 @@ import { notifyAdminsPaymentFailed } from "@/lib/payments/adminAlert";
 import { syncRefundsForCharge, paymentForIntent } from "@/lib/payments/refunds";
 import { matchFeeByEmailAndAmount } from "@/lib/payments/match";
 import { placeTeamRecruitForPayment } from "@/lib/domain/openSpots";
+import { confirmLessonPaid } from "@/lib/domain/lessonBilling";
 
 // Resolve the local Payment for a Stripe subscription. Normally it's linked by
 // stripeSubscriptionId (set on checkout.session.completed), but the first
@@ -63,12 +64,14 @@ export async function POST(req: Request) {
         mode?: string;
         subscription?: string;
         payment_intent?: string;
+        customer?: string | null;
         amount_total?: number | null;
         customer_details?: { email?: string | null } | null;
         customer_email?: string | null;
         metadata?: { paymentId?: string };
       };
       const paymentId = s.metadata?.paymentId;
+      let lessonHandled = false;
       if (paymentId) {
         if (s.mode === "subscription") {
           // 3-payment plan: enrollment confirmed, card saved; charges bill later.
@@ -83,8 +86,15 @@ export async function POST(req: Request) {
             data: { status: "PAID", paidAt: new Date(), stripePaymentIntentId: s.payment_intent ?? null },
           });
           await audit({ entityType: "Payment", entityId: paymentId, action: "PAID", summary: "Stripe checkout completed" });
+          // A lesson booking: confirm the occurrence, send the player a lesson
+          // confirmation, and (for a recurring series) capture the saved card for
+          // later off-session charges. No-ops for non-lesson payments.
+          const res = await confirmLessonPaid(paymentId, { paymentIntentId: s.payment_intent ?? null, customerId: s.customer ?? null }).catch((e) => { console.error("confirmLessonPaid failed", e); return { wasLesson: false }; });
+          lessonHandled = res.wasLesson;
         }
-        await sendPaymentConfirmation(paymentId);
+        // Lessons get their own confirmation (sent by confirmLessonPaid); the
+        // generic season-fee "you're enrolled" receipt would be wrong for them.
+        if (!lessonHandled) await sendPaymentConfirmation(paymentId);
         // Auto-assign an open-spots recruit onto their team now that they've paid
         // (or committed to the 3-payment plan).
         await placeTeamRecruitForPayment(paymentId);

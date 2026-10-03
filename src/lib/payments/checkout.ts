@@ -73,6 +73,19 @@ export async function createCheckoutRedirect(opts: {
     return { ok: true, redirectUrl: `${base}/pay/success?sim=1&payment=${payment.id}` };
   }
 
+  // A recurring lesson's FIRST payment must save the card so later lessons in the
+  // series can be auto-charged off-session (Phase 4). Detected here from the
+  // booking's series so the generic public pay page needs no special flag.
+  let saveCardForSeries = false;
+  if (isAlaCarte && !installments) {
+    const booking = await prisma.alaCarteBooking.findFirst({
+      where: { paymentId: payment.id },
+      select: { series: { select: { cadence: true, defaultPaymentMethodId: true } } },
+    });
+    const ser = booking?.series;
+    if (ser && ser.cadence !== "ONCE" && !ser.defaultPaymentMethodId) saveCardForSeries = true;
+  }
+
   // Team apparel bought with this fee — one-time line items charged once, added
   // to both the pay-in-full checkout and the FIRST invoice of the payment plan.
   const apparel = await apparelLineItems(payment.id);
@@ -139,7 +152,12 @@ export async function createCheckoutRedirect(opts: {
       metadata: { paymentId: payment.id },
       // Also stamp the id on the PaymentIntent so the charge itself is traceable
       // back to this Payment (reconciliation / debugging), not just the session.
-      payment_intent_data: { metadata: { paymentId: payment.id } },
+      // For a recurring lesson, create a Customer and keep the card on file
+      // (setup_future_usage) so each later lesson can be charged off-session.
+      ...(saveCardForSeries ? { customer_creation: "always" as const } : {}),
+      payment_intent_data: saveCardForSeries
+        ? { metadata: { paymentId: payment.id }, setup_future_usage: "off_session" as const }
+        : { metadata: { paymentId: payment.id } },
       success_url: success,
       cancel_url: cancel,
     });
