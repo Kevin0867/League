@@ -47,6 +47,9 @@ export async function isCourtTimeFree(
   start: string,
   end: string,
   courtsNeeded = 1,
+  /** When rescheduling a lesson, ignore its own existing hold so it doesn't
+   *  conflict with itself. Matches CourtHold.refId. */
+  ignoreHoldRefId?: string | null,
 ): Promise<{ ok: boolean; reason?: string }> {
   const facility = await prisma.facility.findUnique({
     where: { id: facilityId },
@@ -62,7 +65,7 @@ export async function isCourtTimeFree(
   const s0 = toMin(start), s1 = toMin(end);
   const win = dayWindowUtc(day);
   const [holds, sessions, fixtures] = await Promise.all([
-    prisma.courtHold.findMany({ where: { facilityId, releasedAt: null, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true, courtCount: true } }),
+    prisma.courtHold.findMany({ where: { facilityId, releasedAt: null, date: { gte: win.start, lt: win.end }, ...(ignoreHoldRefId ? { NOT: { refType: "LESSON", refId: ignoreHoldRefId } } : {}) }, select: { date: true, startTime: true, endTime: true, courtCount: true } }),
     prisma.session.findMany({ where: { facilityId, status: { notIn: ["CANCELLED", "RESCHEDULED"] }, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true, courtCount: true } }),
     prisma.fixture.findMany({ where: { facilityId, status: { not: "CANCELLED" }, scheduledAt: { gte: win.start, lt: win.end } }, select: { scheduledAt: true } }),
   ]);

@@ -75,6 +75,12 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
         subtitle={viewingOther ? `Set up ${whose} lesson offerings, availability, and pricing. Changes are saved for this coach.` : "Set up every kind of lesson you offer, your price, and when you're available. Players book and pay through PURE, and your court is reserved automatically."}
       />
 
+      {!viewingOther && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Link href="/console/profile/lessons/schedule" className="btn-ghost">View my upcoming booked lessons →</Link>
+        </div>
+      )}
+
       {sp.ok === "offering" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Offering saved.</p>}
       {sp.ok === "offeringdel" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Offering removed.</p>}
       {sp.ok === "availability" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Availability saved.</p>}

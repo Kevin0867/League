@@ -33,14 +33,15 @@ export function generateOccurrences(opts: {
 
 const overlaps = (a0: number, a1: number, b0: number, b1: number) => a0 < b1 && b0 < a1;
 
-/** Is the coach already committed (another lesson or a session) at this time? */
-async function coachBusyAt(coachId: string, day: string, start: string, end: string): Promise<boolean> {
+/** Is the coach already committed (another lesson or a session) at this time?
+ *  `ignoreBookingId` skips one lesson (used when rescheduling it). */
+export async function coachBusyAt(coachId: string, day: string, start: string, end: string, ignoreBookingId?: string | null): Promise<boolean> {
   const win = { start: new Date(`${day}T00:00:00Z`), end: new Date(`${day}T00:00:00Z`) };
   win.start.setUTCDate(win.start.getUTCDate() - 1);
   win.end.setUTCDate(win.end.getUTCDate() + 2);
   const s0 = toMin(start), s1 = toMin(end);
   const [lessons, sessions] = await Promise.all([
-    prisma.alaCarteBooking.findMany({ where: { coachId, status: { notIn: ["CANCELLED", "DECLINED"] }, scheduledAt: { gte: win.start, lt: win.end } }, select: { scheduledAt: true, lessonLengthMin: true, offering: { select: { lengthMin: true } } } }),
+    prisma.alaCarteBooking.findMany({ where: { coachId, status: { notIn: ["CANCELLED", "DECLINED"] }, scheduledAt: { gte: win.start, lt: win.end }, ...(ignoreBookingId ? { id: { not: ignoreBookingId } } : {}) }, select: { scheduledAt: true, lessonLengthMin: true, offering: { select: { lengthMin: true } } } }),
     prisma.session.findMany({ where: { coaches: { some: { coachId } }, status: { notIn: ["CANCELLED", "RESCHEDULED"] }, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true } }),
   ]);
   for (const l of lessons) {
