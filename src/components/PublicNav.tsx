@@ -10,7 +10,10 @@ const LINKS = [
   { href: "/teams", label: "Teams" },
   { href: "/gallery", label: "Gallery" },
   { href: "/clinics", label: "Clinics and lessons" },
-  { href: "/lessons", label: "Book a Lesson" },
+  // "Book a Lesson" (/lessons) is intentionally NOT linked here while it's in
+  // testing — the pages stay live at a direct URL you can share privately, but
+  // they're hidden from the public nav so visitors don't stumble onto it. Add
+  // this entry back to launch it publicly.
   { href: "/locations", label: "Locations" },
   { href: "/standings", label: "Standings" },
   { href: "/championship", label: "Championship" },
