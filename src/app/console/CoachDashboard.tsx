@@ -318,6 +318,16 @@ export async function CoachDashboard({ personId, firstName }: { personId: string
         </section>
       )}
 
+      {/* Lessons: set up what you teach, your price, and when you're free */}
+      <div className="card border-l-4 border-brand-500">
+        <h2 className="font-semibold text-slate-900">Private/Group lesson pricing</h2>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Set up every kind of lesson you offer — private, semi-private, group — with your price, length, group size, preferred
+          locations, and the times you&apos;re available. Players book and pay through PURE and your court is reserved automatically.
+        </p>
+        <Link href="/console/profile/lessons" className="btn-primary mt-3 inline-flex">Set up my lessons →</Link>
+      </div>
+
       {/* Calendar subscription — keeps their phone in sync automatically */}
       {feedUrl && (
         <div className="card">

@@ -219,8 +219,8 @@ export async function POST(req: Request) {
       } else {
         const f = booking.offering.facility;
         const now = new Date();
-        const rate = isWeekend(now) ? f.weekendRateCents : f.weekdayRateCents;
-        courtCostCents = f.feeBasis === "PER_HOUR" ? Math.round(rate * durationHours("00:00", "01:00")) : rate;
+        const rate = f ? (isWeekend(now) ? f.weekendRateCents : f.weekdayRateCents) : 0;
+        courtCostCents = f && f.feeBasis === "PER_HOUR" ? Math.round(rate * durationHours("00:00", "01:00")) : rate;
       }
 
       const split = computeSplit(gross, courtCostCents, directorTaught);

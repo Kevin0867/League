@@ -193,6 +193,18 @@ export default async function EditCoachPage({
         </div>
       )}
 
+      {/* Private/group lesson setup — admins edit this coach's offerings, prices,
+          and availability (same screen the coach uses, scoped to them). */}
+      <section className="card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-slate-900">Private/Group lesson pricing</h2>
+            <p className="text-sm text-slate-500">Set or edit this coach&apos;s lesson offerings, prices, and availability.</p>
+          </div>
+          <Link href={`/console/profile/lessons?coach=${person.id}`} className="btn-secondary">Edit lesson setup →</Link>
+        </div>
+      </section>
+
       {/* Team assignments — deploy this coach without leaving their profile */}
       <section className="card space-y-4">
         <div>

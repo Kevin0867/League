@@ -64,7 +64,7 @@ export default async function ClinicSignupPage({
             </span>
           </div>
           <p className="mt-2 text-sm font-medium text-slate-700">{formatClinicWhen(offering.scheduledAt)}</p>
-          <p className="text-sm text-slate-500">{offering.facility.name}{coachName ? ` · Coach ${coachName}` : ""}</p>
+          <p className="text-sm text-slate-500">{offering.facility?.name ?? ""}{coachName ? ` · Coach ${coachName}` : ""}</p>
           {offering.description && <p className="mt-4 whitespace-pre-wrap text-sm text-slate-600">{offering.description}</p>}
 
           <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm">
