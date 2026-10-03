@@ -31,7 +31,10 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
   const name = `${coach.person.firstName} ${coach.person.lastName}`.trim();
 
   const offering = sp.offering ? offerings.find((o) => o.id === sp.offering) : null;
-  const price = offering ? (offering.adminLockedPriceCents ?? offering.priceCents) : 0;
+  // priceCents is PER PERSON; the lesson total is per-person × #players (× any
+  // recurring discount), charged at checkout.
+  const perPerson = offering ? (offering.adminLockedPriceCents ?? offering.priceCents) : 0;
+  const discountPct = offering?.recurringDiscountPct && offering.recurrenceAllowed ? Math.min(90, Math.max(0, offering.recurringDiscountPct)) : 0;
   // Location options = the offering's preferred venues, else every lesson venue.
   const locOptions = offering ? (() => { const pref = asIds(offering.preferredFacilityIds); const ids = pref.length ? pref : facilities.map((f) => f.id); return facilities.filter((f) => ids.includes(f.id)); })() : [];
   const loc = sp.loc && locOptions.some((f) => f.id === sp.loc) ? sp.loc : "";
@@ -77,9 +80,9 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
               <Link key={o.id} href={`/lessons/${id}?offering=${o.id}`} className={`flex items-center justify-between rounded-xl border p-3 ${selected ? "border-brand-500 bg-brand-50" : "border-slate-200 bg-white hover:border-brand-300"}`}>
                 <span>
                   <span className="font-semibold text-slate-900">{o.title || TYPE_LABEL[o.type]}</span>
-                  <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[o.type]} · {o.lengthMin ?? 60} min{o.recurrenceAllowed ? " · recurring OK" : ""}</span>
+                  <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[o.type]} · {o.lengthMin ?? 60} min{o.recurrenceAllowed ? " · recurring OK" : ""}{o.recurringDiscountPct && o.recurrenceAllowed ? ` · ${o.recurringDiscountPct}% off recurring` : ""}</span>
                 </span>
-                <span className="font-bold text-brand-700">{formatCents(p)}</span>
+                <span className="text-right"><span className="font-bold text-brand-700">{formatCents(p)}</span><span className="block text-[11px] font-normal text-slate-400">per person</span></span>
               </Link>
             );
           })}
@@ -133,6 +136,7 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
               <div>
                 <label className="label">How many players?</label>
                 <input name="people" type="number" min={offering.minPeople ?? 2} max={offering.maxPeople ?? 4} defaultValue={offering.minPeople ?? 2} className="input w-28" />
+                <p className="mt-1 text-xs text-slate-500">{formatCents(perPerson)} per person — the total is per person × players.</p>
               </div>
             )}
 
@@ -160,6 +164,7 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
                     </div>
                   </div>
                   <p className="text-xs text-slate-500">We book the same time each week/month where the coach and a court are free. You pay per lesson — the first now, the rest before each session. (Leave this closed for a single lesson.)</p>
+                  {discountPct > 0 && <p className="text-xs font-semibold text-emerald-700">Recurring saves {discountPct}% off each lesson.</p>}
                 </div>
               </details>
             )}
@@ -175,9 +180,9 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
             </div>
 
             <button type="submit" className="w-full rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white hover:bg-brand-700">
-              Continue to payment — {formatCents(price)}
+              Continue to payment — {formatCents(perPerson)}/person
             </button>
-            <p className="text-center text-xs text-slate-400">You&apos;ll pay for your first lesson on the next screen. Your court is reserved the moment you book.</p>
+            <p className="text-center text-xs text-slate-400">You&apos;ll pay for your first lesson on the next screen — {formatCents(perPerson)} per person{discountPct > 0 ? `, less ${discountPct}% for a recurring series` : ""}. Your court is reserved the moment you book.</p>
           </form>
         )
       )}

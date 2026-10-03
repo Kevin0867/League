@@ -85,11 +85,17 @@ export async function createLessonBooking(opts: {
 }): Promise<BookResult> {
   const offering = await prisma.alaCarteOffering.findUnique({
     where: { id: opts.offeringId },
-    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
+    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, recurringDiscountPct: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
   });
   if (!offering || !offering.active) return { ok: false, booked: 0, skipped: 0, error: "This lesson isn't available." };
   const lengthMin = offering.lengthMin ?? 60;
-  const price = offering.adminLockedPriceCents ?? offering.priceCents;
+  // priceCents is PER PERSON. The per-lesson charge = per-person × #people, and a
+  // recurring series takes the optional per-lesson discount off each lesson.
+  const perPersonCents = offering.adminLockedPriceCents ?? offering.priceCents;
+  const people = Math.max(1, opts.people);
+  const isRecurring = opts.cadence !== "ONCE" && opts.endType !== "ONCE";
+  const discountPct = isRecurring ? Math.min(90, Math.max(0, offering.recurringDiscountPct ?? 0)) : 0;
+  const price = Math.round(perPersonCents * people * (1 - discountPct / 100));
   const coachId = offering.coachId ?? null;
   const coachName = offering.coach ? `${offering.coach.person.firstName} ${offering.coach.person.lastName}`.trim() : "your coach";
   const facility = await prisma.facility.findUnique({ where: { id: opts.facilityId }, select: { name: true } });
