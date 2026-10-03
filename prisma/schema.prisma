@@ -650,6 +650,27 @@ model AvailabilityBlock {
   @@index([coachId])
 }
 
+/// A reservation of court-time at a facility, so a lesson can't collide with a
+/// practice, match, or another lesson at the same place+time. PURE-internal
+/// conflict avoidance — `refType`/`refId` link back to what holds it. A released
+/// hold (releasedAt set) no longer blocks (kept for history).
+model CourtHold {
+  id         String   @id @default(cuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id])
+  date       DateTime
+  startTime  String   // "HH:MM"
+  endTime    String
+  courtCount Int      @default(1)
+  refType    String   // LESSON | SESSION | FIXTURE | MANUAL
+  refId      String?
+  note       String?
+  releasedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([facilityId, date])
+}
+
 /// A dated override to a coach's recurring weekly availability: BLOCK = they're
 /// unavailable that day/time (vacation, an appointment), OPEN = extra one-off
 /// availability beyond their usual blocks. startTime/endTime null = the whole day.
@@ -746,6 +767,7 @@ model Facility {
   courtBlocks      CourtBlock[]
   blackoutDates    BlackoutDate[]
   sessions         Session[]
+  courtHolds       CourtHold[]
   teams            Team[]
   fixtures         Fixture[]
   locationPrefs    LocationPreference[]
