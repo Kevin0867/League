@@ -122,15 +122,30 @@ export async function accruePlayerSeasonFee(opts: {
   // Launch/Send-all and Request-fee never create a second charge for one player.
   const openForSeason = await prisma.payment.findMany({
     where: { seasonId, category: "PLAYER_FEE", status: { in: OPEN_STATUSES } },
-    select: { id: true, partyId: true, coveredPersonIds: true, amountCents: true, description: true },
+    select: { id: true, partyId: true, coveredPersonIds: true, amountCents: true, description: true, status: true, installmentPlan: true },
   });
   const existing = openForSeason.find((p) => coveredIds(p).includes(playerId));
   if (existing) {
+    const update: { description?: string; amountCents?: number } = {};
     // Keep the description current (e.g. after a team move) without re-billing.
-    if (existing.description !== description) {
-      await prisma.payment.update({ where: { id: existing.id }, data: { description } }).catch(() => {});
+    if (existing.description !== description) update.description = description;
+    // Self-heal a stale price: an UNPAID single-player invoice still at the FULL
+    // fee, when proration would reduce it, is repriced DOWN to the prorated amount
+    // — the fix for a mid-season joiner whose invoice was created (or reused) at
+    // full price. Never touches a paid fee, a payment plan, a shared family
+    // invoice, or an admin custom fee (prorate=false, or any non-full amount).
+    const canReprice =
+      opts.prorate !== false &&
+      existing.status === "REQUESTED" &&
+      !existing.installmentPlan &&
+      coveredIds(existing).length <= 1 &&
+      existing.amountCents === opts.feeCents &&
+      feeCents < existing.amountCents;
+    if (canReprice) update.amountCents = feeCents;
+    if (Object.keys(update).length) {
+      await prisma.payment.update({ where: { id: existing.id }, data: update }).catch(() => {});
     }
-    return { paymentId: existing.id, payerId: existing.partyId ?? payerId, amountCents: existing.amountCents, coveredCount: 1, created: false };
+    return { paymentId: existing.id, payerId: existing.partyId ?? payerId, amountCents: canReprice ? feeCents : existing.amountCents, coveredCount: 1, created: false };
   }
 
   const created = await prisma.payment.create({
