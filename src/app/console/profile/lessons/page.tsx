@@ -48,7 +48,7 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
               {coaches.map((c) => (
                 <Link key={c.personId} href={`/console/profile/lessons?coach=${c.personId}`} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-brand-300 hover:bg-brand-50">
                   <span className="font-medium text-slate-800">{c.person.firstName} {c.person.lastName}</span>
-                  <span className="text-brand-700">Set up →</span>
+                  <span className="btn-chip-brand">Set up</span>
                 </Link>
               ))}
             </div>
@@ -148,8 +148,8 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
                       <p className="mt-0.5 text-xs text-slate-400">Locations: {locs}</p>
                     </div>
                     <details className="mt-2 border-t border-slate-100">
-                      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-brand-700">Edit</summary>
-                      <div className="p-3 pt-0">
+                      <summary className="btn-chip-muted m-3 inline-flex cursor-pointer list-none text-xs font-semibold [&::-webkit-details-marker]:hidden">Edit</summary>
+                      <div className="px-3 pb-3">
                         <OfferingForm ticket={ticket} hidden={hidden} offering={o} facilities={facilities} facName={facName} />
                       </div>
                     </details>
@@ -160,9 +160,9 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           </div>
         )}
 
-        <details className="rounded-xl border border-dashed border-slate-300 p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-brand-700">+ Add a lesson offering</summary>
-          <div className="mt-3">
+        <details>
+          <summary className="btn-primary inline-flex cursor-pointer list-none [&::-webkit-details-marker]:hidden">+ Add a lesson offering</summary>
+          <div className="mt-3 rounded-xl border border-slate-200 p-3">
             <OfferingForm ticket={ticket} hidden={hidden} facilities={facilities} facName={facName} />
           </div>
         </details>
@@ -324,7 +324,7 @@ function OfferingForm({
           <input type="hidden" name="ticket" value={ticket} />{hidden}
           <input type="hidden" name="op" value="deleteOffering" />
           <input type="hidden" name="offeringId" value={offering.id} />
-          <button className="text-xs text-rose-600 hover:underline">Remove this offering</button>
+          <button className="btn-chip-danger">Remove this offering</button>
         </form>
       )}
     </div>
