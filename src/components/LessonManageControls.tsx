@@ -32,7 +32,7 @@ export function LessonManageControls({
 
   return (
     <details className="mt-2 rounded-lg border border-slate-200">
-      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-brand-700">Manage lesson</summary>
+      <summary className="btn-chip-muted m-2 inline-flex cursor-pointer list-none text-xs font-semibold [&::-webkit-details-marker]:hidden">Manage lesson</summary>
       <div className="space-y-3 border-t border-slate-100 p-3">
         {/* Reschedule / relocate */}
         <form method="POST" action="/api/console/lessons" className="flex flex-wrap items-end gap-2">
@@ -69,7 +69,7 @@ export function LessonManageControls({
               <input type="checkbox" name="refund" value="1" /> Refund the card
             </label>
           )}
-          <button className="btn-ghost text-xs text-rose-600">Cancel lesson</button>
+          <button className="btn-chip-danger">Cancel lesson</button>
         </form>
       </div>
     </details>
