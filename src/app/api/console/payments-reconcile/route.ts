@@ -4,7 +4,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { isStripeConfigured } from "@/lib/stripe";
-import { reconcileStripePayments, undoStripeImport, updateSubscriptionDescriptions } from "@/lib/payments/reconcile";
+import { reconcileStripePayments, undoStripeImport, updateSubscriptionDescriptions, rescanImportDescriptions } from "@/lib/payments/reconcile";
 
 // Reconcile local payments against Stripe: find any payment completed in Stripe
 // but not yet recorded PAID here, and record it. Idempotent — safe to re-run.
@@ -42,6 +42,22 @@ export async function POST(req: Request) {
   }
 
   if (!isStripeConfigured()) return back("?recerr=notconfigured");
+
+  // Re-read each unfiled import's Stripe line items to fill in what it was for,
+  // so the "needs filing" list can auto-pick the category (e.g. ACP entries).
+  if (String(fd.get("op") ?? "") === "rescanImports") {
+    try {
+      const r = await rescanImportDescriptions();
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: "reconcile", action: "IMPORT_RESCAN",
+        summary: `Re-scanned ${r.scanned} imported charge(s) from Stripe — ${r.updated} description(s) updated, ${r.categorized} auto-categorizable`,
+      });
+      return back(`?rescanok=1&rsscanned=${r.scanned}&rsupdated=${r.updated}&rscat=${r.categorized}`);
+    } catch (e) {
+      console.error("rescan imports failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "rescan failed")}`);
+    }
+  }
 
   // Revert the historical over-import: remove the pre-floor auto-imported rows
   // that inflated revenue, without touching today-and-forward imports.

@@ -22,6 +22,8 @@ export function AttributeImportRow({
   amount,
   date,
   payerEmail,
+  description,
+  suggestedCategory,
   suggestion,
 }: {
   ticket: string;
@@ -29,6 +31,10 @@ export function AttributeImportRow({
   amount: string;
   date: string;
   payerEmail: string | null;
+  /** What the charge was for, read from its Stripe line items (if known). */
+  description?: string | null;
+  /** Category inferred from the charge text, pre-selected in the dropdown. */
+  suggestedCategory?: string | null;
   /** Best-guess person from the payer email, offered as a one-click attach. */
   suggestion: Found | null;
 }) {
@@ -36,8 +42,12 @@ export function AttributeImportRow({
   const [results, setResults] = useState<Found[]>([]);
   const [picked, setPicked] = useState<Found | null>(suggestion);
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState("PLAYER_FEE");
+  const [category, setCategory] = useState(suggestedCategory ?? "PLAYER_FEE");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A season fee must attach to the player it's for; one-off categories (ACP
+  // entry, clinic, apparel, custom) can be filed on category alone.
+  const canSubmit = !!picked || category !== "PLAYER_FEE";
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -62,7 +72,10 @@ export function AttributeImportRow({
 
       <div className="w-24 shrink-0 font-semibold text-slate-800">{amount}</div>
       <div className="w-20 shrink-0 text-xs text-slate-400">{date}</div>
-      <div className="w-44 shrink-0 truncate text-xs text-slate-500" title={payerEmail ?? ""}>{payerEmail ?? "no email on charge"}</div>
+      <div className="w-44 shrink-0 truncate text-xs text-slate-500" title={payerEmail ?? ""}>
+        {payerEmail ?? "no email on charge"}
+        {description && <span className="block truncate text-slate-400" title={description}>{description}</span>}
+      </div>
 
       {/* Person picker */}
       <div className="relative min-w-[200px] flex-1">
@@ -111,9 +124,9 @@ export function AttributeImportRow({
 
       <button
         type="submit"
-        disabled={!picked}
+        disabled={!canSubmit}
         className="btn-primary shrink-0 px-4 py-1.5 text-sm disabled:opacity-40"
-        title={picked ? "" : "Pick a family first"}
+        title={canSubmit ? "" : "Pick a family first (or choose a non-season category)"}
       >
         Attach
       </button>

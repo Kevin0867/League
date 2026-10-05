@@ -12,7 +12,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { personContacts } from "@/lib/domain/contacts";
 import { requireAdmin } from "@/lib/rbac";
 import { getStripeWebhookStatus } from "@/lib/payments/webhookStatus";
-import { stripeCollectedBreakdown, paymentsSince } from "@/lib/payments/reconcile";
+import { stripeCollectedBreakdown, paymentsSince, guessImportCategory } from "@/lib/payments/reconcile";
 import { assignedPlayerIds } from "@/lib/domain/pnl";
 import { placementPaymentPeople, testTeamPersonIds, makeCoveredPlayersResolver, type PersonPayRow } from "@/lib/domain/placementPayment";
 import { coachEarnings } from "@/lib/domain/coachEarnings";
@@ -332,11 +332,18 @@ export default async function PaymentsPage({
   const imported = importedRaw.map((p) => {
     const email = p.party?.email ?? parseEmail(p.description);
     const g = p.party ?? (email ? guessByEmail.get(email.toLowerCase()) ?? null : null);
+    // The human-readable charge text, minus the "· email" suffix we append for
+    // unattributed rows — shown so the admin can see what the charge is for, and
+    // used to pre-pick the category.
+    const descText = (p.description ?? "").replace(/\s*·\s*[^\s·]+@[^\s·]+\s*$/, "").trim();
+    const showDesc = descText && descText !== "Imported from Stripe" ? descText : null;
     return {
       id: p.id,
       amountCents: p.amountCents,
       createdAt: p.createdAt,
       payerEmail: email,
+      description: showDesc,
+      suggestedCategory: guessImportCategory(descText, p.amountCents),
       suggestion: g ? { id: g.id, name: `${g.firstName} ${g.lastName}`, email: g.email ?? null } : null,
     };
   });
@@ -754,8 +761,20 @@ export default async function PaymentsPage({
           <p className="mb-3 text-sm text-slate-500">
             These charges were found in Stripe with no record here (Payment Links, dashboard invoices, etc.) and imported so
             revenue is complete. Attach each to a family and set its category so it lands in the right reports. Where we could
-            guess the family from the payer&apos;s email, it&apos;s pre-filled — just confirm.
+            guess the family from the payer&apos;s email, it&apos;s pre-filled, and where the charge text tells us what it is
+            (e.g. an ACP entry), the category is pre-picked — just confirm. One-off categories (ACP entry, clinic, apparel,
+            custom) can be filed without a family.
           </p>
+          <form method="POST" action="/api/console/payments-reconcile" className="mb-3">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="rescanImports" />
+            <button className="btn-chip-brand">↻ Re-scan from Stripe to auto-categorize</button>
+          </form>
+          {sp.rescanok && (
+            <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Re-scanned {sp.rsscanned} charge{sp.rsscanned === "1" ? "" : "s"} — {sp.rsupdated} description{sp.rsupdated === "1" ? "" : "s"} updated, {sp.rscat} now auto-categorizable. Categories below are pre-picked where we could tell; confirm and Attach.
+            </p>
+          )}
           <div>
             {imported.map((p) => (
               <AttributeImportRow
@@ -765,6 +784,8 @@ export default async function PaymentsPage({
                 amount={formatCents(p.amountCents)}
                 date={`${MONTHS[p.createdAt.getMonth()]} ${p.createdAt.getDate()}`}
                 payerEmail={p.payerEmail}
+                description={p.description}
+                suggestedCategory={p.suggestedCategory}
                 suggestion={p.suggestion}
               />
             ))}

@@ -106,6 +106,63 @@ async function lineItemTextForCharge(client: Stripe, charge: Stripe.Charge, piId
   return charge.description ?? "";
 }
 
+/**
+ * Best-guess the business category of an imported Stripe charge from its
+ * line-item / description text (and amount). Lets the "needs filing" UI pre-pick
+ * the right category instead of always defaulting to a season fee — ACP entries
+ * in particular must land in their own accounting bucket. Returns null when the
+ * text gives no clear signal (the UI then leaves the admin to choose).
+ */
+export function guessImportCategory(text: string | null | undefined, _amountCents?: number): string | null {
+  const t = (text ?? "").toLowerCase();
+  if (!t.trim()) return null;
+  // ACP = Arizona Club Pickleball — kept in separate accounting.
+  if (/\bacp\b|arizona club|club pickleball|league entry|league fee|tournament|bracket|\bdupr\b|ladder/.test(t)) return "ACP_ENTRY";
+  if (/clinic|private lesson|semi-?private|group lesson|\blesson\b|coaching session|drill/.test(t)) return "ALA_CARTE";
+  if (/apparel|t-?shirt|\bshirt\b|jersey|tank top|hoodie|\bhat\b|visor|merch|paddle|\bgear\b/.test(t)) return "APPAREL";
+  if (/season|team fee|registration|\bdues\b|academy fee|session count/.test(t)) return "PLAYER_FEE";
+  return null;
+}
+
+/**
+ * Backfill the stored description of already-imported "needs filing" charges by
+ * re-reading their Stripe line items — so the UI can auto-categorize charges that
+ * were imported before we captured the richer text (e.g. Payment-Link charges
+ * whose product name says "ACP entry"). Preserves the payer-email suffix the UI
+ * parses. Idempotent and safe to re-run.
+ */
+export async function rescanImportDescriptions(): Promise<{ scanned: number; updated: number; categorized: number }> {
+  if (!isStripeConfigured()) return { scanned: 0, updated: 0, categorized: 0 };
+  const client = stripe();
+  const rows = await prisma.payment.findMany({
+    where: { direction: "IN", category: "STRIPE_IMPORT", amountCents: { gt: 0 }, stripePaymentIntentId: { not: null } },
+    select: { id: true, description: true, stripePaymentIntentId: true, amountCents: true },
+    take: 300,
+  });
+  let updated = 0, categorized = 0;
+  for (const r of rows) {
+    const piId = r.stripePaymentIntentId!;
+    try {
+      const pi = await client.paymentIntents.retrieve(piId, { expand: ["latest_charge"] });
+      const charge = pi.latest_charge && typeof pi.latest_charge !== "string" ? (pi.latest_charge as Stripe.Charge) : null;
+      const probe = charge ?? ({ invoice: (pi as unknown as { invoice?: string }).invoice ?? null, description: pi.description ?? null } as unknown as Stripe.Charge);
+      const text = await lineItemTextForCharge(client, probe, piId);
+      if (!text || !text.trim()) continue;
+      // Keep the "· email" suffix the needs-filing list uses to guess the family.
+      const em = r.description ? /·\s*([^\s·]+@[^\s·]+)\s*$/.exec(r.description) : null;
+      const newDesc = `${text}${em ? ` · ${em[1]}` : ""}`;
+      if (newDesc !== r.description) {
+        await prisma.payment.update({ where: { id: r.id }, data: { description: newDesc } });
+        updated++;
+      }
+      if (guessImportCategory(text, r.amountCents)) categorized++;
+    } catch (e) {
+      console.error("rescan import description failed", r.id, e);
+    }
+  }
+  return { scanned: rows.length, updated, categorized };
+}
+
 // The IMPORT FLOOR: the earliest a charge may be *imported* as a new row. This
 // exists so reconciliation can never again pull the historical Stripe backlog
 // into the books (which double-counts payments already recorded from the old
@@ -590,6 +647,10 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
             })
           : null;
 
+        // Capture the richer line-item text (product/price names) — not just the
+        // often-empty charge.description — so the "needs filing" UI can
+        // auto-categorize (e.g. an "ACP entry" Payment Link). Falls back cleanly.
+        const itemText = (await lineItemTextForCharge(client, charge, piId).catch(() => "")) || charge.description || "Imported from Stripe";
         const created = await prisma.payment.create({
           data: {
             direction: "IN",
@@ -603,7 +664,7 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
             partyId: person?.id ?? null,
             seasonId: activeSeasonId,
             stripePaymentIntentId: piId ?? undefined,
-            description: (charge.description ?? "Imported from Stripe") + (person ? "" : email ? ` · ${email}` : ""),
+            description: itemText + (person ? "" : email ? ` · ${email}` : ""),
             paidAt: paidAtFromUnix(charge.created) ?? new Date(),
           },
         });
