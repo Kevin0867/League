@@ -1,0 +1,148 @@
+"use client";
+
+import { useState } from "react";
+
+// Add/edit one coach lesson offering. Client-side so the form guides valid input
+// (format drives sensible group-size defaults and locks a private lesson to 1
+// player; the recurring discount is only editable when recurrence is on) — the
+// server still validates and rejects bad values. Native POST, no fetch.
+
+type Offering = {
+  id: string; type: string; title: string; description: string | null; priceCents: number;
+  lengthMin: number | null; minPeople: number | null; maxPeople: number | null;
+  preferredFacilityIds: unknown; recurrenceAllowed: boolean; recurringDiscountPct: number | null; active: boolean;
+};
+
+const TYPE_OPTIONS: Array<[string, string]> = [
+  ["PRIVATE", "Private (1 player)"],
+  ["SEMI_PRIVATE", "Semi-private (2–3)"],
+  ["GROUP", "Group (4+)"],
+];
+// Sensible min/max filled in when the format changes.
+const DEFAULTS: Record<string, { min: number; max: number }> = {
+  PRIVATE: { min: 1, max: 1 },
+  SEMI_PRIVATE: { min: 2, max: 3 },
+  GROUP: { min: 4, max: 8 },
+};
+
+function asIds(v: unknown): string[] { return Array.isArray(v) ? v.map(String) : []; }
+
+export function OfferingForm({
+  ticket, personId, offering, facilities,
+}: {
+  ticket: string;
+  personId?: string;
+  offering?: Offering;
+  facilities: { id: string; name: string }[];
+}) {
+  const [type, setType] = useState(offering?.type ?? "PRIVATE");
+  const [minPeople, setMinPeople] = useState(offering?.minPeople ?? DEFAULTS[offering?.type ?? "PRIVATE"]?.min ?? 1);
+  const [maxPeople, setMaxPeople] = useState(offering?.maxPeople ?? DEFAULTS[offering?.type ?? "PRIVATE"]?.max ?? 1);
+  const [recurrence, setRecurrence] = useState(offering ? offering.recurrenceAllowed : true);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const pref = asIds(offering?.preferredFacilityIds);
+  const isPrivate = type === "PRIVATE";
+
+  const onType = (t: string) => {
+    setType(t);
+    const d = DEFAULTS[t];
+    if (d) { setMinPeople(d.min); setMaxPeople(d.max); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <form method="POST" action="/api/console/lesson-offerings" className="grid gap-3 sm:grid-cols-6">
+        <input type="hidden" name="ticket" value={ticket} />
+        {personId && <input type="hidden" name="personId" value={personId} />}
+        <input type="hidden" name="op" value="saveOffering" />
+        {offering && <input type="hidden" name="offeringId" value={offering.id} />}
+
+        <div className="sm:col-span-2">
+          <label className="label">Format</label>
+          <select name="type" value={type} onChange={(e) => onType(e.target.value)} className="input py-1">
+            {TYPE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        <div className="sm:col-span-1">
+          <label className="label">Length (min)</label>
+          <input name="lengthMin" type="number" min={15} max={240} step={15} defaultValue={offering?.lengthMin ?? 60} className="input py-1" />
+        </div>
+        <div className="sm:col-span-1">
+          <label className="label">Price / person ($)</label>
+          <input name="price" type="number" min={0} step="0.01" defaultValue={offering ? (offering.priceCents / 100).toFixed(2) : ""} placeholder="80.00" className="input py-1" required />
+        </div>
+        <div className="sm:col-span-1">
+          <label className="label"># people (min)</label>
+          <input name="minPeople" type="number" min={1} max={20} value={isPrivate ? 1 : minPeople} onChange={(e) => setMinPeople(Math.max(1, parseInt(e.target.value || "1", 10)))} disabled={isPrivate} className="input py-1 disabled:bg-slate-100 disabled:text-slate-400" />
+        </div>
+        <div className="sm:col-span-1">
+          <label className="label"># people (max)</label>
+          <input name="maxPeople" type="number" min={1} max={20} value={isPrivate ? 1 : maxPeople} onChange={(e) => setMaxPeople(Math.max(1, parseInt(e.target.value || "1", 10)))} disabled={isPrivate} className="input py-1 disabled:bg-slate-100 disabled:text-slate-400" />
+        </div>
+
+        <div className="sm:col-span-6">
+          <label className="label">Title / note (optional)</label>
+          <input name="title" defaultValue={offering?.title ?? ""} placeholder="e.g. 60-min private — all levels" className="input py-1" />
+        </div>
+
+        {facilities.length > 0 && (
+          <div className="sm:col-span-6">
+            <label className="label">Preferred locations</label>
+            <div className="flex flex-wrap gap-3">
+              {facilities.map((f) => (
+                <label key={f.id} className="flex items-center gap-1.5 text-sm text-slate-700">
+                  <input type="checkbox" name="facility" value={f.id} defaultChecked={pref.includes(f.id)} /> {f.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="sm:col-span-6 -mt-1 text-xs text-slate-500">
+          <strong>Price is per person.</strong> For a semi-private or group lesson, each player pays this amount (e.g. $40/person × 3 players = $120 for the lesson).
+        </p>
+
+        <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="recurrenceAllowed" checked={recurrence} onChange={(e) => setRecurrence(e.target.checked)} /> Allow recurring bookings (weekly/monthly series)
+        </label>
+        <div className="sm:col-span-2">
+          <label className="label">Recurring discount (%)</label>
+          <input name="recurringDiscountPct" type="number" min={0} max={90} step={1} defaultValue={offering?.recurringDiscountPct ?? ""} placeholder="0" disabled={!recurrence} className="input py-1 disabled:bg-slate-100 disabled:text-slate-400" />
+        </div>
+        <div className="sm:col-span-1" />
+        <p className="sm:col-span-6 -mt-1 text-xs text-slate-500">
+          {recurrence
+            ? "Optional: take this % off each lesson's per-person price when a player commits to a recurring series. Leave blank or 0 for no discount."
+            : "Turn on recurring bookings above to offer a recurring discount."}
+        </p>
+
+        <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="active" value="on" defaultChecked={offering ? offering.active : true} /> Bookable (players can book it; uncheck to pause without deleting)
+        </label>
+        <div className="sm:col-span-3 flex items-end justify-end">
+          <button className="btn-primary py-1 text-sm">{offering ? "Save" : "Add offering"}</button>
+        </div>
+      </form>
+
+      {offering && (
+        confirmDel ? (
+          <div className="flex items-center justify-end gap-2 text-right">
+            <span className="text-xs text-slate-500">Remove this offering?</span>
+            <form method="POST" action="/api/console/lesson-offerings">
+              <input type="hidden" name="ticket" value={ticket} />
+              {personId && <input type="hidden" name="personId" value={personId} />}
+              <input type="hidden" name="op" value="deleteOffering" />
+              <input type="hidden" name="offeringId" value={offering.id} />
+              <button className="btn-chip-danger">Yes, remove</button>
+            </form>
+            <button type="button" onClick={() => setConfirmDel(false)} className="btn-chip-muted">Cancel</button>
+          </div>
+        ) : (
+          <div className="text-right">
+            <button type="button" onClick={() => setConfirmDel(true)} className="btn-chip-danger">Remove this offering</button>
+          </div>
+        )
+      )}
+    </div>
+  );
+}

@@ -163,16 +163,22 @@ export function ConsoleShell({
     (s) => s.items.length > 0
   );
 
-  const isActive = (href: string) => (href === "/console" ? pathname === "/console" : pathname.startsWith(href));
-  // An item is active on its own href or any of its extra `match` paths (so the
-  // single Rostering entry lights up on /pools, /board and /teams alike).
-  const isActiveItem = (item: NavItem) => isActive(item.href) || (item.match?.some((p) => pathname.startsWith(p)) ?? false);
-  // Name of the page currently open, for the top bar. Prefer the most specific
-  // (longest-href) matching nav item so /console/today wins over /console.
-  const pageTitle =
-    [TODAY, DASHBOARD, ...SECTIONS.flatMap((s) => s.items)]
-      .filter((it) => isActiveItem(it))
-      .sort((a, b) => b.href.length - a.href.length)[0]?.label ?? "Console";
+  // A prefix matches the current path on an exact hit or a path boundary (so
+  // /console/profile does NOT swallow /console/profile/lessons).
+  const matchesPrefix = (p: string) => (p === "/console" ? pathname === "/console" : pathname === p || pathname.startsWith(p + "/"));
+  // How specifically an item matches the current path (longest matching prefix,
+  // across its href + any `match` paths); -1 if it doesn't match at all.
+  const itemMatchLen = (item: NavItem) => {
+    let best = -1;
+    for (const p of [item.href, ...(item.match ?? [])]) if (matchesPrefix(p) && p.length > best) best = p.length;
+    return best;
+  };
+  // Only the MOST specific matching item lights up, so /console/profile/lessons
+  // highlights "Lesson pricing" alone, not "My Profile" too.
+  const allNavItems = [TODAY, DASHBOARD, ...SECTIONS.flatMap((s) => s.items)];
+  const bestMatchLen = Math.max(-1, ...allNavItems.map(itemMatchLen));
+  const isActiveItem = (item: NavItem) => { const l = itemMatchLen(item); return l >= 0 && l === bestMatchLen; };
+  const pageTitle = allNavItems.find(isActiveItem)?.label ?? "Console";
   // Every item renders as a squared button block. The active section is
   // illuminated with the lime fill; inactive items are quiet outlined buttons on
   // the navy rail. No icons — the label carries it.
@@ -222,7 +228,7 @@ export function ConsoleShell({
               </Link>
             )}
             {!coachOnly && (
-              <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActive(DASHBOARD.href))}>
+              <Link href={DASHBOARD.href} onClick={() => setOpen(false)} className={linkClass(isActiveItem(DASHBOARD))}>
                 {DASHBOARD.label}
               </Link>
             )}

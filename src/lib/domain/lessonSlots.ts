@@ -57,6 +57,8 @@ export async function openLessonSlots(opts: {
   toDay: string;
   stepMin?: number;
   maxSlots?: number;
+  /** Max slots surfaced per day, so later days in the range aren't starved. */
+  perDayMax?: number;
 }): Promise<LessonSlot[]> {
   const step = opts.stepMin ?? 30;
   const max = opts.maxSlots ?? 200;
@@ -137,6 +139,10 @@ export async function openLessonSlots(opts: {
   }
 
   const facCourts = facility.courtCount || 1;
+  // Cap slots PER DAY so a coach with all-day availability early in the range
+  // can't exhaust the overall cap before the engine ever reaches later days
+  // (which is why a one-off extra day near the end used to never appear).
+  const perDay = opts.perDayMax ?? 8;
   const slots: LessonSlot[] = [];
 
   for (const day of eachDay(opts.fromDay, opts.toDay)) {
@@ -149,8 +155,10 @@ export async function openLessonSlots(opts: {
     const facHolds = facHoldByDay.get(day) ?? [];
     const facSess = facSessByDay.get(day) ?? [];
 
+    let dayCount = 0;
     for (const w of available) {
       for (let t = w.s; t + opts.lengthMin <= w.e; t += step) {
+        if (dayCount >= perDay) break;
         const c0 = t, c1 = t + opts.lengthMin;
         // Coach free?
         if (busy.some((b) => overlaps(c0, c1, b.s, b.e))) continue;
@@ -164,8 +172,10 @@ export async function openLessonSlots(opts: {
         for (const s of facSess) if (overlaps(c0, c1, s.iv.s, s.iv.e)) used += s.n;
         if (used + 1 > facCourts) continue;
         slots.push({ day, startTime: toHHMM(c0), endTime: addMinutesHHMM(toHHMM(c0), opts.lengthMin) });
+        dayCount++;
         if (slots.length >= max) return slots;
       }
+      if (dayCount >= perDay) break;
     }
   }
   return slots;
