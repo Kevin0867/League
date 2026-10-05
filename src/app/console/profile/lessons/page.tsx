@@ -130,6 +130,7 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
       {admin && (
         <div className="flex flex-wrap gap-2 text-sm">
           <Link href="/console/profile/lessons/locations" className="btn-ghost">Manage lesson locations →</Link>
+          <Link href="/console/profile/lessons/promos" className="btn-ghost">Promo codes →</Link>
         </div>
       )}
 

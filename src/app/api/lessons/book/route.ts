@@ -48,6 +48,7 @@ export async function POST(req: Request) {
     cadence, intervalN: 1, endType, count, endDate,
     client: { firstName, lastName, email, phone },
     roster,
+    promoCode: g("promoCode") || undefined,
   });
 
   if (!result.ok || !result.firstPaymentId) {

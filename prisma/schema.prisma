@@ -1810,6 +1810,8 @@ model LessonSeries {
   /// For a group booking: the other players' names/emails the booker entered, so
   /// waivers can go out and the roster is tracked. JSON array of {name,email}.
   roster        Json?
+  /// Promo code applied at booking (recorded for reporting), if any.
+  promoCode     String?
   /// Saved card for per-lesson auto-charge (Phase 4).
   stripeCustomerId       String?
   defaultPaymentMethodId String?
@@ -1821,6 +1823,26 @@ model LessonSeries {
 
   @@index([clientId])
   @@index([coachId])
+}
+
+/// A promo code for lesson bookings — a percentage or flat-amount discount off
+/// the first lesson, with optional expiry / redemption cap / minimum order.
+model PromoCode {
+  id             String    @id @default(cuid())
+  /// Stored UPPERCASE; what the player types (case-insensitive).
+  code           String    @unique
+  /// PERCENT (value = whole-number %) | AMOUNT (value = cents off).
+  kind           String
+  value          Int
+  active         Boolean   @default(true)
+  expiresAt      DateTime?
+  /// Max total redemptions (null = unlimited); timesRedeemed tracks usage.
+  maxRedemptions Int?
+  timesRedeemed  Int       @default(0)
+  /// Only applies when the order is at least this many cents (null = any).
+  minAmountCents Int?
+  note           String?
+  createdAt      DateTime  @default(now())
 }
 
 // ===========================================================================

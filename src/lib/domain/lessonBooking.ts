@@ -5,6 +5,7 @@ import { phoenixDateInput, formatTime12, formatDate } from "@/lib/time";
 import { isCourtTimeFree, createCourtHold, addMinutesHHMM, toMin, phoenixHHMM } from "@/lib/domain/courtHold";
 import { notifyFacilityCourtRequest } from "@/lib/domain/courtNotify";
 import { perPersonCentsFor, parsePriceTiers } from "@/lib/domain/lessonPricing";
+import { checkPromo, redeemPromo } from "@/lib/domain/promo";
 
 // Turn a player's slot pick (+ optional recurrence) into real bookings: a
 // LessonSeries header, one AlaCarteBooking per occurrence (reusing the à-la-carte
@@ -85,6 +86,7 @@ export async function createLessonBooking(opts: {
   endDate?: Date | null;
   client: { firstName: string; lastName: string; email: string; phone?: string };
   roster?: { name: string; email: string }[];
+  promoCode?: string;
 }): Promise<BookResult> {
   const offering = await prisma.alaCarteOffering.findUnique({
     where: { id: opts.offeringId },
@@ -116,7 +118,15 @@ export async function createLessonBooking(opts: {
   // very first lesson. Checked BEFORE we create any bookings for them.
   const priorLessons = await prisma.alaCarteBooking.count({ where: { clientId: person.id, status: { notIn: ["CANCELLED", "DECLINED"] } } });
   const introApplies = offering.introPriceCents != null && offering.introPriceCents >= 0 && priorLessons === 0;
-  const firstPrice = introApplies ? offering.introPriceCents! : regularPrice;
+  let firstPrice = introApplies ? offering.introPriceCents! : regularPrice;
+
+  // Promo code: a one-time discount off the first lesson. Validated here;
+  // redeemed only once the booking actually succeeds.
+  let promoToRedeem: { id: string; code: string } | null = null;
+  if (opts.promoCode && opts.promoCode.trim()) {
+    const chk = await checkPromo(opts.promoCode, firstPrice);
+    if (chk.ok) { firstPrice = Math.max(0, firstPrice - chk.discountCents); promoToRedeem = { id: chk.promo.id, code: chk.promo.code }; }
+  }
 
   const occurrences = generateOccurrences({ startDay: opts.startDay, startTime: opts.startTime, cadence: opts.cadence, intervalN: opts.intervalN, endType: opts.endType, count: opts.count, endDate: opts.endDate });
 
@@ -126,6 +136,7 @@ export async function createLessonBooking(opts: {
       cadence: opts.cadence, intervalN: opts.intervalN, endType: opts.endType, endDate: opts.endDate ?? null, count: opts.count ?? null,
       people: Math.max(1, opts.people), priceCents: price, status: "ACTIVE",
       roster: opts.roster && opts.roster.length ? opts.roster : undefined,
+      promoCode: promoToRedeem?.code ?? null,
     },
   });
 
@@ -163,6 +174,9 @@ export async function createLessonBooking(opts: {
     if (i === 0) { firstPaymentId = payment.id; firstScheduledAt = scheduledAt; }
     booked++;
   }
+
+  // Redeem the promo now that at least one lesson booked.
+  if (booked > 0 && promoToRedeem) await redeemPromo(promoToRedeem.id).catch(() => {});
 
   // Email the facility's court contact a reservation request for this booking —
   // courts are arranged directly with each venue (no external system).
