@@ -82,6 +82,7 @@ export async function createLessonBooking(opts: {
   count?: number | null;
   endDate?: Date | null;
   client: { firstName: string; lastName: string; email: string; phone?: string };
+  roster?: { name: string; email: string }[];
 }): Promise<BookResult> {
   const offering = await prisma.alaCarteOffering.findUnique({
     where: { id: opts.offeringId },
@@ -114,6 +115,7 @@ export async function createLessonBooking(opts: {
       offeringId: offering.id, coachId, clientId: person.id, facilityId: opts.facilityId,
       cadence: opts.cadence, intervalN: opts.intervalN, endType: opts.endType, endDate: opts.endDate ?? null, count: opts.count ?? null,
       people: Math.max(1, opts.people), priceCents: price, status: "ACTIVE",
+      roster: opts.roster && opts.roster.length ? opts.roster : undefined,
     },
   });
 

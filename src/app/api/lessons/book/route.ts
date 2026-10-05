@@ -35,10 +35,19 @@ export async function POST(req: Request) {
   const endDate = endType === "UNTIL_DATE" && g("endDate") ? new Date(`${g("endDate")}T23:59:59Z`) : null;
   const people = Math.max(1, parseInt(g("people") || "1", 10));
 
+  // Group roster: the other players' names/emails (parallel fields), for waivers
+  // and roster tracking. Keep only rows with at least a name or an email.
+  const rNames = fd.getAll("rosterName").map((v) => String(v).trim());
+  const rEmails = fd.getAll("rosterEmail").map((v) => String(v).trim());
+  const roster = rNames
+    .map((nm, i) => ({ name: nm, email: (rEmails[i] ?? "").toLowerCase() }))
+    .filter((r) => r.name || r.email);
+
   const result = await createLessonBooking({
     offeringId, facilityId, startDay, startTime, people,
     cadence, intervalN: 1, endType, count, endDate,
     client: { firstName, lastName, email, phone },
+    roster,
   });
 
   if (!result.ok || !result.firstPaymentId) {
