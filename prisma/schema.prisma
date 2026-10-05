@@ -1738,16 +1738,44 @@ model AlaCarteOffering {
   cancelWindowHours  Int?
   cancelPolicy       String?
   /// When the class/clinic runs (admin catalog); coach offerings are scheduled
-  /// per booking, not here.
+  /// per booking, not here. For a MULTI-SESSION class, this holds the first
+  /// session's date (so public listing/sorting works) and the full schedule lives
+  /// in classSessions.
   scheduledAt DateTime?
+  /// Audience targeting for a publicly-listed class/clinic (all optional; null =
+  /// no restriction on that dimension). Used to match players for marketing and
+  /// to label who a class is for. DUPR band is inclusive; gender is MALE|FEMALE;
+  /// ageGroup is YOUTH|ADULT (derived from Person.dob).
+  targetMinRating Float?
+  targetMaxRating Float?
+  targetGender    String?
+  targetAgeGroup  String?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
   bookings    AlaCarteBooking[]
   lessonSeries LessonSeries[]
+  classSessions ClassSession[]
 
   @@index([facilityId])
   @@index([coachId])
+}
+
+/// One dated session of a MULTI-SESSION class (e.g. week 3 of a 6-week 4.0 men's
+/// class). A single-session clinic has none of these and uses the offering's own
+/// scheduledAt. Enrollment + payment are per class (the parent offering), not per
+/// session — a player signs up once for the whole series.
+model ClassSession {
+  id          String   @id @default(cuid())
+  offeringId  String
+  offering    AlaCarteOffering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime
+  lengthMin   Int?
+  facilityId  String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([offeringId, scheduledAt])
 }
 
 /// A booking. Court cost comes off the top, then the split is applied to net;

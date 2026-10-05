@@ -16,7 +16,8 @@ export type AudienceType =
   | "DIVISION"
   | "TEAM"
   | "SINGLE_COACH"
-  | "SINGLE_PERSON";
+  | "SINGLE_PERSON"
+  | "PERSON_LIST";
 
 export type Recipient = {
   personId: string;
@@ -173,6 +174,14 @@ export async function resolveAudience(
     }
     case "SINGLE_PERSON": {
       if (ref) personIds = [ref];
+      break;
+    }
+    // An explicit, hand-/rule-picked set of people (ref = comma-separated person
+    // ids), e.g. the players matched to a targeted class. Not expanded to
+    // guardians — the sender chose exactly these recipients.
+    case "PERSON_LIST": {
+      personIds = (ref ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      expandMinors = false;
       break;
     }
   }

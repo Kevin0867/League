@@ -57,7 +57,19 @@ export default async function ClinicsPage() {
                     {formatCents(c.priceCents)}
                   </span>
                 </div>
-                <p className="mt-2 text-sm font-medium text-slate-600">{formatClinicWhen(c.scheduledAt)}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {c.sessions.length > 1 && (
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">{c.sessions.length}-week class</span>
+                  )}
+                  {c.targetLabel && (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">For {c.targetLabel}</span>
+                  )}
+                </div>
+                <p className="mt-2 text-sm font-medium text-slate-600">
+                  {c.sessions.length > 1
+                    ? `${c.sessions.length} sessions · starts ${formatClinicWhen(c.sessions[0])}`
+                    : formatClinicWhen(c.scheduledAt)}
+                </p>
                 <p className="text-sm text-slate-500">
                   {c.facilityName}{c.coachName ? ` · Coach ${c.coachName}` : ""}
                 </p>
