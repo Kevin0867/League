@@ -6,6 +6,7 @@ import { dispatchMessage } from "@/lib/messaging";
 import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { isCourtTimeFree, createCourtHold, releaseCourtHolds, addMinutesHHMM } from "@/lib/domain/courtHold";
 import { coachBusyAt } from "@/lib/domain/lessonBooking";
+import { notifyFacilityCourtRequest } from "@/lib/domain/courtNotify";
 import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 import { formatCents } from "@/lib/money";
 import { formatDate, formatTime12, phoenixDateInput } from "@/lib/time";
@@ -111,6 +112,18 @@ export async function rescheduleLesson(opts: {
     }).catch(() => {});
   }
 
+  // Court contact at the new venue (and release the old one if it moved).
+  await notifyFacilityCourtRequest({
+    facilityId, action: "reschedule", scheduledAt, lengthMin,
+    coachName, clientName: `${b.client.firstName} ${b.client.lastName}`.trim(), lessonTitle: b.offering?.title ?? null, prevWhen,
+  }).catch(() => {});
+  if (relocated && prevFacilityId && b.scheduledAt) {
+    await notifyFacilityCourtRequest({
+      facilityId: prevFacilityId, action: "cancel", scheduledAt: b.scheduledAt, lengthMin,
+      coachName, clientName: `${b.client.firstName} ${b.client.lastName}`.trim(), lessonTitle: b.offering?.title ?? null,
+    }).catch(() => {});
+  }
+
   await audit({ actorId: opts.actor.userId, entityType: "AlaCarteBooking", entityId: b.id, action: "LESSON_RESCHEDULED", summary: `Lesson moved to ${newWhen}${where} (was ${prevWhen})` });
   return { ok: true };
 }
@@ -129,6 +142,16 @@ export async function cancelLesson(opts: {
 
   await releaseCourtHolds("LESSON", b.id);
   await prisma.alaCarteBooking.update({ where: { id: b.id }, data: { status: "CANCELLED" } });
+
+  // Ask the facility to release the court (no external booking system).
+  if (b.facilityId && b.scheduledAt) {
+    await notifyFacilityCourtRequest({
+      facilityId: b.facilityId, action: "cancel", scheduledAt: b.scheduledAt,
+      lengthMin: b.lessonLengthMin ?? b.offering?.lengthMin ?? 60,
+      coachName: b.coach ? `${b.coach.person.firstName} ${b.coach.person.lastName}`.trim() : null,
+      clientName: `${b.client.firstName} ${b.client.lastName}`.trim(), lessonTitle: b.offering?.title ?? null,
+    }).catch(() => {});
+  }
 
   let refundedCents = 0;
   if (doRefund && b.paymentId) {

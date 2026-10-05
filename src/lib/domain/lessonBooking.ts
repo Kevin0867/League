@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 import { phoenixDateInput, formatTime12, formatDate } from "@/lib/time";
 import { isCourtTimeFree, createCourtHold, addMinutesHHMM, toMin, phoenixHHMM } from "@/lib/domain/courtHold";
+import { notifyFacilityCourtRequest } from "@/lib/domain/courtNotify";
 
 // Turn a player's slot pick (+ optional recurrence) into real bookings: a
 // LessonSeries header, one AlaCarteBooking per occurrence (reusing the à-la-carte
@@ -120,6 +121,7 @@ export async function createLessonBooking(opts: {
   });
 
   let firstPaymentId: string | undefined;
+  let firstScheduledAt: Date | undefined;
   let booked = 0, skipped = 0;
   for (let i = 0; i < occurrences.length; i++) {
     const occ = occurrences[i];
@@ -148,8 +150,19 @@ export async function createLessonBooking(opts: {
     });
     await prisma.alaCarteBooking.update({ where: { id: booking.id }, data: { paymentId: payment.id } });
     await createCourtHold({ facilityId: opts.facilityId, day: occ.day, startTime: occ.start, endTime: end, refType: "LESSON", refId: booking.id, note: `Lesson — ${person.firstName} ${person.lastName}` });
-    if (i === 0) firstPaymentId = payment.id;
+    if (i === 0) { firstPaymentId = payment.id; firstScheduledAt = scheduledAt; }
     booked++;
+  }
+
+  // Email the facility's court contact a reservation request for this booking —
+  // courts are arranged directly with each venue (no external system).
+  if (booked > 0 && firstScheduledAt) {
+    const recurrence = booked > 1 ? `${opts.cadence.toLowerCase()}, ${booked} sessions` : null;
+    await notifyFacilityCourtRequest({
+      facilityId: opts.facilityId, action: "book", scheduledAt: firstScheduledAt, lengthMin,
+      coachName: offering.coach ? coachName : null, clientName: `${person.firstName} ${person.lastName}`.trim(),
+      lessonTitle: offering.title, recurrence,
+    }).catch(() => {});
   }
 
   return { ok: true, firstPaymentId, booked, skipped, seriesId: series.id, coachName };

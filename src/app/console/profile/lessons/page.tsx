@@ -127,6 +127,11 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           <Link href="/console/profile/lessons/schedule" className="btn-ghost">View my upcoming booked lessons →</Link>
         </div>
       )}
+      {admin && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Link href="/console/profile/lessons/locations" className="btn-ghost">Manage lesson locations →</Link>
+        </div>
+      )}
 
       {sp.ok === "offering" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Offering saved.</p>}
       {sp.ok === "offeringdel" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Offering removed.</p>}
