@@ -4,6 +4,7 @@ import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 import { phoenixDateInput, formatTime12, formatDate } from "@/lib/time";
 import { isCourtTimeFree, createCourtHold, addMinutesHHMM, toMin, phoenixHHMM } from "@/lib/domain/courtHold";
 import { notifyFacilityCourtRequest } from "@/lib/domain/courtNotify";
+import { perPersonCentsFor, parsePriceTiers } from "@/lib/domain/lessonPricing";
 
 // Turn a player's slot pick (+ optional recurrence) into real bookings: a
 // LessonSeries header, one AlaCarteBooking per occurrence (reusing the à-la-carte
@@ -87,17 +88,19 @@ export async function createLessonBooking(opts: {
 }): Promise<BookResult> {
   const offering = await prisma.alaCarteOffering.findUnique({
     where: { id: opts.offeringId },
-    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, recurringDiscountPct: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
+    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, recurringDiscountPct: true, priceTiers: true, introPriceCents: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
   });
   if (!offering || !offering.active) return { ok: false, booked: 0, skipped: 0, error: "This lesson isn't available." };
   const lengthMin = offering.lengthMin ?? 60;
-  // priceCents is PER PERSON. The per-lesson charge = per-person × #people, and a
-  // recurring series takes the optional per-lesson discount off each lesson.
-  const perPersonCents = offering.adminLockedPriceCents ?? offering.priceCents;
+  // Per-person price: a group-size tier if one matches, else the flat price. The
+  // per-lesson charge = per-person × #people; a recurring series takes the
+  // optional per-lesson discount off each lesson.
   const people = Math.max(1, opts.people);
+  const perPersonCents = perPersonCentsFor(parsePriceTiers(offering.priceTiers), offering.adminLockedPriceCents ?? offering.priceCents, people);
   const isRecurring = opts.cadence !== "ONCE" && opts.endType !== "ONCE";
   const discountPct = isRecurring ? Math.min(90, Math.max(0, offering.recurringDiscountPct ?? 0)) : 0;
-  const price = Math.round(perPersonCents * people * (1 - discountPct / 100));
+  const regularPrice = Math.round(perPersonCents * people * (1 - discountPct / 100));
+  const price = regularPrice; // series-level reference price
   const coachId = offering.coachId ?? null;
   const coachName = offering.coach ? `${offering.coach.person.firstName} ${offering.coach.person.lastName}`.trim() : "your coach";
   const facility = await prisma.facility.findUnique({ where: { id: opts.facilityId }, select: { name: true } });
@@ -108,6 +111,12 @@ export async function createLessonBooking(opts: {
   const person = existing
     ? await prisma.person.update({ where: { id: existing.id }, data: { phone: existing.phone || opts.client.phone || null } })
     : await prisma.person.create({ data: { firstName: opts.client.firstName, lastName: opts.client.lastName, email, phone: opts.client.phone || null } });
+
+  // First-lesson intro price: a flat discounted total for a brand-new client's
+  // very first lesson. Checked BEFORE we create any bookings for them.
+  const priorLessons = await prisma.alaCarteBooking.count({ where: { clientId: person.id, status: { notIn: ["CANCELLED", "DECLINED"] } } });
+  const introApplies = offering.introPriceCents != null && offering.introPriceCents >= 0 && priorLessons === 0;
+  const firstPrice = introApplies ? offering.introPriceCents! : regularPrice;
 
   const occurrences = generateOccurrences({ startDay: opts.startDay, startTime: opts.startTime, cadence: opts.cadence, intervalN: opts.intervalN, endType: opts.endType, count: opts.count, endDate: opts.endDate });
 
@@ -137,16 +146,17 @@ export async function createLessonBooking(opts: {
       skipped++;
       continue;
     }
+    const occPrice = i === 0 ? firstPrice : regularPrice;
     const scheduledAt = phoenixWallTimeToUtc(new Date(`${occ.day}T12:00:00Z`), occ.start);
     const booking = await prisma.alaCarteBooking.create({
       data: {
         offeringId: offering.id, clientId: person.id, coachId, status: "REQUESTED",
-        grossCents: price, scheduledAt, facilityId: opts.facilityId, lessonLengthMin: lengthMin, seriesId: series.id,
+        grossCents: occPrice, scheduledAt, facilityId: opts.facilityId, lessonLengthMin: lengthMin, seriesId: series.id,
       },
     });
-    const desc = `${offering.title} with ${coachName}${facility ? ` at ${facility.name}` : ""} — ${formatDate(new Date(`${occ.day}T12:00:00Z`))} ${formatTime12(occ.start)}`;
+    const desc = `${offering.title} with ${coachName}${facility ? ` at ${facility.name}` : ""} — ${formatDate(new Date(`${occ.day}T12:00:00Z`))} ${formatTime12(occ.start)}${i === 0 && introApplies ? " (intro price)" : ""}`;
     const payment = await prisma.payment.create({
-      data: { direction: "IN", partyId: person.id, amountCents: price, method: "STRIPE", status: "REQUESTED", category: "ALA_CARTE", description: desc },
+      data: { direction: "IN", partyId: person.id, amountCents: occPrice, method: "STRIPE", status: "REQUESTED", category: "ALA_CARTE", description: desc },
     });
     await prisma.alaCarteBooking.update({ where: { id: booking.id }, data: { paymentId: payment.id } });
     await createCourtHold({ facilityId: opts.facilityId, day: occ.day, startTime: occ.start, endTime: end, refType: "LESSON", refId: booking.id, note: `Lesson — ${person.firstName} ${person.lastName}` });

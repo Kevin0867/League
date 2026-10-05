@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
@@ -107,12 +108,27 @@ export async function POST(req: Request) {
       }
     }
 
+    // Multi-person price tiers (optional) — per-person $ by group size.
+    const tPeople = fd.getAll("tierPeople").map((v) => parseInt(String(v), 10));
+    const tPrice = fd.getAll("tierPrice").map((v) => { const n = parseFloat(String(v)); return Number.isFinite(n) ? Math.round(n * 100) : NaN; });
+    const priceTiersArr: { people: number; perPersonCents: number }[] = [];
+    for (let i = 0; i < tPeople.length; i++) {
+      if (!Number.isFinite(tPeople[i]) || tPeople[i] <= 0) continue;
+      if (!Number.isFinite(tPrice[i]) || tPrice[i] < 0) continue;
+      priceTiersArr.push({ people: tPeople[i], perPersonCents: tPrice[i] });
+    }
+    priceTiersArr.sort((a, b) => a.people - b.people);
+    // First-lesson intro price (optional flat total).
+    const introPriceCents = cents("introPrice");
+
     const data = {
       type, title, description: g("description") || null,
       priceCents, lengthMin, minPeople, maxPeople,
-      preferredFacilityIds: preferred.length ? preferred : undefined,
+      preferredFacilityIds: preferred.length ? preferred : Prisma.DbNull,
       recurrenceAllowed,
       recurringDiscountPct,
+      priceTiers: priceTiersArr.length ? priceTiersArr : Prisma.DbNull,
+      introPriceCents: introPriceCents && introPriceCents > 0 ? introPriceCents : null,
       coachSet: true, coachId: coach.id,
       // An unchecked checkbox sends NO field, so "!== off" always read true and
       // Bookable could never be turned off. Checked sends "on".

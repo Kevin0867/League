@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PublicNav } from "@/components/PublicNav";
 import { LessonBookingWizard } from "@/components/LessonBookingWizard";
+import { parsePriceTiers } from "@/lib/domain/lessonPricing";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
     id: o.id, type: o.type, title: o.title, priceCents: o.priceCents, adminLockedPriceCents: o.adminLockedPriceCents,
     lengthMin: o.lengthMin, minPeople: o.minPeople, maxPeople: o.maxPeople, recurrenceAllowed: o.recurrenceAllowed,
     recurringDiscountPct: o.recurringDiscountPct, preferredFacilityIds: asIds(o.preferredFacilityIds),
+    priceTiers: parsePriceTiers(o.priceTiers), introPriceCents: o.introPriceCents,
   }));
 
   return (
