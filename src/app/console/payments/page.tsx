@@ -18,6 +18,7 @@ import { placementPaymentPeople, testTeamPersonIds, makeCoveredPlayersResolver, 
 import { coachEarnings } from "@/lib/domain/coachEarnings";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
+import { ApplyPaymentToControl } from "@/components/ApplyPaymentToControl";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { smsConfigured, emailConfigured } from "@/lib/notify";
 import { feeStateOf } from "@/lib/domain/feeStatus";
@@ -183,7 +184,10 @@ export default async function PaymentsPage({
       const ids = Array.isArray(p.coveredPersonIds) ? (p.coveredPersonIds as string[]) : [];
       const payerName = p.party ? `${p.party.firstName} ${p.party.lastName}` : "";
       const names = ids.map((id) => coveredNameById.get(id)).filter((n): n is string => !!n && n !== payerName);
-      return { ...p, coveredNames: names.length ? [...new Set(names)].join(", ") : null };
+      // The full applied-to list (incl. a covered player who is also the payer),
+      // for the "apply to which player" editor — which needs the true state.
+      const coveredList = ids.map((id) => ({ id, name: coveredNameById.get(id) ?? "" })).filter((c) => c.name);
+      return { ...p, coveredNames: names.length ? [...new Set(names)].join(", ") : null, coveredList };
     });
   const inboundRows = withCovered(inbound);
   const subscriptionRows = withCovered(subscriptions);
@@ -588,6 +592,11 @@ export default async function PaymentsPage({
       {sp.attrok && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Charge filed — it&apos;s now attached to the family and category you chose, and will show in the right reports.
+        </div>
+      )}
+      {sp.applyok && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Updated — the payment is now applied to the player(s) you chose, and reports credit them.
         </div>
       )}
 
@@ -1155,7 +1164,7 @@ export default async function PaymentsPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Ledger title="Fees in" rows={inboundRows} search={{ q: qRaw, payView }} />
+        <Ledger title="Fees in" rows={inboundRows} search={{ q: qRaw, payView }} ticket={ticket} />
         <SubscriptionsLedger rows={subscriptionRows} count={subsCount} collectedCents={subsCollectedCents} remainingCents={subsRemainingCents} />
         <Ledger title="Payments out" rows={outbound} />
       </div>
@@ -1167,10 +1176,13 @@ function Ledger({
   title,
   rows,
   search,
+  ticket,
 }: {
   title: string;
-  rows: Array<{ id: string; partyId?: string | null; amountCents: number; status: string; category: string; paidAt?: Date | null; coveredNames?: string | null; party: { firstName: string; lastName: string } | null }>;
+  rows: Array<{ id: string; partyId?: string | null; amountCents: number; status: string; category: string; paidAt?: Date | null; coveredNames?: string | null; coveredList?: { id: string; name: string }[]; party: { firstName: string; lastName: string } | null }>;
   search?: { q: string; payView: "all" | "paid" | "unpaid" };
+  /** When set, each row gets an "apply to which player" editor. */
+  ticket?: string;
 }) {
   const pill = (label: string, value: string, active: boolean) => (
     <Link
@@ -1211,8 +1223,8 @@ function Ledger({
       ) : (
         <ul className="divide-y divide-slate-100 text-sm">
           {rows.map((p) => (
-            <li key={p.id} className="flex items-center justify-between py-2">
-              <div>
+            <li key={p.id} className="flex items-start justify-between py-2">
+              <div className="min-w-0">
                 <div className="font-medium text-slate-800">{formatCents(p.amountCents)}</div>
                 <div className="text-xs text-slate-400">
                   {p.party ? (
@@ -1226,6 +1238,14 @@ function Ledger({
                   {p.coveredNames ? ` · for ${p.coveredNames}` : ""}
                   {p.paidAt ? ` · paid ${formatDate(p.paidAt)}` : ""}
                 </div>
+                {ticket && (
+                  <ApplyPaymentToControl
+                    ticket={ticket}
+                    paymentId={p.id}
+                    current={p.coveredList ?? []}
+                    payer={p.partyId && p.party ? { id: p.partyId, name: `${p.party.firstName} ${p.party.lastName}` } : null}
+                  />
+                )}
               </div>
               <StatusBadge status={p.status} />
             </li>
