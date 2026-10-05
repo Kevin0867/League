@@ -49,6 +49,7 @@ export async function POST(req: Request) {
     client: { firstName, lastName, email, phone },
     roster,
     promoCode: g("promoCode") || undefined,
+    packageDiscountPct: g("packageDiscountPct") ? Math.max(0, Math.min(90, parseInt(g("packageDiscountPct"), 10) || 0)) : null,
   });
 
   if (!result.ok || !result.firstPaymentId) {

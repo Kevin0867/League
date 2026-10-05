@@ -4,7 +4,7 @@ import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 import { phoenixDateInput, formatTime12, formatDate } from "@/lib/time";
 import { isCourtTimeFree, createCourtHold, addMinutesHHMM, toMin, phoenixHHMM } from "@/lib/domain/courtHold";
 import { notifyFacilityCourtRequest } from "@/lib/domain/courtNotify";
-import { perPersonCentsFor, parsePriceTiers } from "@/lib/domain/lessonPricing";
+import { parsePriceTiers, lessonGroupBaseCents, lessonPerLessonCents } from "@/lib/domain/lessonPricing";
 import { checkPromo, redeemPromo } from "@/lib/domain/promo";
 
 // Turn a player's slot pick (+ optional recurrence) into real bookings: a
@@ -87,21 +87,22 @@ export async function createLessonBooking(opts: {
   client: { firstName: string; lastName: string; email: string; phone?: string };
   roster?: { name: string; email: string }[];
   promoCode?: string;
+  /** A chosen package's discount %, overriding the recurring discount for the whole series. */
+  packageDiscountPct?: number | null;
 }): Promise<BookResult> {
   const offering = await prisma.alaCarteOffering.findUnique({
     where: { id: opts.offeringId },
-    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, recurringDiscountPct: true, priceTiers: true, introPriceCents: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
+    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, recurringDiscountPct: true, priceTiers: true, introPriceCents: true, additionalPersonDiscountPct: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
   });
   if (!offering || !offering.active) return { ok: false, booked: 0, skipped: 0, error: "This lesson isn't available." };
   const lengthMin = offering.lengthMin ?? 60;
-  // Per-person price: a group-size tier if one matches, else the flat price. The
-  // per-lesson charge = per-person × #people; a recurring series takes the
-  // optional per-lesson discount off each lesson.
+  // Group base per lesson (tiers, or flat + sibling/family discount for extras),
+  // then the whole-series discount: a chosen package % overrides the recurring %.
   const people = Math.max(1, opts.people);
-  const perPersonCents = perPersonCentsFor(parsePriceTiers(offering.priceTiers), offering.adminLockedPriceCents ?? offering.priceCents, people);
+  const base = lessonGroupBaseCents({ flatPerPersonCents: offering.adminLockedPriceCents ?? offering.priceCents, tiers: parsePriceTiers(offering.priceTiers), additionalPersonDiscountPct: offering.additionalPersonDiscountPct, headcount: people });
   const isRecurring = opts.cadence !== "ONCE" && opts.endType !== "ONCE";
-  const discountPct = isRecurring ? Math.min(90, Math.max(0, offering.recurringDiscountPct ?? 0)) : 0;
-  const regularPrice = Math.round(perPersonCents * people * (1 - discountPct / 100));
+  const seriesDiscountPct = opts.packageDiscountPct != null ? Math.min(90, Math.max(0, opts.packageDiscountPct)) : (isRecurring ? Math.min(90, Math.max(0, offering.recurringDiscountPct ?? 0)) : 0);
+  const regularPrice = lessonPerLessonCents(base, seriesDiscountPct);
   const price = regularPrice; // series-level reference price
   const coachId = offering.coachId ?? null;
   const coachName = offering.coach ? `${offering.coach.person.firstName} ${offering.coach.person.lastName}`.trim() : "your coach";

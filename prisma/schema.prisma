@@ -1719,6 +1719,13 @@ model AlaCarteOffering {
   priceTiers   Json?
   /// Optional discounted FLAT total for a NEW client's very first lesson.
   introPriceCents Int?
+  /// Optional sibling/family discount: % off each player AFTER the first when a
+  /// family books together (only when priceTiers is not set — tiers already price
+  /// the group).
+  additionalPersonDiscountPct Int?
+  /// Optional prepaid packages: book N lessons at a discount. JSON array of
+  /// {count:int, discountPct:int}. Applies the discount to every lesson in the series.
+  packages     Json?
   /// When the class/clinic runs (admin catalog); coach offerings are scheduled
   /// per booking, not here.
   scheduledAt DateTime?

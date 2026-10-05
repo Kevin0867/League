@@ -12,12 +12,18 @@ type Offering = {
   lengthMin: number | null; minPeople: number | null; maxPeople: number | null;
   preferredFacilityIds: unknown; recurrenceAllowed: boolean; recurringDiscountPct: number | null; active: boolean;
   priceTiers?: unknown; introPriceCents?: number | null;
+  additionalPersonDiscountPct?: number | null; packages?: unknown;
 };
 
 type Tier = { people: string; price: string };
 function initialTiers(v: unknown): Tier[] {
   if (!Array.isArray(v)) return [];
   return v.map((x) => { const o = x as { people?: unknown; perPersonCents?: unknown }; return { people: String(Number(o.people) || ""), price: Number.isFinite(Number(o.perPersonCents)) ? (Number(o.perPersonCents) / 100).toFixed(2) : "" }; }).filter((t) => t.people);
+}
+type Pkg = { count: string; pct: string };
+function initialPackages(v: unknown): Pkg[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => { const o = x as { count?: unknown; discountPct?: unknown }; return { count: String(Number(o.count) || ""), pct: String(Number(o.discountPct) || "") }; }).filter((p) => p.count);
 }
 
 const TYPE_OPTIONS: Array<[string, string]> = [
@@ -47,6 +53,7 @@ export function OfferingForm({
   const [maxPeople, setMaxPeople] = useState(offering?.maxPeople ?? DEFAULTS[offering?.type ?? "PRIVATE"]?.max ?? 1);
   const [recurrence, setRecurrence] = useState(offering ? offering.recurrenceAllowed : true);
   const [tiers, setTiers] = useState<Tier[]>(initialTiers(offering?.priceTiers));
+  const [packages, setPackages] = useState<Pkg[]>(initialPackages(offering?.packages));
   const [confirmDel, setConfirmDel] = useState(false);
   const pref = asIds(offering?.preferredFacilityIds);
   const isPrivate = type === "PRIVATE";
@@ -133,6 +140,30 @@ export function OfferingForm({
           <input name="introPrice" type="number" min={0} step="0.01" defaultValue={offering?.introPriceCents != null ? (offering.introPriceCents / 100).toFixed(2) : ""} placeholder="optional" className="input py-1" />
         </div>
         <p className="sm:col-span-4 flex items-end text-xs text-slate-500">A discounted flat total for a brand-new player&apos;s very first lesson (a one-time intro offer). Leave blank for none.</p>
+
+        {!isPrivate && (
+          <div className="sm:col-span-2">
+            <label className="label">Sibling/family discount (%)</label>
+            <input name="additionalPersonDiscountPct" type="number" min={0} max={90} step={1} defaultValue={offering?.additionalPersonDiscountPct ?? ""} placeholder="optional" className="input py-1" />
+          </div>
+        )}
+        {!isPrivate && <p className="sm:col-span-4 flex items-end text-xs text-slate-500">% off each player after the first when a family books together. (Ignored if you set per-group-size tiers above.)</p>}
+
+        {/* Prepaid packages — book N lessons at a discount. */}
+        <div className="sm:col-span-6 rounded-lg border border-slate-200 p-3">
+          <p className="text-xs font-semibold text-slate-700">Lesson packages <span className="font-normal text-slate-400">(optional — book N lessons at a discount; shown as a recurring option)</span></p>
+          <div className="mt-2 space-y-2">
+            {packages.map((p, i) => (
+              <div key={i} className="flex flex-wrap items-end gap-2">
+                <div><label className="label text-xs"># lessons</label><input name="pkgCount" type="number" min={2} max={52} value={p.count} onChange={(e) => setPackages((ps) => ps.map((x, j) => j === i ? { ...x, count: e.target.value } : x))} className="input py-1 w-24" /></div>
+                <div><label className="label text-xs">% off each</label><input name="pkgPct" type="number" min={0} max={90} value={p.pct} onChange={(e) => setPackages((ps) => ps.map((x, j) => j === i ? { ...x, pct: e.target.value } : x))} className="input py-1 w-24" /></div>
+                <button type="button" onClick={() => setPackages((ps) => ps.filter((_, j) => j !== i))} className="btn-chip-danger mb-1">remove</button>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={() => setPackages((ps) => [...ps, { count: "", pct: "" }])} className="btn-secondary mt-2 text-xs">+ Add a package</button>
+          <p className="mt-1 text-xs text-slate-400">e.g. 5 lessons → 10% off each, 10 lessons → 15% off each. Players pay per lesson (first now, rest before each).</p>
+        </div>
 
         <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="recurrenceAllowed" checked={recurrence} onChange={(e) => setRecurrence(e.target.checked)} /> Allow recurring bookings (weekly/monthly series)

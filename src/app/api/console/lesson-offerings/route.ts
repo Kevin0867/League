@@ -121,6 +121,21 @@ export async function POST(req: Request) {
     // First-lesson intro price (optional flat total).
     const introPriceCents = cents("introPrice");
 
+    // Sibling/family discount: % off each additional player (no-tiers case).
+    const famRaw = parseInt(g("additionalPersonDiscountPct") || "0", 10);
+    const additionalPersonDiscountPct = Number.isFinite(famRaw) && famRaw > 0 ? Math.min(90, famRaw) : null;
+
+    // Prepaid packages: rows of {count, discountPct}.
+    const pkgCount = fd.getAll("pkgCount").map((v) => parseInt(String(v), 10));
+    const pkgPct = fd.getAll("pkgPct").map((v) => parseInt(String(v), 10));
+    const packagesArr: { count: number; discountPct: number }[] = [];
+    for (let i = 0; i < pkgCount.length; i++) {
+      if (!Number.isFinite(pkgCount[i]) || pkgCount[i] < 2) continue;
+      const d = Number.isFinite(pkgPct[i]) ? Math.min(90, Math.max(0, pkgPct[i])) : 0;
+      packagesArr.push({ count: pkgCount[i], discountPct: d });
+    }
+    packagesArr.sort((a, b) => a.count - b.count);
+
     const data = {
       type, title, description: g("description") || null,
       priceCents, lengthMin, minPeople, maxPeople,
@@ -129,6 +144,8 @@ export async function POST(req: Request) {
       recurringDiscountPct,
       priceTiers: priceTiersArr.length ? priceTiersArr : Prisma.DbNull,
       introPriceCents: introPriceCents && introPriceCents > 0 ? introPriceCents : null,
+      additionalPersonDiscountPct,
+      packages: packagesArr.length ? packagesArr : Prisma.DbNull,
       coachSet: true, coachId: coach.id,
       // An unchecked checkbox sends NO field, so "!== off" always read true and
       // Bookable could never be turned off. Checked sends "on".
