@@ -7,9 +7,20 @@ import { mintConsoleTicket } from "@/lib/auth";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { LessonSetupForm } from "@/components/LessonSetupForm";
 import { LessonManageControls, type ManageBooking } from "@/components/LessonManageControls";
+import { ClassBuilderForm } from "@/components/ClassBuilderForm";
+import { describeTarget } from "@/lib/domain/classAudience";
 import Link from "next/link";
 import { formatDateTime12 } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
+
+// datetime-local value from a stored Date, using UTC parts so it round-trips
+// through the route's `new Date(raw)` (which parses in the container's UTC tz) —
+// matching the single-clinic path's existing behavior.
+function toLocalInput(d: Date | null): string {
+  if (!d) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +37,7 @@ const ERRORS: Record<string, string> = {
 
 const OKS: Record<string, string> = {
   createOffering: "Offering added.",
+  editClass: "Class updated.",
   respondToBooking: "Booking updated.",
   deliverBooking: "Booking delivered and split recorded.",
   lessonSent: "Lesson created — payment request sent.",
@@ -40,7 +52,7 @@ export default async function AlaCartePage({
   const sp = await searchParams;
   const ticket = await mintConsoleTicket();
   const [offerings, bookings, alaFacilities, coaches, activeCounts] = await Promise.all([
-    prisma.alaCarteOffering.findMany({ include: { facility: true, coach: { include: { person: true } } }, orderBy: { createdAt: "desc" } }),
+    prisma.alaCarteOffering.findMany({ include: { facility: true, coach: { include: { person: true } }, classSessions: { orderBy: { scheduledAt: "asc" } } }, orderBy: { createdAt: "desc" } }),
     prisma.alaCarteBooking.findMany({
       include: { offering: { include: { facility: true } }, client: true, coach: { include: { person: true } } },
       orderBy: { createdAt: "desc" }, take: 40,
@@ -76,56 +88,21 @@ export default async function AlaCartePage({
         <SplitCard title="Academy Director teaches" rates={DIRECTOR_TEACHES} note="Director takes coach + director lines (70%); PURE retains 30%." />
       </div>
 
-      {/* Create offering */}
-      <form method="POST" action="/api/console/alacarte" className="card grid gap-3 sm:grid-cols-6 sm:items-end">
-        <input type="hidden" name="ticket" value={ticket} />
-        <input type="hidden" name="op" value="createOffering" />
-        <div className="sm:col-span-3">
-          <label className="label">Title</label>
-          <input name="title" className="input" placeholder="Saturday skills clinic" required />
+      {/* Create offering / class */}
+      <div className="card space-y-3">
+        <div>
+          <h2 className="font-semibold text-slate-900">Create a class or clinic</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            A clinic/class with a capacity appears on the public <span className="font-medium">Clinics</span> page with a direct signup link.
+            Add a DUPR band, gender, or age group to target it (e.g. a 4.0 men&apos;s class) and invite matching players. Make it multi-week to run a class series.
+          </p>
         </div>
-        <div className="sm:col-span-1">
-          <label className="label">Type</label>
-          <select name="type" className="input">
-            {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </div>
-        <div className="sm:col-span-1">
-          <label className="label">Price / person ($)</label>
-          <input name="price" type="number" min={0} step="0.01" className="input" placeholder="75" required />
-        </div>
-        <div className="sm:col-span-1">
-          <label className="label">Capacity</label>
-          <input name="capacity" type="number" min={1} step="1" className="input" placeholder="8" />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="label">Venue</label>
-          <select name="facilityId" className="input" required>
-            <option value="">—</option>
-            {alaFacilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-        </div>
-        <div className="sm:col-span-2">
-          <label className="label">Coach</label>
-          <select name="coachId" className="input">
-            <option value="">Any / TBD</option>
-            {coaches.map((c) => <option key={c.id} value={c.id}>{c.person.firstName} {c.person.lastName}</option>)}
-          </select>
-        </div>
-        <div className="sm:col-span-2">
-          <label className="label">Date &amp; time</label>
-          <input name="scheduledAt" type="datetime-local" className="input" />
-        </div>
-        <div className="sm:col-span-6">
-          <label className="label">Description <span className="font-normal text-slate-400">(shown on the public signup page)</span></label>
-          <textarea name="description" rows={2} className="input" placeholder="What to expect, who it's for, what to bring…" />
-        </div>
-        <div className="sm:col-span-5 text-xs text-slate-500">
-          Clinics with a capacity appear on the public <span className="font-medium">Clinics</span> page with a direct signup link.
-          Private &amp; semi-private lessons stay internal — set those up with a payment request below.
-        </div>
-        <button className="btn-primary">Add offering</button>
-      </form>
+        <ClassBuilderForm
+          ticket={ticket}
+          facilities={alaFacilities.map((f) => ({ id: f.id, name: f.name }))}
+          coaches={coaches.map((c) => ({ id: c.id, name: `${c.person.firstName} ${c.person.lastName}` }))}
+        />
+      </div>
 
       {alaFacilities.length === 0 && (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -154,6 +131,9 @@ export default async function AlaCartePage({
               const spotsLeft = o.capacity != null ? Math.max(0, o.capacity - taken) : null;
               const isClinic = o.type === "CLINIC";
               const publicListed = isClinic && o.active && o.capacity != null;
+              const hasTarget = o.targetMinRating != null || o.targetMaxRating != null || !!o.targetGender || !!o.targetAgeGroup;
+              const targetLabel = hasTarget ? describeTarget(o) : null;
+              const sessions = o.classSessions ?? [];
               return (
                 <div key={o.id} className={`rounded-lg border p-3 ${o.active ? "border-slate-200" : "border-slate-200 bg-slate-50 opacity-70"}`}>
                   <div className="flex items-start justify-between gap-2">
@@ -161,13 +141,18 @@ export default async function AlaCartePage({
                     <span className="whitespace-nowrap font-semibold text-brand-700">{formatCents(o.priceCents)}</span>
                   </div>
                   <div className="mt-1 text-xs text-slate-400">
-                    {TYPE_LABEL[o.type]} · {o.facility?.name ?? "—"}{o.coach ? ` · ${o.coach.person.firstName} ${o.coach.person.lastName}` : ""}
+                    {TYPE_LABEL[o.type]}{sessions.length > 1 ? ` · ${sessions.length}-week class` : ""} · {o.facility?.name ?? "—"}{o.coach ? ` · ${o.coach.person.firstName} ${o.coach.person.lastName}` : ""}
                   </div>
-                  {o.scheduledAt && (
-                    <div className="mt-1 text-xs text-slate-500">
-                      {formatDateTime12(o.scheduledAt)}
-                    </div>
+                  {targetLabel && (
+                    <div className="mt-1 inline-block rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">For: {targetLabel}</div>
                   )}
+                  {sessions.length > 1 ? (
+                    <div className="mt-1 text-xs text-slate-500">
+                      {sessions.length} sessions · {formatDateTime12(sessions[0].scheduledAt)} → {formatDateTime12(sessions[sessions.length - 1].scheduledAt)}
+                    </div>
+                  ) : o.scheduledAt ? (
+                    <div className="mt-1 text-xs text-slate-500">{formatDateTime12(o.scheduledAt)}</div>
+                  ) : null}
                   {o.capacity != null && (
                     <div className="mt-1 text-xs">
                       <span className={spotsLeft === 0 ? "font-medium text-rose-600" : "text-emerald-700"}>
@@ -184,13 +169,39 @@ export default async function AlaCartePage({
                     </div>
                   )}
 
-                  <form method="POST" action="/api/console/alacarte" className="mt-2">
-                    <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="toggleOffering" />
-                    <input type="hidden" name="offeringId" value={o.id} />
-                    <input type="hidden" name="active" value={o.active ? "0" : "1"} />
-                    <button className="btn-chip-muted">{o.active ? "Deactivate" : "Reactivate"}</button>
-                  </form>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <form method="POST" action="/api/console/alacarte">
+                      <input type="hidden" name="ticket" value={ticket} />
+                      <input type="hidden" name="op" value="toggleOffering" />
+                      <input type="hidden" name="offeringId" value={o.id} />
+                      <input type="hidden" name="active" value={o.active ? "0" : "1"} />
+                      <button className="btn-chip-muted">{o.active ? "Deactivate" : "Reactivate"}</button>
+                    </form>
+                    {isClinic && hasTarget && (
+                      <Link href={`/console/alacarte/${o.id}/invite`} className="btn-chip-brand text-xs">Invite matching players →</Link>
+                    )}
+                  </div>
+
+                  {isClinic && (
+                    <details className="mt-2 border-t border-slate-100 pt-2">
+                      <summary className="btn-chip-muted inline-flex cursor-pointer list-none text-xs font-semibold [&::-webkit-details-marker]:hidden">Edit class</summary>
+                      <div className="mt-2">
+                        <ClassBuilderForm
+                          ticket={ticket}
+                          facilities={alaFacilities.map((f) => ({ id: f.id, name: f.name }))}
+                          coaches={coaches.map((c) => ({ id: c.id, name: `${c.person.firstName} ${c.person.lastName}` }))}
+                          offering={{
+                            id: o.id, type: o.type, title: o.title, description: o.description,
+                            facilityId: o.facilityId, coachId: o.coachId, priceCents: o.priceCents, capacity: o.capacity,
+                            scheduledAt: toLocalInput(o.scheduledAt),
+                            targetMinRating: o.targetMinRating, targetMaxRating: o.targetMaxRating,
+                            targetGender: o.targetGender, targetAgeGroup: o.targetAgeGroup,
+                            sessions: sessions.map((s) => toLocalInput(s.scheduledAt)),
+                          }}
+                        />
+                      </div>
+                    </details>
+                  )}
                 </div>
               );
             })}

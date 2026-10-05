@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { PublicNav } from "@/components/PublicNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { formatCents } from "@/lib/money";
-import { activeBookingCount, formatClinicWhen } from "@/lib/domain/clinics";
+import { activeBookingCount, formatClinicWhen, clinicTargetLabel } from "@/lib/domain/clinics";
 import { SUPPORT_ADDRESS } from "@/lib/payments/receipt";
 
 export const dynamic = "force-dynamic";
@@ -26,11 +26,13 @@ export default async function ClinicSignupPage({
 
   const offering = await prisma.alaCarteOffering.findUnique({
     where: { id },
-    include: { facility: true, coach: { include: { person: true } } },
+    include: { facility: true, coach: { include: { person: true } }, classSessions: { orderBy: { scheduledAt: "asc" } } },
   });
 
   const isClinic = offering && offering.type === "CLINIC" && offering.active && offering.capacity != null;
-  const isPast = offering?.scheduledAt ? offering.scheduledAt.getTime() < Date.now() : false;
+  const sessions = offering?.classSessions ?? [];
+  const lastDate = sessions.length ? sessions[sessions.length - 1].scheduledAt : offering?.scheduledAt ?? null;
+  const isPast = lastDate ? lastDate.getTime() < Date.now() : false;
 
   if (!offering || !isClinic || isPast) {
     return (
@@ -49,6 +51,7 @@ export default async function ClinicSignupPage({
   const taken = await activeBookingCount(offering.id);
   const spotsLeft = Math.max(0, (offering.capacity ?? 0) - taken);
   const coachName = offering.coach ? `${offering.coach.person.firstName} ${offering.coach.person.lastName}` : null;
+  const targetLabel = clinicTargetLabel(offering);
 
   return (
     <div>
@@ -63,8 +66,25 @@ export default async function ClinicSignupPage({
               {formatCents(offering.priceCents)}
             </span>
           </div>
-          <p className="mt-2 text-sm font-medium text-slate-700">{formatClinicWhen(offering.scheduledAt)}</p>
+          {sessions.length > 1 ? (
+            <p className="mt-2 text-sm font-medium text-slate-700">{sessions.length}-week class · one sign-up covers all sessions</p>
+          ) : (
+            <p className="mt-2 text-sm font-medium text-slate-700">{formatClinicWhen(offering.scheduledAt)}</p>
+          )}
           <p className="text-sm text-slate-500">{offering.facility?.name ?? ""}{coachName ? ` · Coach ${coachName}` : ""}</p>
+          {targetLabel && <p className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">For {targetLabel}</p>}
+
+          {sessions.length > 1 && (
+            <ol className="mt-4 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              {sessions.map((s, i) => (
+                <li key={s.id} className="flex gap-2">
+                  <span className="w-16 shrink-0 font-medium text-slate-400">Week {i + 1}</span>
+                  <span>{formatClinicWhen(s.scheduledAt)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+
           {offering.description && <p className="mt-4 whitespace-pre-wrap text-sm text-slate-600">{offering.description}</p>}
 
           <div className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm">

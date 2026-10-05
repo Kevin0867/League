@@ -20,9 +20,11 @@ export async function POST(req: Request) {
   const phone = String(fd.get("phone") ?? "").trim();
   if (!firstName || !lastName || !email) return back("?err=fields");
 
-  const offering = await prisma.alaCarteOffering.findUnique({ where: { id: offeringId }, include: { facility: true } });
+  const offering = await prisma.alaCarteOffering.findUnique({ where: { id: offeringId }, include: { facility: true, classSessions: { orderBy: { scheduledAt: "asc" } } } });
   const isClinic = offering && offering.type === "CLINIC" && offering.active && offering.capacity != null;
-  const isPast = offering?.scheduledAt ? offering.scheduledAt.getTime() < Date.now() : false;
+  const sessions = offering?.classSessions ?? [];
+  const lastDate = sessions.length ? sessions[sessions.length - 1].scheduledAt : offering?.scheduledAt ?? null;
+  const isPast = lastDate ? lastDate.getTime() < Date.now() : false;
   if (!offering || !isClinic || isPast) return back("?err=closed");
 
   // Capacity re-check at submit time (the page count can be stale).
@@ -38,8 +40,13 @@ export async function POST(req: Request) {
       })
     : await prisma.person.create({ data: { firstName, lastName, email, phone: phone || null } });
 
-  const when = formatClinicWhen(offering.scheduledAt);
-  const description = `${offering.title}${offering.facility ? ` — ${offering.facility.name}` : ""}${offering.scheduledAt ? `, ${when}` : ""}`;
+  // For a multi-week class, book the spot against the first session and note the
+  // full span in the description; a single clinic keeps its one date.
+  const startAt = sessions.length ? sessions[0].scheduledAt : offering.scheduledAt;
+  const when = formatClinicWhen(startAt);
+  const description = sessions.length > 1
+    ? `${offering.title}${offering.facility ? ` — ${offering.facility.name}` : ""} (${sessions.length}-week class, starts ${when})`
+    : `${offering.title}${offering.facility ? ` — ${offering.facility.name}` : ""}${startAt ? `, ${when}` : ""}`;
 
   // Booking holds the spot; grossCents lets the split be computed on delivery.
   const booking = await prisma.alaCarteBooking.create({
@@ -49,7 +56,7 @@ export async function POST(req: Request) {
       coachId: offering.coachId,
       status: "REQUESTED",
       grossCents: offering.priceCents,
-      scheduledAt: offering.scheduledAt,
+      scheduledAt: startAt,
     },
   });
 

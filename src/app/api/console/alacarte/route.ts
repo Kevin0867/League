@@ -18,6 +18,21 @@ import { icsInvite, type IcsEvent } from "@/lib/domain/ics";
 // POST and bounce through the console layout's auth. See /api/console/facilities.
 export const dynamic = "force-dynamic";
 
+// Parse the audience-targeting fields from a class form into offering columns.
+function parseClassTarget(fd: FormData) {
+  const num = (k: string) => { const v = String(fd.get(k) ?? "").trim(); const n = parseFloat(v); return v && Number.isFinite(n) ? n : null; };
+  const genderRaw = String(fd.get("targetGender") ?? "").trim().toUpperCase();
+  const ageRaw = String(fd.get("targetAgeGroup") ?? "").trim().toUpperCase();
+  let min = num("targetMinRating"), max = num("targetMaxRating");
+  if (min != null && max != null && min > max) { const t = min; min = max; max = t; } // tolerate swapped band
+  return {
+    targetMinRating: min,
+    targetMaxRating: max,
+    targetGender: genderRaw === "MALE" || genderRaw === "FEMALE" ? genderRaw : null,
+    targetAgeGroup: ageRaw === "YOUTH" || ageRaw === "ADULT" ? ageRaw : null,
+  };
+}
+
 export async function POST(req: Request) {
   const origin = new URL(req.url).origin;
   const back = (qs: string) =>
@@ -43,9 +58,20 @@ export async function POST(req: Request) {
       const priceDollars = Number(formData.get("price") ?? 0);
       const capacityRaw = String(formData.get("capacity") ?? "").trim();
       const capacity = capacityRaw ? Math.max(1, Math.round(Number(capacityRaw))) : null;
+
+      // Multi-session class: one or more sessionAt datetime rows. When present,
+      // the offering's own scheduledAt is the earliest session (so listing/sorting
+      // works) and each session is stored as a ClassSession row. A single clinic
+      // uses the lone scheduledAt field, no ClassSession rows.
+      const sessionDates = formData.getAll("sessionAt").map((v) => String(v).trim()).filter(Boolean)
+        .map((s) => new Date(s)).filter((d) => !isNaN(d.getTime())).sort((a, b) => a.getTime() - b.getTime());
       const scheduledRaw = String(formData.get("scheduledAt") ?? "").trim();
-      const scheduledAt = scheduledRaw ? new Date(scheduledRaw) : null;
-      await prisma.alaCarteOffering.create({
+      const singleAt = scheduledRaw ? new Date(scheduledRaw) : null;
+      const scheduledAt = sessionDates.length ? sessionDates[0] : (singleAt && !isNaN(singleAt.getTime()) ? singleAt : null);
+
+      const target = parseClassTarget(formData);
+
+      const created = await prisma.alaCarteOffering.create({
         data: {
           type: String(formData.get("type") ?? "PRIVATE"),
           title: String(formData.get("title") ?? "").trim() || "Lesson",
@@ -54,11 +80,17 @@ export async function POST(req: Request) {
           coachId: String(formData.get("coachId") ?? "") || null,
           priceCents: Math.round(priceDollars * 100),
           capacity,
-          scheduledAt: scheduledAt && !isNaN(scheduledAt.getTime()) ? scheduledAt : null,
+          scheduledAt,
+          ...target,
           active: true,
         },
       });
-      await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: facilityId, action: "CREATE", summary: "Created à la carte offering" });
+      if (sessionDates.length) {
+        await prisma.classSession.createMany({
+          data: sessionDates.map((d) => ({ offeringId: created.id, scheduledAt: d, facilityId })),
+        });
+      }
+      await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: created.id, action: "CREATE", summary: `Created ${sessionDates.length ? `${sessionDates.length}-session class` : "à la carte offering"}` });
       return back("?ok=createOffering");
     }
 
@@ -72,6 +104,51 @@ export async function POST(req: Request) {
       await prisma.alaCarteOffering.update({ where: { id: offeringId }, data: { active } });
       await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: offeringId, action: active ? "ACTIVATE" : "DEACTIVATE" });
       return back("?ok=createOffering");
+    }
+
+    // Edit a class/clinic's details, targeting, and session schedule in place.
+    case "editClass": {
+      if (!actor || !can(actor.role, "manageAlaCarte")) return back("?err=auth");
+      const offeringId = String(formData.get("offeringId") ?? "");
+      const offering = await prisma.alaCarteOffering.findUnique({ where: { id: offeringId } });
+      if (!offering) return back("?err=notfound");
+
+      const facilityId = String(formData.get("facilityId") ?? "") || offering.facilityId;
+      if (facilityId) {
+        const facility = await prisma.facility.findUnique({ where: { id: facilityId } });
+        if (!facility) return back("?err=facility");
+        if (!facility.alaCarteAllowed) return back("?err=notallowed");
+      }
+      const priceDollars = Number(formData.get("price") ?? 0);
+      const capacityRaw = String(formData.get("capacity") ?? "").trim();
+      const capacity = capacityRaw ? Math.max(1, Math.round(Number(capacityRaw))) : null;
+      const sessionDates = formData.getAll("sessionAt").map((v) => String(v).trim()).filter(Boolean)
+        .map((s) => new Date(s)).filter((d) => !isNaN(d.getTime())).sort((a, b) => a.getTime() - b.getTime());
+      const scheduledRaw = String(formData.get("scheduledAt") ?? "").trim();
+      const singleAt = scheduledRaw ? new Date(scheduledRaw) : null;
+      const scheduledAt = sessionDates.length ? sessionDates[0] : (singleAt && !isNaN(singleAt.getTime()) ? singleAt : null);
+      const target = parseClassTarget(formData);
+
+      await prisma.alaCarteOffering.update({
+        where: { id: offeringId },
+        data: {
+          title: String(formData.get("title") ?? "").trim() || offering.title,
+          description: String(formData.get("description") ?? "").trim() || null,
+          facilityId: facilityId || null,
+          coachId: String(formData.get("coachId") ?? "") || null,
+          priceCents: priceDollars > 0 ? Math.round(priceDollars * 100) : offering.priceCents,
+          capacity,
+          scheduledAt,
+          ...target,
+        },
+      });
+      // Rewrite the session schedule wholesale.
+      await prisma.classSession.deleteMany({ where: { offeringId } });
+      if (sessionDates.length) {
+        await prisma.classSession.createMany({ data: sessionDates.map((d) => ({ offeringId, scheduledAt: d, facilityId: facilityId || null })) });
+      }
+      await audit({ actorId: actor.userId, entityType: "AlaCarteOffering", entityId: offeringId, action: "UPDATE", summary: "Edited class/clinic" });
+      return back("?ok=editClass");
     }
 
     // Admin sets up a private/semi/group lesson for named participants and sends
