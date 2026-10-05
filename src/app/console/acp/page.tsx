@@ -7,6 +7,7 @@ import { DIVISION_MIN_TEAMS } from "@/lib/domain/seasonCalendar";
 import { mintConsoleTicket } from "@/lib/auth";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { requireAdmin } from "@/lib/rbac";
+import { buildAcpCrossReference } from "@/lib/domain/acpCrossReference";
 
 // Admin view of ACP outside-club interest (Phase A) and entries (Phase B).
 // Groups entries by division so staff can see which divisions clear the
@@ -38,6 +39,7 @@ export default async function ConsoleAcpPage({
   const window = acpEntryWindow();
   const paid = entries.filter((e) => e.status === "PAID").length;
   const revenue = entries.reduce((n, e) => n + e.amountDueCents, 0);
+  const xref = await buildAcpCrossReference();
 
   // Group entries by division to check the four-team minimum.
   const byDivision = new Map<string, typeof entries>();
@@ -66,6 +68,62 @@ export default async function ConsoleAcpPage({
       {(sp.err === "cpname" || sp.err === "cpemail" || sp.err === "cpamount") && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Check the payment details and try again.</div>
       )}
+
+      {/* Cross-reference: ACP signups who are already active Academy players (so
+          they're in ACP via their Academy membership and shouldn't be charged). */}
+      <div className="card">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-slate-900">Already in ACP via Academy</h2>
+          <span className="text-xs text-slate-500">{xref.academyCount} active Academy players on file</span>
+        </div>
+        <p className="mt-0.5 text-sm text-slate-500">
+          Active Academy players are automatically in ACP through their Academy registration. These ACP signups match an
+          Academy player by email — they&apos;re already in and shouldn&apos;t be charged to join. Matching is by email across
+          club entries and ACP charges (filed or imported from Stripe).
+        </p>
+
+        {xref.alreadyIn === 0 ? (
+          <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            No ACP signups match an active Academy player. Nothing to reconcile.
+          </p>
+        ) : (
+          <>
+            <div className="mt-3 flex flex-wrap gap-4 text-sm">
+              <span className="rounded-lg bg-amber-50 px-3 py-1.5 text-amber-800"><strong>{xref.alreadyIn}</strong> ACP signup{xref.alreadyIn === 1 ? "" : "s"} already in via Academy</span>
+              {xref.alreadyInChargedCents > 0 && <span className="rounded-lg bg-rose-50 px-3 py-1.5 text-rose-800"><strong>{formatCents(xref.alreadyInChargedCents)}</strong> collected from already-in players — review for refund</span>}
+            </div>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="py-1.5 pr-3">ACP signup</th>
+                    <th className="py-1.5 pr-3">Email</th>
+                    <th className="py-1.5 pr-3">Seen in</th>
+                    <th className="py-1.5 pr-3">Charged</th>
+                    <th className="py-1.5">Academy player</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xref.people.filter((p) => p.academy).map((p) => (
+                    <tr key={p.key} className="border-b border-slate-100">
+                      <td className="py-1.5 pr-3 font-medium text-slate-800">{p.name ?? "—"}</td>
+                      <td className="py-1.5 pr-3 text-slate-500">{p.email ?? "—"}</td>
+                      <td className="py-1.5 pr-3 text-xs text-slate-500">{p.sources.join(", ")}</td>
+                      <td className="py-1.5 pr-3">{p.chargedCents > 0 ? <span className="font-semibold text-rose-700">{formatCents(p.chargedCents)}</span> : <span className="text-slate-400">—</span>}</td>
+                      <td className="py-1.5">
+                        <Link href={`/console/people/${p.academy!.personId}`} className="text-brand-700 hover:underline">{p.academy!.name}</Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Charges shown as collected should be refunded if these players paid to join ACP separately — they&apos;re covered by their Academy membership. (Unfiled Stripe imports are matched too; file them on Payments to set the ACP category.)
+            </p>
+          </>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Interest sign-ups" value={interests.length} />
