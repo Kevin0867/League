@@ -32,6 +32,33 @@ async function fetchIcs(url: string): Promise<string | null> {
 
 export type CalendarSyncResult = { coaches: number; synced: number; failed: number; blocks: number };
 
+/** Sync ONE coach's calendar right now (used by the "Sync now" button). Returns
+ *  the number of busy blocks imported, or null if the fetch/parse failed. */
+export async function syncOneCoachCalendar(coachId: string, now: Date): Promise<{ ok: boolean; blocks: number }> {
+  const c = await prisma.coach.findUnique({ where: { id: coachId }, select: { id: true, externalCalendarUrl: true } });
+  const url = (c?.externalCalendarUrl ?? "").trim();
+  if (!url || (!/^https?:\/\//i.test(url) && !/^webcal:\/\//i.test(url))) return { ok: false, blocks: 0 };
+  const raw = await fetchIcs(url);
+  if (!raw || !/BEGIN:VCALENDAR/i.test(raw)) return { ok: false, blocks: 0 };
+  const windowStart = new Date(now.getTime() - 1 * 86400000);
+  const windowEnd = new Date(now.getTime() + HORIZON_DAYS * 86400000);
+  const events = parseIcsBusy(raw, windowStart, windowEnd);
+  const fetchedAt = new Date();
+  await prisma.$transaction([
+    prisma.coachBusyBlock.deleteMany({ where: { coachId } }),
+    ...(events.length
+      ? [prisma.coachBusyBlock.createMany({
+          data: events.map((e) => ({
+            coachId, startAt: e.start, endAt: e.end, allDay: e.allDay,
+            summary: e.summary?.slice(0, 200) ?? null, uid: e.uid?.slice(0, 200) ?? null,
+            sourceUrl: url.slice(0, 500), fetchedAt,
+          })),
+        })]
+      : []),
+  ]);
+  return { ok: true, blocks: events.length };
+}
+
 /** Sync every coach that has a calendar URL. Returns run counters. */
 export async function syncAllCoachCalendars(now: Date): Promise<CalendarSyncResult> {
   const coaches = await prisma.coach.findMany({

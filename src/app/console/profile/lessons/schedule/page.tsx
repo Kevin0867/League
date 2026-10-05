@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatTime12, phoenixDateInput } from "@/lib/time";
 import { phoenixHHMM } from "@/lib/domain/courtHold";
 import { LessonManageControls, type ManageBooking } from "@/components/LessonManageControls";
+import { LessonCoachTools } from "@/components/LessonCoachTools";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My upcoming lessons" };
@@ -17,6 +18,8 @@ const LERR: Record<string, string> = {
   cancelled: "That lesson is already cancelled.",
   nofacility: "Pick a location.",
   badtime: "Enter a valid date and time.",
+  client: "Enter the client's name and email.",
+  noperson: "Your login isn't linked to a coach profile yet.",
   op: "Unknown action.",
 };
 
@@ -49,8 +52,23 @@ export default async function CoachLessonsSchedulePage({ searchParams }: { searc
   const facilities = await prisma.facility.findMany({ where: { archived: false, alaCarteAllowed: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
   const facName = new Map(facilities.map((f) => [f.id, f.name]));
 
+  // Coach tools: bookable offerings (for book-a-client) and upcoming time blocks.
+  const offerings = coach
+    ? await prisma.alaCarteOffering.findMany({ where: { coachId: coach.id, active: true }, select: { id: true, title: true, type: true, minPeople: true, maxPeople: true }, orderBy: { priceCents: "asc" } })
+    : [];
+  const todayFloor = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const exceptions = coach
+    ? await prisma.availabilityException.findMany({ where: { coachId: coach.id, kind: "BLOCK", date: { gte: todayFloor } }, orderBy: { date: "asc" }, take: 50 })
+    : [];
+  const blocks = exceptions.map((e) => {
+    const d = formatDate(new Date(`${phoenixDateInput(e.date)}T12:00:00Z`));
+    const span = e.startTime && e.endTime ? `${formatTime12(e.startTime)}–${formatTime12(e.endTime)}` : "all day";
+    return { id: e.id, label: `${d} · ${span}${e.note ? ` · ${e.note}` : ""}` };
+  });
+
   const lok = sp.lok;
   const lerr = sp.lerr ? (LERR[sp.lerr] ?? decodeURIComponent(sp.lerr)) : null;
+  const payId = sp.pay ?? null;
 
   return (
     <div className="space-y-6">
@@ -62,7 +80,20 @@ export default async function CoachLessonsSchedulePage({ searchParams }: { searc
 
       {lok === "moved" && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Lesson moved — the player has been notified.</p>}
       {lok === "cancelled" && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Lesson cancelled — the player has been notified.</p>}
+      {lok === "coachbooked" && !payId && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Lesson booked and marked paid — it&apos;s on your calendar.</p>}
+      {lok === "coachbooked" && payId && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Lesson booked. Send the client this pay link to collect payment:
+          <Link href={`/pay/${payId}`} className="mt-1 block break-all rounded bg-white px-2 py-1 text-xs font-medium text-brand-700 hover:underline">{`/pay/${payId}`}</Link>
+        </div>
+      )}
+      {lok === "blocked" && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Time blocked — players can't book it.</p>}
+      {lok === "unblocked" && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Block removed.</p>}
       {lerr && <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{lerr}</p>}
+
+      {coach && (
+        <LessonCoachTools offerings={offerings} facilities={facilities} blocks={blocks} ticket={ticket} returnTo="/console/profile/lessons/schedule" />
+      )}
 
       <div className="card">
         {!coach || bookings.length === 0 ? (

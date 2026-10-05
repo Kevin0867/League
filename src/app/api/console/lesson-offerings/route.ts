@@ -187,6 +187,33 @@ export async function POST(req: Request) {
     return back("?ok=offeringdel");
   }
 
+  // -- Duplicate an offering -------------------------------------------------
+  // Copy an existing offering (same pricing/rules) as a new, inactive draft the
+  // coach can tweak — handy for a "same lesson, different length/price" variant.
+  if (op === "duplicateOffering") {
+    const id = g("offeringId");
+    const src = await prisma.alaCarteOffering.findFirst({ where: { id, coachId: coach.id } });
+    if (!src) return back("?err=notfound");
+    await prisma.alaCarteOffering.create({
+      data: {
+        type: src.type, title: `${src.title} (copy)`, description: src.description,
+        priceCents: src.priceCents, lengthMin: src.lengthMin, minPeople: src.minPeople, maxPeople: src.maxPeople,
+        preferredFacilityIds: src.preferredFacilityIds === null ? Prisma.DbNull : (src.preferredFacilityIds as Prisma.InputJsonValue),
+        recurrenceAllowed: src.recurrenceAllowed, recurringDiscountPct: src.recurringDiscountPct,
+        priceTiers: src.priceTiers === null ? Prisma.DbNull : (src.priceTiers as Prisma.InputJsonValue),
+        introPriceCents: src.introPriceCents, additionalPersonDiscountPct: src.additionalPersonDiscountPct,
+        packages: src.packages === null ? Prisma.DbNull : (src.packages as Prisma.InputJsonValue),
+        minNoticeHours: src.minNoticeHours, bookingHorizonDays: src.bookingHorizonDays, bufferMin: src.bufferMin,
+        dailyCap: src.dailyCap, cancelWindowHours: src.cancelWindowHours, cancelPolicy: src.cancelPolicy,
+        adminLockedPriceCents: src.adminLockedPriceCents,
+        coachSet: true, coachId: coach.id,
+        active: false, // a draft — the coach reviews and turns it on
+      },
+    });
+    await audit({ actorId: actor.userId, entityType: "Coach", entityId: coach.id, action: "lesson.offering.duplicate", summary: `Duplicated a lesson offering` });
+    return back("?ok=offeringdup");
+  }
+
   // -- Weekly availability (wholesale) + phone calendar URL -----------------
   if (op === "saveAvailability") {
     const days = fd.getAll("availDay").map((v) => String(v).trim());
@@ -267,6 +294,14 @@ export async function POST(req: Request) {
     const id = g("exceptionId");
     await prisma.availabilityException.deleteMany({ where: { id, coachId: coach.id } });
     return back("?ok=exceptiondel");
+  }
+
+  // -- Refresh the phone calendar right now (don't wait for the cron) --------
+  if (op === "syncCalendar") {
+    const { syncOneCoachCalendar } = await import("@/lib/domain/coachCalendarSync");
+    const res = await syncOneCoachCalendar(coach.id, new Date());
+    if (!res.ok) return back("?err=calsync");
+    return back(`?ok=calsync&blocks=${res.blocks}`);
   }
 
   return back("?err=op");
