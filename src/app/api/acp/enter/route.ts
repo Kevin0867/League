@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { sendEmail } from "@/lib/notify";
 import { formatCents } from "@/lib/money";
 import { acpEntryWindow, validateEntry, type RosterPlayerInput } from "@/lib/domain/acpEntry";
+import { syncAcpEntryToZoho } from "@/lib/integrations/zohoAcp";
 
 // Phase-B ACP entry submission (build-list item 1). Public, no auth — an outside
 // club enters one team into one division with a 6–8 player roster. Validates the
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
 
   const season = await prisma.season.findFirst({ where: { active: true, program: "ACP" } });
 
-  await prisma.acpEntry.create({
+  const entry = await prisma.acpEntry.create({
     data: {
       seasonId: season?.id ?? null,
       clubName,
@@ -71,6 +72,10 @@ export async function POST(req: Request) {
       },
     },
   });
+
+  // Sync the team contact + roster players to the Zoho mailing list (same list as
+  // season registrations). Best-effort — a Zoho hiccup never fails the entry.
+  await syncAcpEntryToZoho(entry.id).catch((e) => console.warn("[zoho] ACP entry sync failed:", e));
 
   await sendEmail(
     contactEmail,

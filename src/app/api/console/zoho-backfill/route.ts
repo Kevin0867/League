@@ -4,6 +4,7 @@ import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { isZohoConfigured, pushContactToZoho } from "@/lib/integrations/zoho";
+import { backfillAcpZoho } from "@/lib/integrations/zohoAcp";
 
 // One-time (repeatable) backfill: push every existing registration's
 // account-holder contact into Zoho Campaigns. Resumable — it only processes
@@ -96,8 +97,12 @@ export async function POST(req: Request) {
   }
   const remaining = Math.max(0, all.length - batch.length);
 
-  await audit({ actorId: actor.userId, entityType: "System", entityId: "zoho-backfill", action: "ZOHO_BACKFILL", summary: `Synced ${pushed} contacts to Zoho (${failed} failed, ${remaining} remaining)${reasons.length ? ` — ${reasons.join("; ")}` : ""}` });
-  const qs = new URLSearchParams({ bfok: "1", pushed: String(pushed), failed: String(failed), remaining: String(remaining) });
+  // Also sync ACP entries (team contacts + roster players) to the same list.
+  const acp = await backfillAcpZoho().catch((e) => { console.warn("[zoho] ACP backfill failed:", e); return { entriesScanned: 0, synced: 0 }; });
+  pushed += acp.synced;
+
+  await audit({ actorId: actor.userId, entityType: "System", entityId: "zoho-backfill", action: "ZOHO_BACKFILL", summary: `Synced ${pushed} contacts to Zoho (${failed} failed, ${remaining} remaining; ACP: ${acp.synced} from ${acp.entriesScanned} entries)${reasons.length ? ` — ${reasons.join("; ")}` : ""}` });
+  const qs = new URLSearchParams({ bfok: "1", pushed: String(pushed), failed: String(failed), remaining: String(remaining), acp: String(acp.synced) });
   if (failRows.length) qs.set("failrows", JSON.stringify(failRows));
   return back(`?${qs.toString()}`);
 }
