@@ -2,11 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
-import { formatDate, formatTime12, phoenixDateInput } from "@/lib/time";
+import { phoenixDateInput } from "@/lib/time";
 import { openLessonSlots } from "@/lib/domain/lessonSlots";
 import { PublicNav } from "@/components/PublicNav";
+import { LessonBookingForm } from "@/components/LessonBookingForm";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const coach = await prisma.coach.findFirst({ where: { personId: id }, select: { person: { select: { firstName: true, lastName: true } } } });
+  const nm = coach ? `${coach.person.firstName} ${coach.person.lastName}`.trim() : null;
+  return { title: nm ? `Book with ${nm} — PURE Academy` : "Book a lesson — PURE Academy" };
+}
 
 const TYPE_LABEL: Record<string, string> = { PRIVATE: "Private (1 player)", SEMI_PRIVATE: "Semi-private (2–3)", GROUP: "Group (4+)" };
 function asIds(v: unknown): string[] { return Array.isArray(v) ? v.map(String) : []; }
@@ -43,8 +51,8 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
   let slotsByDay: Map<string, string[]> | null = null;
   if (offering?.lengthMin && loc) {
     const from = phoenixDateInput(new Date());
-    const toD = new Date(); toD.setUTCDate(toD.getUTCDate() + 21);
-    const slots = await openLessonSlots({ coachId: coach.id, facilityId: loc, lengthMin: offering.lengthMin, fromDay: from, toDay: phoenixDateInput(toD), maxSlots: 60 });
+    const toD = new Date(); toD.setUTCDate(toD.getUTCDate() + 42);
+    const slots = await openLessonSlots({ coachId: coach.id, facilityId: loc, lengthMin: offering.lengthMin, fromDay: from, toDay: phoenixDateInput(toD), maxSlots: 240, perDayMax: 8 });
     slotsByDay = new Map();
     for (const s of slots) { const a = slotsByDay.get(s.day) ?? []; a.push(s.startTime); slotsByDay.set(s.day, a); }
   }
@@ -80,7 +88,14 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
               <Link key={o.id} href={`/lessons/${id}?offering=${o.id}`} className={`flex items-center justify-between rounded-xl border p-3 ${selected ? "border-brand-500 bg-brand-50" : "border-slate-200 bg-white hover:border-brand-300"}`}>
                 <span>
                   <span className="font-semibold text-slate-900">{o.title || TYPE_LABEL[o.type]}</span>
-                  <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[o.type]} · {o.lengthMin ?? 60} min{o.recurrenceAllowed ? " · recurring OK" : ""}{o.recurringDiscountPct && o.recurrenceAllowed ? ` · ${o.recurringDiscountPct}% off recurring` : ""}</span>
+                  <span className="ml-2 text-xs text-slate-500">
+                    {TYPE_LABEL[o.type]} · {o.lengthMin ?? 60} min · {o.type === "PRIVATE" ? "1 player" : `${o.minPeople ?? 2}–${o.maxPeople ?? o.minPeople ?? 2} players`}
+                    {o.recurrenceAllowed ? " · can repeat weekly/monthly" : ""}
+                    {o.recurringDiscountPct && o.recurrenceAllowed ? ` (${o.recurringDiscountPct}% off)` : ""}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-slate-400">
+                    {(() => { const pref = asIds(o.preferredFacilityIds); const names = (pref.length ? pref : facilities.map((f) => f.id)).map((fid) => facName.get(fid)).filter(Boolean); return names.length ? `At: ${names.join(", ")}` : null; })()}
+                  </span>
                 </span>
                 <span className="text-right"><span className="font-bold text-brand-700">{formatCents(p)}</span><span className="block text-[11px] font-normal text-slate-400">per person</span></span>
               </Link>
@@ -106,84 +121,20 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
       {/* Step 3 — pick a time + details */}
       {offering && loc && slotsByDay && (
         slotsByDay.size === 0 ? (
-          <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">No open times at {facName.get(loc)} in the next 3 weeks. Try another location, or check back soon.</p>
+          <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">No open times at {facName.get(loc)} in the next few weeks. Try another location, or check back soon.</p>
         ) : (
-          <form method="POST" action="/api/lessons/book" className="mt-6 space-y-5">
-            <input type="hidden" name="coachPersonId" value={id} />
-            <input type="hidden" name="offeringId" value={offering.id} />
-            <input type="hidden" name="facilityId" value={loc} />
-
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">3 · Pick a time</h2>
-              <div className="mt-2 space-y-3">
-                {[...slotsByDay.entries()].map(([day, times]) => (
-                  <div key={day}>
-                    <p className="text-xs font-semibold text-slate-500">{formatDate(new Date(`${day}T12:00:00Z`))}</p>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {times.map((t) => (
-                        <label key={t} className="cursor-pointer">
-                          <input type="radio" name="slot" value={`${day}|${t}`} required className="peer sr-only" />
-                          <span className="inline-block rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 peer-checked:border-brand-500 peer-checked:bg-brand-600 peer-checked:text-white">{formatTime12(t)}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {offering.type !== "PRIVATE" && (offering.maxPeople ?? 1) > 1 && (
-              <div>
-                <label className="label">How many players?</label>
-                <input name="people" type="number" min={offering.minPeople ?? 2} max={offering.maxPeople ?? 4} defaultValue={offering.minPeople ?? 2} className="input w-28" />
-                <p className="mt-1 text-xs text-slate-500">{formatCents(perPerson)} per person — the total is per person × players.</p>
-              </div>
-            )}
-
-            {offering.recurrenceAllowed && (
-              <details className="rounded-xl border border-slate-200 p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-slate-700">Make this a recurring lesson</summary>
-                <div className="mt-3 space-y-3">
-                  <input type="hidden" name="recurring" value="on" />
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div>
-                      <label className="label">Repeats</label>
-                      <select name="cadence" className="input py-1"><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select>
-                    </div>
-                    <div>
-                      <label className="label">End</label>
-                      <select name="endType" className="input py-1"><option value="COUNT">After N lessons</option><option value="UNTIL_DATE">Until a date</option></select>
-                    </div>
-                    <div>
-                      <label className="label"># of lessons</label>
-                      <input name="count" type="number" min="2" max="52" defaultValue="5" className="input py-1 w-24" />
-                    </div>
-                    <div>
-                      <label className="label">or until</label>
-                      <input name="endDate" type="date" className="input py-1" />
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500">We book the same time each week/month where the coach and a court are free. You pay per lesson — the first now, the rest before each session. (Leave this closed for a single lesson.)</p>
-                  {discountPct > 0 && <p className="text-xs font-semibold text-emerald-700">Recurring saves {discountPct}% off each lesson.</p>}
-                </div>
-              </details>
-            )}
-
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">4 · Your details</h2>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                <div><label className="label">First name</label><input name="firstName" required className="input" /></div>
-                <div><label className="label">Last name</label><input name="lastName" required className="input" /></div>
-                <div><label className="label">Email</label><input name="email" type="email" required className="input" /></div>
-                <div><label className="label">Mobile</label><input name="phone" type="tel" className="input" /></div>
-              </div>
-            </div>
-
-            <button type="submit" className="w-full rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white hover:bg-brand-700">
-              Continue to payment — {formatCents(perPerson)}/person
-            </button>
-            <p className="text-center text-xs text-slate-400">You&apos;ll pay for your first lesson on the next screen — {formatCents(perPerson)} per person{discountPct > 0 ? `, less ${discountPct}% for a recurring series` : ""}. Your court is reserved the moment you book.</p>
-          </form>
+          <LessonBookingForm
+            coachPersonId={id}
+            offeringId={offering.id}
+            facilityId={loc}
+            slots={[...slotsByDay.entries()].map(([day, times]) => ({ day, times }))}
+            perPersonCents={perPerson}
+            discountPct={discountPct}
+            type={offering.type}
+            minPeople={offering.minPeople ?? (offering.type === "PRIVATE" ? 1 : 2)}
+            maxPeople={offering.maxPeople ?? (offering.type === "PRIVATE" ? 1 : 2)}
+            recurrenceAllowed={offering.recurrenceAllowed}
+          />
         )
       )}
       </div>

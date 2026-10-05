@@ -7,11 +7,34 @@ import { PageHeader } from "@/components/RoadmapNote";
 import { formatCents } from "@/lib/money";
 import { formatDate, formatTime12, formatDateTime12 } from "@/lib/time";
 import { LessonAvailabilityForm } from "@/components/LessonAvailabilityForm";
+import { OfferingForm } from "@/components/OfferingForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Private/Group lesson pricing" };
 
 const TYPE_LABEL: Record<string, string> = { PRIVATE: "Private (1 player)", SEMI_PRIVATE: "Semi-private (2–3)", GROUP: "Group (4+)" };
+
+// Inline validation messages for the lesson-offerings route's rejections.
+const LESSON_ERRORS: Record<string, string> = {
+  type: "Pick a lesson format.",
+  price: "Enter a price greater than $0.",
+  length: "Lesson length must be in 15-minute blocks, between 15 minutes and 4 hours.",
+  people: "Enter the minimum and maximum number of players.",
+  peoplemin: "A semi-private or group lesson needs at least 2 players.",
+  peopleorder: "Maximum players can't be less than the minimum.",
+  peoplemax: "That's more players than a lesson can hold (max 20).",
+  discount: "Recurring discount must be a whole number between 0 and 90%.",
+  availnone: "Add at least one availability window before saving (use Time off to block specific days).",
+  availorder: "Each availability window's end time must be after its start time.",
+  availoverlap: "You have overlapping availability windows on the same day — merge them into one.",
+  calurl: "That calendar link isn't a valid URL. It should start with https:// or webcal://.",
+  date: "Pick a valid date.",
+  exppast: "That date is in the past.",
+  exptimes: "An extra-availability slot needs both a start and end time.",
+  exporder: "End time must be after start time.",
+  expdup: "You already have an entry for that day — edit or remove it first.",
+  pickcoach: "Pick a coach first, then add their lesson.",
+};
 function asIds(v: unknown): string[] { return Array.isArray(v) ? v.map(String) : []; }
 
 export default async function LessonPricingPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -109,9 +132,7 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
       {sp.ok === "availability" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Availability saved.</p>}
       {sp.ok === "exception" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Added to your calendar.</p>}
       {sp.ok === "exceptiondel" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Removed.</p>}
-      {sp.err === "price" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter a price greater than $0.</p>}
-      {sp.err === "length" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter a lesson length in minutes.</p>}
-      {sp.err === "type" && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Pick a lesson format.</p>}
+      {sp.err && LESSON_ERRORS[sp.err] && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{LESSON_ERRORS[sp.err]}</p>}
 
       {/* 1 · Lesson offerings */}
       <div className="card space-y-4">
@@ -150,7 +171,7 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
                     <details className="mt-2 border-t border-slate-100">
                       <summary className="btn-chip-muted m-3 inline-flex cursor-pointer list-none text-xs font-semibold [&::-webkit-details-marker]:hidden">Edit</summary>
                       <div className="px-3 pb-3">
-                        <OfferingForm ticket={ticket} hidden={hidden} offering={o} facilities={facilities} facName={facName} />
+                        <OfferingForm ticket={ticket} personId={viewingOther ? personId : undefined} offering={o} facilities={facilities} />
                       </div>
                     </details>
                   </li>
@@ -163,7 +184,7 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
         <details>
           <summary className="btn-primary inline-flex cursor-pointer list-none [&::-webkit-details-marker]:hidden">+ Add a lesson offering</summary>
           <div className="mt-3 rounded-xl border border-slate-200 p-3">
-            <OfferingForm ticket={ticket} hidden={hidden} facilities={facilities} facName={facName} />
+            <OfferingForm ticket={ticket} personId={viewingOther ? personId : undefined} facilities={facilities} />
           </div>
         </details>
       </div>
@@ -242,91 +263,3 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
   );
 }
 
-// One offering's add/edit form (native POST). Reused for the "add" card and each
-// existing row. PRIVATE forces 1 person; SEMI/GROUP take a min–max range.
-function OfferingForm({
-  ticket, hidden, offering, facilities, facName,
-}: {
-  ticket: string;
-  hidden: React.ReactNode;
-  offering?: { id: string; type: string; title: string; description: string | null; priceCents: number; lengthMin: number | null; minPeople: number | null; maxPeople: number | null; preferredFacilityIds: unknown; recurrenceAllowed: boolean; recurringDiscountPct: number | null; active: boolean };
-  facilities: { id: string; name: string }[];
-  facName: Map<string, string>;
-}) {
-  const pref = asIds(offering?.preferredFacilityIds);
-  return (
-    <div className="space-y-3">
-      <form method="POST" action="/api/console/lesson-offerings" className="grid gap-3 sm:grid-cols-6">
-        <input type="hidden" name="ticket" value={ticket} />{hidden}
-        <input type="hidden" name="op" value="saveOffering" />
-        {offering && <input type="hidden" name="offeringId" value={offering.id} />}
-        <div className="sm:col-span-2">
-          <label className="label">Format</label>
-          <select name="type" defaultValue={offering?.type ?? "PRIVATE"} className="input py-1">
-            {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </div>
-        <div className="sm:col-span-1">
-          <label className="label">Length (min)</label>
-          <input name="lengthMin" type="number" min="15" step="15" defaultValue={offering?.lengthMin ?? 60} className="input py-1" />
-        </div>
-        <div className="sm:col-span-1">
-          <label className="label">Price / person ($)</label>
-          <input name="price" type="number" min="0" step="0.01" defaultValue={offering ? (offering.priceCents / 100).toFixed(2) : ""} placeholder="80.00" className="input py-1" required />
-        </div>
-        <div className="sm:col-span-1">
-          <label className="label"># people (min)</label>
-          <input name="minPeople" type="number" min="1" defaultValue={offering?.minPeople ?? 1} className="input py-1" />
-        </div>
-        <div className="sm:col-span-1">
-          <label className="label"># people (max)</label>
-          <input name="maxPeople" type="number" min="1" defaultValue={offering?.maxPeople ?? 1} className="input py-1" />
-        </div>
-        <div className="sm:col-span-6">
-          <label className="label">Title / note (optional)</label>
-          <input name="title" defaultValue={offering?.title ?? ""} placeholder="e.g. 60-min private — all levels" className="input py-1" />
-        </div>
-        {facilities.length > 0 && (
-          <div className="sm:col-span-6">
-            <label className="label">Preferred locations</label>
-            <div className="flex flex-wrap gap-3">
-              {facilities.map((f) => (
-                <label key={f.id} className="flex items-center gap-1.5 text-sm text-slate-700">
-                  <input type="checkbox" name="facility" value={f.id} defaultChecked={pref.includes(f.id)} /> {f.name}
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-        <p className="sm:col-span-6 -mt-1 text-xs text-slate-500">
-          <strong>Price is per person.</strong> For a semi-private or group lesson, each player pays this amount (e.g. $40/person × 3 players = $120 for the lesson).
-        </p>
-        <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" name="recurrenceAllowed" defaultChecked={offering ? offering.recurrenceAllowed : true} /> Allow recurring bookings (weekly/monthly series)
-        </label>
-        <div className="sm:col-span-2">
-          <label className="label">Recurring discount (%)</label>
-          <input name="recurringDiscountPct" type="number" min="0" max="90" step="1" defaultValue={offering?.recurringDiscountPct ?? ""} placeholder="0" className="input py-1" />
-        </div>
-        <div className="sm:col-span-1" />
-        <p className="sm:col-span-6 -mt-1 text-xs text-slate-500">
-          Optional: take this % off each lesson&apos;s per-person price when a player commits to a recurring series — a built-in incentive to book a block. Leave blank or 0 for no discount.
-        </p>
-        <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" name="active" defaultChecked={offering ? offering.active : true} /> Bookable
-        </label>
-        <div className="sm:col-span-3 flex items-end justify-end">
-          <button className="btn-primary py-1 text-sm">{offering ? "Save" : "Add offering"}</button>
-        </div>
-      </form>
-      {offering && (
-        <form method="POST" action="/api/console/lesson-offerings" className="text-right">
-          <input type="hidden" name="ticket" value={ticket} />{hidden}
-          <input type="hidden" name="op" value="deleteOffering" />
-          <input type="hidden" name="offeringId" value={offering.id} />
-          <button className="btn-chip-danger">Remove this offering</button>
-        </form>
-      )}
-    </div>
-  );
-}
