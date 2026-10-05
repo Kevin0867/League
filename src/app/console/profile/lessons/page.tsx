@@ -34,6 +34,7 @@ const LESSON_ERRORS: Record<string, string> = {
   exptimes: "An extra-availability slot needs both a start and end time.",
   exporder: "End time must be after start time.",
   expdup: "You already have an entry for that day — edit or remove it first.",
+  calsync: "Couldn't read your calendar feed just now. Check the link is still valid, then try again.",
   pickcoach: "Pick a coach first, then add their lesson.",
 };
 function asIds(v: unknown): string[] { return Array.isArray(v) ? v.map(String) : []; }
@@ -136,9 +137,11 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
 
       {sp.ok === "offering" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Offering saved.</p>}
       {sp.ok === "offeringdel" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Offering removed.</p>}
+      {sp.ok === "offeringdup" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Offering duplicated — the copy is saved below as an inactive draft. Edit it, then mark it bookable.</p>}
       {sp.ok === "availability" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Availability saved.</p>}
       {sp.ok === "exception" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Added to your calendar.</p>}
       {sp.ok === "exceptiondel" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Removed.</p>}
+      {sp.ok === "calsync" && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Calendar synced — {sp.blocks ?? "0"} busy time{sp.blocks === "1" ? "" : "s"} imported and blocked from booking.</p>}
       {sp.err && LESSON_ERRORS[sp.err] && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{LESSON_ERRORS[sp.err]}</p>}
 
       {/* 1 · Lesson offerings */}
@@ -175,7 +178,15 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
                       </p>
                       <p className="mt-0.5 text-xs text-slate-400">Locations: {locs}</p>
                     </div>
-                    <details className="mt-2 border-t border-slate-100">
+                    <div className="mt-2 flex items-center gap-2 border-t border-slate-100 px-3 pt-2">
+                      <form method="POST" action="/api/console/lesson-offerings" className="inline">
+                        <input type="hidden" name="ticket" value={ticket} />{hidden}
+                        <input type="hidden" name="op" value="duplicateOffering" />
+                        <input type="hidden" name="offeringId" value={o.id} />
+                        <button className="btn-chip-muted text-xs font-semibold" title="Create an inactive copy you can tweak">Duplicate</button>
+                      </form>
+                    </div>
+                    <details className="border-t border-slate-100">
                       <summary className="btn-chip-muted m-3 inline-flex cursor-pointer list-none text-xs font-semibold [&::-webkit-details-marker]:hidden">Edit</summary>
                       <div className="px-3 pb-3">
                         <OfferingForm ticket={ticket} personId={viewingOther ? personId : undefined} offering={o} facilities={facilities} />
@@ -224,11 +235,18 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           initialCalendarUrl={coach?.externalCalendarUrl ?? ""}
         />
         {coach?.externalCalendarUrl && (
-          <p className="text-xs text-slate-400">
-            {calSync?._max.fetchedAt
-              ? `Calendar last synced ${formatDateTime12(calSync._max.fetchedAt)} — ${calSync._count._all} busy time${calSync._count._all === 1 ? "" : "s"} imported and blocked from booking.`
-              : "Your calendar link is saved — PURE refreshes it automatically every couple of hours to block your busy times."}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-xs text-slate-400">
+              {calSync?._max.fetchedAt
+                ? `Calendar last synced ${formatDateTime12(calSync._max.fetchedAt)} — ${calSync._count._all} busy time${calSync._count._all === 1 ? "" : "s"} imported and blocked from booking.`
+                : "Your calendar link is saved — PURE refreshes it automatically every couple of hours to block your busy times."}
+            </p>
+            <form method="POST" action="/api/console/lesson-offerings">
+              <input type="hidden" name="ticket" value={ticket} />{hidden}
+              <input type="hidden" name="op" value="syncCalendar" />
+              <button className="btn-chip-muted text-xs font-semibold">Sync now</button>
+            </form>
+          </div>
         )}
       </div>
 
