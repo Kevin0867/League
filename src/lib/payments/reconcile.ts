@@ -7,6 +7,36 @@ import { syncRefundsForCharge } from "@/lib/payments/refunds";
 import { matchFeeByEmailAndAmount, matchFeeByPlayerName, playerNameFromText } from "@/lib/payments/match";
 import { placeTeamRecruitForPayment, placePaidUnplacedRecruits } from "@/lib/domain/openSpots";
 import { SEASON_SUBSCRIPTION_DESCRIPTION } from "@/lib/payments/feeCopy";
+import { pushContactToZoho } from "@/lib/integrations/zoho";
+
+/** Split a Stripe billing name into first/last for Zoho. */
+function splitName(full: string | null | undefined): { firstName: string | null; lastName: string | null } {
+  const t = (full ?? "").trim();
+  if (!t) return { firstName: null, lastName: null };
+  const parts = t.split(/\s+/);
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") || null };
+}
+
+/**
+ * Add a Stripe payer to the Zoho mailing list. These are registrations done on
+ * the main site (Replit) via Stripe Payment Links that never hit our own
+ * register flow, so the Stripe reconcile is the only place they'd reach Zoho.
+ * Best-effort and idempotent (Zoho upserts by email); stamps an attributed
+ * person so a later backfill skips them. Never throws.
+ */
+async function syncStripePayerToZoho(opts: { email: string | null; name?: string | null; phone?: string | null; personId?: string | null }): Promise<void> {
+  const email = opts.email?.trim().toLowerCase();
+  if (!email) return;
+  try {
+    const { firstName, lastName } = splitName(opts.name);
+    const r = await pushContactToZoho({ email, firstName, lastName, phone: opts.phone ?? null });
+    if (r.ok && opts.personId) {
+      await prisma.person.update({ where: { id: opts.personId }, data: { zohoSyncedAt: new Date() } }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn("[zoho] Stripe payer sync failed:", e);
+  }
+}
 
 // Reconcile local Payment rows against Stripe — the safety net for payments that
 // were completed in Stripe but never marked PAID here (a missed / mis-signed
@@ -131,15 +161,15 @@ export function guessImportCategory(text: string | null | undefined, _amountCent
  * whose product name says "ACP entry"). Preserves the payer-email suffix the UI
  * parses. Idempotent and safe to re-run.
  */
-export async function rescanImportDescriptions(): Promise<{ scanned: number; updated: number; categorized: number }> {
-  if (!isStripeConfigured()) return { scanned: 0, updated: 0, categorized: 0 };
+export async function rescanImportDescriptions(): Promise<{ scanned: number; updated: number; categorized: number; zohoSynced: number }> {
+  if (!isStripeConfigured()) return { scanned: 0, updated: 0, categorized: 0, zohoSynced: 0 };
   const client = stripe();
   const rows = await prisma.payment.findMany({
     where: { direction: "IN", category: "STRIPE_IMPORT", amountCents: { gt: 0 }, stripePaymentIntentId: { not: null } },
-    select: { id: true, description: true, stripePaymentIntentId: true, amountCents: true },
+    select: { id: true, description: true, stripePaymentIntentId: true, amountCents: true, partyId: true, party: { select: { email: true, zohoSyncedAt: true } } },
     take: 300,
   });
-  let updated = 0, categorized = 0;
+  let updated = 0, categorized = 0, zohoSynced = 0;
   for (const r of rows) {
     const piId = r.stripePaymentIntentId!;
     try {
@@ -147,20 +177,27 @@ export async function rescanImportDescriptions(): Promise<{ scanned: number; upd
       const charge = pi.latest_charge && typeof pi.latest_charge !== "string" ? (pi.latest_charge as Stripe.Charge) : null;
       const probe = charge ?? ({ invoice: (pi as unknown as { invoice?: string }).invoice ?? null, description: pi.description ?? null } as unknown as Stripe.Charge);
       const text = await lineItemTextForCharge(client, probe, piId);
-      if (!text || !text.trim()) continue;
       // Keep the "· email" suffix the needs-filing list uses to guess the family.
       const em = r.description ? /·\s*([^\s·]+@[^\s·]+)\s*$/.exec(r.description) : null;
-      const newDesc = `${text}${em ? ` · ${em[1]}` : ""}`;
-      if (newDesc !== r.description) {
-        await prisma.payment.update({ where: { id: r.id }, data: { description: newDesc } });
-        updated++;
+      if (text && text.trim()) {
+        const newDesc = `${text}${em ? ` · ${em[1]}` : ""}`;
+        if (newDesc !== r.description) {
+          await prisma.payment.update({ where: { id: r.id }, data: { description: newDesc } });
+          updated++;
+        }
+        if (guessImportCategory(text, r.amountCents)) categorized++;
       }
-      if (guessImportCategory(text, r.amountCents)) categorized++;
+      // Backfill this payer into Zoho (one-time) if not already synced.
+      const email = charge?.billing_details?.email ?? r.party?.email ?? em?.[1] ?? null;
+      if (email && !r.party?.zohoSyncedAt) {
+        await syncStripePayerToZoho({ email, name: charge?.billing_details?.name ?? null, phone: charge?.billing_details?.phone ?? null, personId: r.partyId });
+        zohoSynced++;
+      }
     } catch (e) {
       console.error("rescan import description failed", r.id, e);
     }
   }
-  return { scanned: rows.length, updated, categorized };
+  return { scanned: rows.length, updated, categorized, zohoSynced };
 }
 
 // The IMPORT FLOOR: the earliest a charge may be *imported* as a new row. This
@@ -669,6 +706,9 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
           },
         });
         await audit({ entityType: "Payment", entityId: created.id, action: "IMPORTED", summary: `Imported paid charge from Stripe — ${(charge.amount / 100).toFixed(2)}${email ? ` (${email})` : ""}${person ? "" : " · unattributed"}` });
+        // Feed the payer into Zoho — a main-site (Replit) registration reaches our
+        // mailing list only here. Best-effort; dormant until Zoho is configured.
+        await syncStripePayerToZoho({ email, name: charge.billing_details?.name ?? null, phone: charge.billing_details?.phone ?? null, personId: person?.id ?? null });
         res.imported++;
         res.importedCents += charge.amount;
         if (!person) res.importedUnattributed++;
