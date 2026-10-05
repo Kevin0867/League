@@ -1801,6 +1801,9 @@ model LessonSeries {
   count         Int?
   people        Int      @default(1)
   priceCents    Int      @default(0)
+  /// For a group booking: the other players' names/emails the booker entered, so
+  /// waivers can go out and the roster is tracked. JSON array of {name,email}.
+  roster        Json?
   /// Saved card for per-lesson auto-charge (Phase 4).
   stripeCustomerId       String?
   defaultPaymentMethodId String?

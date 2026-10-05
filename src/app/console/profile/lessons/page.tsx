@@ -8,6 +8,7 @@ import { formatCents } from "@/lib/money";
 import { formatDate, formatTime12, formatDateTime12 } from "@/lib/time";
 import { LessonAvailabilityForm } from "@/components/LessonAvailabilityForm";
 import { OfferingForm } from "@/components/OfferingForm";
+import { LessonSlotPreview } from "@/components/LessonSlotPreview";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Private/Group lesson pricing" };
@@ -188,6 +189,21 @@ export default async function LessonPricingPage({ searchParams }: { searchParams
           </div>
         </details>
       </div>
+
+      {/* What players see — live check of the open times your availability produces */}
+      {offerings.length > 0 && facilities.length > 0 && (
+        <div className="card space-y-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">What players see</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Preview the exact open times a player would be offered — so you can tell at a glance whether a location or your availability is limiting your bookings.</p>
+          </div>
+          <LessonSlotPreview
+            coachPersonId={personId}
+            offerings={offerings.map((o) => ({ id: o.id, title: o.title, type: o.type, lengthMin: o.lengthMin }))}
+            facilities={facilities}
+          />
+        </div>
+      )}
 
       {/* 2 · Availability + phone calendar */}
       <div className="card space-y-3">
