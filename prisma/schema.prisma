@@ -1365,6 +1365,8 @@ model AcpEntry {
   /// SUBMITTED | CONFIRMED | PAID | WITHDRAWN
   status        String   @default("SUBMITTED")
   notes         String?
+  /// When the team contact was pushed to the Zoho mailing list (null = pending).
+  zohoSyncedAt  DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -1384,6 +1386,9 @@ model AcpEntryPlayer {
   email      String?
   duprId     String?
   duprRating Float?
+  /// When this roster player was pushed to the Zoho mailing list (null = pending
+  /// or no email).
+  zohoSyncedAt DateTime?
   createdAt  DateTime @default(now())
 
   @@index([entryId])
