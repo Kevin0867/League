@@ -11,7 +11,14 @@ type Offering = {
   id: string; type: string; title: string; description: string | null; priceCents: number;
   lengthMin: number | null; minPeople: number | null; maxPeople: number | null;
   preferredFacilityIds: unknown; recurrenceAllowed: boolean; recurringDiscountPct: number | null; active: boolean;
+  priceTiers?: unknown; introPriceCents?: number | null;
 };
+
+type Tier = { people: string; price: string };
+function initialTiers(v: unknown): Tier[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => { const o = x as { people?: unknown; perPersonCents?: unknown }; return { people: String(Number(o.people) || ""), price: Number.isFinite(Number(o.perPersonCents)) ? (Number(o.perPersonCents) / 100).toFixed(2) : "" }; }).filter((t) => t.people);
+}
 
 const TYPE_OPTIONS: Array<[string, string]> = [
   ["PRIVATE", "Private (1 player)"],
@@ -39,6 +46,7 @@ export function OfferingForm({
   const [minPeople, setMinPeople] = useState(offering?.minPeople ?? DEFAULTS[offering?.type ?? "PRIVATE"]?.min ?? 1);
   const [maxPeople, setMaxPeople] = useState(offering?.maxPeople ?? DEFAULTS[offering?.type ?? "PRIVATE"]?.max ?? 1);
   const [recurrence, setRecurrence] = useState(offering ? offering.recurrenceAllowed : true);
+  const [tiers, setTiers] = useState<Tier[]>(initialTiers(offering?.priceTiers));
   const [confirmDel, setConfirmDel] = useState(false);
   const pref = asIds(offering?.preferredFacilityIds);
   const isPrivate = type === "PRIVATE";
@@ -101,6 +109,30 @@ export function OfferingForm({
         <p className="sm:col-span-6 -mt-1 text-xs text-slate-500">
           <strong>Price is per person.</strong> For a semi-private or group lesson, each player pays this amount (e.g. $40/person × 3 players = $120 for the lesson).
         </p>
+
+        {/* Optional per-person price by group size — overrides the flat price. */}
+        {!isPrivate && (
+          <div className="sm:col-span-6 rounded-lg border border-slate-200 p-3">
+            <p className="text-xs font-semibold text-slate-700">Price by group size <span className="font-normal text-slate-400">(optional — overrides the per-person price above for a matching headcount)</span></p>
+            <div className="mt-2 space-y-2">
+              {tiers.map((t, i) => (
+                <div key={i} className="flex flex-wrap items-end gap-2">
+                  <div><label className="label text-xs">Players</label><input name="tierPeople" type="number" min={1} max={20} value={t.people} onChange={(e) => setTiers((ts) => ts.map((x, j) => j === i ? { ...x, people: e.target.value } : x))} className="input py-1 w-24" /></div>
+                  <div><label className="label text-xs">$ / person</label><input name="tierPrice" type="number" min={0} step="0.01" value={t.price} onChange={(e) => setTiers((ts) => ts.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} className="input py-1 w-28" /></div>
+                  <button type="button" onClick={() => setTiers((ts) => ts.filter((_, j) => j !== i))} className="btn-chip-danger mb-1">remove</button>
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={() => setTiers((ts) => [...ts, { people: "", price: "" }])} className="btn-secondary mt-2 text-xs">+ Add a tier</button>
+            <p className="mt-1 text-xs text-slate-400">e.g. 2 players → $60/person, 3 players → $50/person. Headcounts without a tier use the per-person price above.</p>
+          </div>
+        )}
+
+        <div className="sm:col-span-2">
+          <label className="label">First-lesson intro price ($)</label>
+          <input name="introPrice" type="number" min={0} step="0.01" defaultValue={offering?.introPriceCents != null ? (offering.introPriceCents / 100).toFixed(2) : ""} placeholder="optional" className="input py-1" />
+        </div>
+        <p className="sm:col-span-4 flex items-end text-xs text-slate-500">A discounted flat total for a brand-new player&apos;s very first lesson (a one-time intro offer). Leave blank for none.</p>
 
         <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="recurrenceAllowed" checked={recurrence} onChange={(e) => setRecurrence(e.target.checked)} /> Allow recurring bookings (weekly/monthly series)

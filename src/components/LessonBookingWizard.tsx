@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatCents } from "@/lib/money";
 import { formatDate, formatTime12 } from "@/lib/time";
+import { perPersonCentsFor, type PriceTier } from "@/lib/domain/lessonPricing";
 
 // The whole public booking flow as a single client component: choose offering →
 // location → time → players/recurrence → details. Selection is in-component state
@@ -17,6 +18,7 @@ type Offering = {
   id: string; type: string; title: string | null; priceCents: number; adminLockedPriceCents: number | null;
   lengthMin: number | null; minPeople: number | null; maxPeople: number | null; recurrenceAllowed: boolean;
   recurringDiscountPct: number | null; preferredFacilityIds: string[];
+  priceTiers: PriceTier[]; introPriceCents: number | null;
 };
 type Facility = { id: string; name: string; generalArea: string | null };
 type DaySlots = { day: string; times: string[] };
@@ -39,7 +41,7 @@ export function LessonBookingWizard({
   const [endType, setEndType] = useState<"COUNT" | "UNTIL_DATE">("COUNT");
 
   const offering = offerings.find((o) => o.id === offeringId) ?? null;
-  const perPerson = offering ? (offering.adminLockedPriceCents ?? offering.priceCents) : 0;
+  const flatPerPerson = offering ? (offering.adminLockedPriceCents ?? offering.priceCents) : 0;
   const discountPct = offering?.recurrenceAllowed && offering.recurringDiscountPct ? Math.min(90, Math.max(0, offering.recurringDiscountPct)) : 0;
   const minPeople = offering ? (offering.minPeople ?? DEFAULTS[offering.type]?.min ?? 1) : 1;
   const maxPeople = offering ? (offering.maxPeople ?? DEFAULTS[offering.type]?.max ?? 1) : 1;
@@ -67,8 +69,10 @@ export function LessonBookingWizard({
   };
 
   const headcount = isGroup ? Math.min(Math.max(people, minPeople), maxPeople) : 1;
+  const perPerson = offering ? perPersonCentsFor(offering.priceTiers, flatPerPerson, headcount) : 0;
   const baseCents = perPerson * headcount;
   const perLessonCents = recurring && discountPct > 0 ? Math.round(baseCents * (1 - discountPct / 100)) : baseCents;
+  const introCents = offering?.introPriceCents ?? null; // new-player first-lesson price
   const extraPlayers = Math.max(0, headcount - 1); // booker is player 1
 
   return (
@@ -80,7 +84,9 @@ export function LessonBookingWizard({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">1 · Choose your lesson</h2>
         <div className="mt-2 grid gap-2">
           {offerings.map((o) => {
-            const p = o.adminLockedPriceCents ?? o.priceCents;
+            const flat = o.adminLockedPriceCents ?? o.priceCents;
+            const lowest = o.priceTiers.length ? Math.min(flat, ...o.priceTiers.map((t) => t.perPersonCents)) : flat;
+            const hasRange = o.priceTiers.length > 0 && lowest !== flat;
             const selected = offeringId === o.id;
             const prefNames = (o.preferredFacilityIds.length ? o.preferredFacilityIds : facilities.map((f) => f.id)).map((fid) => facName.get(fid)).filter(Boolean);
             const sizeLabel = o.type === "PRIVATE" ? "1 player" : `${o.minPeople ?? 2}–${o.maxPeople ?? o.minPeople ?? 2} players`;
@@ -90,8 +96,9 @@ export function LessonBookingWizard({
                   <span className="font-semibold text-slate-900">{o.title || TYPE_LABEL[o.type]}</span>
                   <span className="ml-2 text-xs text-slate-500">{TYPE_LABEL[o.type]} · {o.lengthMin ?? 60} min · {sizeLabel}{o.recurrenceAllowed ? " · can repeat weekly/monthly" : ""}{o.recurringDiscountPct && o.recurrenceAllowed ? ` (${o.recurringDiscountPct}% off)` : ""}</span>
                   {prefNames.length > 0 && <span className="mt-0.5 block text-[11px] text-slate-400">At: {prefNames.join(", ")}</span>}
+                  {o.introPriceCents != null && <span className="mt-0.5 block text-[11px] font-semibold text-emerald-700">New players: {formatCents(o.introPriceCents)} first lesson</span>}
                 </span>
-                <span className="text-right"><span className="font-bold text-brand-700">{formatCents(p)}</span><span className="block text-[11px] font-normal text-slate-400">per person</span></span>
+                <span className="text-right"><span className="font-bold text-brand-700">{hasRange ? "from " : ""}{formatCents(lowest)}</span><span className="block text-[11px] font-normal text-slate-400">per person</span></span>
               </button>
             );
           })}
@@ -204,6 +211,11 @@ export function LessonBookingWizard({
               )}
             </div>
 
+            {introCents != null && (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs text-emerald-800">
+                New to PURE? Your <strong>first lesson is {formatCents(introCents)}</strong> — applied automatically at checkout if this is your first lesson with us.
+              </p>
+            )}
             <button type="submit" className="w-full rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white hover:bg-brand-700">
               Continue to payment — {formatCents(perLessonCents)}{isGroup ? " total" : ""}
             </button>

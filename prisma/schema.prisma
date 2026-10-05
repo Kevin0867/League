@@ -1713,6 +1713,12 @@ model AlaCarteOffering {
   /// when the player books this as a recurring series (weekly/monthly). 0/null =
   /// no recurring discount. priceCents is always per person.
   recurringDiscountPct Int?
+  /// Optional per-person price by group size (overrides priceCents for a matching
+  /// headcount) — e.g. [{people:1,perPersonCents:9000},{people:2,perPersonCents:6000}].
+  /// JSON array of {people:int, perPersonCents:int}, ascending by people.
+  priceTiers   Json?
+  /// Optional discounted FLAT total for a NEW client's very first lesson.
+  introPriceCents Int?
   /// When the class/clinic runs (admin catalog); coach offerings are scheduled
   /// per booking, not here.
   scheduledAt DateTime?
