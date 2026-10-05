@@ -26,3 +26,38 @@ export function perPersonCentsFor(tiers: PriceTier[] | null | undefined, flatPer
   for (const t of list) if (t.people <= headcount) chosen = t;
   return chosen.perPersonCents;
 }
+
+export type LessonPackage = { count: number; discountPct: number };
+export function parsePackages(v: unknown): LessonPackage[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => { const o = x as { count?: unknown; discountPct?: unknown }; return { count: Number(o.count), discountPct: Number(o.discountPct) }; })
+    .filter((p) => Number.isFinite(p.count) && p.count >= 2 && Number.isFinite(p.discountPct) && p.discountPct >= 0 && p.discountPct <= 90)
+    .sort((a, b) => a.count - b.count);
+}
+
+const clampPct = (p: number | null | undefined) => Math.min(90, Math.max(0, p ?? 0));
+
+/**
+ * The GROUP base price for one lesson (before any recurring/package discount):
+ *  - with price tiers → per-person(tier) × headcount;
+ *  - otherwise → player 1 at the flat price, each additional player at the
+ *    optional sibling/family discount.
+ */
+export function lessonGroupBaseCents(opts: {
+  flatPerPersonCents: number;
+  tiers?: PriceTier[] | null;
+  additionalPersonDiscountPct?: number | null;
+  headcount: number;
+}): number {
+  const headcount = Math.max(1, opts.headcount);
+  if (opts.tiers && opts.tiers.length) return perPersonCentsFor(opts.tiers, opts.flatPerPersonCents, headcount) * headcount;
+  const extra = headcount - 1;
+  const extraEach = Math.round(opts.flatPerPersonCents * (1 - clampPct(opts.additionalPersonDiscountPct) / 100));
+  return opts.flatPerPersonCents + extra * extraEach;
+}
+
+/** Apply a whole-series discount (recurring % or a package %) to a lesson. */
+export function lessonPerLessonCents(baseCents: number, discountPct: number): number {
+  return Math.round(baseCents * (1 - clampPct(discountPct) / 100));
+}

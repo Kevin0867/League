@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatCents } from "@/lib/money";
 import { formatDate, formatTime12 } from "@/lib/time";
-import { perPersonCentsFor, type PriceTier } from "@/lib/domain/lessonPricing";
+import { lessonGroupBaseCents, lessonPerLessonCents, type PriceTier, type LessonPackage } from "@/lib/domain/lessonPricing";
 
 // The whole public booking flow as a single client component: choose offering →
 // location → time → players/recurrence → details. Selection is in-component state
@@ -19,6 +19,7 @@ type Offering = {
   lengthMin: number | null; minPeople: number | null; maxPeople: number | null; recurrenceAllowed: boolean;
   recurringDiscountPct: number | null; preferredFacilityIds: string[];
   priceTiers: PriceTier[]; introPriceCents: number | null;
+  additionalPersonDiscountPct: number | null; packages: LessonPackage[];
 };
 type Facility = { id: string; name: string; generalArea: string | null };
 type DaySlots = { day: string; times: string[] };
@@ -39,13 +40,15 @@ export function LessonBookingWizard({
   const [people, setPeople] = useState(1);
   const [recurring, setRecurring] = useState(false);
   const [endType, setEndType] = useState<"COUNT" | "UNTIL_DATE">("COUNT");
+  const [pkg, setPkg] = useState<LessonPackage | null>(null);
+  const [pkgCadence, setPkgCadence] = useState<"WEEKLY" | "MONTHLY">("WEEKLY");
   const [promo, setPromo] = useState("");
   const [promoState, setPromoState] = useState<{ ok: boolean; msg: string; discountCents: number } | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
 
   const offering = offerings.find((o) => o.id === offeringId) ?? null;
   const flatPerPerson = offering ? (offering.adminLockedPriceCents ?? offering.priceCents) : 0;
-  const discountPct = offering?.recurrenceAllowed && offering.recurringDiscountPct ? Math.min(90, Math.max(0, offering.recurringDiscountPct)) : 0;
+  const recurringPct = offering?.recurrenceAllowed && offering.recurringDiscountPct ? Math.min(90, Math.max(0, offering.recurringDiscountPct)) : 0;
   const minPeople = offering ? (offering.minPeople ?? DEFAULTS[offering.type]?.min ?? 1) : 1;
   const maxPeople = offering ? (offering.maxPeople ?? DEFAULTS[offering.type]?.max ?? 1) : 1;
   const isGroup = !!offering && offering.type !== "PRIVATE" && maxPeople > 1;
@@ -59,7 +62,7 @@ export function LessonBookingWizard({
     const o = offerings.find((x) => x.id === id);
     const mn = o ? (o.minPeople ?? DEFAULTS[o.type]?.min ?? 1) : 1;
     setPeople(o && o.type !== "PRIVATE" ? mn : 1);
-    setRecurring(false);
+    setRecurring(false); setPkg(null);
   };
 
   const chooseLocation = async (fid: string) => {
@@ -72,9 +75,10 @@ export function LessonBookingWizard({
   };
 
   const headcount = isGroup ? Math.min(Math.max(people, minPeople), maxPeople) : 1;
-  const perPerson = offering ? perPersonCentsFor(offering.priceTiers, flatPerPerson, headcount) : 0;
-  const baseCents = perPerson * headcount;
-  const perLessonCents = recurring && discountPct > 0 ? Math.round(baseCents * (1 - discountPct / 100)) : baseCents;
+  const baseCents = offering ? lessonGroupBaseCents({ flatPerPersonCents: flatPerPerson, tiers: offering.priceTiers, additionalPersonDiscountPct: offering.additionalPersonDiscountPct, headcount }) : 0;
+  // A package overrides the recurring discount for the whole series.
+  const seriesDiscountPct = pkg ? pkg.discountPct : (recurring ? recurringPct : 0);
+  const perLessonCents = lessonPerLessonCents(baseCents, seriesDiscountPct);
   const introCents = offering?.introPriceCents ?? null; // new-player first-lesson price
   const extraPlayers = Math.max(0, headcount - 1); // booker is player 1
   const promoDiscount = promoState?.ok ? Math.min(promoState.discountCents, perLessonCents) : 0;
@@ -172,11 +176,41 @@ export function LessonBookingWizard({
               <div>
                 <label className="label">How many players?</label>
                 <input name="people" type="number" min={minPeople} max={maxPeople} value={people} onChange={(e) => setPeople(Math.min(Math.max(parseInt(e.target.value || String(minPeople), 10), minPeople), maxPeople))} className="input w-28" />
-                <p className="mt-1 text-xs text-slate-500">{formatCents(perPerson)} per person · {headcount} player{headcount === 1 ? "" : "s"} = <strong>{formatCents(baseCents)}</strong> per lesson.</p>
+                <p className="mt-1 text-xs text-slate-500">{headcount} player{headcount === 1 ? "" : "s"} = <strong>{formatCents(baseCents)}</strong> per lesson{offering.additionalPersonDiscountPct && !offering.priceTiers.length && headcount > 1 ? ` (incl. ${offering.additionalPersonDiscountPct}% sibling/family discount for players after the first)` : ""}.</p>
               </div>
             )}
 
-            {offering.recurrenceAllowed && (
+            {/* Packages */}
+            {offering.recurrenceAllowed && offering.packages.length > 0 && (
+              <div className="rounded-xl border border-slate-200 p-3">
+                <p className="text-sm font-semibold text-slate-700">Buy a package &amp; save</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {offering.packages.map((p, i) => (
+                    <button type="button" key={i} onClick={() => { setPkg(pkg?.count === p.count && pkg?.discountPct === p.discountPct ? null : p); setRecurring(false); }} className={`rounded-xl border px-3 py-2 text-sm ${pkg?.count === p.count && pkg?.discountPct === p.discountPct ? "border-brand-500 bg-brand-50 font-semibold text-brand-800" : "border-slate-200 bg-white text-slate-700 hover:border-brand-300"}`}>
+                      {p.count} lessons{p.discountPct > 0 ? ` · ${p.discountPct}% off` : ""}
+                    </button>
+                  ))}
+                </div>
+                {pkg && (
+                  <div className="mt-3 space-y-2">
+                    <input type="hidden" name="recurring" value="on" />
+                    <input type="hidden" name="endType" value="COUNT" />
+                    <input type="hidden" name="count" value={pkg.count} />
+                    <input type="hidden" name="packageDiscountPct" value={pkg.discountPct} />
+                    <div className="flex items-end gap-2">
+                      <div><label className="label">Repeats</label>
+                        <select name="cadence" value={pkgCadence} onChange={(e) => setPkgCadence(e.target.value as "WEEKLY" | "MONTHLY")} className="input py-1"><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select>
+                      </div>
+                      <button type="button" onClick={() => setPkg(null)} className="btn-chip-muted mb-1">Clear</button>
+                    </div>
+                    <p className="text-xs font-semibold text-emerald-700">{pkg.count}-lesson package{pkg.discountPct > 0 ? ` — ${pkg.discountPct}% off each` : ""}: {formatCents(perLessonCents)}/lesson, {formatCents(perLessonCents * pkg.count)} over the package. You pay per lesson (first now, rest before each).</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Recurring (hidden while a package is selected) */}
+            {offering.recurrenceAllowed && !pkg && (
               <details onToggle={(e) => setRecurring((e.target as HTMLDetailsElement).open)} className="rounded-xl border border-slate-200 p-3">
                 <summary className="cursor-pointer text-sm font-semibold text-slate-700">Make this a recurring lesson</summary>
                 <div className="mt-3 space-y-3">
@@ -200,7 +234,7 @@ export function LessonBookingWizard({
                     )}
                   </div>
                   <p className="text-xs text-slate-500">We book the same time each week/month where the coach and a court are free. You pay per lesson — the first now, the rest before each session.</p>
-                  {discountPct > 0 && <p className="text-xs font-semibold text-emerald-700">Recurring saves {discountPct}% off each lesson — {formatCents(perLessonCents)} per lesson instead of {formatCents(baseCents)}.</p>}
+                  {recurringPct > 0 && <p className="text-xs font-semibold text-emerald-700">Recurring saves {recurringPct}% off each lesson — {formatCents(perLessonCents)} per lesson instead of {formatCents(baseCents)}.</p>}
                 </div>
               </details>
             )}
@@ -249,8 +283,8 @@ export function LessonBookingWizard({
               Continue to payment — {formatCents(payNowCents)}{isGroup ? " total" : ""}
             </button>
             <p className="text-center text-xs text-slate-400">
-              You&apos;ll pay for your first lesson on the next screen{isGroup ? ` (${formatCents(perPerson)}/person × ${headcount})` : ""}
-              {recurring && discountPct > 0 ? `, with ${discountPct}% off for the recurring series` : ""}. Your court is reserved the moment you book.
+              You&apos;ll pay for your first lesson on the next screen{isGroup ? ` (${formatCents(baseCents)} for ${headcount} players)` : ""}
+              {pkg ? `, as part of your ${pkg.count}-lesson package` : seriesDiscountPct > 0 ? `, with ${seriesDiscountPct}% off for the recurring series` : ""}. Your court is reserved the moment you book.
             </p>
           </form>
         ) : null
