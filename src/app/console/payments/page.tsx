@@ -772,7 +772,7 @@ export default async function PaymentsPage({
           </form>
           {sp.rescanok && (
             <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              Re-scanned {sp.rsscanned} charge{sp.rsscanned === "1" ? "" : "s"} — {sp.rsupdated} description{sp.rsupdated === "1" ? "" : "s"} updated, {sp.rscat} now auto-categorizable. Categories below are pre-picked where we could tell; confirm and Attach.
+              Re-scanned {sp.rsscanned} charge{sp.rsscanned === "1" ? "" : "s"} — {sp.rsupdated} description{sp.rsupdated === "1" ? "" : "s"} updated, {sp.rscat} now auto-categorizable{sp.rszoho && sp.rszoho !== "0" ? `, ${sp.rszoho} payer${sp.rszoho === "1" ? "" : "s"} synced to Zoho` : ""}. Categories below are pre-picked where we could tell; confirm and Attach.
             </p>
           )}
           <div>
