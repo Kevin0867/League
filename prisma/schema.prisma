@@ -1726,6 +1726,17 @@ model AlaCarteOffering {
   /// Optional prepaid packages: book N lessons at a discount. JSON array of
   /// {count:int, discountPct:int}. Applies the discount to every lesson in the series.
   packages     Json?
+  /// Booking rules (all optional). minNoticeHours: no bookings within this many
+  /// hours of the start. bookingHorizonDays: how far out players can book (default
+  /// ~6 weeks). bufferMin: minutes the coach needs between back-to-back lessons.
+  /// dailyCap: max lessons this coach teaches per day. cancelWindowHours +
+  /// cancelPolicy: the cancellation/refund policy shown to players.
+  minNoticeHours     Int?
+  bookingHorizonDays Int?
+  bufferMin          Int?
+  dailyCap           Int?
+  cancelWindowHours  Int?
+  cancelPolicy       String?
   /// When the class/clinic runs (admin catalog); coach offerings are scheduled
   /// per booking, not here.
   scheduledAt DateTime?
