@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { actorFromForm } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
@@ -243,6 +244,37 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error("attribute import failed", e);
       return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "attribute failed")}`);
+    }
+  }
+
+  // Change WHICH player(s) a payment is applied to (coveredPersonIds) without
+  // touching the payer (partyId). A parent pays once and the charge can be
+  // applied to themselves or any of their kids — e.g. an ACP entry fee Chelsi
+  // paid, applied to Clayton. Reports that read coveredPersonIds then credit the
+  // right player.
+  if (String(fd.get("op") ?? "") === "applyTo") {
+    const paymentId = String(fd.get("paymentId") ?? "");
+    if (!paymentId) return back("?recerr=missing#fees-in");
+    const personIds = fd.getAll("personId").map((v) => String(v).trim()).filter(Boolean);
+    try {
+      const pay = await prisma.payment.findUnique({ where: { id: paymentId }, select: { id: true, direction: true } });
+      if (!pay || pay.direction !== "IN") return back("?recerr=notfound#fees-in");
+      // Only keep ids that are real people (guards against stale/typo'd ids).
+      const valid = personIds.length
+        ? (await prisma.person.findMany({ where: { id: { in: personIds } }, select: { id: true } })).map((p) => p.id)
+        : [];
+      await prisma.payment.update({
+        where: { id: paymentId },
+        data: { coveredPersonIds: valid.length ? valid : Prisma.DbNull },
+      });
+      await audit({
+        actorId: actor.userId, entityType: "Payment", entityId: paymentId, action: "APPLIED_TO",
+        summary: `Applied payment to ${valid.length} player(s)${valid.length ? ` (${valid.join(", ")})` : " (cleared)"}`,
+      });
+      return back("?applyok=1#fees-in");
+    } catch (e) {
+      console.error("applyTo failed", e);
+      return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "apply failed")}#fees-in`);
     }
   }
 
