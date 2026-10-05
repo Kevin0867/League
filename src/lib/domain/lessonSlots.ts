@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { DOW, isBookable } from "@/lib/domain/facilityWindows";
 import { phoenixDateInput } from "@/lib/time";
 import { toMin, addMinutesHHMM, phoenixHHMM } from "@/lib/domain/courtHold";
+import { phoenixWallTimeToUtc } from "@/lib/domain/ics";
 
 // The open-slot engine: given a coach, a facility, and a lesson length, return the
 // times a player can book — the coach's availability MINUS everything already on
@@ -59,9 +60,17 @@ export async function openLessonSlots(opts: {
   maxSlots?: number;
   /** Max slots surfaced per day, so later days in the range aren't starved. */
   perDayMax?: number;
+  /** Booking rules (optional). */
+  minNoticeHours?: number | null;
+  bufferMin?: number | null;
+  dailyCap?: number | null;
 }): Promise<LessonSlot[]> {
   const step = opts.stepMin ?? 30;
   const max = opts.maxSlots ?? 200;
+  const buffer = Math.max(0, opts.bufferMin ?? 0);
+  const dailyCap = opts.dailyCap && opts.dailyCap > 0 ? opts.dailyCap : null;
+  // Earliest bookable instant given the minimum-notice rule.
+  const notBeforeUtc = opts.minNoticeHours && opts.minNoticeHours > 0 ? new Date(Date.now() + opts.minNoticeHours * 3600_000) : null;
   const facility = await prisma.facility.findUnique({
     where: { id: opts.facilityId },
     select: { courtCount: true, courtBlocks: true, blackoutDates: { select: { date: true } } },
@@ -114,6 +123,8 @@ export async function openLessonSlots(opts: {
   const matchDays = new Set(facFixtures.map((f) => phoenixDateInput(f.scheduledAt)));
   const coachBusyByDay = new Map<string, Iv[]>();
   const pushBusy = (day: string, iv: Iv) => { const a = coachBusyByDay.get(day) ?? []; a.push(iv); coachBusyByDay.set(day, a); };
+  // Existing lessons per day — for the daily cap.
+  const lessonCountByDay = new Map<string, number>();
   // Coach lessons: scheduledAt is a full datetime — derive its Phoenix HH:MM.
   for (const l of coachLessons) {
     if (!l.scheduledAt) continue;
@@ -121,6 +132,7 @@ export async function openLessonSlots(opts: {
     const hhmm = phoenixHHMM(l.scheduledAt);
     const len = l.offering?.lengthMin ?? 60;
     pushBusy(day, { s: toMin(hhmm), e: toMin(hhmm) + len });
+    lessonCountByDay.set(day, (lessonCountByDay.get(day) ?? 0) + 1);
   }
   for (const se of coachSessions) pushBusy(phoenixDateInput(se.date), { s: toMin(se.startTime), e: toMin(se.endTime) });
   // Imported phone-calendar busy times: a UTC interval, possibly spanning days —
@@ -147,6 +159,8 @@ export async function openLessonSlots(opts: {
 
   for (const day of eachDay(opts.fromDay, opts.toDay)) {
     if (wholeDayBlock.has(day) || blackoutDays.has(day)) continue;
+    // Daily cap: the coach already has their max lessons this day.
+    if (dailyCap != null && (lessonCountByDay.get(day) ?? 0) >= dailyCap) continue;
     const dow = DOW[new Date(`${day}T12:00:00Z`).getUTCDay()];
     const base = [...(availByDow.get(dow) ?? []), ...(openByDay.get(day) ?? [])];
     if (!base.length) continue;
@@ -160,8 +174,10 @@ export async function openLessonSlots(opts: {
       for (let t = w.s; t + opts.lengthMin <= w.e; t += step) {
         if (dayCount >= perDay) break;
         const c0 = t, c1 = t + opts.lengthMin;
-        // Coach free?
-        if (busy.some((b) => overlaps(c0, c1, b.s, b.e))) continue;
+        // Minimum notice: the start must be far enough in the future.
+        if (notBeforeUtc && phoenixWallTimeToUtc(new Date(`${day}T12:00:00Z`), toHHMM(c0)) < notBeforeUtc) continue;
+        // Coach free? (pad existing commitments by the buffer on each side)
+        if (busy.some((b) => overlaps(c0, c1, b.s - buffer, b.e + buffer))) continue;
         // Facility open at this time?
         if (!isBookable(facility.courtBlocks, dow, toHHMM(c0)).ok) continue;
         // Match night?

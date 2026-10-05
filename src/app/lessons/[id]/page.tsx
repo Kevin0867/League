@@ -39,6 +39,7 @@ export default async function BookCoachPage({ params, searchParams }: { params: 
     recurringDiscountPct: o.recurringDiscountPct, preferredFacilityIds: asIds(o.preferredFacilityIds),
     priceTiers: parsePriceTiers(o.priceTiers), introPriceCents: o.introPriceCents,
     additionalPersonDiscountPct: o.additionalPersonDiscountPct, packages: parsePackages(o.packages),
+    cancelPolicy: o.cancelPolicy, cancelWindowHours: o.cancelWindowHours, minNoticeHours: o.minNoticeHours,
   }));
 
   return (

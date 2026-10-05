@@ -13,6 +13,7 @@ type Offering = {
   preferredFacilityIds: unknown; recurrenceAllowed: boolean; recurringDiscountPct: number | null; active: boolean;
   priceTiers?: unknown; introPriceCents?: number | null;
   additionalPersonDiscountPct?: number | null; packages?: unknown;
+  minNoticeHours?: number | null; bookingHorizonDays?: number | null; bufferMin?: number | null; dailyCap?: number | null; cancelWindowHours?: number | null; cancelPolicy?: string | null;
 };
 
 type Tier = { people: string; price: string };
@@ -178,6 +179,18 @@ export function OfferingForm({
             ? "Optional: take this % off each lesson's per-person price when a player commits to a recurring series. Leave blank or 0 for no discount."
             : "Turn on recurring bookings above to offer a recurring discount."}
         </p>
+
+        <details className="sm:col-span-6 rounded-lg border border-slate-200 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-brand-700">Booking rules (optional)</summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div><label className="label text-xs">Min notice (hours)</label><input name="minNoticeHours" type="number" min={0} defaultValue={offering?.minNoticeHours ?? ""} placeholder="e.g. 12" className="input py-1" /></div>
+            <div><label className="label text-xs">Booking horizon (days)</label><input name="bookingHorizonDays" type="number" min={1} max={365} defaultValue={offering?.bookingHorizonDays ?? ""} placeholder="42" className="input py-1" /></div>
+            <div><label className="label text-xs">Buffer between lessons (min)</label><input name="bufferMin" type="number" min={0} step={5} defaultValue={offering?.bufferMin ?? ""} placeholder="e.g. 15" className="input py-1" /></div>
+            <div><label className="label text-xs">Max lessons / day</label><input name="dailyCap" type="number" min={1} defaultValue={offering?.dailyCap ?? ""} placeholder="e.g. 6" className="input py-1" /></div>
+            <div><label className="label text-xs">Cancellation window (hours)</label><input name="cancelWindowHours" type="number" min={0} defaultValue={offering?.cancelWindowHours ?? ""} placeholder="e.g. 24" className="input py-1" /></div>
+            <div className="sm:col-span-3"><label className="label text-xs">Cancellation / refund policy (shown to players)</label><input name="cancelPolicy" defaultValue={offering?.cancelPolicy ?? ""} placeholder="e.g. Free cancellation 24h before; inside 24h is non-refundable." className="input py-1" /></div>
+          </div>
+        </details>
 
         <label className="sm:col-span-3 flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="active" value="on" defaultChecked={offering ? offering.active : true} /> Bookable (players can book it; uncheck to pause without deleting)

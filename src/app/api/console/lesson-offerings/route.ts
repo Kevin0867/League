@@ -146,6 +146,12 @@ export async function POST(req: Request) {
       introPriceCents: introPriceCents && introPriceCents > 0 ? introPriceCents : null,
       additionalPersonDiscountPct,
       packages: packagesArr.length ? packagesArr : Prisma.DbNull,
+      minNoticeHours: int("minNoticeHours"),
+      bookingHorizonDays: int("bookingHorizonDays"),
+      bufferMin: (() => { const n = parseInt(g("bufferMin"), 10); return Number.isFinite(n) && n >= 0 ? n : null; })(),
+      dailyCap: int("dailyCap"),
+      cancelWindowHours: (() => { const n = parseInt(g("cancelWindowHours"), 10); return Number.isFinite(n) && n >= 0 ? n : null; })(),
+      cancelPolicy: g("cancelPolicy") || null,
       coachSet: true, coachId: coach.id,
       // An unchecked checkbox sends NO field, so "!== off" always read true and
       // Bookable could never be turned off. Checked sends "on".

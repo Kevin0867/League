@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   if (!coach) return NextResponse.json({ slots: [] });
   const offering = await prisma.alaCarteOffering.findFirst({
     where: { id: offeringId, coachId: coach.id, coachSet: true, active: true },
-    select: { lengthMin: true, preferredFacilityIds: true },
+    select: { lengthMin: true, preferredFacilityIds: true, minNoticeHours: true, bookingHorizonDays: true, bufferMin: true, dailyCap: true },
   });
   if (!offering?.lengthMin) return NextResponse.json({ slots: [] });
 
@@ -31,9 +31,13 @@ export async function GET(req: Request) {
   const fac = await prisma.facility.findFirst({ where: { id: facilityId, archived: false, alaCarteAllowed: true }, select: { id: true } });
   if (!fac) return NextResponse.json({ slots: [] });
 
+  const horizon = offering.bookingHorizonDays && offering.bookingHorizonDays > 0 ? Math.min(365, offering.bookingHorizonDays) : 42;
   const from = phoenixDateInput(new Date());
-  const toD = new Date(); toD.setUTCDate(toD.getUTCDate() + 42);
-  const slots = await openLessonSlots({ coachId: coach.id, facilityId, lengthMin: offering.lengthMin, fromDay: from, toDay: phoenixDateInput(toD), maxSlots: 240, perDayMax: 8 });
+  const toD = new Date(); toD.setUTCDate(toD.getUTCDate() + horizon);
+  const slots = await openLessonSlots({
+    coachId: coach.id, facilityId, lengthMin: offering.lengthMin, fromDay: from, toDay: phoenixDateInput(toD), maxSlots: 240, perDayMax: 8,
+    minNoticeHours: offering.minNoticeHours, bufferMin: offering.bufferMin, dailyCap: offering.dailyCap,
+  });
 
   const byDay = new Map<string, string[]>();
   for (const s of slots) { const a = byDay.get(s.day) ?? []; a.push(s.startTime); byDay.set(s.day, a); }

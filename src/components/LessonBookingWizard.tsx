@@ -20,6 +20,7 @@ type Offering = {
   recurringDiscountPct: number | null; preferredFacilityIds: string[];
   priceTiers: PriceTier[]; introPriceCents: number | null;
   additionalPersonDiscountPct: number | null; packages: LessonPackage[];
+  cancelPolicy: string | null; cancelWindowHours: number | null; minNoticeHours: number | null;
 };
 type Facility = { id: string; name: string; generalArea: string | null };
 type DaySlots = { day: string; times: string[] };
@@ -286,6 +287,11 @@ export function LessonBookingWizard({
               You&apos;ll pay for your first lesson on the next screen{isGroup ? ` (${formatCents(baseCents)} for ${headcount} players)` : ""}
               {pkg ? `, as part of your ${pkg.count}-lesson package` : seriesDiscountPct > 0 ? `, with ${seriesDiscountPct}% off for the recurring series` : ""}. Your court is reserved the moment you book.
             </p>
+            {(offering.cancelPolicy || offering.cancelWindowHours) && (
+              <p className="text-center text-xs text-slate-400">
+                <strong>Cancellation:</strong> {offering.cancelPolicy || `Please give at least ${offering.cancelWindowHours}h notice to cancel or reschedule.`}
+              </p>
+            )}
           </form>
         ) : null
       )}

@@ -38,11 +38,13 @@ const overlaps = (a0: number, a1: number, b0: number, b1: number) => a0 < b1 && 
 
 /** Is the coach already committed (another lesson or a session) at this time?
  *  `ignoreBookingId` skips one lesson (used when rescheduling it). */
-export async function coachBusyAt(coachId: string, day: string, start: string, end: string, ignoreBookingId?: string | null): Promise<boolean> {
+export async function coachBusyAt(coachId: string, day: string, start: string, end: string, ignoreBookingId?: string | null, bufferMin?: number | null): Promise<boolean> {
   const win = { start: new Date(`${day}T00:00:00Z`), end: new Date(`${day}T00:00:00Z`) };
   win.start.setUTCDate(win.start.getUTCDate() - 1);
   win.end.setUTCDate(win.end.getUTCDate() + 2);
-  const s0 = toMin(start), s1 = toMin(end);
+  // Pad the booked slot by the buffer so back-to-back lessons keep a gap.
+  const buf = Math.max(0, bufferMin ?? 0);
+  const s0 = toMin(start) - buf, s1 = toMin(end) + buf;
   const [lessons, sessions, busyBlocks] = await Promise.all([
     prisma.alaCarteBooking.findMany({ where: { coachId, status: { notIn: ["CANCELLED", "DECLINED"] }, scheduledAt: { gte: win.start, lt: win.end }, ...(ignoreBookingId ? { id: { not: ignoreBookingId } } : {}) }, select: { scheduledAt: true, lessonLengthMin: true, offering: { select: { lengthMin: true } } } }),
     prisma.session.findMany({ where: { coaches: { some: { coachId } }, status: { notIn: ["CANCELLED", "RESCHEDULED"] }, date: { gte: win.start, lt: win.end } }, select: { date: true, startTime: true, endTime: true } }),
@@ -92,7 +94,7 @@ export async function createLessonBooking(opts: {
 }): Promise<BookResult> {
   const offering = await prisma.alaCarteOffering.findUnique({
     where: { id: opts.offeringId },
-    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, recurringDiscountPct: true, priceTiers: true, introPriceCents: true, additionalPersonDiscountPct: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
+    select: { id: true, title: true, type: true, coachId: true, priceCents: true, adminLockedPriceCents: true, recurringDiscountPct: true, priceTiers: true, introPriceCents: true, additionalPersonDiscountPct: true, minNoticeHours: true, bufferMin: true, dailyCap: true, lengthMin: true, active: true, coach: { select: { person: { select: { firstName: true, lastName: true } } } } },
   });
   if (!offering || !offering.active) return { ok: false, booked: 0, skipped: 0, error: "This lesson isn't available." };
   const lengthMin = offering.lengthMin ?? 60;
@@ -148,7 +150,7 @@ export async function createLessonBooking(opts: {
     const occ = occurrences[i];
     const end = addMinutesHHMM(occ.start, lengthMin);
     const courtFree = await isCourtTimeFree(opts.facilityId, occ.day, occ.start, end);
-    const coachBusy = coachId ? await coachBusyAt(coachId, occ.day, occ.start, end) : false;
+    const coachBusy = coachId ? await coachBusyAt(coachId, occ.day, occ.start, end, null, offering.bufferMin) : false;
     if (!courtFree.ok || coachBusy) {
       if (i === 0) {
         // The chosen first slot was taken between preview and submit — unwind.
@@ -158,8 +160,24 @@ export async function createLessonBooking(opts: {
       skipped++;
       continue;
     }
-    const occPrice = i === 0 ? firstPrice : regularPrice;
     const scheduledAt = phoenixWallTimeToUtc(new Date(`${occ.day}T12:00:00Z`), occ.start);
+    // Enforce booking rules on the FIRST occurrence (the one being booked now).
+    if (i === 0) {
+      if (offering.minNoticeHours && offering.minNoticeHours > 0 && scheduledAt.getTime() < Date.now() + offering.minNoticeHours * 3600_000) {
+        await prisma.lessonSeries.delete({ where: { id: series.id } }).catch(() => {});
+        return { ok: false, booked: 0, skipped: 0, error: `This lesson needs at least ${offering.minNoticeHours}h notice. Please pick a later time.` };
+      }
+      if (offering.dailyCap && offering.dailyCap > 0 && coachId) {
+        const dayStart = new Date(`${occ.day}T00:00:00Z`); dayStart.setUTCDate(dayStart.getUTCDate() - 1);
+        const dayEnd = new Date(`${occ.day}T00:00:00Z`); dayEnd.setUTCDate(dayEnd.getUTCDate() + 2);
+        const sameDay = await prisma.alaCarteBooking.findMany({ where: { coachId, status: { notIn: ["CANCELLED", "DECLINED"] }, scheduledAt: { gte: dayStart, lt: dayEnd } }, select: { scheduledAt: true } });
+        if (sameDay.filter((x) => x.scheduledAt && phoenixDateInput(x.scheduledAt) === occ.day).length >= offering.dailyCap) {
+          await prisma.lessonSeries.delete({ where: { id: series.id } }).catch(() => {});
+          return { ok: false, booked: 0, skipped: 0, error: "That day is fully booked with the coach. Please pick another day." };
+        }
+      }
+    }
+    const occPrice = i === 0 ? firstPrice : regularPrice;
     const booking = await prisma.alaCarteBooking.create({
       data: {
         offeringId: offering.id, clientId: person.id, coachId, status: "REQUESTED",
