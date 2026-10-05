@@ -39,6 +39,9 @@ export function LessonBookingWizard({
   const [people, setPeople] = useState(1);
   const [recurring, setRecurring] = useState(false);
   const [endType, setEndType] = useState<"COUNT" | "UNTIL_DATE">("COUNT");
+  const [promo, setPromo] = useState("");
+  const [promoState, setPromoState] = useState<{ ok: boolean; msg: string; discountCents: number } | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
 
   const offering = offerings.find((o) => o.id === offeringId) ?? null;
   const flatPerPerson = offering ? (offering.adminLockedPriceCents ?? offering.priceCents) : 0;
@@ -74,6 +77,21 @@ export function LessonBookingWizard({
   const perLessonCents = recurring && discountPct > 0 ? Math.round(baseCents * (1 - discountPct / 100)) : baseCents;
   const introCents = offering?.introPriceCents ?? null; // new-player first-lesson price
   const extraPlayers = Math.max(0, headcount - 1); // booker is player 1
+  const promoDiscount = promoState?.ok ? Math.min(promoState.discountCents, perLessonCents) : 0;
+  const payNowCents = Math.max(0, perLessonCents - promoDiscount);
+
+  const applyPromo = async () => {
+    const code = promo.trim();
+    if (!code) { setPromoState(null); return; }
+    setPromoChecking(true);
+    try {
+      const res = await fetch(`/api/lessons/promo-check?code=${encodeURIComponent(code)}&amount=${perLessonCents}`);
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; discountCents?: number; label?: string; reason?: string };
+      if (d.ok) setPromoState({ ok: true, msg: `${d.label} applied`, discountCents: d.discountCents ?? 0 });
+      else setPromoState({ ok: false, msg: d.reason ?? "That code isn't valid.", discountCents: 0 });
+    } catch { setPromoState({ ok: false, msg: "Couldn't check that code.", discountCents: 0 }); }
+    finally { setPromoChecking(false); }
+  };
 
   return (
     <div>
@@ -211,13 +229,24 @@ export function LessonBookingWizard({
               )}
             </div>
 
+            {/* Promo code */}
+            <div>
+              <label className="label">Promo code (optional)</label>
+              <div className="flex gap-2">
+                <input value={promo} onChange={(e) => { setPromo(e.target.value); setPromoState(null); }} placeholder="Enter a code" className="input w-48 uppercase" />
+                <button type="button" onClick={applyPromo} disabled={promoChecking || !promo.trim()} className="btn-secondary text-sm disabled:opacity-40">{promoChecking ? "Checking…" : "Apply"}</button>
+              </div>
+              {promoState && <p className={`mt-1 text-xs ${promoState.ok ? "text-emerald-700" : "text-rose-600"}`}>{promoState.msg}{promoState.ok && promoDiscount > 0 ? ` — −${formatCents(promoDiscount)} off your first lesson` : ""}</p>}
+              {promoState?.ok && <input type="hidden" name="promoCode" value={promo.trim().toUpperCase()} />}
+            </div>
+
             {introCents != null && (
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs text-emerald-800">
                 New to PURE? Your <strong>first lesson is {formatCents(introCents)}</strong> — applied automatically at checkout if this is your first lesson with us.
               </p>
             )}
             <button type="submit" className="w-full rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white hover:bg-brand-700">
-              Continue to payment — {formatCents(perLessonCents)}{isGroup ? " total" : ""}
+              Continue to payment — {formatCents(payNowCents)}{isGroup ? " total" : ""}
             </button>
             <p className="text-center text-xs text-slate-400">
               You&apos;ll pay for your first lesson on the next screen{isGroup ? ` (${formatCents(perPerson)}/person × ${headcount})` : ""}
