@@ -81,7 +81,7 @@ export async function buildAcpCrossReference(): Promise<AcpCrossReference> {
   // ACP charges: filed ACP_ENTRY payments + Stripe imports that read as ACP.
   const payments = await prisma.payment.findMany({
     where: { direction: "IN", status: { in: ["PAID", "PENDING", "REQUESTED"] }, category: { in: ["ACP_ENTRY", "STRIPE_IMPORT"] } },
-    select: { amountCents: true, category: true, description: true, coveredPersonIds: true, party: { select: { firstName: true, lastName: true, email: true } } },
+    select: { amountCents: true, category: true, description: true, coveredPersonIds: true, stripePayerName: true, stripePayerEmail: true, party: { select: { firstName: true, lastName: true, email: true } } },
     take: 1000,
   });
   // Resolve any "applied to" players (coveredPersonIds) so a charge is credited to
@@ -102,8 +102,8 @@ export async function buildAcpCrossReference(): Promise<AcpCrossReference> {
       const each = Math.round(p.amountCents / covered.length);
       for (const c of covered) add(c.name, c.email, "charge", each);
     } else {
-      const email = p.party?.email ?? parseEmailFromDesc(p.description);
-      const name = p.party ? `${p.party.firstName} ${p.party.lastName}`.trim() : null;
+      const email = p.party?.email ?? p.stripePayerEmail ?? parseEmailFromDesc(p.description);
+      const name = p.party ? `${p.party.firstName} ${p.party.lastName}`.trim() : (p.stripePayerName ?? null);
       add(name, email, "charge", p.amountCents);
     }
   }

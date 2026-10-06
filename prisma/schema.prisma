@@ -1134,6 +1134,11 @@ model Payment {
   stripeCheckoutId String?
   stripePaymentIntentId String?
   stripeSubscriptionId String?
+  /// Payer identity as Stripe saw it (billing_details) — captured on import so an
+  /// UNATTRIBUTED charge still shows who paid and can be applied to a player. Never
+  /// card data; just the name/email on the charge.
+  stripePayerName  String?
+  stripePayerEmail String?
   /// On an OUT/REFUND row: the Stripe refund id it records. Makes refund
   /// syncing idempotent — a refund (from the app OR the Stripe dashboard) is
   /// only ever booked once, whichever path sees it first.
