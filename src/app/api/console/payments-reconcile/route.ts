@@ -51,9 +51,9 @@ export async function POST(req: Request) {
       const r = await rescanImportDescriptions();
       await audit({
         actorId: actor.userId, entityType: "Payment", entityId: "reconcile", action: "IMPORT_RESCAN",
-        summary: `Re-scanned ${r.scanned} imported charge(s) from Stripe — ${r.updated} description(s) updated, ${r.categorized} auto-categorizable, ${r.zohoSynced} payer(s) synced to Zoho`,
+        summary: `Re-scanned ${r.scanned} imported charge(s) from Stripe — ${r.updated} description(s) updated, ${r.categorized} auto-categorizable, ${r.payerFilled} payer name/email filled, ${r.zohoSynced} payer(s) synced to Zoho`,
       });
-      return back(`?rescanok=1&rsscanned=${r.scanned}&rsupdated=${r.updated}&rscat=${r.categorized}&rszoho=${r.zohoSynced}`);
+      return back(`?rescanok=1&rsscanned=${r.scanned}&rsupdated=${r.updated}&rscat=${r.categorized}&rspayer=${r.payerFilled}&rszoho=${r.zohoSynced}`);
     } catch (e) {
       console.error("rescan imports failed", e);
       return back(`?recerr=${encodeURIComponent(e instanceof Error ? e.message.slice(0, 160) : "rescan failed")}`);

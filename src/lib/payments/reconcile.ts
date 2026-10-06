@@ -161,15 +161,25 @@ export function guessImportCategory(text: string | null | undefined, _amountCent
  * whose product name says "ACP entry"). Preserves the payer-email suffix the UI
  * parses. Idempotent and safe to re-run.
  */
-export async function rescanImportDescriptions(): Promise<{ scanned: number; updated: number; categorized: number; zohoSynced: number }> {
-  if (!isStripeConfigured()) return { scanned: 0, updated: 0, categorized: 0, zohoSynced: 0 };
+export async function rescanImportDescriptions(): Promise<{ scanned: number; updated: number; categorized: number; zohoSynced: number; payerFilled: number }> {
+  if (!isStripeConfigured()) return { scanned: 0, updated: 0, categorized: 0, zohoSynced: 0, payerFilled: 0 };
   const client = stripe();
+  // Two kinds of rows need Stripe re-read: unfiled imports (rewrite description
+  // so the UI can categorize), and any UNATTRIBUTED Stripe charge still missing
+  // its payer identity (so it shows who paid and can be applied to a player) —
+  // e.g. an ACP-entry Payment Link that imported with a category but no person.
   const rows = await prisma.payment.findMany({
-    where: { direction: "IN", category: "STRIPE_IMPORT", amountCents: { gt: 0 }, stripePaymentIntentId: { not: null } },
-    select: { id: true, description: true, stripePaymentIntentId: true, amountCents: true, partyId: true, party: { select: { email: true, zohoSyncedAt: true } } },
+    where: {
+      direction: "IN", method: "STRIPE", amountCents: { gt: 0 }, stripePaymentIntentId: { not: null },
+      OR: [
+        { category: "STRIPE_IMPORT" },
+        { AND: [{ partyId: null }, { stripePayerEmail: null }] },
+      ],
+    },
+    select: { id: true, category: true, description: true, stripePaymentIntentId: true, amountCents: true, partyId: true, stripePayerName: true, stripePayerEmail: true, party: { select: { email: true, zohoSyncedAt: true } } },
     take: 300,
   });
-  let updated = 0, categorized = 0, zohoSynced = 0;
+  let updated = 0, categorized = 0, zohoSynced = 0, payerFilled = 0;
   for (const r of rows) {
     const piId = r.stripePaymentIntentId!;
     try {
@@ -179,7 +189,8 @@ export async function rescanImportDescriptions(): Promise<{ scanned: number; upd
       const text = await lineItemTextForCharge(client, probe, piId);
       // Keep the "· email" suffix the needs-filing list uses to guess the family.
       const em = r.description ? /·\s*([^\s·]+@[^\s·]+)\s*$/.exec(r.description) : null;
-      if (text && text.trim()) {
+      // Only rewrite the description of unfiled imports (don't clobber filed rows).
+      if (r.category === "STRIPE_IMPORT" && text && text.trim()) {
         const newDesc = `${text}${em ? ` · ${em[1]}` : ""}`;
         if (newDesc !== r.description) {
           await prisma.payment.update({ where: { id: r.id }, data: { description: newDesc } });
@@ -187,17 +198,24 @@ export async function rescanImportDescriptions(): Promise<{ scanned: number; upd
         }
         if (guessImportCategory(text, r.amountCents)) categorized++;
       }
+      // Backfill the payer identity (name + email) from Stripe billing details so
+      // the row is identifiable even when unattributed.
+      const payerName = charge?.billing_details?.name ?? null;
+      const payerEmail = charge?.billing_details?.email ?? charge?.receipt_email ?? r.party?.email ?? em?.[1] ?? null;
+      if ((payerName && payerName !== r.stripePayerName) || (payerEmail && payerEmail !== r.stripePayerEmail)) {
+        await prisma.payment.update({ where: { id: r.id }, data: { stripePayerName: payerName ?? r.stripePayerName, stripePayerEmail: payerEmail ?? r.stripePayerEmail } });
+        payerFilled++;
+      }
       // Backfill this payer into Zoho (one-time) if not already synced.
-      const email = charge?.billing_details?.email ?? r.party?.email ?? em?.[1] ?? null;
-      if (email && !r.party?.zohoSyncedAt) {
-        await syncStripePayerToZoho({ email, name: charge?.billing_details?.name ?? null, phone: charge?.billing_details?.phone ?? null, personId: r.partyId });
+      if (payerEmail && !r.party?.zohoSyncedAt) {
+        await syncStripePayerToZoho({ email: payerEmail, name: payerName, phone: charge?.billing_details?.phone ?? null, personId: r.partyId });
         zohoSynced++;
       }
     } catch (e) {
       console.error("rescan import description failed", r.id, e);
     }
   }
-  return { scanned: rows.length, updated, categorized, zohoSynced };
+  return { scanned: rows.length, updated, categorized, zohoSynced, payerFilled };
 }
 
 // The IMPORT FLOOR: the earliest a charge may be *imported* as a new row. This
@@ -702,6 +720,10 @@ async function reconcileFromStripe(res: ReconcileResult, sinceUnix: number, floo
             seasonId: activeSeasonId,
             stripePaymentIntentId: piId ?? undefined,
             description: itemText + (person ? "" : email ? ` · ${email}` : ""),
+            // Keep the payer's Stripe identity even when we can't match a person,
+            // so the row still shows who paid and can be applied to a player.
+            stripePayerName: charge.billing_details?.name ?? null,
+            stripePayerEmail: email ?? null,
             paidAt: paidAtFromUnix(charge.created) ?? new Date(),
           },
         });

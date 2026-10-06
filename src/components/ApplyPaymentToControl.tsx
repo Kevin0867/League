@@ -10,7 +10,7 @@ import { useState, useRef, useEffect } from "react";
 type Found = { id: string; name: string; email: string | null };
 
 export function ApplyPaymentToControl({
-  ticket, paymentId, current, payer,
+  ticket, paymentId, current, payer, prefillQuery,
 }: {
   ticket: string;
   paymentId: string;
@@ -18,11 +18,15 @@ export function ApplyPaymentToControl({
   current: { id: string; name: string }[];
   /** The payer, offered as a one-click "apply to the payer" choice. */
   payer: { id: string; name: string } | null;
+  /** Seed the player search with the payer's email/name (from Stripe), so a
+   *  match is usually one click. */
+  prefillQuery?: string;
 }) {
   const [picked, setPicked] = useState<Found[]>(current.map((c) => ({ id: c.id, name: c.name, email: null })));
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Found[]>([]);
   const [open, setOpen] = useState(false);
+  const seeded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -43,7 +47,17 @@ export function ApplyPaymentToControl({
   const remove = (id: string) => setPicked((p) => p.filter((x) => x.id !== id));
 
   return (
-    <details className="mt-1">
+    <details
+      className="mt-1"
+      onToggle={(e) => {
+        // On first open, seed the search with the payer's email/name so the match
+        // is usually one click. Avoids firing a search for every row on page load.
+        if ((e.currentTarget as HTMLDetailsElement).open && !seeded.current && !picked.length && prefillQuery) {
+          seeded.current = true;
+          setQuery(prefillQuery);
+        }
+      }}
+    >
       <summary className="cursor-pointer list-none text-xs font-medium text-brand-700 hover:underline [&::-webkit-details-marker]:hidden">
         {current.length ? "Change who it applies to" : "Apply to a player"}
       </summary>

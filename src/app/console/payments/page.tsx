@@ -781,7 +781,7 @@ export default async function PaymentsPage({
           </form>
           {sp.rescanok && (
             <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-              Re-scanned {sp.rsscanned} charge{sp.rsscanned === "1" ? "" : "s"} — {sp.rsupdated} description{sp.rsupdated === "1" ? "" : "s"} updated, {sp.rscat} now auto-categorizable{sp.rszoho && sp.rszoho !== "0" ? `, ${sp.rszoho} payer${sp.rszoho === "1" ? "" : "s"} synced to Zoho` : ""}. Categories below are pre-picked where we could tell; confirm and Attach.
+              Re-scanned {sp.rsscanned} charge{sp.rsscanned === "1" ? "" : "s"} — {sp.rsupdated} description{sp.rsupdated === "1" ? "" : "s"} updated, {sp.rscat} now auto-categorizable{sp.rspayer && sp.rspayer !== "0" ? `, ${sp.rspayer} payer name/email filled from Stripe` : ""}{sp.rszoho && sp.rszoho !== "0" ? `, ${sp.rszoho} payer${sp.rszoho === "1" ? "" : "s"} synced to Zoho` : ""}. Categories below are pre-picked where we could tell; confirm and Attach.
             </p>
           )}
           <div>
@@ -1179,7 +1179,7 @@ function Ledger({
   ticket,
 }: {
   title: string;
-  rows: Array<{ id: string; partyId?: string | null; amountCents: number; status: string; category: string; paidAt?: Date | null; coveredNames?: string | null; coveredList?: { id: string; name: string }[]; party: { firstName: string; lastName: string } | null }>;
+  rows: Array<{ id: string; partyId?: string | null; amountCents: number; status: string; category: string; paidAt?: Date | null; coveredNames?: string | null; coveredList?: { id: string; name: string }[]; description?: string | null; stripePayerName?: string | null; stripePayerEmail?: string | null; party: { firstName: string; lastName: string; email?: string | null } | null }>;
   search?: { q: string; payView: "all" | "paid" | "unpaid" };
   /** When set, each row gets an "apply to which player" editor. */
   ticket?: string;
@@ -1222,34 +1222,51 @@ function Ledger({
         <p className="text-sm text-slate-400">{search && (search.q || search.payView !== "all") ? "No payments match." : "Nothing yet."}</p>
       ) : (
         <ul className="divide-y divide-slate-100 text-sm">
-          {rows.map((p) => (
+          {rows.map((p) => {
+            // Who paid: the linked person, else the Stripe billing name captured
+            // on import. Email + the charge's line-item text help identify an
+            // unattributed charge so an admin can apply it to the right player.
+            const payerName = p.party ? `${p.party.firstName} ${p.party.lastName}` : (p.stripePayerName || null);
+            const payerEmail = p.party?.email || p.stripePayerEmail || null;
+            // Line-item text, minus the trailing "· email" we append on import (no dupe).
+            const descText = (p.description || "").replace(/\s*·\s*[^\s·]+@[^\s·]+\s*$/, "").trim();
+            return (
             <li key={p.id} className="flex items-start justify-between py-2">
               <div className="min-w-0">
                 <div className="font-medium text-slate-800">{formatCents(p.amountCents)}</div>
                 <div className="text-xs text-slate-400">
-                  {p.party ? (
+                  {payerName ? (
                     p.partyId ? (
-                      <Link href={`/console/people/${p.partyId}`} className="hover:text-brand-700 hover:underline">{p.party.firstName} {p.party.lastName}</Link>
+                      <Link href={`/console/people/${p.partyId}`} className="font-medium text-slate-500 hover:text-brand-700 hover:underline">{payerName}</Link>
                     ) : (
-                      `${p.party.firstName} ${p.party.lastName}`
+                      <span className="font-medium text-slate-500">{payerName}</span>
                     )
-                  ) : null}
-                  {p.party ? " · " : ""}{p.category.replace(/_/g, " ")}
+                  ) : <span className="italic text-slate-400">Unknown payer</span>}
+                  {" · "}{p.category.replace(/_/g, " ")}
                   {p.coveredNames ? ` · for ${p.coveredNames}` : ""}
                   {p.paidAt ? ` · paid ${formatDate(p.paidAt)}` : ""}
+                  {!p.partyId && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">unlinked</span>}
                 </div>
+                {(payerEmail || descText) && (
+                  <div className="mt-0.5 text-xs text-slate-400">
+                    {payerEmail && <span className="text-slate-500">{payerEmail}</span>}
+                    {payerEmail && descText ? " · " : ""}
+                    {descText && <span>{descText}</span>}
+                  </div>
+                )}
                 {ticket && (
                   <ApplyPaymentToControl
                     ticket={ticket}
                     paymentId={p.id}
                     current={p.coveredList ?? []}
                     payer={p.partyId && p.party ? { id: p.partyId, name: `${p.party.firstName} ${p.party.lastName}` } : null}
+                    prefillQuery={payerEmail || payerName || ""}
                   />
                 )}
               </div>
               <StatusBadge status={p.status} />
             </li>
-          ))}
+          );})}
         </ul>
       )}
     </div>
