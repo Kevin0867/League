@@ -11,6 +11,7 @@ import { teamConfirmation, shouldEscalate, MIN_CONFIRMED_PLAYERS } from "@/lib/d
 import { EditableFixtureRow } from "@/components/EditableFixtureRow";
 import { leagueStandingsByDivision } from "@/lib/domain/leagueStandings";
 import { groupTeamsIntoBrackets, bracketKeyForTeam, bracketLabel } from "@/lib/domain/bracketGroups";
+import { BracketSelect } from "@/components/BracketSelect";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { CreateLeagueForm } from "./CreateLeagueForm";
 import { MATCH_TYPES, matchTypeShort } from "@/lib/domain/matchType";
@@ -27,6 +28,7 @@ const hhmm = (d: Date) => new Date(d).toISOString().slice(11, 16);
 const OK: Record<string, string> = {
   generateFixtures: "Bracketed round-robins generated — each team plays the others in its gender + level bracket.",
   editFixture: "Match updated.",
+  setBracket: "Team moved — brackets updated. Regenerate matches to rebuild the round-robins.",
   clearFixtures: "Matches cleared — schedule or regenerate when ready.",
   sendMatchNotice: "Match notice sent to both teams.",
   sendEscalationAlert: "48-hour alert sent.",
@@ -44,6 +46,7 @@ const ERRORS: Record<string, string> = {
   auth: "Not authorized to manage the league.",
   noseason: "No active league — create one first.",
   noteam: "Pick a team.",
+  badbracket: "That isn't a valid bracket (use a DUPR band like W3.0 / M3.5, or ELE / MID / HS).",
   notpublished: "Only published teams can join the league. Publish it in Team Build first.",
   nofixture: "Match not found.",
   norisk: "No teams are currently at risk — nothing to escalate.",
@@ -273,6 +276,41 @@ export default async function LeaguePage({
             </form>
           )}
         </div>
+      </div>
+
+      {/* STEP 1b — Brackets (gender + level). Teams play only within their bracket. */}
+      <div className="card space-y-3">
+        <div>
+          <h2 className="font-semibold text-slate-900"><span className="text-slate-400">Step 1b ·</span> Brackets</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Teams play only within their own gender + skill-level bracket (women vs women, men vs men, HS vs HS; 3.0 vs 3.0).
+            A team&apos;s bracket follows its division — change it below to move a team. A bracket needs 2+ teams to generate play.
+          </p>
+        </div>
+        {rosterTeams.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">Add teams above, then set each team&apos;s bracket here.</p>
+        ) : (
+          <div className="space-y-3">
+            {rosterGroups.map((g) => (
+              <div key={g.key} className={`rounded-lg border p-3 ${g.teams.length >= 2 ? "border-slate-200" : "border-amber-200 bg-amber-50/40"}`}>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-800">{g.label}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${g.teams.length >= 2 ? "bg-brand-50 text-brand-700" : "bg-amber-100 text-amber-800"}`}>
+                    {g.teams.length} team{g.teams.length === 1 ? "" : "s"}{g.teams.length < 2 ? " · needs 2+ to play" : ""}
+                  </span>
+                </div>
+                <ul className="space-y-1.5">
+                  {g.teams.map((t) => (
+                    <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="font-medium text-slate-700">{t.name}</span>
+                      <BracketSelect ticket={ticket} seasonId={season.id} teamId={t.id} current={bracketKeyForTeam(t)} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* STEP 2 — Matches */}
