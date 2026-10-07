@@ -8,6 +8,7 @@ import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { roundRobin, leagueWeekDates, LEAGUE_WEEKS } from "@/lib/domain/fixtures";
 import { groupTeamsIntoBrackets } from "@/lib/domain/bracketGroups";
+import { deriveDivisionCode } from "@/lib/domain/teamName";
 import { leagueStartDate, FIRST_LEAGUE_WEEK } from "@/lib/domain/seasonCalendar";
 import { teamConfirmation, shouldEscalate } from "@/lib/domain/availability";
 import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
@@ -238,6 +239,44 @@ export async function POST(req: Request) {
       await audit({ actorId: actor.userId, entityType: "Season", entityId: seasonId, action: "league.removeTeam", summary: `Removed a team from the league` });
       revalidatePath("/console/league");
       return back("?ok=removeLeagueTeam");
+    }
+
+    // Move a team to a different bracket (gender + level). The bracket is the
+    // team's divisionCode, so this sets divisionCode (and derives gender for
+    // consistency), then links a matching Division if one exists this season.
+    // Clearing (empty/UNASSIGNED) removes the code so the team is "Unassigned".
+    case "setTeamBracket": {
+      const seasonId = String(formData.get("seasonId") ?? "");
+      const teamId = String(formData.get("teamId") ?? "").trim();
+      const raw = String(formData.get("bracketCode") ?? "").trim().toUpperCase();
+      if (!teamId) return back("?err=noteam");
+      const clearing = raw === "" || raw === "UNASSIGNED";
+      const valid = clearing || /^(ELE|MID|HS)$/.test(raw) || /^[WM]\d\.\d\+?$/.test(raw);
+      if (!valid) return back("?err=badbracket");
+      // Only teams actually in this league can be rebracketed here.
+      const inLeague = await prisma.leagueTeam.findFirst({ where: { seasonId, teamId }, select: { teamId: true } });
+      if (!inLeague) return back("?err=noteam");
+
+      const gender = clearing ? undefined : raw.startsWith("W") ? "FEMALE" : raw.startsWith("M") ? "MALE" : undefined;
+      // Best-effort: link an existing Division whose derived code matches.
+      let divisionId: string | undefined;
+      if (!clearing) {
+        const divs = await prisma.division.findMany({ where: { seasonId }, select: { id: true, name: true } });
+        const match = divs.find((d) => (deriveDivisionCode(d.name) ?? "").toUpperCase() === raw);
+        if (match) divisionId = match.id;
+      }
+      await prisma.team.update({
+        where: { id: teamId },
+        data: {
+          divisionCode: clearing ? null : raw,
+          ...(gender ? { gender } : {}),
+          ...(divisionId ? { divisionId } : {}),
+        },
+      });
+      await audit({ actorId: actor.userId, entityType: "Team", entityId: teamId, action: "league.setBracket", summary: `Set bracket to ${clearing ? "Unassigned" : raw}` });
+      revalidatePath("/console/league");
+      revalidatePath("/console/teams");
+      return back("?ok=setBracket");
     }
 
     case "generateFixtures": {
