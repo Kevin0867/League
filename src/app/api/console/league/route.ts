@@ -7,6 +7,7 @@ import { can } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { dispatchMessage } from "@/lib/messaging";
 import { roundRobin, leagueWeekDates, LEAGUE_WEEKS } from "@/lib/domain/fixtures";
+import { groupTeamsIntoBrackets } from "@/lib/domain/bracketGroups";
 import { leagueStartDate, FIRST_LEAGUE_WEEK } from "@/lib/domain/seasonCalendar";
 import { teamConfirmation, shouldEscalate } from "@/lib/domain/availability";
 import { validateLineup, type LineupPair } from "@/lib/domain/lineup";
@@ -250,14 +251,17 @@ export async function POST(req: Request) {
       const existing = await prisma.fixture.count({ where: { seasonId: season.id } });
       if (existing > 0) return back("?err=hasfixtures");
 
-      // The roster is the explicit league membership (LeagueTeam), not the
-      // season's teams — a flat round-robin over whichever published teams the
-      // admin added.
+      // The roster is the explicit league membership (LeagueTeam). Teams compete
+      // ONLY within their own gender + skill-level bracket (women vs women, men vs
+      // men, HS vs HS; 3.0 women vs 3.0 women), so we build a SEPARATE round-robin
+      // per bracket group rather than one flat ladder across everyone.
       const entries = await prisma.leagueTeam.findMany({
         where: { seasonId: season.id },
-        include: { team: { select: { id: true, facilityId: true } } },
+        include: { team: { select: { id: true, facilityId: true, divisionCode: true, gender: true, levelBand: true, division: { select: { name: true } } } } },
       });
-      if (entries.length < 2) return back("?err=fewteams");
+      const groups = groupTeamsIntoBrackets(entries.map((e) => e.team));
+      const playableGroups = groups.filter((g) => g.teams.length >= 2);
+      if (playableGroups.length === 0) return back("?err=fewteams");
 
       const blackouts = (await prisma.blackoutDate.findMany({ where: { facilityId: null } })).map((b) => b.date);
       // League nights are dated from the week of Oct 26 (season week 7), not the
@@ -266,40 +270,45 @@ export async function POST(req: Request) {
       const hub = await prisma.facility.findFirst({ where: { acpLeagueOption: true } });
       const facilityOf = new Map(entries.map((e) => [e.team.id, e.team.facilityId]));
 
-      const rounds = roundRobin(entries.map((e) => e.team.id)).slice(0, LEAGUE_WEEKS);
       let createdFixtures = 0;
-      for (let r = 0; r < rounds.length; r++) {
-        const when = dates[r] ?? dates[dates.length - 1];
-        for (const pair of rounds[r]) {
-          if (!pair.homeId || !pair.awayId) continue; // skip byes
-          await prisma.fixture.create({
-            data: {
-              seasonId: season.id,
-              weekNumber: r + FIRST_LEAGUE_WEEK,
-              scheduledAt: when,
-              facilityId: hub?.id ?? facilityOf.get(pair.homeId) ?? null,
-              homeTeamId: pair.homeId,
-              awayTeamId: pair.awayId,
-              status: "SCHEDULED",
-              courtAllocation: "Courts 1–4",
-            },
-          });
-          createdFixtures++;
+      // Every bracket plays its own round-robin, all on the shared league nights
+      // (different courts). Each group's round r lands on league week r.
+      for (const g of playableGroups) {
+        const rounds = roundRobin(g.teams.map((t) => t.id)).slice(0, LEAGUE_WEEKS);
+        for (let r = 0; r < rounds.length; r++) {
+          const when = dates[r] ?? dates[dates.length - 1];
+          for (const pair of rounds[r]) {
+            if (!pair.homeId || !pair.awayId) continue; // skip byes
+            await prisma.fixture.create({
+              data: {
+                seasonId: season.id,
+                weekNumber: r + FIRST_LEAGUE_WEEK,
+                scheduledAt: when,
+                facilityId: hub?.id ?? facilityOf.get(pair.homeId) ?? null,
+                homeTeamId: pair.homeId,
+                awayTeamId: pair.awayId,
+                status: "SCHEDULED",
+                courtAllocation: "Courts 1–4",
+              },
+            });
+            createdFixtures++;
+          }
         }
       }
 
+      const skipped = groups.filter((g) => g.teams.length < 2);
       await audit({
         actorId: actor.userId,
         entityType: "Season",
         entityId: season.id,
         action: "GENERATE_FIXTURES",
-        summary: `Generated ${createdFixtures} fixtures across ${entries.length} team(s)`,
+        summary: `Generated ${createdFixtures} fixtures across ${playableGroups.length} bracket(s): ${playableGroups.map((g) => `${g.label} (${g.teams.length})`).join(", ")}${skipped.length ? ` — skipped ${skipped.map((g) => g.label).join(", ")} (needs 2+ teams)` : ""}`,
       });
 
       revalidatePath("/console/league");
       revalidatePath("/schedule");
       revalidatePath("/standings");
-      return back("?ok=generateFixtures");
+      return back(`?ok=generateFixtures&brackets=${playableGroups.length}${skipped.length ? `&skipped=${encodeURIComponent(skipped.map((g) => g.label).join(", "))}` : ""}`);
     }
 
     case "sendMatchNotice": {

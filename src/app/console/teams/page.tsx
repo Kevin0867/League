@@ -26,6 +26,9 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Teams" };
 
+const DAY_LABEL: Record<string, string> = { MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun" };
+const TIME_LABEL: Record<string, string> = { morning: "Morning", afternoon: "Afternoon", evening: "Evening" };
+
 const OK: Record<string, string> = { createTeam: "Team created.", deleteTeam: "Team deleted — players returned to the pool.", schedule: "Day, time, and facility saved. Generate practices on the Schedule page.", colors: "Team colors assigned — one distinct color per gender+level group.", merged: "Duplicate teams merged — players consolidated onto the kept team." };
 const ERRORS: Record<string, string> = {
   fields: "Team name and season are required.",
@@ -252,8 +255,20 @@ export default async function TeamBuildBoard({
   const fMarket = sp.market?.trim() || null;
   const fGender = sp.gender?.trim() || null;
   const fLaunch = sp.launch?.trim() || null;
+  const fDay = sp.day?.trim().toUpperCase() || null;        // MON..SUN (training day)
+  const fTime = sp.time?.trim().toLowerCase() || null;      // morning | afternoon | evening
   const fSort = sp.sort?.trim() || "division";
-  const anyFilter = !!(fSegment || fLevel || fMarket || fGender || fLaunch);
+  const anyFilter = !!(fSegment || fLevel || fMarket || fGender || fLaunch || fDay || fTime);
+
+  // Time-of-day bucket from a team's "HH:MM" start time: morning < noon,
+  // afternoon noon–5, evening 5pm on. Null when no start time is set.
+  const timeBucket = (hhmm: string | null): "morning" | "afternoon" | "evening" | null => {
+    const h = parseInt((hhmm ?? "").split(":")[0] ?? "", 10);
+    if (!Number.isFinite(h)) return null;
+    if (h < 12) return "morning";
+    if (h < 17) return "afternoon";
+    return "evening";
+  };
 
   // Launch lifecycle: launched (welcome+pay email sent) → ready to launch
   // (complete, nothing missing) → building (still missing required fields).
@@ -267,6 +282,8 @@ export default async function TeamBuildBoard({
     if (fMarket && (t.market ?? "") !== fMarket) return false;
     if (fGender && genderOf(t) !== fGender) return false;
     if (fLaunch && launchState(t) !== fLaunch) return false;
+    if (fDay && (t.dayOfWeek ?? "").toUpperCase() !== fDay) return false;
+    if (fTime && timeBucket(t.startTime) !== fTime) return false;
     return true;
   });
 
@@ -281,20 +298,27 @@ export default async function TeamBuildBoard({
   // Level chips respect a chosen segment (choosing Men's shows only M* levels).
   const levelChips = levelsPresent.filter((c) => !fSegment || segOf(c) === fSegment).sort();
   marketsPresent.sort();
+  // Training-day + time-of-day options, from the teams that actually have them.
+  const daysPresent = (WEEKDAYS as readonly string[]).filter((d) => teams.some((t) => (t.dayOfWeek ?? "").toUpperCase() === d));
+  const timesPresent = (["morning", "afternoon", "evening"] as const).filter((b) => teams.some((t) => timeBucket(t.startTime) === b));
 
   // Build a URL that keeps the other facets and toggles one. Passing null clears
   // a facet; clicking the already-active value clears it (a toggle).
-  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null; gender?: string | null; launch?: string | null; sort?: string | null }) => {
+  const facetHref = (over: { segment?: string | null; level?: string | null; market?: string | null; gender?: string | null; launch?: string | null; day?: string | null; time?: string | null; sort?: string | null }) => {
     const seg = "segment" in over ? over.segment : fSegment;
     const lvl = "level" in over ? over.level : fLevel;
     const mkt = "market" in over ? over.market : fMarket;
     const gen = "gender" in over ? over.gender : fGender;
     const lnc = "launch" in over ? over.launch : fLaunch;
+    const day = "day" in over ? over.day : fDay;
+    const tim = "time" in over ? over.time : fTime;
     const srt = "sort" in over ? over.sort : fSort;
     const params = new URLSearchParams();
     if (seg) params.set("segment", seg);
     if (lvl) params.set("level", lvl);
     if (mkt) params.set("market", mkt);
+    if (day) params.set("day", day);
+    if (tim) params.set("time", tim);
     if (gen) params.set("gender", gen);
     if (lnc) params.set("launch", lnc);
     if (srt && srt !== "division") params.set("sort", srt); // division is the default
@@ -622,6 +646,24 @@ export default async function TeamBuildBoard({
               ))}
             </FacetRow>
           )}
+          {daysPresent.length > 0 && (
+            <FacetRow label="Training day">
+              <Chip href={facetHref({ day: null })} active={!fDay}>All</Chip>
+              {daysPresent.map((d) => (
+                <Chip key={d} href={facetHref({ day: fDay === d ? null : d })} active={fDay === d}>{DAY_LABEL[d] ?? d}</Chip>
+              ))}
+            </FacetRow>
+          )}
+          {timesPresent.length > 0 && (
+            <FacetRow label="Time of day">
+              <Chip href={facetHref({ time: null })} active={!fTime}>All</Chip>
+              {timesPresent.map((b) => (
+                <Chip key={b} href={facetHref({ time: fTime === b ? null : b })} active={fTime === b}>
+                  {TIME_LABEL[b]} <span className="text-slate-400">({teams.filter((t) => timeBucket(t.startTime) === b).length})</span>
+                </Chip>
+              ))}
+            </FacetRow>
+          )}
           <FacetRow label="Launch">
             <Chip href={facetHref({ launch: null })} active={!fLaunch}>All</Chip>
             {([["launched", "Launched"], ["ready", "Ready to launch"], ["building", "Building"]] as const).map(([val, lbl]) => (
@@ -654,7 +696,7 @@ export default async function TeamBuildBoard({
             const roster = rosterStatus(t._count.members, t.coachPlays);
             const publish = canPublishTeam(t, t.facility);
             return (
-              <div key={t.id} id={`team-${t.id}`} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""} ${t.members.map((m) => `${m.person.firstName} ${m.person.lastName}`).join(" ")}`} className="card scroll-mt-24 transition-shadow hover:shadow-md">
+              <div key={t.id} id={`team-${t.id}`} data-filter-row data-filter-text={`${t.name} ${t.market ?? ""} ${t.divisionCode ?? ""} ${t.division?.name ?? ""} ${t.dayOfWeek ?? ""} ${t.startTime ? formatTime12(t.startTime) : ""} ${timeBucket(t.startTime) ?? ""} ${t.members.map((m) => `${m.person.firstName} ${m.person.lastName}`).join(" ")}`} className="card scroll-mt-24 transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between">
                   <div>
                     <Link href={`/console/teams/${t.id}`} className="inline-flex items-center gap-1.5 font-semibold text-slate-900 hover:text-brand-700">
