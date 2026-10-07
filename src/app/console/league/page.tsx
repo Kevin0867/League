@@ -9,7 +9,8 @@ import { can } from "@/lib/rbac";
 import { CoachLeagueMatches } from "./CoachLeagueMatches";
 import { teamConfirmation, shouldEscalate, MIN_CONFIRMED_PLAYERS } from "@/lib/domain/availability";
 import { EditableFixtureRow } from "@/components/EditableFixtureRow";
-import { leagueStandingsFlat } from "@/lib/domain/leagueStandings";
+import { leagueStandingsByDivision } from "@/lib/domain/leagueStandings";
+import { groupTeamsIntoBrackets, bracketKeyForTeam, bracketLabel } from "@/lib/domain/bracketGroups";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { CreateLeagueForm } from "./CreateLeagueForm";
 import { MATCH_TYPES, matchTypeShort } from "@/lib/domain/matchType";
@@ -24,7 +25,7 @@ const iso = (d: Date) => new Date(d).toISOString().slice(0, 10);
 const hhmm = (d: Date) => new Date(d).toISOString().slice(11, 16);
 
 const OK: Record<string, string> = {
-  generateFixtures: "Round-robin generated — every team plays every other team.",
+  generateFixtures: "Bracketed round-robins generated — each team plays the others in its gender + level bracket.",
   editFixture: "Match updated.",
   clearFixtures: "Matches cleared — schedule or regenerate when ready.",
   sendMatchNotice: "Match notice sent to both teams.",
@@ -100,10 +101,10 @@ export default async function LeaguePage({
     );
   }
 
-  const [leagueEntries, facilities, fixtures, standings] = await Promise.all([
+  const [leagueEntries, facilities, fixtures, divisionStandings] = await Promise.all([
     prisma.leagueTeam.findMany({
       where: { seasonId: season.id },
-      include: { team: { select: { id: true, name: true, published: true, facility: { select: { name: true } } } } },
+      include: { team: { select: { id: true, name: true, published: true, divisionCode: true, gender: true, levelBand: true, division: { select: { name: true } }, facility: { select: { name: true } } } } },
       orderBy: { team: { name: "asc" } },
     }),
     prisma.facility.findMany({ where: { archived: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -118,11 +119,17 @@ export default async function LeaguePage({
       orderBy: [{ weekNumber: "asc" }, { scheduledAt: "asc" }],
       take: 200,
     }),
-    leagueStandingsFlat(season.id),
+    leagueStandingsByDivision(season.id),
   ]);
 
   const rosterTeams = leagueEntries.map((e) => e.team);
   const rosterIds = rosterTeams.map((t) => t.id);
+  // Bracket groups (gender + level) over the league roster — teams only play
+  // within their own group, so this drives the generate warnings and the grouped
+  // leaderboard below.
+  const rosterGroups = groupTeamsIntoBrackets(rosterTeams);
+  const playableGroups = rosterGroups.filter((g) => g.teams.length >= 2);
+  const shortGroups = rosterGroups.filter((g) => g.teams.length < 2);
   // Any team not yet in the league — the pool to add from. No publish
   // requirement: teams can join before they're fully set up.
   const availableTeams = await prisma.team.findMany({
@@ -163,7 +170,13 @@ export default async function LeaguePage({
     <div className="space-y-6">
       <PageHeader title={season.name} subtitle="Add your published teams, schedule matches, enter scores — the leaderboard builds itself." />
 
-      {sp.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{OK[sp.ok] ?? "Done."}</p>}
+      {sp.ok && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {OK[sp.ok] ?? "Done."}
+          {sp.ok === "generateFixtures" && sp.brackets ? ` ${sp.brackets} bracket${sp.brackets === "1" ? "" : "s"} scheduled.` : ""}
+          {sp.ok === "generateFixtures" && sp.skipped ? ` Skipped (needs 2+ teams): ${decodeURIComponent(sp.skipped)}.` : ""}
+        </p>
+      )}
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
       {/* Three-step guide — exactly the flow: add teams → set matches → enter scores */}
@@ -203,6 +216,7 @@ export default async function LeaguePage({
               <li key={t.id} className="flex items-center justify-between px-3 py-2 text-sm">
                 <span className="font-medium text-slate-800">
                   {t.name}
+                  <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{bracketLabel(bracketKeyForTeam(t))}</span>
                   <span className="ml-2 text-xs font-normal text-slate-400">{t.facility?.name ?? "hub TBD"}</span>
                 </span>
                 <ConfirmSubmit
@@ -342,15 +356,32 @@ export default async function LeaguePage({
                 </form>
               </div>
 
-              {/* Generate round-robin */}
+              {/* Generate round-robin — one per bracket (gender + level) */}
               <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-100">
-                <h3 className="mb-2 text-sm font-semibold text-slate-800">Generate a full round-robin</h3>
+                <h3 className="mb-2 text-sm font-semibold text-slate-800">Generate bracketed round-robins</h3>
                 <p className="mb-3 text-sm text-slate-600">
-                  Auto-schedule every pairing across the league weeks from {formatDate(season.startDate)}, skipping blackout dates.
-                  Best as a starting point — you can edit any match afterward.
+                  Teams play only within their own gender + skill-level bracket (women vs women, men vs men, HS vs HS; 3.0 vs 3.0).
+                  Each bracket gets its own round-robin across the league weeks from {formatDate(season.startDate)}, skipping blackout dates. Edit any match afterward.
                 </p>
-                {rosterTeams.length < 2 ? (
-                  <p className="text-sm text-slate-500">Add at least two teams above to generate the round-robin.</p>
+
+                {/* Bracket breakdown */}
+                {rosterGroups.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {rosterGroups.map((g) => (
+                      <span key={g.key} className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${g.teams.length >= 2 ? "bg-brand-50 text-brand-700" : "bg-amber-50 text-amber-700"}`}>
+                        {g.label} · {g.teams.length} team{g.teams.length === 1 ? "" : "s"}{g.teams.length < 2 ? " (needs 2+)" : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {shortGroups.length > 0 && (
+                  <p className="mb-3 text-xs text-amber-700">
+                    {shortGroups.map((g) => g.label).join(", ")} {shortGroups.length === 1 ? "has" : "have"} only one team — those brackets are skipped until another team joins (or consolidate them into an adjacent level).
+                  </p>
+                )}
+
+                {playableGroups.length === 0 ? (
+                  <p className="text-sm text-slate-500">Add at least two teams in the same gender + level bracket to generate play.</p>
                 ) : fixtures.length > 0 ? (
                   <p className="text-sm text-slate-500">
                     Matches already scheduled. <span className="text-slate-400">Clear all matches to regenerate.</span>
@@ -360,7 +391,7 @@ export default async function LeaguePage({
                     <input type="hidden" name="ticket" value={ticket} />
                     <input type="hidden" name="op" value="generateFixtures" />
                     <input type="hidden" name="seasonId" value={season.id} />
-                    <button className="btn-primary">Generate round-robin ({rosterTeams.length} teams)</button>
+                    <button className="btn-primary">Generate {playableGroups.length} bracket{playableGroups.length === 1 ? "" : "s"} ({playableGroups.reduce((n, g) => n + g.teams.length, 0)} teams)</button>
                   </form>
                 )}
               </div>
@@ -469,51 +500,58 @@ export default async function LeaguePage({
       <div className="card overflow-x-auto">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="font-semibold text-slate-900"><span className="text-slate-400">Step 3 ·</span> Leaderboard</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Live standings from entered scores. Ranked by match points, then line differential, then point differential. The top three lines decide each match — line 4 is an exhibition and counts toward nothing.</p>
+            <h2 className="font-semibold text-slate-900"><span className="text-slate-400">Step 3 ·</span> Leaderboards by bracket</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Each gender + skill-level bracket has its own ladder — teams are ranked only against the others in their bracket. Ranked by match points, then line differential, then point differential. Line 4 is an exhibition and counts toward nothing.</p>
           </div>
           <span className="text-xs text-slate-400">{completedFixtures}/{fixtures.length || 0} matches played</span>
         </div>
-        {standings.length === 0 ? (
+        {divisionStandings.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
             Add teams to see them on the leaderboard. Standings fill in as scores are entered.
           </p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="py-2 pr-2">#</th>
-                <th>Team</th>
-                <th className="text-center">P</th>
-                <th className="text-center">W</th>
-                <th className="text-center">L</th>
-                <th className="text-center">Lines</th>
-                <th className="text-center" title="Point differential across counting lines">Diff</th>
-                <th className="text-center">Pts</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {standings.map((r, i) => {
-                const diff = r.pointsFor - r.pointsAgainst;
-                return (
-                <tr key={r.teamId} className={i < 2 ? "bg-accent-50/40" : ""}>
-                  <td className="py-2 pr-2 font-semibold text-slate-500">{i + 1}</td>
-                  <td className="font-medium text-slate-800">
-                    {r.teamName}
-                    {i < 2 && <span className="ml-2 badge bg-accent-100 text-accent-800">seed</span>}
-                    {r.forfeits > 0 && <span className="ml-2 text-xs text-rose-500">{r.forfeits} forfeit{r.forfeits > 1 ? "s" : ""}</span>}
-                  </td>
-                  <td className="text-center text-slate-600 tabular-nums">{r.played}</td>
-                  <td className="text-center text-slate-600 tabular-nums">{r.matchesWon}</td>
-                  <td className="text-center text-slate-600 tabular-nums">{r.matchesLost}</td>
-                  <td className="text-center text-slate-500 tabular-nums">{r.linesWon}–{r.linesLost}</td>
-                  <td className={`text-center tabular-nums ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-500"}`}>{diff > 0 ? `+${diff}` : diff}</td>
-                  <td className="text-center font-bold text-slate-900 tabular-nums">{r.points}</td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="space-y-6">
+            {divisionStandings.map((g) => (
+              <div key={g.key}>
+                <h3 className="mb-2 text-sm font-semibold text-slate-800">{g.label} <span className="font-normal text-slate-400">· {g.rows.length} team{g.rows.length === 1 ? "" : "s"}</span></h3>
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+                    <tr>
+                      <th className="py-2 pr-2">#</th>
+                      <th>Team</th>
+                      <th className="text-center">P</th>
+                      <th className="text-center">W</th>
+                      <th className="text-center">L</th>
+                      <th className="text-center">Lines</th>
+                      <th className="text-center" title="Point differential across counting lines">Diff</th>
+                      <th className="text-center">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {g.rows.map((r, i) => {
+                      const diff = r.pointsFor - r.pointsAgainst;
+                      return (
+                      <tr key={r.teamId} className={i < 2 ? "bg-accent-50/40" : ""}>
+                        <td className="py-2 pr-2 font-semibold text-slate-500">{i + 1}</td>
+                        <td className="font-medium text-slate-800">
+                          {r.teamName}
+                          {i < 2 && <span className="ml-2 badge bg-accent-100 text-accent-800">seed</span>}
+                          {r.forfeits > 0 && <span className="ml-2 text-xs text-rose-500">{r.forfeits} forfeit{r.forfeits > 1 ? "s" : ""}</span>}
+                        </td>
+                        <td className="text-center text-slate-600 tabular-nums">{r.played}</td>
+                        <td className="text-center text-slate-600 tabular-nums">{r.matchesWon}</td>
+                        <td className="text-center text-slate-600 tabular-nums">{r.matchesLost}</td>
+                        <td className="text-center text-slate-500 tabular-nums">{r.linesWon}–{r.linesLost}</td>
+                        <td className={`text-center tabular-nums ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-500"}`}>{diff > 0 ? `+${diff}` : diff}</td>
+                        <td className="text-center font-bold text-slate-900 tabular-nums">{r.points}</td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

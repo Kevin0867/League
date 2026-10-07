@@ -6,6 +6,7 @@
 import { prisma } from "@/lib/db";
 import { computeStandings, pointDiff, type FixtureResult, type TeamStanding } from "@/lib/domain/standings";
 import { teamDisplayName, teamSlug } from "@/lib/domain/teamName";
+import { bracketKeyForTeam, bracketLabel, bracketSortKey } from "@/lib/domain/bracketGroups";
 
 export type LeagueStandingRow = TeamStanding & { teamName: string; teamSlug: string };
 
@@ -77,4 +78,55 @@ export async function leagueStandingsFlat(seasonId: string): Promise<LeagueStand
       teamSlug: identity.get(e.team.id)?.slug ?? "",
     }))
     .sort(rankRows);
+}
+
+export type LeagueDivisionStandings = { key: string; label: string; rows: LeagueStandingRow[] };
+
+/// The league leaderboard SPLIT BY BRACKET (gender + level) — each group is its
+/// own competition (all 3.0 women ranked together, etc.), matching how fixtures
+/// are generated. Groups are ordered Men's → Women's → youth → Unassigned.
+export async function leagueStandingsByDivision(seasonId: string): Promise<LeagueDivisionStandings[]> {
+  const [entries, fixtures] = await Promise.all([
+    prisma.leagueTeam.findMany({
+      where: { seasonId },
+      include: {
+        team: { select: { id: true, name: true, club: true, market: true, divisionCode: true, color: true, gender: true, levelBand: true, division: { select: { name: true } } } },
+      },
+    }),
+    prisma.fixture.findMany({ where: { seasonId }, include: { lines: { include: { games: true } } } }),
+  ]);
+
+  const identity = new Map(entries.map((e) => [e.team.id, { name: teamDisplayName(e.team) || e.team.name, slug: teamSlug(e.team) }]));
+  const keyByTeam = new Map(entries.map((e) => [e.team.id, bracketKeyForTeam(e.team)]));
+
+  const fixtureResults: FixtureResult[] = fixtures.map((f) => ({
+    homeTeamId: f.homeTeamId,
+    awayTeamId: f.awayTeamId,
+    status: f.status,
+    forfeitedById: f.forfeitedById,
+    lines: f.lines.map((l) => ({
+      lineNumber: l.lineNumber,
+      isCounting: l.isCounting,
+      games: l.games.map((g) => ({ homeScore: g.homeScore, awayScore: g.awayScore, isCounting: l.isCounting })),
+    })),
+  }));
+  const ranked = new Map(computeStandings(fixtureResults).map((s) => [s.teamId, s]));
+
+  const groups = new Map<string, LeagueStandingRow[]>();
+  for (const e of entries) {
+    const key = keyByTeam.get(e.team.id) ?? "UNASSIGNED";
+    const row: LeagueStandingRow = {
+      ...(ranked.get(e.team.id) ?? blankStanding(e.team.id)),
+      teamName: identity.get(e.team.id)?.name ?? "—",
+      teamSlug: identity.get(e.team.id)?.slug ?? "",
+    };
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(row);
+  }
+
+  return [...groups.entries()]
+    .map(([key, rows]) => ({ key, label: bracketLabel(key), rows: rows.sort(rankRows) }))
+    .sort((a, b) => {
+      const ka = bracketSortKey(a.key), kb = bracketSortKey(b.key);
+      return ka[0] - kb[0] || ka[1] - kb[1] || ka[2].localeCompare(kb[2]);
+    });
 }
