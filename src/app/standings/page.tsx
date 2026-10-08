@@ -41,18 +41,29 @@ export default async function StandingsPage() {
               <section key={g.key} className="card">
                 <h2 className="mb-3 text-lg font-bold text-slate-900">{g.label} <span className="text-sm font-normal text-slate-400">· {g.rows.length} team{g.rows.length === 1 ? "" : "s"}</span></h2>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+                  <table className="w-full min-w-[34rem] table-fixed text-sm tabular-nums">
+                    <colgroup>
+                      <col className="w-9" />
+                      <col />
+                      <col className="w-10" />
+                      <col className="w-10" />
+                      <col className="w-10" />
+                      <col className="w-16" />
+                      <col className="w-14" />
+                      <col className="w-10" />
+                      <col className="w-12" />
+                    </colgroup>
+                    <thead className="text-left text-xs font-medium uppercase tracking-wide text-slate-400">
                       <tr>
-                        <th className="py-1 pr-2">#</th>
-                        <th>Team</th>
-                        <th className="text-center">P</th>
-                        <th className="text-center">W</th>
-                        <th className="text-center">L</th>
-                        <th className="text-center">Lines</th>
-                        <th className="text-center" title="Point differential across counting lines">Diff</th>
-                        <th className="text-center">FF</th>
-                        <th className="text-center">Pts</th>
+                        <th className="py-1 pr-2 font-medium">#</th>
+                        <th className="font-medium">Team</th>
+                        <th className="py-1 text-center font-medium">P</th>
+                        <th className="py-1 text-center font-medium">W</th>
+                        <th className="py-1 text-center font-medium">L</th>
+                        <th className="py-1 text-center font-medium">Lines</th>
+                        <th className="py-1 text-center font-medium" title="Point differential across counting lines">Diff</th>
+                        <th className="py-1 text-center font-medium">FF</th>
+                        <th className="py-1 text-center font-medium">Pts</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -61,20 +72,20 @@ export default async function StandingsPage() {
                         return (
                           <tr key={s.teamId} className={i < 2 ? "bg-accent-50/40" : ""}>
                             <td className="py-1.5 pr-2 font-semibold text-slate-500">{i + 1}</td>
-                            <td className="font-medium text-slate-800">
+                            <td className="truncate pr-2 font-medium text-slate-800">
                               {s.teamSlug ? (
                                 <Link href={`/teams/${s.teamSlug}`} className="hover:text-brand-700 hover:underline">{s.teamName}</Link>
                               ) : (
                                 s.teamName
                               )}
                             </td>
-                            <td className="text-center tabular-nums">{s.played}</td>
-                            <td className="text-center tabular-nums">{s.matchesWon}</td>
-                            <td className="text-center tabular-nums">{s.matchesLost}</td>
-                            <td className="text-center tabular-nums text-slate-500">{s.linesWon}–{s.linesLost}</td>
-                            <td className={`text-center tabular-nums ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-500"}`}>{diff > 0 ? `+${diff}` : diff}</td>
-                            <td className={`text-center tabular-nums ${s.forfeits > 0 ? "text-rose-600 font-medium" : ""}`}>{s.forfeits}</td>
-                            <td className="text-center font-bold text-slate-900 tabular-nums">{s.points}</td>
+                            <td className="py-1.5 text-center">{s.played}</td>
+                            <td className="py-1.5 text-center">{s.matchesWon}</td>
+                            <td className="py-1.5 text-center">{s.matchesLost}</td>
+                            <td className="py-1.5 text-center text-slate-500">{s.linesWon}–{s.linesLost}</td>
+                            <td className={`py-1.5 text-center ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-500"}`}>{diff > 0 ? `+${diff}` : diff}</td>
+                            <td className={`py-1.5 text-center ${s.forfeits > 0 ? "text-rose-600 font-medium" : ""}`}>{s.forfeits}</td>
+                            <td className="py-1.5 text-center font-bold text-slate-900">{s.points}</td>
                           </tr>
                         );
                       })}

@@ -550,19 +550,29 @@ export default async function LeaguePage({
         ) : (
           <div className="space-y-6">
             {divisionStandings.map((g) => (
-              <div key={g.key}>
+              <div key={g.key} className="min-w-[34rem]">
                 <h3 className="mb-2 text-sm font-semibold text-slate-800">{g.label} <span className="font-normal text-slate-400">· {g.rows.length} team{g.rows.length === 1 ? "" : "s"}</span></h3>
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+                <table className="w-full table-fixed text-sm tabular-nums">
+                  <colgroup>
+                    <col className="w-9" />
+                    <col />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-16" />
+                    <col className="w-14" />
+                    <col className="w-12" />
+                  </colgroup>
+                  <thead className="text-left text-xs font-medium uppercase tracking-wide text-slate-400">
                     <tr>
-                      <th className="py-2 pr-2">#</th>
-                      <th>Team</th>
-                      <th className="text-center">P</th>
-                      <th className="text-center">W</th>
-                      <th className="text-center">L</th>
-                      <th className="text-center">Lines</th>
-                      <th className="text-center" title="Point differential across counting lines">Diff</th>
-                      <th className="text-center">Pts</th>
+                      <th className="py-2 pr-2 font-medium">#</th>
+                      <th className="font-medium">Team</th>
+                      <th className="py-2 text-center font-medium">P</th>
+                      <th className="py-2 text-center font-medium">W</th>
+                      <th className="py-2 text-center font-medium">L</th>
+                      <th className="py-2 text-center font-medium">Lines</th>
+                      <th className="py-2 text-center font-medium" title="Point differential across counting lines">Diff</th>
+                      <th className="py-2 text-center font-medium">Pts</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -571,17 +581,17 @@ export default async function LeaguePage({
                       return (
                       <tr key={r.teamId} className={i < 2 ? "bg-accent-50/40" : ""}>
                         <td className="py-2 pr-2 font-semibold text-slate-500">{i + 1}</td>
-                        <td className="font-medium text-slate-800">
+                        <td className="truncate pr-2 font-medium text-slate-800">
                           {r.teamName}
                           {i < 2 && <span className="ml-2 badge bg-accent-100 text-accent-800">seed</span>}
                           {r.forfeits > 0 && <span className="ml-2 text-xs text-rose-500">{r.forfeits} forfeit{r.forfeits > 1 ? "s" : ""}</span>}
                         </td>
-                        <td className="text-center text-slate-600 tabular-nums">{r.played}</td>
-                        <td className="text-center text-slate-600 tabular-nums">{r.matchesWon}</td>
-                        <td className="text-center text-slate-600 tabular-nums">{r.matchesLost}</td>
-                        <td className="text-center text-slate-500 tabular-nums">{r.linesWon}–{r.linesLost}</td>
-                        <td className={`text-center tabular-nums ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-500"}`}>{diff > 0 ? `+${diff}` : diff}</td>
-                        <td className="text-center font-bold text-slate-900 tabular-nums">{r.points}</td>
+                        <td className="py-2 text-center text-slate-600">{r.played}</td>
+                        <td className="py-2 text-center text-slate-600">{r.matchesWon}</td>
+                        <td className="py-2 text-center text-slate-600">{r.matchesLost}</td>
+                        <td className="py-2 text-center text-slate-500">{r.linesWon}–{r.linesLost}</td>
+                        <td className={`py-2 text-center ${diff > 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-500"}`}>{diff > 0 ? `+${diff}` : diff}</td>
+                        <td className="py-2 text-center font-bold text-slate-900">{r.points}</td>
                       </tr>
                       );
                     })}
