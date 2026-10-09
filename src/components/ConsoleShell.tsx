@@ -275,7 +275,7 @@ export function ConsoleShell({
               <Link href="/logout" prefetch={false} className="whitespace-nowrap text-sm font-semibold text-white/80 hover:text-white">Sign out</Link>
             </div>
           </div>
-          <div className="p-4 md:p-6">
+          <div className="overflow-x-clip p-4 md:p-6">
             {agreementAction && (
               <Link
                 href="/console/agreement"

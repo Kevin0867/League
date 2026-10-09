@@ -81,7 +81,7 @@ export function CoachBroadcastComposer({
             <MediaAttach label="Attach a photo / video" library />
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" name="channel_SMS" value="on" defaultChecked /> Text (SMS)
@@ -90,7 +90,7 @@ export function CoachBroadcastComposer({
               <input type="checkbox" name="channel_EMAIL" value="on" /> Also send by email
             </label>
           </div>
-          <button type="submit" disabled={pending} className="btn-primary text-sm disabled:opacity-60">
+          <button type="submit" disabled={pending} className="btn-primary w-full text-sm disabled:opacity-60 sm:w-auto">
             {pending ? "Sending…" : "Send broadcast"}
           </button>
         </div>

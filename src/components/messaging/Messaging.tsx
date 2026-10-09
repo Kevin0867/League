@@ -47,9 +47,12 @@ export function Composer({ contacts, targets, ticket, returnTo, library = false 
         <textarea name="body" rows={3} className="input" placeholder="Write a message…" />
       </div>
       <MediaAttach library={library} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Mobile-first: on a phone the Send button is a full-width block so it's
+          always visible and tappable (never pushed off-screen by justify-between);
+          inline on sm+. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <NotifyByPicker />
-        <button type="submit" className="btn-primary">Send</button>
+        <button type="submit" className="btn-primary w-full sm:w-auto">Send</button>
       </div>
     </form>
   );
@@ -180,9 +183,9 @@ export function ConversationView({
           <input type="hidden" name="returnTo" value={basePath} />
           <textarea name="body" rows={2} className="input" placeholder="Write a reply…" />
           <MediaAttach library={library} />
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <NotifyByPicker />
-            <button type="submit" className="btn-primary">Send</button>
+            <button type="submit" className="btn-primary w-full sm:w-auto">Send</button>
           </div>
         </form>
       ) : (
