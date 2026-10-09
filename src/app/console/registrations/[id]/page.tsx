@@ -851,8 +851,14 @@ export default async function RegistrationDetail({
           <Select label="Status" name="status" defaultValue={reg.status} options={STATUSES.map((s) => ({ value: s, label: s }))} />
           <Field label="Skill level" name="skillLevel" defaultValue={reg.skillLevel ?? ""} />
           <div>
-            <label className="label">DUPR rating <span className="font-normal text-slate-400">(coach/admin set · shows on the team)</span></label>
+            <label className="label">
+              DUPR rating <span className="font-normal text-slate-400">(shows on the team)</span>
+              {p.duprRating != null && (p.duprVerified
+                ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">✓ Verified</span>
+                : <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Self-reported</span>)}
+            </label>
             <input name="duprRating" type="number" step="0.001" min="2" max="8" inputMode="decimal" className="input" defaultValue={p.duprRating != null ? String(p.duprRating) : ""} placeholder="e.g. 3.75" />
+            <p className="mt-0.5 text-xs text-slate-400">Saving here marks it verified. Players&apos; self-reported ratings stay &quot;self-reported&quot; until a coach or admin confirms.</p>
           </div>
           <Field label="DUPR ID (optional)" name="duprId" defaultValue={p.duprId ?? ""} />
           <Field label="Program interest" name="programInterest" defaultValue={reg.programInterest ?? ""} />

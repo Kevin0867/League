@@ -52,10 +52,19 @@ export async function POST(req: Request) {
   }
   const duprId = g("duprId") || null;
 
-  await prisma.person.update({ where: { id: personId }, data: { duprRating, duprId } });
+  // A coach/assistant coach/admin entering it here IS the verification step —
+  // mark it verified (and clear verification when the rating is cleared).
+  await prisma.person.update({
+    where: { id: personId },
+    data: {
+      duprRating, duprId,
+      duprVerified: duprRating != null,
+      duprVerifiedAt: duprRating != null ? new Date() : null,
+    },
+  });
   await audit({
     actorId: actor.userId, entityType: "Person", entityId: personId, action: "player.dupr.set",
-    summary: `Set DUPR rating to ${duprRating ?? "—"}${duprId ? ` (id ${duprId})` : ""}`,
+    summary: `Verified DUPR rating${duprRating != null ? ` = ${duprRating}` : " cleared"}${duprId ? ` (id ${duprId})` : ""}`,
   });
   return back("?ok=dupr");
 }
