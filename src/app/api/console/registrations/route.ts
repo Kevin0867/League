@@ -1045,6 +1045,9 @@ export async function POST(req: Request) {
           lastName: g("lastName") || undefined,
           duprRating,
           duprId: nn("duprId"),
+          // Entered by an admin here = verified (cleared when the rating is cleared).
+          duprVerified: duprRating != null,
+          duprVerifiedAt: duprRating != null ? new Date() : null,
           email: nn("email"),
           email2: nn("email2"),
           email3: nn("email3"),

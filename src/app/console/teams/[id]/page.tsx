@@ -856,7 +856,13 @@ export default async function TeamDetailPage({
                       {m.person.firstName} {m.person.lastName}
                     </Link>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
-                      <span>{m.person.duprRating ? `DUPR ${m.person.duprRating}` : "no rating"}</span>
+                      <span>
+                        {m.person.duprRating
+                          ? <>DUPR {m.person.duprRating} {m.person.duprVerified
+                              ? <span className="font-medium text-emerald-600">✓ verified</span>
+                              : <span className="text-amber-600">self-reported</span>}</>
+                          : "no rating"}
+                      </span>
                       {feeBadge(m.personId)}
                       {!hasFamilyEmail(m.person) && <span className="text-amber-600">⚠ no email</span>}
                       {!m.person.waiverSignedAt && <span className="text-amber-600">⚠ no waiver</span>}
