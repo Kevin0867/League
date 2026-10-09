@@ -98,8 +98,8 @@ export default async function ConsoleInboxPage({
 
       {/* Conversations come first — reading and replying is the primary job of
           the inbox; the broadcast composer sits below it. */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-3">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-3">
           {/* Search every message — subject, who's in the thread, or anything
               said in it. */}
           {!coachModerating && (

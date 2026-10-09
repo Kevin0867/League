@@ -45,7 +45,7 @@ export default async function PortalLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="mx-auto max-w-3xl overflow-x-clip px-4 py-6">
         {showMessages && <UnreadPoller count={unread} />}
         {unread > 0 && (
           <Link

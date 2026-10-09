@@ -56,9 +56,9 @@ export function AnnouncementComposer({ ticket, counts }: { ticket: string; count
           <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_EMAIL" defaultChecked /> Email</label>
           <label className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" name="channel_SMS" defaultChecked /> SMS</label>
         </div>
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
           {key && <span className="text-xs text-slate-400">Goes to {count.toLocaleString()} {count === 1 ? "person" : "people"}</span>}
-          <button className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50" disabled={!key}>Send announcement</button>
+          <button className="btn-primary w-full text-sm disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto" disabled={!key}>Send announcement</button>
         </div>
       </form>
     </div>
