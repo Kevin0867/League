@@ -99,7 +99,6 @@ export default async function PersonDetail({
       {sp.err && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">
           {sp.err === "fields" ? "First and last name are required."
-            : sp.err === "dupr" ? "Enter a DUPR rating between 2.0 and 8.0, or leave it blank."
             : sp.err === "nonote" ? "Add a note saying how it was paid (check, Class Wallet, cash…)."
             : sp.err === "amount" ? "Enter a valid dollar amount."
             : sp.err === "alreadypaid" ? "This player's season fee is already marked paid."
@@ -122,8 +121,6 @@ export default async function PersonDetail({
             <div><label className="label">Email</label><input name="email" type="email" className="input" defaultValue={person.email ?? ""} /></div>
             <div><label className="label">Phone</label><input name="phone" type="tel" className="input" defaultValue={person.phone ?? ""} /></div>
             <div><label className="label">Date of birth</label><input name="dob" type="date" className="input" defaultValue={person.dob ? new Date(person.dob).toISOString().slice(0, 10) : ""} /></div>
-            <div><label className="label">DUPR rating <span className="font-normal text-slate-400">(coach/admin set)</span></label><input name="duprRating" type="number" step="0.001" min="2" max="8" inputMode="decimal" className="input" defaultValue={person.duprRating ?? ""} placeholder="e.g. 3.75" /></div>
-            <div><label className="label">DUPR ID <span className="font-normal text-slate-400">(optional)</span></label><input name="duprId" className="input" defaultValue={person.duprId ?? ""} placeholder="DUPR profile id" /></div>
           </div>
           <div className="rounded-lg border-l-4 border-brand-300 bg-slate-50 p-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Protected — encrypted at rest</p>

@@ -40,14 +40,6 @@ export async function POST(req: Request) {
     const dobStr = g("dob");
     const dob = dobStr ? new Date(dobStr) : null;
     const age = dob && !isNaN(dob.getTime()) ? ageFromDob(dob) : null;
-    // DUPR rating (admin-set here; 2.0–8.0, 3 decimals; blank clears it).
-    const drStr = g("duprRating");
-    let duprRating: number | null = null;
-    if (drStr !== "") {
-      const dr = parseFloat(drStr);
-      if (!Number.isFinite(dr) || dr < 2 || dr > 8) return back("?err=dupr");
-      duprRating = Math.round(dr * 1000) / 1000;
-    }
     await prisma.person.update({
       where: { id: personId },
       data: {
@@ -56,8 +48,6 @@ export async function POST(req: Request) {
         email: g("email").toLowerCase() || null,
         phone: g("phone") || null,
         dob: dob && !isNaN(dob.getTime()) ? dob : null,
-        duprRating,
-        duprId: g("duprId") || null,
         // Keep the minor flag in step with the birthdate when one is set.
         ...(age !== null ? { isMinor: age < 18 } : {}),
         emergencyName: encryptField(g("emergencyName") || null),
