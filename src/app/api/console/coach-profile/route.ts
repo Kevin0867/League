@@ -48,6 +48,19 @@ export async function POST(req: Request) {
     newEmail = g("email").toLowerCase();
     if (newEmail) personData.email = newEmail;
   }
+  // A coach's own DUPR rating + DUPR id (self-reported — stays unverified until an
+  // admin confirms it). Gated on the form marker so other callers don't clear it.
+  if (g("duprVisible") === "1") {
+    const drStr = g("duprRating").trim();
+    if (drStr === "") {
+      personData.duprRating = null;
+    } else {
+      const dr = parseFloat(drStr);
+      if (!Number.isFinite(dr) || dr < 2 || dr > 8) return back("?err=dupr");
+      personData.duprRating = Math.round(dr * 1000) / 1000; // DUPR uses up to 3 decimals
+    }
+    personData.duprId = g("duprId") || null;
+  }
   await prisma.person.update({ where: { id: personId }, data: personData });
 
   // Keep the login email in sync when an admin changes it — but never clobber

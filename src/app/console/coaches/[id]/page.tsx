@@ -300,6 +300,9 @@ export default async function EditCoachPage({
           certifications: coach?.certifications ?? "",
           bio: coach?.bio ?? "",
           coachingLevels: coach?.coachingLevels ?? "",
+          duprRating: person.duprRating != null ? String(person.duprRating) : "",
+          duprId: person.duprId ?? "",
+          duprVerified: person.duprVerified ?? false,
           publicHidden: coach?.publicHidden ?? [],
           markets: parseMarkets(coach?.marketsCovered ?? null),
           availability: (coach?.availabilityBlocks ?? []).map((b) => ({

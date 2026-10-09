@@ -33,6 +33,9 @@ export function CoachProfileForm({
     certifications: string;
     bio: string;
     coachingLevels: string;
+    duprRating: string;
+    duprId: string;
+    duprVerified?: boolean;
     publicHidden: string[];
     markets: string[];
     availability: Block[];
@@ -122,6 +125,28 @@ export function CoachProfileForm({
             <label className="label">Levels you can coach</label>
             <input name="coachingLevels" className="input" defaultValue={initial.coachingLevels}
               placeholder="e.g. 2.5–4.0, Youth (Elementary–High School), Beginners" />
+          </div>
+
+          {/* The coach's OWN DUPR rating (self-reported). */}
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-slate-800">Your DUPR rating</span>
+              {initial.duprVerified
+                ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Verified</span>
+                : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Self-reported</span>}
+            </div>
+            <p className="mt-0.5 text-xs text-slate-500">Your own playing rating. The office verifies it against DUPR; until then it shows as self-reported.</p>
+            <input type="hidden" name="duprVisible" value="1" />
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">DUPR rating</label>
+                <input name="duprRating" type="number" step="0.001" min="2" max="8" inputMode="decimal" className="input" defaultValue={initial.duprRating} placeholder="e.g. 4.25" />
+              </div>
+              <div>
+                <label className="label">DUPR ID <span className="font-normal text-slate-400">(optional)</span></label>
+                <input name="duprId" className="input" defaultValue={initial.duprId} placeholder="Your DUPR profile ID" />
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
