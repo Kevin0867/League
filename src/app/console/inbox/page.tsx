@@ -71,7 +71,7 @@ export default async function ConsoleInboxPage({
       {sp.err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{ERRORS[sp.err] ?? "Something went wrong."}</p>}
 
       {isAdmin && (
-        <div className="flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 text-sm">
           <Link href="/console/inbox" className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 font-medium ${!moderating ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
             My messages
             {myUnread > 0 && <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${!moderating ? "bg-white text-brand-700" : "bg-rose-500 text-white"}`}>{myUnread}</span>}
@@ -84,7 +84,7 @@ export default async function ConsoleInboxPage({
       )}
 
       {coach && !isAdmin && (
-        <div className="flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 text-sm">
           <Link href="/console/inbox" className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 font-medium ${!coachModerating ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
             My messages
             {myUnread > 0 && <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${!coachModerating ? "bg-white text-brand-700" : "bg-rose-500 text-white"}`}>{myUnread}</span>}

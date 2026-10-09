@@ -62,7 +62,7 @@ export function Composer({ contacts, targets, ticket, returnTo, library = false 
  *  sender picks Email, Text, or both — read by /api/messages. */
 function NotifyByPicker() {
   return (
-    <div className="flex items-center gap-3 text-sm text-slate-600">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
       <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Notify by</span>
       <label className="flex items-center gap-1.5"><input type="checkbox" name="notifyEmail" defaultChecked /> Email</label>
       <label className="flex items-center gap-1.5"><input type="checkbox" name="notifySms" defaultChecked /> Text</label>
