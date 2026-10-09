@@ -1028,11 +1028,23 @@ export async function POST(req: Request) {
       const waiverChecked = fd.get("waiverSigned") === "on";
       const waiverSignedAt = waiverChecked ? existingPerson?.waiverSignedAt ?? new Date() : null;
 
+      // DUPR rating lives on the Person (so it's the SAME value the team roster
+      // reads — registration and team stay in sync). 2.0–8.0, 3 decimals; blank clears.
+      const drStr = g("duprRating");
+      let duprRating: number | null = null;
+      if (drStr !== "") {
+        const dr = parseFloat(drStr);
+        if (!Number.isFinite(dr) || dr < 2 || dr > 8) return NextResponse.redirect(new URL(`/console/registrations/${reg.id}?err=dupr`, origin), 303);
+        duprRating = Math.round(dr * 1000) / 1000;
+      }
+
       await prisma.person.update({
         where: { id: personId },
         data: {
           firstName: g("firstName") || undefined,
           lastName: g("lastName") || undefined,
+          duprRating,
+          duprId: nn("duprId"),
           email: nn("email"),
           email2: nn("email2"),
           email3: nn("email3"),

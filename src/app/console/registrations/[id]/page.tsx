@@ -65,6 +65,7 @@ const OK: Record<string, string> = {
   proratedsame: "Already prorated — the invoice already matches the weeks remaining.",
 };
 const ERR: Record<string, string> = {
+  dupr: "Enter a DUPR rating between 2.0 and 8.0, or leave it blank.",
   notassigned: "This player isn't on a team yet — assign them first.",
   nopayment: "No outstanding fee to resend.",
   fields: "Missing information.",
@@ -849,6 +850,11 @@ export default async function RegistrationDetail({
             options={[{ value: "", label: "— Unassigned —" }, ...reg.season!.divisions.map((d) => ({ value: d.id, label: d.name }))]} />
           <Select label="Status" name="status" defaultValue={reg.status} options={STATUSES.map((s) => ({ value: s, label: s }))} />
           <Field label="Skill level" name="skillLevel" defaultValue={reg.skillLevel ?? ""} />
+          <div>
+            <label className="label">DUPR rating <span className="font-normal text-slate-400">(coach/admin set · shows on the team)</span></label>
+            <input name="duprRating" type="number" step="0.001" min="2" max="8" inputMode="decimal" className="input" defaultValue={p.duprRating != null ? String(p.duprRating) : ""} placeholder="e.g. 3.75" />
+          </div>
+          <Field label="DUPR ID (optional)" name="duprId" defaultValue={p.duprId ?? ""} />
           <Field label="Program interest" name="programInterest" defaultValue={reg.programInterest ?? ""} />
           <Field label="Practice time pref" name="practiceTimePref" defaultValue={reg.practiceTimePref ?? ""} />
           <Field label="Schedule" name="schedule" defaultValue={reg.schedule ?? ""} />
