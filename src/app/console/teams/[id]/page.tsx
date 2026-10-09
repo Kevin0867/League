@@ -44,6 +44,7 @@ function hasFamilyEmail(person: WithEmails & { guardian?: WithEmails | null }): 
 }
 
 const OK_MSG: Record<string, string> = {
+  dupr: "DUPR rating saved.",
   motto: "Team motto saved.",
   updateTeam: "Team fields saved.",
   addPlayer: "Player added to the roster.",
@@ -74,6 +75,8 @@ const OK_MSG: Record<string, string> = {
 
 const ERR_MSG: Record<string, string> = {
   noplayers: "This team has no players on the roster yet.",
+  dupr: "Enter a DUPR rating between 2.0 and 8.0, or leave it blank.",
+  duprauth: "Only an admin or this team's coach can set a player's DUPR rating.",
   auth: "Not authorized to manage teams.",
   team: "Missing team.",
   coach: "Cannot assign this coach — not cleared (background check required).",
@@ -901,6 +904,26 @@ export default async function TeamDetailPage({
                             compact
                             label="Save"
                           />
+                        </div>
+                      </details>
+                      {/* DUPR rating — coach or admin only (players can't set their own). */}
+                      <details className="text-xs">
+                        <summary className="btn-chip-brand inline-flex w-fit list-none cursor-pointer [&::-webkit-details-marker]:hidden">🏓 DUPR</summary>
+                        <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                          <form method="POST" action="/api/console/player-dupr" className="flex flex-wrap items-end gap-1.5">
+                            <input type="hidden" name="ticket" value={ticket} />
+                            <input type="hidden" name="teamId" value={team.id} />
+                            <input type="hidden" name="personId" value={m.personId} />
+                            <label className="block">
+                              <span className="mb-0.5 block text-[11px] font-medium text-slate-500">Rating</span>
+                              <input name="duprRating" type="number" step="0.001" min="2" max="8" inputMode="decimal" defaultValue={m.person.duprRating ?? ""} placeholder="e.g. 3.75" className="input w-24 py-1 text-xs" />
+                            </label>
+                            <label className="block">
+                              <span className="mb-0.5 block text-[11px] font-medium text-slate-500">DUPR ID <span className="font-normal text-slate-400">(opt)</span></span>
+                              <input name="duprId" defaultValue={m.person.duprId ?? ""} placeholder="profile id" className="input w-28 py-1 text-xs" />
+                            </label>
+                            <button className="btn-secondary py-1 text-xs">Save</button>
+                          </form>
                         </div>
                       </details>
                       {admin && (
