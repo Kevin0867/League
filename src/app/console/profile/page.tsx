@@ -85,6 +85,9 @@ export default async function CoachProfilePage({
       {sp.err === "noperson" && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Your login isn&apos;t linked to a person record — contact an administrator.</p>
       )}
+      {sp.err === "dupr" && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Enter a DUPR rating between 2.0 and 8.0, or leave it blank.</p>
+      )}
 
       <div className="card">
         <h2 className="mb-1 font-semibold text-slate-900">Change password</h2>
@@ -128,6 +131,9 @@ export default async function CoachProfilePage({
           certifications: coach?.certifications ?? "",
           bio: coach?.bio ?? "",
           coachingLevels: coach?.coachingLevels ?? "",
+          duprRating: person?.duprRating != null ? String(person.duprRating) : "",
+          duprId: person?.duprId ?? "",
+          duprVerified: person?.duprVerified ?? false,
           publicHidden: coach?.publicHidden ?? [],
           markets: parseMarkets(coach?.marketsCovered ?? null),
           availability: (coach?.availabilityBlocks ?? []).map((b) => ({
