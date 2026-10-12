@@ -70,6 +70,47 @@ export async function syncRefundsForCharge(
   return { created, createdCents, fullyRefunded };
 }
 
+/**
+ * Issue a real Stripe refund for an original IN payment, resolving the charge
+ * from whatever reference we have: a PaymentIntent id, a charge id (the CSV
+ * reconciler stores one in stripePaymentIntentId), or the Checkout session when
+ * the PI id was never captured. Books the OUT/REFUND row(s) and flips the
+ * original to REFUNDED when fully refunded. Returns:
+ *   { ok:true }         — a Stripe refund was issued and recorded
+ *   { ok:false, reason:"noref" } — no usable Stripe reference on the payment
+ *   { ok:false, reason:"fail" }  — Stripe rejected the refund
+ */
+export async function refundOriginalViaStripe(
+  original: OriginalPayment,
+  refs: { stripePaymentIntentId: string | null; stripeCheckoutId: string | null },
+): Promise<{ ok: true; refundedCents: number } | { ok: false; reason: "noref" | "fail" }> {
+  let piId: string | null = refs.stripePaymentIntentId;
+  let chargeId: string | null = null;
+  // The CSV reconciler stores a charge id (ch_…) in the PI field — refund by charge.
+  if (piId && piId.startsWith("ch_")) { chargeId = piId; piId = null; }
+  // No PI/charge on file but we have the Checkout session — pull its PaymentIntent.
+  if (!piId && !chargeId && refs.stripeCheckoutId) {
+    try {
+      const sess = await stripe().checkout.sessions.retrieve(refs.stripeCheckoutId);
+      const pi = sess.payment_intent;
+      piId = typeof pi === "string" ? pi : (pi as { id?: string } | null)?.id ?? null;
+    } catch { /* fall through to noref */ }
+  }
+  if (!piId && !chargeId) return { ok: false, reason: "noref" };
+  try {
+    const refund = await stripe().refunds.create(piId ? { payment_intent: piId } : { charge: chargeId! });
+    const cId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id ?? chargeId;
+    if (cId) {
+      const charge = await stripe().charges.retrieve(cId);
+      const res = await syncRefundsForCharge(original, charge.id, charge.amount, charge.amount_refunded);
+      return { ok: true, refundedCents: res.createdCents };
+    }
+    return { ok: true, refundedCents: refund.amount ?? 0 };
+  } catch {
+    return { ok: false, reason: "fail" };
+  }
+}
+
 /** Look up the local inbound payment for a Stripe payment intent. */
 export async function paymentForIntent(paymentIntentId: string): Promise<OriginalPayment | null> {
   const p = await prisma.payment.findFirst({
