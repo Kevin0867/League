@@ -18,7 +18,7 @@ import { accruePlayerSeasonFee, splitFamilyFee, ensureSeasonFeePayable } from "@
 import { proratedSeasonFee } from "@/lib/payments/proration";
 import { sendTeamLaunch } from "@/lib/domain/teamLaunch";
 import { feeStateOf } from "@/lib/domain/feeStatus";
-import { syncRefundsForCharge } from "@/lib/payments/refunds";
+import { syncRefundsForCharge, refundOriginalViaStripe } from "@/lib/payments/refunds";
 import { welcomeEmail } from "@/lib/domain/welcomeEmail";
 import { notifyTeamAssignment } from "@/lib/domain/teamAssignmentNotify";
 import { decryptField } from "@/lib/crypto";
@@ -1293,21 +1293,30 @@ export async function POST(req: Request) {
       if (!pay) return back("?err=norefund");
 
       const original = { id: pay.id, partyId: pay.partyId, seasonId: pay.seasonId, amountCents: pay.amountCents, status: pay.status, description: pay.description };
-      if (isStripeConfigured() && pay.stripePaymentIntentId) {
-        try {
-          const refund = await stripe().refunds.create({ payment_intent: pay.stripePaymentIntentId });
-          const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id ?? null;
-          if (chargeId) {
-            const charge = await stripe().charges.retrieve(chargeId);
-            // Books the OUT/REFUND row (idempotent by refund id) and marks the
-            // original REFUNDED when fully refunded — same path the webhook uses.
-            await syncRefundsForCharge(original, charge.id, charge.amount, charge.amount_refunded);
+      if (isStripeConfigured()) {
+        const r = await refundOriginalViaStripe(original, { stripePaymentIntentId: pay.stripePaymentIntentId, stripeCheckoutId: pay.stripeCheckoutId });
+        if (!r.ok && r.reason === "noref") {
+          if (pay.method && pay.method !== "STRIPE") {
+            // Collected offline (check/cash/Class Wallet) — there's nothing in
+            // Stripe to refund. Record a REAL manual refund (not a fake one).
+            await prisma.payment.update({ where: { id: pay.id }, data: { status: "REFUNDED" } });
+            await prisma.payment.create({
+              data: {
+                direction: "OUT", partyId: pay.partyId ?? personId, amountCents: pay.amountCents, method: pay.method,
+                status: "PAID", category: "REFUND", seasonId: reg.seasonId, paidAt: new Date(),
+                description: `Refund (offline — ${pay.method.toLowerCase()}) — ${pay.description ?? "season fee"}`,
+              },
+            });
+            await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "REFUNDED", summary: `Manual refund recorded (${pay.method})` });
+            return back(`/${reg.id}?ok=refundmanual`);
           }
-        } catch {
-          return back("?err=refundfail");
+          // A Stripe payment whose charge we can't locate — DON'T fake it; the
+          // admin must refund it in Stripe directly (then "Mark refunded in Stripe").
+          return back(`/${reg.id}?err=refundnostripe`);
         }
+        if (!r.ok) return back(`/${reg.id}?err=refundfail`);
       } else {
-        // No Stripe — simulate the booking so the ledger still balances in dev.
+        // Dev only (Stripe not configured) — simulate so the ledger balances.
         await prisma.payment.update({ where: { id: pay.id }, data: { status: "REFUNDED" } });
         await prisma.payment.create({
           data: {
@@ -1318,7 +1327,7 @@ export async function POST(req: Request) {
         });
       }
       await audit({ actorId: actor.userId, entityType: "Payment", entityId: pay.id, action: "REFUNDED", summary: "Refund issued" });
-      return back("?ok=refund");
+      return back(`/${reg.id}?ok=refund`);
     }
 
     // Refund a player who's no longer participating AND stop any active payment
@@ -1342,9 +1351,9 @@ export async function POST(req: Request) {
       const original = { id: pay.id, partyId: pay.partyId, seasonId: pay.seasonId, amountCents: pay.amountCents, status: pay.status, description: pay.description };
 
       let refundedCents = 0;
-      if (isStripeConfigured() && (pay.stripeSubscriptionId || pay.stripePaymentIntentId)) {
-        try {
-          if (pay.stripeSubscriptionId) {
+      if (isStripeConfigured()) {
+        if (pay.stripeSubscriptionId) {
+          try {
             // Stop future installments first, then refund every paid invoice.
             try { await stripe().subscriptions.cancel(pay.stripeSubscriptionId); } catch (e) { console.error("refundStopPlan: sub cancel failed", e); }
             const invoices = await stripe().invoices.list({ subscription: pay.stripeSubscriptionId, limit: 100 });
@@ -1360,21 +1369,33 @@ export async function POST(req: Request) {
               const res = await syncRefundsForCharge(original, fresh.id, fresh.amount, fresh.amount_refunded);
               refundedCents += res.createdCents;
             }
-          } else if (pay.stripePaymentIntentId) {
-            const refund = await stripe().refunds.create({ payment_intent: pay.stripePaymentIntentId });
-            const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id ?? null;
-            if (chargeId) {
-              const charge = await stripe().charges.retrieve(chargeId);
-              const res = await syncRefundsForCharge(original, charge.id, charge.amount, charge.amount_refunded);
-              refundedCents += res.createdCents;
-            }
+          } catch {
+            return back(`/${reg.id}?err=refundfail`);
           }
-        } catch {
-          return back(`/${reg.id}?err=refundfail`);
+        } else {
+          // One-time fee — refund via PI / charge / Checkout session.
+          const r = await refundOriginalViaStripe(original, { stripePaymentIntentId: pay.stripePaymentIntentId, stripeCheckoutId: pay.stripeCheckoutId });
+          if (r.ok) {
+            refundedCents += r.refundedCents;
+          } else if (r.reason === "noref" && pay.method && pay.method !== "STRIPE") {
+            // Offline payment — record a real manual refund.
+            await prisma.payment.create({
+              data: {
+                direction: "OUT", partyId: pay.partyId ?? personId, amountCents: pay.amountCents, method: pay.method,
+                status: "PAID", category: "REFUND", seasonId: reg.seasonId, paidAt: new Date(),
+                description: `Refund (offline — ${pay.method.toLowerCase()}) — ${pay.description ?? "season fee"}`,
+              },
+            });
+            refundedCents = pay.amountCents;
+          } else if (r.reason === "noref") {
+            // Can't locate the Stripe charge — don't fake it.
+            return back(`/${reg.id}?err=refundnostripe`);
+          } else {
+            return back(`/${reg.id}?err=refundfail`);
+          }
         }
       } else {
-        // No Stripe linkage / not configured — book a simulated refund so the
-        // ledger balances, and (below) mark the fee refunded.
+        // Dev only (Stripe not configured) — simulate so the ledger balances.
         await prisma.payment.create({
           data: {
             direction: "OUT", partyId: pay.partyId ?? personId, amountCents: pay.amountCents, method: "STRIPE",

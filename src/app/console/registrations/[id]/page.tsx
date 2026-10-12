@@ -46,7 +46,8 @@ const OK: Record<string, string> = {
   fee: "Season fee requested.",
   feeset: "Season fee set to the custom amount — once it's paid, the season shows fully paid.",
   feesetsent: "Custom season fee set and the pay request sent — once it's paid, the season shows fully paid.",
-  refund: "Refund started.",
+  refund: "Refund issued in Stripe — the money is on its way back to the payer.",
+  refundmanual: "Refund recorded. This fee was collected offline (not a Stripe charge), so there's nothing to refund in Stripe — return the money the same way it was paid.",
   waiverSent: "Waiver request emailed.",
   sentall: "Sent — welcome, season fee + apparel, and waiver, in one combined email to the family.",
   welcomeSent: "Welcome sent.",
@@ -78,6 +79,7 @@ const ERR: Record<string, string> = {
   cap: "That team is already full. Tick “Add even if the team is full” to place them anyway.",
   norefund: "No collected fee or active plan found to refund for this player.",
   refundfail: "The refund didn't go through at Stripe — check the payment in Stripe and try again.",
+  refundnostripe: "Couldn't find this charge in Stripe to refund automatically (no Stripe reference on file). Refund it directly in the Stripe dashboard, then use “Already refunded in Stripe?” below to mark it here.",
   noprorate: "No unpaid season-fee invoice to prorate — it may already be paid or on a plan.",
   prorateshared: "That invoice covers more than one player. Split it into per-player invoices first, then prorate.",
 };
