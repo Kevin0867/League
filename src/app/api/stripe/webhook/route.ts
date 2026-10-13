@@ -8,6 +8,7 @@ import { syncRefundsForCharge, paymentForIntent } from "@/lib/payments/refunds";
 import { matchFeeByEmailAndAmount } from "@/lib/payments/match";
 import { placeTeamRecruitForPayment } from "@/lib/domain/openSpots";
 import { confirmLessonPaid } from "@/lib/domain/lessonBilling";
+import { syncCustomerDefaultCardToSeries } from "@/lib/payments/billingPortal";
 
 // Resolve the local Payment for a Stripe subscription. Normally it's linked by
 // stripeSubscriptionId (set on checkout.session.completed), but the first
@@ -211,6 +212,17 @@ export async function POST(req: Request) {
           data: { status: "REQUESTED" },
         });
       }
+      break;
+    }
+    // A customer changed their default card (usually via the self-service Billing
+    // Portal). Point their active lesson series at the new card so the next
+    // off-session lesson charge uses it. (Subscriptions pick up the new card
+    // automatically in Stripe.)
+    case "customer.updated": {
+      const c = event.data.object as { id: string; invoice_settings?: { default_payment_method?: string | { id?: string } | null } | null };
+      const pm = c.invoice_settings?.default_payment_method;
+      const pmId = typeof pm === "string" ? pm : pm?.id ?? null;
+      if (pmId) await syncCustomerDefaultCardToSeries(c.id, pmId);
       break;
     }
     default:
