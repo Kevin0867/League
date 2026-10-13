@@ -88,3 +88,26 @@ export async function syncCustomerDefaultCardToSeries(customerId: string, paymen
     data: { defaultPaymentMethodId: paymentMethodId },
   });
 }
+
+/** After a card update, pay any OPEN (past-due) invoices on the new card — but
+ *  ONLY for a customer who's already paid at least one invoice (started a plan).
+ *  This catches up a missed season-fee installment, e.g. paid #1, missed #2. A
+ *  customer who never paid anything is left alone. invoice.paid then posts the
+ *  installment through the normal webhook. Best-effort. */
+export async function catchUpUnpaidInvoicesForCustomer(customerId: string): Promise<{ paid: number; failed: number }> {
+  if (!isStripeConfigured() || !customerId) return { paid: 0, failed: 0 };
+  let paid = 0, failed = 0;
+  try {
+    const anyPaid = await stripe().invoices.list({ customer: customerId, status: "paid", limit: 1 });
+    if (anyPaid.data.length === 0) return { paid, failed }; // never started — skip
+    const open = await stripe().invoices.list({ customer: customerId, status: "open", limit: 20 });
+    for (const inv of open.data) {
+      if (!inv.id) continue;
+      try { await stripe().invoices.pay(inv.id); paid++; }
+      catch (e) { console.error("invoice catch-up pay failed", inv.id, e); failed++; }
+    }
+  } catch (e) {
+    console.error("invoice catch-up failed", e);
+  }
+  return { paid, failed };
+}

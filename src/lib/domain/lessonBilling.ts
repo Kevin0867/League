@@ -231,6 +231,74 @@ export async function chargeUpcomingLessons(now: Date): Promise<{ scanned: numbe
 }
 
 /**
+ * After a customer updates their saved card (Billing Portal), charge any UNPAID
+ * lessons in their active series on the NEW card — but ONLY for a series they've
+ * already started paying (≥1 paid occurrence). A series with nothing paid is left
+ * alone (they likely aren't playing this season). Captures past-due AND upcoming
+ * unpaid lessons. Best-effort; idempotent per (payment, card) so it never
+ * double-charges and a new card retries a prior decline cleanly.
+ */
+export async function catchUpUnpaidLessonsForCustomer(customerId: string, now: Date): Promise<{ charged: number; failed: number }> {
+  if (!isStripeConfigured() || !customerId) return { charged: 0, failed: 0 };
+  const seriesList = await prisma.lessonSeries.findMany({
+    where: { stripeCustomerId: customerId, status: "ACTIVE", defaultPaymentMethodId: { not: null } },
+    select: { id: true, defaultPaymentMethodId: true },
+  });
+  let charged = 0, failed = 0;
+  for (const ser of seriesList) {
+    const bookings = await prisma.alaCarteBooking.findMany({
+      where: { seriesId: ser.id, status: { notIn: ["CANCELLED", "DECLINED"] }, paymentId: { not: null } },
+      include: { offering: { select: { title: true } } },
+      orderBy: { scheduledAt: "asc" },
+    });
+    const payIds = bookings.map((b) => b.paymentId!).filter(Boolean);
+    const pays = payIds.length
+      ? await prisma.payment.findMany({ where: { id: { in: payIds } }, select: { id: true, status: true, amountCents: true, description: true } })
+      : [];
+    const payById = new Map(pays.map((p) => [p.id, p]));
+    // Only catch up a series they've STARTED paying — never charge from scratch.
+    const paidCount = pays.filter((p) => p.status === "PAID").length;
+    if (paidCount === 0) continue;
+
+    const unpaid = bookings.filter((b) => { const p = payById.get(b.paymentId!); return p && (p.status === "REQUESTED" || p.status === "FAILED"); });
+    for (const b of unpaid) {
+      const payment = payById.get(b.paymentId!)!;
+      try {
+        const pi = await stripe().paymentIntents.create(
+          {
+            amount: payment.amountCents, currency: "usd",
+            customer: customerId, payment_method: ser.defaultPaymentMethodId!,
+            off_session: true, confirm: true,
+            description: payment.description ?? b.offering?.title ?? "PURE Academy lesson",
+            metadata: { paymentId: payment.id, lessonSeriesId: ser.id, catchup: "1" },
+          },
+          // New card → new key, so a prior decline on the old card doesn't replay.
+          { idempotencyKey: `lessoncatchup:${payment.id}:${ser.defaultPaymentMethodId}` },
+        );
+        if (pi.status === "succeeded") {
+          await prisma.payment.update({ where: { id: payment.id }, data: { status: "PAID", paidAt: now, method: "STRIPE", stripePaymentIntentId: pi.id } });
+          await prisma.alaCarteBooking.update({ where: { id: b.id }, data: { status: "ACCEPTED", payLinkSentAt: null } });
+          await audit({ entityType: "Payment", entityId: payment.id, action: "PAID", summary: "Lesson charged on updated card (catch-up)" });
+          await dispatchMessage({
+            audienceType: "SINGLE_PERSON", audienceRef: b.clientId, channels: ["EMAIL", "SMS"],
+            triggerType: "LESSON_CHARGED", subject: "Lesson payment received — PURE Academy",
+            body: `Thanks for updating your card. We charged ${formatCents(payment.amountCents)} for your ${b.offering?.title ?? "lesson"}${b.scheduledAt ? ` on ${whenLabel(b.scheduledAt)}` : ""}.`,
+            smsBody: `PURE Academy — ${formatCents(payment.amountCents)} charged for your ${b.offering?.title ?? "lesson"}${b.scheduledAt ? ` on ${whenLabel(b.scheduledAt)}` : ""} on your updated card.`,
+          }).catch(() => {});
+          charged++;
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        console.error("lesson catch-up charge failed", e);
+        failed++;
+      }
+    }
+  }
+  return { charged, failed };
+}
+
+/**
  * "Your lesson is today" reminder to the player + the coach, ~2h out. Only
  * confirmed (paid) lessons — an unpaid one is handled by the charge/pay-link
  * path, not a see-you-there text. Idempotent via reminderSentAt.
