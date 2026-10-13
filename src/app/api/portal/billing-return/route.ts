@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { resolveHouseholdStripeCustomer, currentCustomerCardId, syncCustomerDefaultCardToSeries } from "@/lib/payments/billingPortal";
+import { resolveHouseholdStripeCustomer, currentCustomerCardId, syncCustomerDefaultCardToSeries, catchUpUnpaidInvoicesForCustomer } from "@/lib/payments/billingPortal";
+import { catchUpUnpaidLessonsForCustomer } from "@/lib/domain/lessonBilling";
 
 // The Stripe Billing Portal return URL. When a customer finishes in the portal,
 // Stripe sends them back here. We read their current card and point their active
@@ -24,6 +25,10 @@ export async function GET(req: Request) {
     if (!customerId) return back;
     const cardId = await currentCustomerCardId(customerId);
     await syncCustomerDefaultCardToSeries(customerId, cardId);
+    // Catch up anything they already owe, on the new card — but only for a plan
+    // or lesson series they've already started paying (never charge from scratch).
+    await catchUpUnpaidLessonsForCustomer(customerId, new Date());
+    await catchUpUnpaidInvoicesForCustomer(customerId);
   } catch (e) {
     console.error("billing-return sync failed", e);
   }
