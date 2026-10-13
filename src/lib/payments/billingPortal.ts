@@ -55,9 +55,32 @@ export async function createBillingPortalUrl(customerId: string, returnUrl: stri
   }
 }
 
+/** The customer's current card: their default payment method if set, otherwise
+ *  their most-recently-added card. Null if none / on error. Lets us sync the
+ *  card right after the Billing Portal closes, without relying on a webhook. */
+export async function currentCustomerCardId(customerId: string): Promise<string | null> {
+  try {
+    const cust = (await stripe().customers.retrieve(customerId)) as {
+      deleted?: boolean;
+      invoice_settings?: { default_payment_method?: string | { id?: string } | null } | null;
+    };
+    if (!cust.deleted) {
+      const dpm = cust.invoice_settings?.default_payment_method;
+      const id = typeof dpm === "string" ? dpm : dpm?.id ?? null;
+      if (id) return id;
+    }
+    const pms = await stripe().paymentMethods.list({ customer: customerId, type: "card", limit: 10 });
+    const newest = [...pms.data].sort((a, b) => (b.created ?? 0) - (a.created ?? 0))[0];
+    return newest?.id ?? null;
+  } catch (e) {
+    console.error("currentCustomerCardId failed", e);
+    return null;
+  }
+}
+
 /** Sync a customer's new default card onto their active lesson series, so the
- *  next off-session lesson charge uses the card they just updated. Called from
- *  the Stripe webhook on customer.updated. */
+ *  next off-session lesson charge uses the card they just updated. Called on the
+ *  Billing Portal return AND (if configured) from the customer.updated webhook. */
 export async function syncCustomerDefaultCardToSeries(customerId: string, paymentMethodId: string | null): Promise<void> {
   if (!paymentMethodId) return;
   await prisma.lessonSeries.updateMany({

@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       const peopleIds = await householdPersonIds(personId);
       const customerId = await resolveHouseholdStripeCustomer(peopleIds);
       if (!customerId) return NextResponse.redirect(new URL("/portal?err=nocard", origin), 303);
-      const url = await createBillingPortalUrl(customerId, `${origin}/portal?ok=billing`);
+      const url = await createBillingPortalUrl(customerId, `${origin}/api/portal/billing-return`);
       if (!url) return NextResponse.redirect(new URL("/portal?err=billing", origin), 303);
       return NextResponse.redirect(url, 303);
     }
