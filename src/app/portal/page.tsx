@@ -109,6 +109,15 @@ export default async function PortalHome({
   const outstandingPayments = payments.filter((p) => (p.status === "REQUESTED" || p.status === "PENDING") && !isActiveSub(p));
   const failedPayments = payments.filter((p) => p.status === "FAILED");
   const paymentHistory = payments.filter((p) => !["REQUESTED", "PENDING", "FAILED"].includes(p.status));
+  // Whether to offer self-service billing (Stripe Billing Portal): the family has
+  // a payment plan, a saved card for lessons, a stored Stripe customer, or a
+  // failed charge to fix. Cheap signals only — the route resolves the real
+  // customer and errors gracefully if there's nothing on file.
+  const hasBilling =
+    payments.some((p) => !!p.stripeSubscriptionId) ||
+    failedPayments.length > 0 ||
+    !!me?.stripeCustomerId ||
+    (peopleIds.length > 0 && (await prisma.lessonSeries.count({ where: { clientId: { in: peopleIds }, stripeCustomerId: { not: null }, status: "ACTIVE" } })) > 0);
   const totalOutstanding = outstandingPayments.reduce((s, p) => s + p.amountCents, 0);
   const totalPaid = paymentHistory.filter((p) => p.status === "PAID").reduce((s, p) => s + p.amountCents, 0);
   // Match a payment-request announcement to the person's outstanding fee so the
@@ -282,9 +291,17 @@ export default async function PortalHome({
         <Notice kind="error" title={PAY_ERRORS[sp.payerr].title}>{PAY_ERRORS[sp.payerr].detail}</Notice>
       )}
       {sp.paid && <Notice kind="success" title="You're all set">This fee is already paid — thank you!</Notice>}
+      {sp.ok === "billing" && <Notice kind="success" title="Billing updated">Your payment details were saved. Upcoming charges will use your updated card.</Notice>}
+      {sp.err === "nocard" && <Notice kind="error" title="Nothing to manage yet">We don&apos;t have a saved card or payment plan on file for your household. When you pay a fee and choose a plan, you&apos;ll be able to manage your card here.</Notice>}
+      {sp.err === "billing" && <Notice kind="error" title="Couldn't open billing">We couldn&apos;t open the billing page just now. Please try again, or contact us and we&apos;ll help.</Notice>}
       {failedPayments.length > 0 && (
         <Notice kind="error" title="A payment didn't go through">
-          Your last payment attempt was unsuccessful (often an expired card or a bank decline). No place is lost — please try again below. If it keeps failing, contact us and we&apos;ll sort it out.
+          Your last payment attempt was unsuccessful (often an expired card or a bank decline). No place is lost — please try again below, or update your card now. If it keeps failing, contact us and we&apos;ll sort it out.
+          <form method="POST" action="/api/portal" className="mt-3">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="billingPortal" />
+            <button className="btn-primary">Update payment method</button>
+          </form>
         </Notice>
       )}
 
@@ -298,6 +315,23 @@ export default async function PortalHome({
               {totalPaid > 0 && <div className="mt-0.5 text-xs text-slate-400">{formatCents(totalPaid)} paid so far</div>}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Self-service billing — update card, view invoices, manage a payment plan.
+          Only shown when there's something on file (a plan, saved card, or a
+          failed charge to fix). */}
+      {hasBilling && failedPayments.length === 0 && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-800">Payment method &amp; billing</div>
+            <p className="mt-0.5 text-sm text-slate-500">Update your card, view receipts, or manage your payment plan — handled securely by Stripe.</p>
+          </div>
+          <form method="POST" action="/api/portal">
+            <input type="hidden" name="ticket" value={ticket} />
+            <input type="hidden" name="op" value="billingPortal" />
+            <button className="btn-secondary whitespace-nowrap">Manage billing</button>
+          </form>
         </div>
       )}
 

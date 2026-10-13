@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { actorFromForm } from "@/lib/auth";
 import { createCheckoutRedirect } from "@/lib/payments/checkout";
+import { isStripeConfigured } from "@/lib/stripe";
+import { resolveHouseholdStripeCustomer, createBillingPortalUrl } from "@/lib/payments/billingPortal";
 import { saveApparelForPayment, apparelRequiredFor } from "@/lib/payments/apparel";
 import { normalizeCart } from "@/lib/domain/apparel";
 import { audit } from "@/lib/audit";
@@ -43,6 +45,18 @@ export async function POST(req: Request) {
   const op = String(formData.get("op") ?? "");
 
   switch (op) {
+    // Self-service: open the Stripe Billing Portal so the family can update their
+    // card, view invoices, and manage their payment plan on their own.
+    case "billingPortal": {
+      if (!isStripeConfigured()) return NextResponse.redirect(new URL("/portal?err=billing", origin), 303);
+      const peopleIds = await householdPersonIds(personId);
+      const customerId = await resolveHouseholdStripeCustomer(peopleIds);
+      if (!customerId) return NextResponse.redirect(new URL("/portal?err=nocard", origin), 303);
+      const url = await createBillingPortalUrl(customerId, `${origin}/portal?ok=billing`);
+      if (!url) return NextResponse.redirect(new URL("/portal?err=billing", origin), 303);
+      return NextResponse.redirect(url, 303);
+    }
+
     // Book an à la carte offering (§11). Creates a REQUESTED booking for the coach.
     case "bookOffering": {
       const offeringId = String(formData.get("offeringId") ?? "");
