@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { resolveHouseholdStripeCustomer, currentCustomerCardId, syncCustomerDefaultCardToSeries, catchUpUnpaidInvoicesForCustomer } from "@/lib/payments/billingPortal";
+import { resolveHouseholdStripeCustomer, currentCustomerCardId, setCustomerDefaultCard, syncCustomerDefaultCardToSeries, catchUpUnpaidInvoicesForCustomer } from "@/lib/payments/billingPortal";
 import { catchUpUnpaidLessonsForCustomer } from "@/lib/domain/lessonBilling";
 
 // The Stripe Billing Portal return URL. When a customer finishes in the portal,
@@ -24,11 +24,14 @@ export async function GET(req: Request) {
     const customerId = await resolveHouseholdStripeCustomer(peopleIds);
     if (!customerId) return back;
     const cardId = await currentCustomerCardId(customerId);
+    // Force the card they just chose to be the default on the customer AND on
+    // every active subscription, so it isn't overridden by a stale per-sub card.
+    if (cardId) await setCustomerDefaultCard(customerId, cardId);
     await syncCustomerDefaultCardToSeries(customerId, cardId);
     // Catch up anything they already owe, on the new card — but only for a plan
     // or lesson series they've already started paying (never charge from scratch).
     await catchUpUnpaidLessonsForCustomer(customerId, new Date());
-    await catchUpUnpaidInvoicesForCustomer(customerId);
+    await catchUpUnpaidInvoicesForCustomer(customerId, cardId);
   } catch (e) {
     console.error("billing-return sync failed", e);
   }
