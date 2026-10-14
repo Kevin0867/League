@@ -78,6 +78,31 @@ export async function currentCustomerCardId(customerId: string): Promise<string 
   }
 }
 
+/** Force the given card to be the customer's default — on the customer record
+ *  (used by invoices and new subscription charges) AND on each of their active
+ *  subscriptions (a subscription-level default would otherwise override and keep
+ *  billing the old card). Best-effort. */
+export async function setCustomerDefaultCard(customerId: string, paymentMethodId: string): Promise<void> {
+  if (!isStripeConfigured() || !customerId || !paymentMethodId) return;
+  try {
+    await stripe().customers.update(customerId, { invoice_settings: { default_payment_method: paymentMethodId } });
+  } catch (e) {
+    console.error("set customer default card failed", e);
+  }
+  try {
+    const subs = await stripe().subscriptions.list({ customer: customerId, status: "all", limit: 20 });
+    for (const sub of subs.data) {
+      if (sub.status === "canceled" || sub.status === "incomplete_expired") continue;
+      const cur = typeof sub.default_payment_method === "string" ? sub.default_payment_method : sub.default_payment_method?.id ?? null;
+      if (cur === paymentMethodId) continue;
+      try { await stripe().subscriptions.update(sub.id, { default_payment_method: paymentMethodId }); }
+      catch (e) { console.error("set subscription default card failed", sub.id, e); }
+    }
+  } catch (e) {
+    console.error("list subscriptions failed", e);
+  }
+}
+
 /** Sync a customer's new default card onto their active lesson series, so the
  *  next off-session lesson charge uses the card they just updated. Called on the
  *  Billing Portal return AND (if configured) from the customer.updated webhook. */
@@ -94,7 +119,7 @@ export async function syncCustomerDefaultCardToSeries(customerId: string, paymen
  *  This catches up a missed season-fee installment, e.g. paid #1, missed #2. A
  *  customer who never paid anything is left alone. invoice.paid then posts the
  *  installment through the normal webhook. Best-effort. */
-export async function catchUpUnpaidInvoicesForCustomer(customerId: string): Promise<{ paid: number; failed: number }> {
+export async function catchUpUnpaidInvoicesForCustomer(customerId: string, paymentMethodId?: string | null): Promise<{ paid: number; failed: number }> {
   if (!isStripeConfigured() || !customerId) return { paid: 0, failed: 0 };
   let paid = 0, failed = 0;
   try {
@@ -103,8 +128,10 @@ export async function catchUpUnpaidInvoicesForCustomer(customerId: string): Prom
     const open = await stripe().invoices.list({ customer: customerId, status: "open", limit: 20 });
     for (const inv of open.data) {
       if (!inv.id) continue;
-      try { await stripe().invoices.pay(inv.id); paid++; }
-      catch (e) { console.error("invoice catch-up pay failed", inv.id, e); failed++; }
+      try {
+        await stripe().invoices.pay(inv.id, paymentMethodId ? { payment_method: paymentMethodId } : undefined);
+        paid++;
+      } catch (e) { console.error("invoice catch-up pay failed", inv.id, e); failed++; }
     }
   } catch (e) {
     console.error("invoice catch-up failed", e);
