@@ -83,6 +83,66 @@ export async function sendSms(to: string | null | undefined, rawBody: string): P
 /** A file attached to an email (content is base64-encoded). */
 export type EmailAttachment = { filename: string; content: string; contentType?: string };
 
+// --- Resend rate limiting ------------------------------------------------
+// Resend enforces a per-second request cap on the account (commonly 2 on the
+// free tier, 10 on paid). A club-wide blast sends one email per recipient; fired
+// at full concurrency it instantly exceeds that cap, and Resend rejects the
+// overflow with HTTP 429 ("you can only make N requests per second"). That
+// surfaced to admins as "can only send 10 at a time" and silently dropped the
+// throttled recipients. We fix it two ways so a blast of ANY size reaches
+// everyone: (1) pace outbound Resend calls to stay under the limit, and (2)
+// retry a 429 (honoring Retry-After) or transient 5xx instead of failing.
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// Keep request starts at least MIN_GAP_MS apart → a steady ceiling of about
+// RESEND_MAX_RPS requests/second no matter how many sends are in flight. Tune
+// RESEND_MAX_RPS to the account's Resend plan (default stays under the common
+// 10/s paid tier). Admissions are serialized through a promise chain so the
+// spacing holds even when many sends race from the same blast.
+const RESEND_MAX_RPS = Math.max(1, Number(process.env.RESEND_MAX_RPS ?? 8) || 8);
+const MIN_GAP_MS = Math.ceil(1000 / RESEND_MAX_RPS);
+let resendLastStart = 0;
+let resendGate: Promise<void> = Promise.resolve();
+function resendAdmit(): Promise<void> {
+  resendGate = resendGate.then(async () => {
+    const wait = resendLastStart + MIN_GAP_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    resendLastStart = Date.now();
+  });
+  return resendGate;
+}
+
+// POST to Resend with pacing + retry on a rate-limit (429) or transient 5xx, so
+// a large blast never loses recipients to throttling — it just paces itself.
+async function resendPost(payload: Record<string, unknown>): Promise<SendResult> {
+  const MAX_ATTEMPTS = 6;
+  for (let attempt = 1; ; attempt++) {
+    await resendAdmit();
+    let res: Response;
+    try {
+      res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY!}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      if (attempt >= MAX_ATTEMPTS) return { ok: false, simulated: false, error: e instanceof Error ? e.message : "send failed" };
+      await sleep(Math.min(8000, 250 * 2 ** (attempt - 1)));
+      continue;
+    }
+    if (res.ok) return { ok: true, simulated: false };
+    const retryable = res.status === 429 || res.status >= 500;
+    if (!retryable || attempt >= MAX_ATTEMPTS) {
+      const text = await res.text().catch(() => "");
+      return { ok: false, simulated: false, error: `Resend ${res.status}: ${text.slice(0, 200)}` };
+    }
+    // Respect Retry-After (seconds) when Resend sends it, else back off.
+    const ra = Number(res.headers.get("retry-after"));
+    const backoff = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(8000, 250 * 2 ** (attempt - 1));
+    await sleep(backoff);
+  }
+}
+
 /** Send an email via Resend's REST API (no SDK needed). Accepts a single address
  *  or a list — a person may carry up to three notification addresses (both
  *  parents + the student), and all should receive the same email. */
@@ -106,43 +166,30 @@ export async function sendEmail(
     console.log(`[Email simulated] → ${recipients.join(", ")}: ${subject}${attachments?.length ? ` (+${attachments.length} attachment)` : ""}`);
     return { ok: true, simulated: true };
   }
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY!}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM ?? "PURE Academy <team@purepickleball.com>",
-        to: recipients,
-        // Replies go to the message sender when the caller names one (so a coach
-        // sees email replies) — and can include the team inbox so admins see the
-        // reply too. Falls back to the team inbox (override with EMAIL_REPLY_TO).
-        reply_to: (() => {
-          const rt = opts?.replyTo;
-          const list = (Array.isArray(rt) ? rt : rt ? [rt] : []).map((e) => (e ?? "").trim()).filter(Boolean);
-          if (list.length > 1) return list;
-          if (list.length === 1) return list[0];
-          return process.env.EMAIL_REPLY_TO || "team@purepickleball.com";
-        })(),
-        // Optionally copy every outbound email to a shared inbox for a record —
-        // unless the caller opts out (confidential mail must go only to `to`).
-        ...(process.env.EMAIL_BCC && !opts?.skipBcc ? { bcc: process.env.EMAIL_BCC } : {}),
-        subject,
-        text: body,
-        ...(html ? { html } : {}),
-        ...(attachments?.length
-          ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, ...(a.contentType ? { content_type: a.contentType } : {}) })) }
-          : {}),
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return { ok: false, simulated: false, error: `Resend ${res.status}: ${text.slice(0, 200)}` };
-    }
-    return { ok: true, simulated: false };
-  } catch (e) {
-    return { ok: false, simulated: false, error: e instanceof Error ? e.message : "send failed" };
-  }
+  const payload: Record<string, unknown> = {
+    from: process.env.EMAIL_FROM ?? "PURE Academy <team@purepickleball.com>",
+    to: recipients,
+    // Replies go to the message sender when the caller names one (so a coach
+    // sees email replies) — and can include the team inbox so admins see the
+    // reply too. Falls back to the team inbox (override with EMAIL_REPLY_TO).
+    reply_to: (() => {
+      const rt = opts?.replyTo;
+      const list = (Array.isArray(rt) ? rt : rt ? [rt] : []).map((e) => (e ?? "").trim()).filter(Boolean);
+      if (list.length > 1) return list;
+      if (list.length === 1) return list[0];
+      return process.env.EMAIL_REPLY_TO || "team@purepickleball.com";
+    })(),
+    // Optionally copy every outbound email to a shared inbox for a record —
+    // unless the caller opts out (confidential mail must go only to `to`).
+    ...(process.env.EMAIL_BCC && !opts?.skipBcc ? { bcc: process.env.EMAIL_BCC } : {}),
+    subject,
+    text: body,
+    ...(html ? { html } : {}),
+    ...(attachments?.length
+      ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, ...(a.contentType ? { content_type: a.contentType } : {}) })) }
+      : {}),
+  };
+  // Paced + retried so a club-wide blast stays under Resend's per-second cap and
+  // never drops a recipient to a 429.
+  return resendPost(payload);
 }
