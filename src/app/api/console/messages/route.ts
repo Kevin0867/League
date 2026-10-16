@@ -11,6 +11,10 @@ import { broadcastEmailHtml, broadcastSmsWithMedia } from "@/lib/domain/broadcas
 // unlike a server action they don't re-render inline under the cookieless POST
 // and bounce through the console layout's auth.
 export const dynamic = "force-dynamic";
+// A club-wide blast sends one email per recipient, paced under Resend's
+// per-second rate limit, so it can run longer than the default budget. Give it
+// room (at ~8/s this covers a couple thousand recipients).
+export const maxDuration = 300;
 
 // Admin-only broad audiences (the whole club). A coach may reach staff broadcast
 // audiences (all coaches, all admins) and any team they coach.
