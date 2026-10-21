@@ -284,6 +284,35 @@ export async function POST(req: Request) {
       return back("?ok=relinked");
     }
 
+    // One-shot household fix for a family that shares a single email. Picks the
+    // parent the login should open to AND links the chosen children under that
+    // parent (guardianId), so the parent's portal shows the whole family. This is
+    // the complete fix when a login landed on a child (e.g. Briggs) but the email
+    // actually belongs to the parent (Chelsea) who also has kids (Lylah, Josie).
+    case "fixHousehold": {
+      const parentId = String(fd.get("parentId") ?? "").trim();
+      if (!parentId) return back("?err=fields");
+      const parent = await prisma.person.findUnique({ where: { id: parentId }, select: { id: true, firstName: true, lastName: true, guardianId: true } });
+      if (!parent) return back("?err=nopers");
+      // The parent can back only one login (User.personId is unique).
+      const held = await prisma.user.findFirst({ where: { personId: parentId, id: { not: userId } }, select: { email: true } });
+      if (held) return back("?err=linkheld");
+      const childIds = fd.getAll("childIds").map((v) => String(v).trim()).filter((c) => c && c !== parentId);
+      await prisma.$transaction(async (tx) => {
+        // Attach the login to the parent (head of household).
+        await tx.user.update({ where: { id: userId }, data: { personId: parentId } });
+        // Never leave the parent pointing at one of their own kids as a guardian.
+        if (parent.guardianId && childIds.includes(parent.guardianId)) {
+          await tx.person.update({ where: { id: parentId }, data: { guardianId: null } });
+        }
+        if (childIds.length) {
+          await tx.person.updateMany({ where: { id: { in: childIds } }, data: { guardianId: parentId } });
+        }
+      });
+      await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.fixHousehold", summary: `Login → ${parent.firstName} ${parent.lastName}; linked ${childIds.length} child(ren)` });
+      return back(`?ok=household&n=${childIds.length}`);
+    }
+
     // Generate a set-password link WITHOUT emailing it — the admin copies it and
     // delivers it however they like (text, in person). Handy when email delivery
     // is unreliable. The link is shown once, in a copy box, on return.
