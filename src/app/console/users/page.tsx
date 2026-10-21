@@ -31,12 +31,15 @@ const ERRORS: Record<string, string> = {
   lastadmin: "That's the last admin login — assign admin to someone else before removing it.",
   delete: "Couldn't delete that login. It may still be referenced elsewhere.",
   nofamilies: "No active PURE Academy season found to invite families from.",
+  nopers: "Couldn't find that person. Pick a name from the list.",
+  linkheld: "Another login is already attached to that person. Delete or relink that account first.",
 };
 const OKS: Record<string, string> = {
   role: "Role updated.",
   rolesBulk: "Role changes saved.",
   active: "Access updated.",
   edited: "User updated.",
+  relinked: "Login re-pointed. They'll see this person's household next time they sign in.",
   deleted: "Login deleted. The person's records were kept.",
   invited: "Invitation sent — they'll get an email to set their password.",
   "invite-resent": "Invitation re-sent — a fresh set-password link is on its way.",
@@ -55,8 +58,16 @@ export default async function UsersPage({
   const isAdmin = (session?.roles ?? [session?.role]).some((r) => ADMIN_ROLES.includes((r ?? "") as never));
 
   const users = await prisma.user.findMany({
-    include: { person: true },
+    include: { person: { include: { guardian: { select: { id: true, firstName: true, lastName: true } } } } },
     orderBy: [{ role: "asc" }, { email: "asc" }],
+  });
+
+  // People for the "attach login to a different person" picker — the fix for a
+  // login that opens to the wrong family member. Light fields only; the datalist
+  // value carries the id so a name search resolves to an exact person.
+  const allPeople = await prisma.person.findMany({
+    select: { id: true, firstName: true, lastName: true, email: true },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
 
   // How many family portal logins the bulk-invite would create right now.
@@ -148,6 +159,14 @@ export default async function UsersPage({
           />
         )}
       </div>
+
+      {/* Shared options for the per-login "attach to a different person" picker.
+          The value carries "#<id>" so a name search resolves to an exact person. */}
+      <datalist id="people-relink-list">
+        {allPeople.map((p) => (
+          <option key={p.id} value={`${p.firstName} ${p.lastName}${p.email ? ` · ${p.email}` : ""} #${p.id}`} />
+        ))}
+      </datalist>
 
       <div className="max-w-md">
         <TableFilter targetId="users-table" placeholder="Search by name or email…" />
@@ -244,6 +263,38 @@ export default async function UsersPage({
                               </div>
                               <button className="btn-secondary text-xs">Save changes</button>
                             </form>
+
+                            {/* Which person this login opens to. Fixes a login
+                                attached to the wrong family member — e.g. a parent
+                                who shares one email across her kids whose login
+                                landed on a child. Pointing it at the parent makes
+                                the portal show her whole household. */}
+                            <div className="space-y-2 border-t border-slate-200 pt-2">
+                              <div className="text-xs text-slate-500">
+                                Opens to: <span className="font-semibold text-slate-700">{u.person ? `${u.person.firstName} ${u.person.lastName}` : "— (no person)"}</span>
+                              </div>
+                              {u.person?.guardian && (
+                                <form method="POST" action="/api/console/users">
+                                  <input type="hidden" name="ticket" value={ticket} />
+                                  <input type="hidden" name="op" value="relinkPerson" />
+                                  <input type="hidden" name="userId" value={u.id} />
+                                  <input type="hidden" name="personId" value={u.person.guardian.id} />
+                                  <button className="btn-chip-brand" title="Point this login at the parent so they see their whole household">
+                                    Switch to parent: {u.person.guardian.firstName} {u.person.guardian.lastName}
+                                  </button>
+                                </form>
+                              )}
+                              <form method="POST" action="/api/console/users" className="flex flex-wrap items-end gap-2">
+                                <input type="hidden" name="ticket" value={ticket} />
+                                <input type="hidden" name="op" value="relinkPerson" />
+                                <input type="hidden" name="userId" value={u.id} />
+                                <div className="min-w-0 flex-1">
+                                  <label className="label">Attach to a different person</label>
+                                  <input name="personId" list="people-relink-list" className="input py-1 text-sm" placeholder="Start typing a name…" autoComplete="off" />
+                                </div>
+                                <button className="btn-secondary text-xs">Relink</button>
+                              </form>
+                            </div>
 
                             {/* Copy a set-password link (no email needed) */}
                             <form method="POST" action="/api/console/users">
