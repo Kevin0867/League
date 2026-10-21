@@ -260,6 +260,30 @@ export async function POST(req: Request) {
       return back("?ok=edited");
     }
 
+    // Re-point a login at a DIFFERENT existing person — the fix for a login that
+    // opens to the wrong family member (e.g. a parent who shares one email across
+    // her kids, whose login landed on a child instead of herself). Attaching the
+    // login to the parent makes the portal's household view show her AND all her
+    // kids. Accepts either a raw person id or the datalist's "Name · email #id"
+    // string (we parse the trailing #id). The person's own records are untouched;
+    // only which person this sign-in opens changes.
+    case "relinkPerson": {
+      const raw = String(fd.get("personId") ?? "").trim();
+      const m = raw.match(/#([a-z0-9]+)\s*$/i);
+      const personId = m ? m[1] : raw;
+      if (!personId) return back("?err=fields");
+      const person = await prisma.person.findUnique({ where: { id: personId }, select: { id: true, firstName: true, lastName: true } });
+      if (!person) return back("?err=nopers");
+      // personId is unique on User — a person can back only one login. Block a
+      // relink that would collide with another account (they'd need to delete or
+      // relink that one first).
+      const held = await prisma.user.findFirst({ where: { personId, id: { not: userId } }, select: { email: true } });
+      if (held) return back("?err=linkheld");
+      await prisma.user.update({ where: { id: userId }, data: { personId } });
+      await audit({ actorId: actor.userId, entityType: "User", entityId: userId, action: "user.relink", summary: `Relinked login to ${person.firstName} ${person.lastName}` });
+      return back("?ok=relinked");
+    }
+
     // Generate a set-password link WITHOUT emailing it — the admin copies it and
     // delivers it however they like (text, in person). Handy when email delivery
     // is unreliable. The link is shown once, in a copy box, on return.
