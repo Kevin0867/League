@@ -40,6 +40,7 @@ const OKS: Record<string, string> = {
   active: "Access updated.",
   edited: "User updated.",
   relinked: "Login re-pointed. They'll see this person's household next time they sign in.",
+  household: "Household linked — the parent's login now shows the whole family.",
   deleted: "Login deleted. The person's records were kept.",
   invited: "Invitation sent — they'll get an email to set their password.",
   "invite-resent": "Invitation re-sent — a fresh set-password link is on its way.",
@@ -69,6 +70,18 @@ export default async function UsersPage({
     select: { id: true, firstName: true, lastName: true, email: true },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
+
+  // Group people by their (primary) email so the "Fix household" tool can offer
+  // the family that shares a login's email — the common case where a parent used
+  // one address for herself and her kids, and the login landed on a child.
+  const peopleByEmail = new Map<string, typeof allPeople>();
+  for (const p of allPeople) {
+    const key = (p.email ?? "").toLowerCase().trim();
+    if (!key) continue;
+    const arr = peopleByEmail.get(key) ?? [];
+    arr.push(p);
+    peopleByEmail.set(key, arr);
+  }
 
   // How many family portal logins the bulk-invite would create right now.
   const activeSeason = await prisma.season.findFirst({
@@ -294,6 +307,46 @@ export default async function UsersPage({
                                 </div>
                                 <button className="btn-secondary text-xs">Relink</button>
                               </form>
+
+                              {/* Whole-family fix: when several people share this
+                                  login's email (a parent who used one address for
+                                  herself and her kids), pick the parent and tick
+                                  the children. The login opens to the parent and
+                                  the kids become her dependents, so her portal
+                                  shows the whole family in one place. */}
+                              {(() => {
+                                const group = peopleByEmail.get((u.email ?? "").toLowerCase().trim()) ?? [];
+                                if (group.length < 2) return null;
+                                return (
+                                  <form method="POST" action="/api/console/users" className="space-y-2 rounded-lg border border-brand-200 bg-brand-50/60 p-2">
+                                    <input type="hidden" name="ticket" value={ticket} />
+                                    <input type="hidden" name="op" value="fixHousehold" />
+                                    <input type="hidden" name="userId" value={u.id} />
+                                    <div className="text-xs font-semibold text-brand-900">Fix household — {group.length} people share this email</div>
+                                    <p className="text-[11px] text-slate-500">Choose the parent this login should open to, and tick the children to link under them.</p>
+                                    <div>
+                                      <label className="label">Parent (head of household)</label>
+                                      <select name="parentId" className="input py-1 text-sm" defaultValue="">
+                                        <option value="" disabled>Choose the parent…</option>
+                                        {group.map((p) => (
+                                          <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <div className="label">Children to link</div>
+                                      {group.map((p) => (
+                                        <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700">
+                                          <input type="checkbox" name="childIds" value={p.id} defaultChecked />
+                                          {p.firstName} {p.lastName}
+                                        </label>
+                                      ))}
+                                      <p className="text-[11px] text-slate-400">Whoever you pick as the parent above is skipped automatically.</p>
+                                    </div>
+                                    <button className="btn-secondary text-xs">Link as one household</button>
+                                  </form>
+                                );
+                              })()}
                             </div>
 
                             {/* Copy a set-password link (no email needed) */}
