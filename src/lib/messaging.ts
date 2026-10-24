@@ -111,7 +111,21 @@ export async function dispatchMessage(input: DispatchInput): Promise<DispatchRes
   // Never make the sender a recipient of their own message: they shouldn't get
   // an unread badge — or a self-email/text — for something they just sent. A
   // SINGLE_PERSON message addressed to someone else is unaffected.
-  const recipients = senderPersonId ? resolvedRecipients.filter((r) => r.personId !== senderPersonId) : resolvedRecipients;
+  const withoutSender = senderPersonId ? resolvedRecipients.filter((r) => r.personId !== senderPersonId) : resolvedRecipients;
+
+  // Honor the per-person do-not-contact switch centrally: anyone marked
+  // do-not-contact is dropped from EVERY send that flows through here — broadcasts,
+  // announcements, direct messages, and the dispatch-based automated jobs alike —
+  // so a withdrawn person hears nothing until they're allowed back in.
+  const suppressed = withoutSender.length
+    ? new Set(
+        (await prisma.person.findMany({
+          where: { id: { in: withoutSender.map((r) => r.personId) }, doNotContact: true },
+          select: { id: true },
+        })).map((p) => p.id),
+      )
+    : new Set<string>();
+  const recipients = suppressed.size ? withoutSender.filter((r) => !suppressed.has(r.personId)) : withoutSender;
 
   const message = await prisma.message.create({
     data: {

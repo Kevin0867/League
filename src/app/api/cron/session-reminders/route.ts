@@ -68,6 +68,7 @@ export async function GET(req: Request) {
                       firstName: true,
                       phone: true,
                       smsConsentAt: true,
+                      doNotContact: true,
                       guardian: { select: { firstName: true, phone: true, smsConsentAt: true } },
                     },
                   },
@@ -93,11 +94,11 @@ export async function GET(req: Request) {
   // spot for this date, so they need to know where to be. SessionSub is a plain
   // tag (no relation), so resolve the persons by id.
   const subsFor = async (ids: string[]) => {
-    const map = new Map<string, { id: string; firstName: string; phone: string | null; smsConsentAt: Date | null; guardian: { firstName: string | null; phone: string | null; smsConsentAt: Date | null } | null }[]>();
+    const map = new Map<string, { id: string; firstName: string; phone: string | null; smsConsentAt: Date | null; doNotContact: boolean; guardian: { firstName: string | null; phone: string | null; smsConsentAt: Date | null } | null }[]>();
     if (!ids.length) return map;
     const rows = await prisma.sessionSub.findMany({ where: { sessionId: { in: ids } }, select: { sessionId: true, personId: true } });
     const pids = [...new Set(rows.map((r) => r.personId))];
-    const people = pids.length ? await prisma.person.findMany({ where: { id: { in: pids } }, select: { id: true, firstName: true, phone: true, smsConsentAt: true, guardian: { select: { firstName: true, phone: true, smsConsentAt: true } } } }) : [];
+    const people = pids.length ? await prisma.person.findMany({ where: { id: { in: pids } }, select: { id: true, firstName: true, phone: true, smsConsentAt: true, doNotContact: true, guardian: { select: { firstName: true, phone: true, smsConsentAt: true } } } }) : [];
     const byId = new Map(people.map((p) => [p.id, p]));
     for (const r of rows) { const p = byId.get(r.personId); if (!p) continue; const a = map.get(r.sessionId) ?? []; a.push(p); map.set(r.sessionId, a); }
     return map;
@@ -142,6 +143,7 @@ export async function GET(req: Request) {
       : [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(candSubs.get(s.id) ?? [])];
     const sentTo = new Set<string>();
     for (const p of roster) {
+      if (p.doNotContact) continue; // honor do-not-contact
       const token = await signCheckinToken(s.id, p.id);
       const link = `${origin}/checkin/${token}`;
       // Recipients: the player and their guardian, wherever we have a number.
@@ -188,7 +190,7 @@ export async function GET(req: Request) {
                 select: {
                   person: {
                     select: {
-                      id: true, firstName: true, phone: true, smsConsentAt: true,
+                      id: true, firstName: true, phone: true, smsConsentAt: true, doNotContact: true,
                       guardian: { select: { firstName: true, phone: true, smsConsentAt: true } },
                     },
                   },
@@ -224,6 +226,7 @@ export async function GET(req: Request) {
       : [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(soonSubs.get(s.id) ?? [])];
     const sentTo = new Set<string>();
     for (const p of roster) {
+      if (p.doNotContact) continue; // honor do-not-contact
       const recips: { phone: string; name: string }[] = [];
       if (p.phone) recips.push({ phone: p.phone, name: p.firstName });
       if (p.guardian?.phone) recips.push({ phone: p.guardian.phone, name: p.firstName });

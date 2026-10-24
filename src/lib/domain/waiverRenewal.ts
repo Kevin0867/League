@@ -74,7 +74,7 @@ export async function findNewlyAdultMinors(db: PrismaClient) {
  */
 export async function flagAndNotify(
   db: PrismaClient,
-  person: { id: string; firstName: string; email: string | null; waiverRenewalRequiredAt: Date | null }
+  person: { id: string; firstName: string; email: string | null; waiverRenewalRequiredAt: Date | null; doNotContact?: boolean }
 ): Promise<"flagged" | "already" | "no-email"> {
   if (person.waiverRenewalRequiredAt) return "already";
 
@@ -83,6 +83,9 @@ export async function flagAndNotify(
     data: { isMinor: false, waiverRenewalRequiredAt: new Date(), waiverSignedAt: null },
   });
 
+  // Keep the compliance state (waiver now invalid) but never email a person who
+  // has asked not to be contacted.
+  if (person.doNotContact) return "flagged";
   if (!person.email) return "no-email";
 
   const token = await signWaiverToken(person.id);

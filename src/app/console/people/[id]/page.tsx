@@ -152,6 +152,24 @@ export default async function PersonDetail({
             {person.guardian && <Row label="Guardian" value={`${person.guardian.firstName} ${person.guardian.lastName}`} />}
             {person.dependents.length > 0 && <Row label="Dependents" value={person.dependents.map((dpt) => `${dpt.firstName} ${dpt.lastName}`).join(", ")} />}
           </dl>
+
+          {/* Do-not-contact switch: when on, no automated or broadcast email/SMS
+              reaches this person until it's turned back off. */}
+          <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg p-2 text-sm ring-1 ${person.doNotContact ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-200"}`}>
+            <span className={person.doNotContact ? "font-medium text-amber-800" : "text-slate-600"}>
+              {person.doNotContact ? "🔕 Do not contact — no messages are sent" : "Receiving messages normally"}
+            </span>
+            <form method="POST" action="/api/console/people">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="setDoNotContact" />
+              <input type="hidden" name="personId" value={person.id} />
+              <input type="hidden" name="on" value={person.doNotContact ? "0" : "1"} />
+              <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
+              <button className={person.doNotContact ? "btn-chip-muted text-xs" : "btn-secondary text-xs"}>
+                {person.doNotContact ? "Allow contact again" : "Stop contacting"}
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Protected: emergency + medical (decrypted for authorized staff) */}

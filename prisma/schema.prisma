@@ -217,6 +217,14 @@ model Person {
   // consent must be recorded and honored against the person record.
   waiverSignedAt     DateTime?
   mediaOptOut        Boolean   @default(false)
+  /// Hard "do not contact" switch. When true, this person receives NO automated
+  /// or broadcast email/SMS from us — honored centrally in dispatchMessage and in
+  /// the player-facing reminder jobs (waitlist offers, waiver renewal, session
+  /// reminders). Set when someone leaves (e.g. withdraws from the season) and
+  /// should hear nothing until they opt back in; cleared manually (e.g. when they
+  /// register again). Does not block a password-reset/invite the admin initiates.
+  doNotContact       Boolean   @default(false)
+  doNotContactAt     DateTime?
   /// Express opt-in to receive email / SMS from PURE (TCPA / Twilio A2P). Set
   /// when the person checks the box on the opt-in form or during registration;
   /// the exact language and timestamp are also captured in MessagingConsent.
