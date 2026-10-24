@@ -1296,6 +1296,11 @@ model Season {
   /// close date. When true, every new registration is filed as WAITLISTED right
   /// away — used to close enrollment on demand without date arithmetic.
   waitlistMode Boolean @default(false)
+  /// Mute the automated player/guardian session reminders (the ~2-hour "class
+  /// today" heads-up and the ~15-minute check-in text) for this season — used
+  /// when the training schedule is superseded (e.g. ACP match play starts) and
+  /// the practice reminders would be wrong. Coach reminders are unaffected.
+  playerRemindersOff Boolean @default(false)
   /// When the year-end championship tournament begins (one event; individual
   /// bracket matches aren't separately scheduled).
   championshipStartsAt DateTime?

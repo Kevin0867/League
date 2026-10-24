@@ -215,6 +215,20 @@ export async function POST(req: Request) {
       return back(on ? "?ok=waitlistOn" : "?ok=waitlistOff");
     }
 
+    // Mute/unmute the automated player session reminders (the ~2h "class today"
+    // and ~15-min check-in texts) for a season — used when match play starts and
+    // the practice schedule no longer applies. `off=1` mutes; coach reminders are
+    // untouched.
+    case "setPlayerReminders": {
+      const id = String(formData.get("seasonId") ?? "");
+      const off = String(formData.get("off") ?? "") === "1";
+      const season = await prisma.season.findUnique({ where: { id } });
+      if (!season) return back("?err=notfound");
+      await prisma.season.update({ where: { id }, data: { playerRemindersOff: off } });
+      await audit({ actorId: actor.userId, entityType: "Season", entityId: id, action: "season.playerReminders", summary: `${off ? "Muted" : "Resumed"} player session reminders for ${season.name}` });
+      return back(off ? "?ok=remindersOff" : "?ok=remindersOn");
+    }
+
     case "addDivision": {
       const seasonId = String(formData.get("seasonId") ?? "");
       const name = String(formData.get("name") ?? "").trim();
