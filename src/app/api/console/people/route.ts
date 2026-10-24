@@ -64,6 +64,20 @@ export async function POST(req: Request) {
     return back("?ok=personedit");
   }
 
+  // Flip the hard do-not-contact switch for a person — e.g. someone who withdrew
+  // and should receive no automated or broadcast email/SMS until they return.
+  // Honored centrally in dispatchMessage and the reminder jobs. `on=1` mutes.
+  if (op === "setDoNotContact") {
+    const personId = String(formData.get("personId") ?? "").trim();
+    const on = String(formData.get("on") ?? "") === "1";
+    if (!personId) return back("?err=fields");
+    const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, lastName: true } });
+    if (!person) return back("?err=notfound");
+    await prisma.person.update({ where: { id: personId }, data: { doNotContact: on, doNotContactAt: on ? new Date() : null } });
+    await audit({ actorId: actor.userId, entityType: "Person", entityId: personId, action: "person.doNotContact", summary: `${on ? "Enabled" : "Cleared"} do-not-contact for ${person.firstName} ${person.lastName}` });
+    return back(on ? "?ok=dncon" : "?ok=dncoff");
+  }
+
   // Link a child to a parent/guardian (or clear it). Fixes a player who doesn't
   // show up in a parent's portal because their guardian isn't set. Setting the
   // guardian makes the child a dependent — visible in that parent's household.

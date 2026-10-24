@@ -32,8 +32,8 @@ async function teamRoom(teamId: string) {
 
 /** Text + email the offered person their 24h window and accept link. */
 async function notifyOffer(teamName: string, personId: string, token: string, expires: Date): Promise<void> {
-  const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, email: true, phone: true } });
-  if (!person) return;
+  const person = await prisma.person.findUnique({ where: { id: personId }, select: { firstName: true, email: true, phone: true, doNotContact: true } });
+  if (!person || person.doNotContact) return;
   const link = `${appUrl()}/waitlist/accept?token=${token}`;
   const deadline = expires.toLocaleString("en-US", { timeZone: "America/Phoenix", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const msg = `Great news — a spot just opened on ${teamName} and you're next on the waitlist! Accept your spot here within 24 hours (by ${deadline} AZ) or it goes to the next person: ${link}`;

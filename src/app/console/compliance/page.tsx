@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/rbac";
 import { mintConsoleTicket } from "@/lib/auth";
 import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+import { DoNotContactManager } from "@/components/DoNotContactManager";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,15 @@ export default async function CompliancePage({
     prisma.person.count({ where: { duprId: { not: null }, duprVerified: false } }),
   ]);
 
+  // People on the hard do-not-contact list — no automated or broadcast email/SMS
+  // reaches them until they're taken back off.
+  const doNotContact = await prisma.person.findMany({
+    where: { doNotContact: true },
+    select: { id: true, firstName: true, lastName: true, email: true },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+  });
+  const doNotContactList = doNotContact.map((p) => ({ id: p.id, name: `${p.firstName} ${p.lastName}`, email: p.email ?? null }));
+
   const now = new Date();
   const in30 = new Date();
   in30.setDate(in30.getDate() + 30);
@@ -48,6 +58,12 @@ export default async function CompliancePage({
 
       {sp.ok === "waivers" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Sent a waiver request (text + email) to {sp.n ?? 0} outstanding player{sp.n === "1" ? "" : "s"}.</div>
+      )}
+      {sp.ok === "dncon" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Added to the do-not-contact list — they&apos;ll receive no automated or broadcast email or text until you allow contact again.</div>
+      )}
+      {sp.ok === "dncoff" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Removed from the do-not-contact list — they can receive messages again.</div>
       )}
       {sp.err && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">{sp.err === "auth" ? "You don't have permission." : "Something went wrong."}</div>
@@ -122,6 +138,13 @@ export default async function CompliancePage({
           )}
         </Panel>
       </div>
+
+      <Panel
+        title="Do not contact"
+        subtitle="Stop all automated and broadcast email/SMS to a person — e.g. someone who withdrew — until they opt back in. Honored across broadcasts, announcements, and the reminder jobs."
+      >
+        <DoNotContactManager ticket={ticket} muted={doNotContactList} returnTo="/console/compliance" />
+      </Panel>
 
       <p className="text-sm text-slate-500">
         {mediaOptOuts} {mediaOptOuts === 1 ? "person has" : "people have"} withheld media
