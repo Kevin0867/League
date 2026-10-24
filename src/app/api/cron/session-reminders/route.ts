@@ -117,20 +117,27 @@ export async function GET(req: Request) {
     const where = s.facility ? ` · ${s.facility.name}` : "";
 
     // Coach: reminder + one link to run the class (check in, notes, team message).
+    // A muted season silences every automated reminder for this session — coach
+    // and player/guardian alike (e.g. once match play starts on a different
+    // schedule). The session is still marked sent so the loop doesn't re-scan it.
+    const muted = mutedSeasons.has(s.seasonId);
+
     const coachLink = `${origin}/console/schedule/${s.id}`;
     const coachBody = `PURE Academy — ${teamNames} at ${when}${where}. Open your class to check players in, add notes, and message the team: ${coachLink}`;
-    for (const sc of s.coaches) {
-      const phone = phoneOf.get(sc.coachId);
-      if (!phone) continue;
-      const res = await sendSms(phone, coachBody);
-      if (res.ok) texted++;
+    if (!muted) {
+      for (const sc of s.coaches) {
+        const phone = phoneOf.get(sc.coachId);
+        if (!phone) continue;
+        const res = await sendSms(phone, coachBody);
+        if (res.ok) texted++;
+      }
     }
 
     // Players + guardians with a phone: time, place, and a self-check-in
     // link scoped to that player. Dedupe by phone so a parent coaching their own
     // kid, or two players sharing a number, aren't double-texted. Skipped
-    // entirely when this session's season has player reminders muted.
-    const roster = mutedSeasons.has(s.seasonId)
+    // entirely when this session's season has reminders muted.
+    const roster = muted
       ? []
       : [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(candSubs.get(s.id) ?? [])];
     const sentTo = new Set<string>();

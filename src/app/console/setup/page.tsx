@@ -25,8 +25,8 @@ const OK_MESSAGE: Record<string, string> = {
   toggleSeasonTest: "Season test flag updated.",
   waitlistOn: "Waitlist mode ON — every new sign-up now goes to the waitlist, and the public form says registration is closed.",
   waitlistOff: "Registration reopened — new sign-ups are placed as normal again.",
-  remindersOff: "Player session reminders are OFF for this season — no automated practice reminder texts will go to players or guardians. Coach reminders are unaffected.",
-  remindersOn: "Player session reminders are back ON — players and guardians will get the automated practice reminder texts again.",
+  remindersOff: "Automated session reminders are OFF for this season — no automated practice reminder texts will go to players, guardians, or coaches.",
+  remindersOn: "Automated session reminders are back ON — players, guardians, and coaches will get the automated practice reminder texts again.",
   addDivision: "Division added.",
   editDivision: "Division updated.",
   deleteDivision: "Division removed.",
@@ -256,14 +256,14 @@ export default async function SetupPage({
           {s.active && (
             <div className={`flex flex-wrap items-center justify-between gap-3 rounded-lg p-3 ring-1 ${s.playerRemindersOff ? "bg-amber-50 ring-amber-200" : "bg-slate-50 ring-slate-200"}`}>
               <div className="text-sm">
-                <span className="text-slate-500">Player session reminders</span>{" "}
+                <span className="text-slate-500">Automated session reminders</span>{" "}
                 <span className={`font-semibold ${s.playerRemindersOff ? "text-amber-800" : "text-slate-800"}`}>
-                  {s.playerRemindersOff ? "OFF for this season" : "ON — texting players as normal"}
+                  {s.playerRemindersOff ? "OFF for this season" : "ON — texting as normal"}
                 </span>
                 <span className="ml-1 block text-xs text-slate-400 sm:ml-1 sm:inline">
                   {s.playerRemindersOff
-                    ? "The automated practice reminder texts (the ~2-hour heads-up and the ~15-minute check-in) are muted for players and guardians. Coach reminders still send."
-                    : "Turn off to stop the automated practice reminder texts to players and guardians — e.g. once match play starts on a different schedule. Coach reminders are unaffected."}
+                    ? "The automated practice reminder texts (the ~2-hour heads-up and the ~15-minute check-in) are muted for players, guardians, and coaches."
+                    : "Turn off to stop the automated practice reminder texts to players, guardians, and coaches — e.g. once match play starts on a different schedule."}
                 </span>
               </div>
               <form method="POST" action="/api/console/setup">
@@ -272,7 +272,7 @@ export default async function SetupPage({
                 <input type="hidden" name="seasonId" value={s.id} />
                 <input type="hidden" name="off" value={s.playerRemindersOff ? "0" : "1"} />
                 <button className={s.playerRemindersOff ? "btn-secondary text-sm" : "btn-primary text-sm"}>
-                  {s.playerRemindersOff ? "Resume player reminders" : "Turn off player reminders"}
+                  {s.playerRemindersOff ? "Resume reminders" : "Turn off reminders"}
                 </button>
               </form>
             </div>
