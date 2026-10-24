@@ -39,6 +39,13 @@ export async function GET(req: Request) {
   const from = new Date(now.getTime() - 2 * 864e5);
   const to = new Date(now.getTime() + 2 * 864e5);
 
+  // Seasons that have muted automated player reminders (e.g. once ACP match play
+  // starts and the practice schedule no longer applies). Player/guardian texts
+  // are skipped for sessions in these seasons; coach reminders still send.
+  const mutedSeasons = new Set(
+    (await prisma.season.findMany({ where: { playerRemindersOff: true }, select: { id: true } })).map((s) => s.id),
+  );
+
   const candidates = await prisma.session.findMany({
     where: {
       status: { in: ["SCHEDULED", "DELIVERED"] },
@@ -121,8 +128,11 @@ export async function GET(req: Request) {
 
     // Players + guardians with a phone: time, place, and a self-check-in
     // link scoped to that player. Dedupe by phone so a parent coaching their own
-    // kid, or two players sharing a number, aren't double-texted.
-    const roster = [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(candSubs.get(s.id) ?? [])];
+    // kid, or two players sharing a number, aren't double-texted. Skipped
+    // entirely when this session's season has player reminders muted.
+    const roster = mutedSeasons.has(s.seasonId)
+      ? []
+      : [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(candSubs.get(s.id) ?? [])];
     const sentTo = new Set<string>();
     for (const p of roster) {
       const token = await signCheckinToken(s.id, p.id);
@@ -201,7 +211,10 @@ export async function GET(req: Request) {
     const wherePart = [facilityName, address].filter(Boolean).join(", ");
     const whereText = wherePart ? ` at ${wherePart}` : "";
 
-    const roster = [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(soonSubs.get(s.id) ?? [])];
+    // Muted season → no player/guardian heads-up for this session.
+    const roster = mutedSeasons.has(s.seasonId)
+      ? []
+      : [...s.teams.flatMap((st) => st.team.members.map((m) => m.person)), ...(soonSubs.get(s.id) ?? [])];
     const sentTo = new Set<string>();
     for (const p of roster) {
       const recips: { phone: string; name: string }[] = [];
