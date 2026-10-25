@@ -7,6 +7,7 @@ import { can } from "@/lib/rbac";
 import { decryptField } from "@/lib/crypto";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TextResetLinkButton } from "@/components/TextResetLinkButton";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
 import { RESET_STATUS } from "@/lib/domain/resetStatus";
 import { backHref } from "@/lib/nav";
 
@@ -159,16 +160,27 @@ export default async function PersonDetail({
             <span className={person.doNotContact ? "font-medium text-amber-800" : "text-slate-600"}>
               {person.doNotContact ? "🔕 Do not contact — no messages are sent" : "Receiving messages normally"}
             </span>
-            <form method="POST" action="/api/console/people">
-              <input type="hidden" name="ticket" value={ticket} />
-              <input type="hidden" name="op" value="setDoNotContact" />
-              <input type="hidden" name="personId" value={person.id} />
-              <input type="hidden" name="on" value={person.doNotContact ? "0" : "1"} />
-              <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
-              <button className={person.doNotContact ? "btn-chip-muted text-xs" : "btn-secondary text-xs"}>
-                {person.doNotContact ? "Allow contact again" : "Stop contacting"}
-              </button>
-            </form>
+            {person.doNotContact ? (
+              <form method="POST" action="/api/console/people">
+                <input type="hidden" name="ticket" value={ticket} />
+                <input type="hidden" name="op" value="setDoNotContact" />
+                <input type="hidden" name="personId" value={person.id} />
+                <input type="hidden" name="on" value="0" />
+                <input type="hidden" name="returnTo" value={`/console/people/${person.id}`} />
+                <button className="btn-chip-muted text-xs">Allow contact again</button>
+              </form>
+            ) : (
+              <ConfirmSubmit
+                action="/api/console/people"
+                fields={{ ticket, op: "setDoNotContact", personId: person.id, on: "1", returnTo: `/console/people/${person.id}` }}
+                confirmTitle="⚠ Opt this person out of all messages?"
+                confirm={`${person.firstName} ${person.lastName} will receive NO automated or broadcast email or text from PURE Academy — including season announcements — until you turn this back off. Only do this if they asked to stop being contacted. To simply take someone out of a season, withdraw their registration instead.`}
+                confirmLabel="Yes, do not contact"
+                label="Stop contacting"
+                className="btn-secondary text-xs"
+                danger
+              />
+            )}
           </div>
         </div>
 

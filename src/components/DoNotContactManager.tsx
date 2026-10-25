@@ -1,5 +1,10 @@
 "use client";
 import { useRef, useState } from "react";
+import { ConfirmSubmit } from "@/components/ConfirmSubmit";
+
+// Shown before anyone is opted out, so it's a deliberate, confirmed choice.
+const OPT_OUT_WARNING =
+  "will receive NO automated or broadcast email or text from PURE Academy — including season announcements — until you turn this back off. Only do this if they asked to stop being contacted. To simply take someone out of a season, withdraw their registration instead.";
 
 type Found = { id: string; name: string; email: string | null };
 
@@ -68,14 +73,16 @@ export function DoNotContactManager({
                 {mutedIds.has(p.id) ? (
                   <span className="whitespace-nowrap text-xs font-medium text-amber-700">Already muted</span>
                 ) : (
-                  <form method="POST" action="/api/console/people">
-                    <input type="hidden" name="ticket" value={ticket} />
-                    <input type="hidden" name="op" value="setDoNotContact" />
-                    <input type="hidden" name="personId" value={p.id} />
-                    <input type="hidden" name="on" value="1" />
-                    <input type="hidden" name="returnTo" value={returnTo} />
-                    <button className="btn-secondary whitespace-nowrap text-xs">Do not contact</button>
-                  </form>
+                  <ConfirmSubmit
+                    action="/api/console/people"
+                    fields={{ ticket, op: "setDoNotContact", personId: p.id, on: "1", returnTo }}
+                    confirmTitle="⚠ Opt this person out of all messages?"
+                    confirm={`${p.name} ${OPT_OUT_WARNING}`}
+                    confirmLabel="Yes, do not contact"
+                    label="Do not contact"
+                    className="btn-secondary whitespace-nowrap text-xs"
+                    danger
+                  />
                 )}
               </li>
             ))}
