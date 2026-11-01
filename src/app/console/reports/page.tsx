@@ -2,9 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/RoadmapNote";
 import { formatCents } from "@/lib/money";
-import { teamContribution, completionRate, type TeamPnL } from "@/lib/domain/reporting";
-import type { FacilityRates, DeliveredSession } from "@/lib/domain/finance";
-import { COACH_PER_SESSION_CENTS } from "@/lib/enums";
+import { completionRate, type TeamPnL } from "@/lib/domain/reporting";
+import { seasonTeamPnls } from "@/lib/domain/reportingData";
 import { formatTime12, formatDate } from "@/lib/time";
 import { requireAdmin } from "@/lib/rbac";
 import { teamAssignmentReport, waitlistReport } from "@/lib/domain/rosterReports";
@@ -83,52 +82,9 @@ export default async function ReportsPage() {
   const rate = completionRate(registered, attended);
 
   // ---- Season P&L per team (§16) ----
-  const teams = await prisma.team.findMany({
-    where: season ? { seasonId: season.id, origin: "PURE_ACADEMY" } : { origin: "PURE_ACADEMY" },
-    include: {
-      facility: true,
-      members: { select: { personId: true } },
-      sessions: { include: { session: true } },
-    },
-  });
-
-  const pnls: TeamPnL[] = [];
-  for (const t of teams) {
-    const memberIds = t.members.map((m) => m.personId);
-    // Revenue is cash actually collected: fees paid in full, PLUS the collected
-    // portion of active subscriptions (per-installment × installments cleared).
-    // A subscription-heavy team no longer reads $0 — it earns credit as each
-    // 30-day charge lands.
-    let revenue = 0;
-    if (memberIds.length) {
-      const pays = await prisma.payment.findMany({
-        where: {
-          partyId: { in: memberIds },
-          category: "PLAYER_FEE",
-          OR: [{ status: "PAID" }, { installmentPlan: true, status: "PENDING", installmentsPaid: { gte: 1 } }],
-        },
-        select: { amountCents: true, status: true, installmentsPaid: true, installmentsTotal: true },
-      });
-      for (const p of pays) {
-        if (p.status === "PAID") {
-          revenue += p.amountCents;
-        } else {
-          const total = p.installmentsTotal ?? 3;
-          const perCharge = Math.round(p.amountCents / total); // matches Stripe's per-installment charge
-          revenue += perCharge * (p.installmentsPaid ?? 0);
-        }
-      }
-    }
-
-    const delivered = t.sessions.map((st) => st.session).filter((s) => s.status === "DELIVERED");
-    const coachCost = delivered.length * COACH_PER_SESSION_CENTS;
-    const ds: DeliveredSession[] = delivered.map((s) => ({ courtCount: s.courtCount, startTime: s.startTime, endTime: s.endTime, date: s.date }));
-    const rates: FacilityRates = t.facility
-      ? { feeBasis: t.facility.feeBasis, weekdayRateCents: t.facility.weekdayRateCents, weekendRateCents: t.facility.weekendRateCents, percentageRate: t.facility.percentageRate }
-      : { feeBasis: "NONE", weekdayRateCents: 0, weekendRateCents: 0, percentageRate: null };
-
-    pnls.push(teamContribution(t.name, t.id, revenue, coachCost, ds, rates));
-  }
+  // Shared with the CSV export (/console/export/pnl-teams) so the on-screen table
+  // and the download can never disagree.
+  const pnls: TeamPnL[] = await seasonTeamPnls();
 
   const totals = pnls.reduce(
     (a, p) => ({
@@ -151,6 +107,8 @@ export default async function ReportsPage() {
   };
 
   const EXPORTS = [
+    ["pnl-teams", "Season P&L (by team)"],
+    ["pnl-season", "P&L — season by month"],
     ["assignments", "Team assignments"],
     ["waitlist", "Waitlist"],
     ["registrations", "Registrations"],
@@ -310,7 +268,14 @@ export default async function ReportsPage() {
 
       {/* Season P&L */}
       <div className="card overflow-x-auto">
-        <h2 className="mb-3 font-semibold text-slate-900">Season P&amp;L by team</h2>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-slate-900">Season P&amp;L by team</h2>
+          <span className="text-xs text-slate-400">
+            <a href="/console/export/pnl-teams" className="font-medium text-brand-700 hover:underline">↓ CSV</a>
+            {" · "}
+            <Link href="/console/pnl" className="font-medium text-brand-700 hover:underline">Full P&amp;L statement →</Link>
+          </span>
+        </div>
         {pnls.length > 0 && totals.revenue === 0 && (
           <p className="mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
             No season fees marked paid yet, so revenue reads $0 across the board. It fills in as

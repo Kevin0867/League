@@ -138,6 +138,13 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
             : "Forecast: full projection — scheduled/outstanding revenue and every expense line, incl. court + coach pay for practices AND league/championship nights. Each team's coach earns 12 sessions for the season ($1,200/team): 6 practices, 5 league nights, and the championship."}
         </p>
         {!valid && <p className="text-sm text-rose-700">The “from” date needs to be on or before the “to” date.</p>}
+        {/* Export the statement exactly as shown (this range + basis), and the
+            whole-season month-by-month breakdown. */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          <span className="text-xs font-medium text-slate-500">Export:</span>
+          <a href={`/console/export/pnl?from=${from}&to=${to}&basis=${basis}`} className="btn-secondary text-sm">↓ This statement (CSV)</a>
+          <a href="/console/export/pnl-season" className="btn-secondary text-sm">↓ Season by month (CSV)</a>
+        </div>
       </div>
 
       {/* Revenue */}
