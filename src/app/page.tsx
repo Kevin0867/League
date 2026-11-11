@@ -55,14 +55,13 @@ export default async function HomePage() {
           {/* CTA + program details */}
           <div className="mt-10 grid gap-8 lg:grid-cols-2 lg:items-start">
             <div>
-              <Link
-                href="/open-spots"
+              <a
+                href="https://purepickleball.com/acp"
                 className="btn-accent inline-flex flex-col items-center rounded-2xl px-8 py-5 text-center"
               >
-                <span className="text-base font-extrabold uppercase tracking-wide">Fall 2026 Season — Now Enrolling</span>
-                <span className="mt-0.5 text-xs font-medium uppercase tracking-wide text-brand-900/70">All ages &amp; skill levels</span>
-                <span className="mt-1.5 text-sm font-bold text-brand-900 underline underline-offset-2">Click here to register →</span>
-              </Link>
+                <span className="text-base font-extrabold uppercase tracking-wide">Arizona Club Pickleball</span>
+                <span className="mt-1.5 text-sm font-bold text-brand-900 underline underline-offset-2">Check Arizona Club Pickleball Schedule and Standings here →</span>
+              </a>
             </div>
 
             <div>
