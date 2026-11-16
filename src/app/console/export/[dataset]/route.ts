@@ -8,6 +8,7 @@ import { computeEnrollmentBreakdown } from "@/lib/domain/enrollmentBreakdown";
 import { teamAssignmentReport, waitlistReport } from "@/lib/domain/rosterReports";
 import { pnlRange, pnlSeasonByMonth, monthLabel, today, type PnlBasis } from "@/lib/domain/pnl";
 import { seasonTeamPnls } from "@/lib/domain/reportingData";
+import { currentPayoutRunIds } from "@/lib/domain/payoutRuns";
 
 // Dollars as a plain number (no $ or thousands separator) so the CSV is ready
 // for spreadsheet math.
@@ -77,7 +78,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ dataset:
       }))));
     }
     case "payouts": {
-      const lines = await prisma.coachPayoutLine.findMany({ include: { coach: { include: { person: true } }, payoutRun: true } });
+      const keep = await currentPayoutRunIds();
+      const lines = await prisma.coachPayoutLine.findMany({ where: { payoutRunId: { in: [...keep] } }, include: { coach: { include: { person: true } }, payoutRun: true } });
       return csvResponse("coach-payouts.csv", toCsv(lines.map((l) => ({
         coach: `${l.coach.person.firstName} ${l.coach.person.lastName}`,
         periodStart: l.payoutRun.periodStart, periodEnd: l.payoutRun.periodEnd,
@@ -98,10 +100,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ dataset:
     }
     case "1099": {
       // Year-end contractor totals (§9, Phase 4) — coach payout totals to date.
+      // Count only the latest run per period so duplicate draft runs don't inflate
+      // the 1099 amount (a coach's reported income must not be double-counted).
+      const keep = await currentPayoutRunIds();
       const coaches = await prisma.coach.findMany({ include: { person: true, payouts: true } });
       return csvResponse("coach-1099-totals.csv", toCsv(coaches.map((c) => ({
         coach: `${c.person.firstName} ${c.person.lastName}`,
-        totalPaid: formatCents(c.payouts.reduce((s, l) => s + l.totalCents, 0)),
+        totalPaid: formatCents(c.payouts.filter((l) => keep.has(l.payoutRunId)).reduce((s, l) => s + l.totalCents, 0)),
       }))));
     }
     case "enrollment-breakdown": {

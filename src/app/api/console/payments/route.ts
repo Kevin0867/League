@@ -47,8 +47,9 @@ export async function POST(req: Request) {
   }
 
   if (op === "payouts") {
-    await generatePayoutRun(formData, actor);
-    return back("?ok=payouts");
+    const res = await generatePayoutRun(formData, actor);
+    if (res?.error === "payout-finalized") return back("?err=payoutfinalized");
+    return back(res?.superseded ? "?ok=payouts-regenerated" : "?ok=payouts");
   }
 
   if (op === "customRequest") {
@@ -274,6 +275,24 @@ async function generatePayoutRun(
   const month = Number(formData.get("month") ?? new Date().getUTCMonth() + 1);
   const { start, end } = monthRange(year, month);
 
+  // Idempotent regeneration. Generating a payout for a period must REPLACE any
+  // earlier DRAFT run for the same period, not stack a second one — otherwise
+  // every re-run duplicates every coach's line and the payouts/1099 exports
+  // (which sum all lines) double-count. We never touch a run that's already been
+  // committed (FINALIZED/EXPORTED/PAID): regenerating over that is refused.
+  const existing = await prisma.payoutRun.findMany({
+    where: { periodStart: start, periodEnd: end },
+    select: { id: true, status: true },
+  });
+  if (existing.some((r) => r.status !== "DRAFT")) {
+    return { error: "payout-finalized" as const };
+  }
+  const superseded = existing.length > 0;
+  if (superseded) {
+    // Cascade deletes the old DRAFT run's lines (CoachPayoutLine onDelete: Cascade).
+    await prisma.payoutRun.deleteMany({ where: { id: { in: existing.map((r) => r.id) } } });
+  }
+
   const rate = await prisma.rateConfig.findFirst({ orderBy: { createdAt: "desc" } });
   const perSession = rate?.coachPerSessionCents ?? 10000;
   const assistantPct = rate?.assistantPct ?? 0.5;
@@ -350,5 +369,6 @@ async function generatePayoutRun(
     lines++;
   }
 
-  await audit({ actorId: actor.userId, entityType: "PayoutRun", entityId: run.id, action: "GENERATE", summary: `Payout run with ${lines} coach line(s)` });
+  await audit({ actorId: actor.userId, entityType: "PayoutRun", entityId: run.id, action: "GENERATE", summary: `Payout run with ${lines} coach line(s)${superseded ? " (replaced a prior draft)" : ""}` });
+  return { superseded };
 }
