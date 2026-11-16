@@ -16,6 +16,7 @@ import { stripeCollectedBreakdown, paymentsSince, guessImportCategory } from "@/
 import { assignedPlayerIds } from "@/lib/domain/pnl";
 import { placementPaymentPeople, testTeamPersonIds, makeCoveredPlayersResolver, type PersonPayRow } from "@/lib/domain/placementPayment";
 import { coachEarnings } from "@/lib/domain/coachEarnings";
+import { currentPayoutRunIds } from "@/lib/domain/payoutRuns";
 import { AttributeImportRow } from "@/components/AttributeImportRow";
 import { AssignCsvChargeRow } from "@/components/AssignCsvChargeRow";
 import { ApplyPaymentToControl } from "@/components/ApplyPaymentToControl";
@@ -287,8 +288,11 @@ export default async function PaymentsPage({
   // DELIVERED. Rate comes from the coach's profile (season pay ÷ 12 sessions, i.e.
   // $1,200/season → $100/session), falling back to the default per-session rate.
   // $0 until practices begin — nothing is owed for sessions that haven't happened.
+  // Only the latest payout run per period counts, so duplicate historical runs
+  // don't inflate the coach-pay figure (see currentPayoutRunIds).
+  const payoutKeep = [...(await currentPayoutRunIds())];
   const [coachPayoutAgg, facilityDueAgg, coachEarn] = await Promise.all([
-    prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true } }),
+    prisma.coachPayoutLine.aggregate({ _sum: { totalCents: true }, where: { payoutRunId: { in: payoutKeep } } }),
     prisma.facilityStatement.aggregate({ _sum: { amountDueCents: true } }),
     // Pay accrues on completion: payable rows on classes whose end time has
     // passed (not cancelled), role-aware. Substitute coverage already moved the
@@ -868,6 +872,12 @@ export default async function PaymentsPage({
       )}
       {sp.ok === "payouts" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Coach payout run generated.</div>
+      )}
+      {sp.ok === "payouts-regenerated" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Coach payout run regenerated — it replaced the earlier draft for that period (no duplicate).</div>
+      )}
+      {sp.err === "payoutfinalized" && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">A finalized/paid payout run already exists for that period — it was not overwritten. Reopen it first if you need to regenerate.</div>
       )}
       {sp.err === "auth" && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">Not authorized to run payouts.</div>
