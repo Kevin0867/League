@@ -9,6 +9,7 @@ import { teamAssignmentReport, waitlistReport } from "@/lib/domain/rosterReports
 import { pnlRange, pnlSeasonByMonth, monthLabel, today, type PnlBasis } from "@/lib/domain/pnl";
 import { seasonTeamPnls } from "@/lib/domain/reportingData";
 import { currentPayoutRunIds } from "@/lib/domain/payoutRuns";
+import { effectiveRoles } from "@/lib/enums";
 
 // Dollars as a plain number (no $ or thousands separator) so the CSV is ready
 // for spreadsheet math.
@@ -305,6 +306,34 @@ export async function GET(req: Request, { params }: { params: Promise<{ dataset:
         playerCount: e.playerCount, playersListed: e._count.players, amountDue: formatCents(e.amountDueCents),
         status: e.status, contactName: e.contactName, contactEmail: e.contactEmail, contactPhone: e.contactPhone ?? "",
       })), ["club", "market", "division", "divisionCode", "playerCount", "playersListed", "amountDue", "status", "contactName", "contactEmail", "contactPhone"]));
+    }
+    case "communications": {
+      // Every message captured in the platform's conversations — inbound texts
+      // from players/coaches AND in-app direct messages — for reading and theme
+      // analysis. Admin only (message content + names). One row per message.
+      if (!admin) return new Response("Unauthorized", { status: 401 });
+      const msgs = await prisma.chatMessage.findMany({
+        where: { deletedAt: null },
+        include: {
+          sender: { select: { firstName: true, lastName: true, user: { select: { role: true, extraRoles: true } } } },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      const roleOf = (u: { role: string; extraRoles: string[] } | null) => {
+        const roles = u ? effectiveRoles(u) : [];
+        if (isAdmin(roles)) return "Admin";
+        if (roles.includes("COACH")) return "Coach";
+        return "Player/Parent";
+      };
+      return csvResponse("communications.csv", toCsv(msgs.map((m) => ({
+        date: m.createdAt,
+        channel: m.externalId ? "text" : "in-app",
+        sender: `${m.sender.firstName} ${m.sender.lastName}`.trim(),
+        role: roleOf(m.sender.user),
+        body: m.body,
+        hasAttachment: m.attachmentUrl ? "yes" : "no",
+        conversationId: m.conversationId,
+      })), ["date", "channel", "sender", "role", "body", "hasAttachment", "conversationId"]));
     }
     default:
       return new Response("Unknown dataset", { status: 404 });
