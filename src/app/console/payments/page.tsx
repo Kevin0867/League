@@ -876,6 +876,12 @@ export default async function PaymentsPage({
       {sp.ok === "payouts-regenerated" && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Coach payout run regenerated — it replaced the earlier draft for that period (no duplicate).</div>
       )}
+      {sp.ok === "payouts-season" && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Regenerated payout runs for {sp.n ?? "0"} season month(s) — stale/duplicate drafts replaced.{Number(sp.skipped ?? 0) > 0 ? ` ${sp.skipped} finalized month(s) left untouched.` : ""}</div>
+      )}
+      {sp.err === "noseason" && (
+        <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">No active PURE Academy season found to generate payouts for.</div>
+      )}
       {sp.err === "payoutfinalized" && (
         <div className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-800">A finalized/paid payout run already exists for that period — it was not overwritten. Reopen it first if you need to regenerate.</div>
       )}
@@ -1100,7 +1106,14 @@ export default async function PaymentsPage({
             <h2 className="font-semibold text-slate-900">Coach payout register</h2>
             <p className="text-sm text-slate-500">Sessions delivered × flat rate (assistant 50%) plus private-lesson earnings.</p>
           </div>
-          <MonthForm op="payouts" ticket={ticket} label="Generate payout run" now={now} />
+          <div className="flex flex-wrap items-end gap-2">
+            <MonthForm op="payouts" ticket={ticket} label="Generate payout run" now={now} />
+            <form method="POST" action="/api/console/payments">
+              <input type="hidden" name="ticket" value={ticket} />
+              <input type="hidden" name="op" value="payoutsAllSeason" />
+              <button className="btn-secondary text-sm whitespace-nowrap" title="Regenerate a clean payout run for every month of the season (replaces stale/duplicate drafts; skips finalized months)">Regenerate all season months</button>
+            </form>
+          </div>
         </div>
         {payoutRuns.length === 0 ? (
           <p className="text-sm text-slate-400">No payout runs yet.</p>

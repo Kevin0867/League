@@ -47,9 +47,37 @@ export async function POST(req: Request) {
   }
 
   if (op === "payouts") {
-    const res = await generatePayoutRun(formData, actor);
+    const year = Number(formData.get("year") ?? new Date().getUTCFullYear());
+    const month = Number(formData.get("month") ?? new Date().getUTCMonth() + 1);
+    const res = await generatePayoutRun(year, month, actor);
     if (res?.error === "payout-finalized") return back("?err=payoutfinalized");
     return back(res?.superseded ? "?ok=payouts-regenerated" : "?ok=payouts");
+  }
+
+  // Regenerate a clean payout run for EVERY month of the active season in one
+  // click — replaces stale/duplicate drafts month by month. Months already
+  // finalized/paid are skipped (not overwritten); future months are not run.
+  if (op === "payoutsAllSeason") {
+    const season = await prisma.season.findFirst({
+      where: { active: true, isTest: false, program: "PURE_ACADEMY" },
+      orderBy: { startDate: "desc" },
+      select: { startDate: true, endDate: true },
+    });
+    if (!season) return back("?err=noseason");
+    const now = new Date();
+    let y = season.startDate.getUTCFullYear();
+    let m = season.startDate.getUTCMonth() + 1;
+    const endY = season.endDate.getUTCFullYear();
+    const endM = season.endDate.getUTCMonth() + 1;
+    let done = 0, skipped = 0;
+    for (let guard = 0; guard < 24 && (y < endY || (y === endY && m <= endM)); guard++) {
+      if (new Date(Date.UTC(y, m - 1, 1)) <= now) {
+        const res = await generatePayoutRun(y, m, actor);
+        if (res?.error === "payout-finalized") skipped++; else done++;
+      }
+      m++; if (m > 12) { m = 1; y++; }
+    }
+    return back(`?ok=payouts-season&n=${done}${skipped ? `&skipped=${skipped}` : ""}`);
   }
 
   if (op === "customRequest") {
@@ -268,11 +296,10 @@ async function generateFacilityStatements(
  * (assistant 50%), plus à la carte earnings, per coach.
  */
 async function generatePayoutRun(
-  formData: FormData,
+  year: number,
+  month: number,
   actor: { userId: string; role: string }
 ) {
-  const year = Number(formData.get("year") ?? new Date().getUTCFullYear());
-  const month = Number(formData.get("month") ?? new Date().getUTCMonth() + 1);
   const { start, end } = monthRange(year, month);
 
   // Idempotent regeneration. Generating a payout for a period must REPLACE any
