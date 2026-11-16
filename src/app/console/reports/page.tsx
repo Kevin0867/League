@@ -118,6 +118,11 @@ export default async function ReportsPage() {
     ["payouts", "Coach payouts"],
     ["statements", "Facility statements"],
     ["1099", "Coach 1099 totals"],
+    ["schedule", "Practice schedule"],
+    ["attendance", "Attendance"],
+    ["facilities", "Facilities & courts"],
+    ["coaches", "Coaches (master)"],
+    ["acp-entries", "ACP entries"],
   ];
 
   return (
