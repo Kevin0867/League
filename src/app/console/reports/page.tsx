@@ -123,6 +123,7 @@ export default async function ReportsPage() {
     ["facilities", "Facilities & courts"],
     ["coaches", "Coaches (master)"],
     ["acp-entries", "ACP entries"],
+    ["communications", "Player & coach messages"],
   ];
 
   return (
