@@ -227,6 +227,80 @@ export async function GET(req: Request, { params }: { params: Promise<{ dataset:
       }
       return csvResponse("pnl-by-team.csv", toCsv(rows, ["team", "revenue", "coachCost", "courtCost", "contribution"]));
     }
+    case "schedule": {
+      // Full practice/session schedule (Q-SCHED). SessionCoach carries only a
+      // coachId (no relation), so coach names are resolved via a lookup map.
+      const sessions = await prisma.session.findMany({
+        include: {
+          facility: { select: { name: true } },
+          teams: { include: { team: { select: { name: true } } } },
+          coaches: { select: { coachId: true } },
+        },
+        orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      });
+      const coachIds = [...new Set(sessions.flatMap((s) => s.coaches.map((c) => c.coachId)))];
+      const coaches = coachIds.length
+        ? await prisma.coach.findMany({ where: { id: { in: coachIds } }, select: { id: true, person: { select: { firstName: true, lastName: true } } } })
+        : [];
+      const coachName = new Map(coaches.map((c) => [c.id, `${c.person.firstName} ${c.person.lastName}`.trim()]));
+      return csvResponse("practice-schedule.csv", toCsv(sessions.map((s) => ({
+        date: s.date, startTime: s.startTime, endTime: s.endTime, type: s.type, status: s.status,
+        facility: s.facility?.name ?? "", courts: s.courtCount, weekNumber: s.weekNumber ?? "",
+        teams: s.teams.map((t) => t.team.name).join("; "),
+        coaches: s.coaches.map((c) => coachName.get(c.coachId) ?? "").filter(Boolean).join("; "),
+        cancelReason: s.cancelReason ?? "",
+      })), ["date", "startTime", "endTime", "type", "status", "facility", "courts", "weekNumber", "teams", "coaches", "cancelReason"]));
+    }
+    case "attendance": {
+      const rows = await prisma.attendance.findMany({
+        include: { session: { select: { date: true, startTime: true, type: true } }, person: { select: { firstName: true, lastName: true } } },
+        orderBy: { markedAt: "asc" },
+      });
+      return csvResponse("attendance.csv", toCsv(rows.map((a) => ({
+        date: a.session.date, startTime: a.session.startTime, type: a.session.type,
+        player: `${a.person.firstName} ${a.person.lastName}`.trim(), status: a.status, markedAt: a.markedAt,
+      })), ["date", "startTime", "type", "player", "status", "markedAt"]));
+    }
+    case "facilities": {
+      const fac = await prisma.facility.findMany({ orderBy: { name: "asc" } });
+      return csvResponse("facilities.csv", toCsv(fac.map((f) => ({
+        name: f.name, market: f.market ?? "", courtCount: f.courtCount, feeBasis: f.feeBasis,
+        weekdayRate: formatCents(f.weekdayRateCents), weekendRate: formatCents(f.weekendRateCents),
+        dayRate: f.courtCostDayCents != null ? formatCents(f.courtCostDayCents) : "",
+        eveningRate: f.courtCostEveningCents != null ? formatCents(f.courtCostEveningCents) : "",
+        weekendCourtRate: f.courtCostWeekendCents != null ? formatCents(f.courtCostWeekendCents) : "",
+        eveningStartsAt: f.courtEveningStartsAt ?? "", percentageRate: f.percentageRate ?? "",
+        paymentTerms: f.paymentTerms ?? "", contact: f.primaryContact ?? "", contactEmail: f.contactEmail ?? "", contactPhone: f.contactPhone ?? "",
+        isPrivate: f.isPrivate, generalArea: f.generalArea ?? "", acpLeagueOption: f.acpLeagueOption, acpHeldCourts: f.acpHeldCourts ?? "",
+      })), ["name", "market", "courtCount", "feeBasis", "weekdayRate", "weekendRate", "dayRate", "eveningRate", "weekendCourtRate", "eveningStartsAt", "percentageRate", "paymentTerms", "contact", "contactEmail", "contactPhone", "isPrivate", "generalArea", "acpLeagueOption", "acpHeldCourts"]));
+    }
+    case "coaches": {
+      // Coach master incl. background-check + onboarding status. Admin only
+      // (staffing/compliance detail); pay totals come from the 1099/payouts exports.
+      if (!admin) return new Response("Unauthorized", { status: 401 });
+      const coaches = await prisma.coach.findMany({
+        include: { person: { select: { firstName: true, lastName: true, email: true, phone: true } } },
+        orderBy: { person: { lastName: "asc" } },
+      });
+      return csvResponse("coaches.csv", toCsv(coaches.map((c) => ({
+        coach: `${c.person.firstName} ${c.person.lastName}`.trim(), email: c.person.email ?? "", phone: c.person.phone ?? "",
+        isProCoach: c.isProCoach, marketsCovered: c.marketsCovered ?? "",
+        backgroundCheckDate: c.backgroundCheckDate, backgroundCheckExpiry: c.backgroundCheckExpiry,
+        onboardingCompletedAt: c.onboardingCompletedAt, safeSportCertified: c.safeSportCertified,
+        allowConcurrentTeams: c.allowConcurrentTeams, publishedOnSite: c.publishedOnSite,
+      })), ["coach", "email", "phone", "isProCoach", "marketsCovered", "backgroundCheckDate", "backgroundCheckExpiry", "onboardingCompletedAt", "safeSportCertified", "allowConcurrentTeams", "publishedOnSite"]));
+    }
+    case "acp-entries": {
+      const entries = await prisma.acpEntry.findMany({
+        include: { _count: { select: { players: true } } },
+        orderBy: [{ divisionCode: "asc" }, { clubName: "asc" }],
+      });
+      return csvResponse("acp-entries.csv", toCsv(entries.map((e) => ({
+        club: e.clubName, market: e.market ?? "", division: e.divisionName, divisionCode: e.divisionCode ?? "",
+        playerCount: e.playerCount, playersListed: e._count.players, amountDue: formatCents(e.amountDueCents),
+        status: e.status, contactName: e.contactName, contactEmail: e.contactEmail, contactPhone: e.contactPhone ?? "",
+      })), ["club", "market", "division", "divisionCode", "playerCount", "playersListed", "amountDue", "status", "contactName", "contactEmail", "contactPhone"]));
+    }
     default:
       return new Response("Unknown dataset", { status: 404 });
   }
