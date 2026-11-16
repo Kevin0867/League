@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/stripe";
 import { sendEmail } from "@/lib/notify";
-import { appendMessage, findOrCreateConversation } from "@/lib/domain/dm";
+import { appendMessage, findOrCreateConversation, resolveTeamInboxPersonId } from "@/lib/domain/dm";
 import { lookupInboundRoute, findPersonByPhone } from "@/lib/domain/smsRouting";
 
 // Twilio inbound-SMS webhook. When someone replies to a text we sent, the reply
@@ -111,16 +111,29 @@ export async function POST(req: Request) {
       return twiml();
     }
 
-    // Fallback — we couldn't resolve a sender to route to. Don't lose the reply:
-    // forward it to the team inbox with whatever we know about who sent it.
-    const who = recipientPersonId
-      ? await prisma.person.findUnique({ where: { id: recipientPersonId }, select: { firstName: true, lastName: true } })
-      : null;
-    const whoName = who ? `${who.firstName} ${who.lastName}`.trim() : "an unknown number";
+    // No reply-route to a specific coach. Consolidate it into the platform: if we
+    // know who texted, land it in the shared team-inbox conversation (with the
+    // designated office admin) so it shows in the console inbox, every admin sees
+    // it in the moderation view, and a reply texts them straight back — instead of
+    // escaping to email only.
+    const teamPersonId = await resolveTeamInboxPersonId();
+    if (recipientPersonId && teamPersonId && teamPersonId !== recipientPersonId) {
+      const convId = await findOrCreateConversation(teamPersonId, recipientPersonId);
+      try {
+        await appendMessage(convId, recipientPersonId, body, { email: true, sms: false }, null, messageSid);
+      } catch (e) {
+        if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2002") return twiml();
+        throw e;
+      }
+      return twiml();
+    }
+
+    // Truly unknown number (no person on file) — can't make a conversation, so
+    // don't lose it: forward to the team inbox email as a last resort.
     await sendEmail(
       TEAM_INBOX,
-      `Inbound text reply from ${whoName}`,
-      `A text reply came in that we couldn't match to a specific coach/message:\n\nFrom: ${from} (${whoName})\n\n“${body}”\n\nOpen the console inbox to follow up.`,
+      `Inbound text from an unknown number`,
+      `A text came in from a number we couldn't match to anyone on file:\n\nFrom: ${from}\n\n“${body}”\n\nAdd this person (or their number) in the console, then replies will thread automatically.`,
     );
     return twiml();
   } catch (e) {

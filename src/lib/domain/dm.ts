@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { sendEmail, sendSms } from "@/lib/notify";
 import { appUrl } from "@/lib/stripe";
 import { isStaff, isAdmin } from "@/lib/rbac";
-import { effectiveRoles } from "@/lib/enums";
+import { effectiveRoles, ADMIN_ROLES } from "@/lib/enums";
 import { recordSmsRoute } from "@/lib/domain/smsRouting";
 import { SMS_FULL_CAP } from "@/lib/messaging";
 
@@ -32,6 +32,29 @@ export async function findOrCreateConversation(aPersonId: string, bPersonId: str
     select: { id: true },
   });
   return convo.id;
+}
+
+/** The staff person who owns the shared "team inbox" — where an inbound text (or,
+ *  later, email) that isn't a reply to a specific coach is routed, so cold messages
+ *  still land as a conversation in the console inbox (and every admin sees them via
+ *  the moderation view) instead of only emailing team@. Prefers a person record on
+ *  the shared team@purepickleball.com address; otherwise the earliest active admin. */
+export async function resolveTeamInboxPersonId(): Promise<string | null> {
+  const teamPerson = await prisma.person.findFirst({
+    where: { email: { equals: "team@purepickleball.com", mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (teamPerson) return teamPerson.id;
+  const admin = await prisma.user.findFirst({
+    where: {
+      active: true,
+      personId: { not: null },
+      OR: [{ role: { in: [...ADMIN_ROLES] } }, { extraRoles: { hasSome: [...ADMIN_ROLES] } }],
+    },
+    orderBy: { createdAt: "asc" },
+    select: { personId: true },
+  });
+  return admin?.personId ?? null;
 }
 
 /** Append a message, resurface the thread for everyone, and bump its sort time. */
